@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Plus, AlertCircle } from "lucide-react"
 import { createEvolutionInstance } from "@/lib/whatsapp-api"
+import WhatsAppQRModal from "./whatsapp-qr-modal"
 import InstanceCreationModal from "./instance-creation-modal"
 
 interface WhatsAppConnectionModalProps {
@@ -29,9 +30,10 @@ export default function WhatsAppConnectionModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  // Estados para o modal de criação
+  // Estados para os modais
   const [creationModalOpen, setCreationModalOpen] = useState(false)
-  const [isCreating, setIsCreating] = useState(false)
+  const [qrModalOpen, setQrModalOpen] = useState(false)
+  const [createdConnection, setCreatedConnection] = useState<any>(null)
 
   const validateConnectionName = (name: string): boolean => {
     // Permitir apenas letras, números e underscores
@@ -60,10 +62,6 @@ export default function WhatsAppConnectionModal({
   }
 
   const handleCreationComplete = async () => {
-    // Evitar chamadas duplas
-    if (isCreating) return
-
-    setIsCreating(true)
     setLoading(true)
 
     try {
@@ -73,11 +71,8 @@ export default function WhatsAppConnectionModal({
         // Atualizar a lista de conexões
         onSuccess()
 
-        // Fechar modal de criação
-        setCreationModalOpen(false)
-
-        // Limpar formulário
-        setConnectionName("")
+        // Armazenar a conexão criada para usar depois
+        setCreatedConnection(result.data.connection)
       } else {
         setError(result.error || "Erro ao criar conexão")
         // Fechar modal de criação e reabrir o de configuração em caso de erro
@@ -91,33 +86,32 @@ export default function WhatsAppConnectionModal({
       onOpenChange(true)
     } finally {
       setLoading(false)
-      setIsCreating(false)
     }
   }
 
-  // Reset states when modal closes
-  const handleModalClose = (open: boolean) => {
-    if (!open) {
-      setConnectionName("")
-      setError("")
-      setLoading(false)
-      setIsCreating(false)
-    }
-    onOpenChange(open)
+  const handleConnectWhatsApp = () => {
+    // Abrir o modal do QR Code com a conexão criada
+    setQrModalOpen(true)
   }
 
-  const handleCreationModalClose = (open: boolean) => {
-    if (!open) {
-      setIsCreating(false)
-      setLoading(false)
+  const handleQRModalClose = () => {
+    setQrModalOpen(false)
+    setCreatedConnection(null)
+    setConnectionName("") // Limpar o formulário
+  }
+
+  const handleStatusChange = (status: string) => {
+    if (createdConnection) {
+      setCreatedConnection({ ...createdConnection, status })
     }
-    setCreationModalOpen(open)
+    // Atualizar a lista quando o status mudar
+    onSuccess()
   }
 
   return (
     <>
       {/* Modal de criação da conexão */}
-      <Dialog open={open} onOpenChange={handleModalClose}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -149,11 +143,11 @@ export default function WhatsAppConnectionModal({
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => handleModalClose(false)} disabled={loading}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={loading || !connectionName.trim() || isCreating}>
-                {loading || isCreating ? (
+              <Button type="submit" disabled={loading || !connectionName.trim()}>
+                {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Criando...
@@ -173,10 +167,18 @@ export default function WhatsAppConnectionModal({
       {/* Modal de animação de criação */}
       <InstanceCreationModal
         open={creationModalOpen}
-        onOpenChange={handleCreationModalClose}
+        onOpenChange={setCreationModalOpen}
         connectionName={connectionName}
         onComplete={handleCreationComplete}
-        onConnectWhatsApp={() => {}} // Função vazia, não será usada
+        onConnectWhatsApp={handleConnectWhatsApp}
+      />
+
+      {/* Modal do QR Code */}
+      <WhatsAppQRModal
+        open={qrModalOpen}
+        onOpenChange={handleQRModalClose}
+        connection={createdConnection}
+        onStatusChange={handleStatusChange}
       />
     </>
   )

@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,6 +22,12 @@ import {
   MessageSquare,
   Download,
   Settings,
+  Home,
+  Bot,
+  Cog,
+  LogOut,
+  Users,
+  Shield,
   Plus,
   Edit,
   Trash2,
@@ -32,15 +38,13 @@ import {
   Plug,
   Upload,
   ImageIcon,
+  Smartphone,
   User,
   Eye,
   EyeOff,
   QrCode,
-  Users,
-  Bot,
-  Smartphone,
 } from "lucide-react"
-import { getCurrentUser } from "@/lib/auth"
+import { getCurrentUser, signOut } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import { useTheme } from "@/components/theme-provider"
 import { themePresets, type ThemeConfig } from "@/lib/theme"
@@ -53,10 +57,9 @@ import { disconnectInstance } from "@/lib/whatsapp-settings-api"
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState("dashboard")
+  const [settingsSubTab, setSettingsSubTab] = useState("profile")
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const activeTab = searchParams.get("tab") || "dashboard"
-  const settingsSubTab = searchParams.get("subtab") || "profile"
 
   const [users, setUsers] = useState([])
   const [agents, setAgents] = useState([])
@@ -137,13 +140,6 @@ export default function AdminDashboard() {
     }
   }
 
-  const updateURL = (tab: string, subtab?: string) => {
-    const params = new URLSearchParams()
-    params.set("tab", tab)
-    if (subtab) params.set("subtab", subtab)
-    router.push(`/admin?${params.toString()}`)
-  }
-
   useEffect(() => {
     const currentUser = getCurrentUser()
     if (!currentUser) {
@@ -159,9 +155,18 @@ export default function AdminDashboard() {
   }, [router])
 
   const handleLogout = async () => {
-    // await signOut() // removido pois não existe mais
+    await signOut()
     router.push("/")
   }
+
+  const sidebarItems = [
+    { icon: Home, label: "Dashboard", key: "dashboard", active: activeTab === "dashboard" },
+    { icon: Users, label: "Gerenciar Usuários", key: "users", active: activeTab === "users" },
+    { icon: Bot, label: "Agentes IA", key: "agents", active: activeTab === "agents" },
+    { icon: Smartphone, label: "Conexões WhatsApp", key: "whatsapp", active: activeTab === "whatsapp" },
+    { icon: Shield, label: "Administração", key: "admin", active: activeTab === "admin" },
+    { icon: Cog, label: "Configurações", key: "settings", active: activeTab === "settings" },
+  ]
 
   const fetchUsers = async () => {
     const { data, error } = await supabase.from("user_profiles").select("*").order("created_at", { ascending: false })
@@ -507,6 +512,33 @@ export default function AdminDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      <UserModal
+        open={userModalOpen}
+        onOpenChange={setUserModalOpen}
+        user={selectedUserForEdit}
+        onSuccess={fetchUsers}
+      />
+
+      <Dialog open={deleteUserModal} onOpenChange={setDeleteUserModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Exclusão</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir o usuário "{userToDelete?.full_name}" ({userToDelete?.email})? Esta ação
+              não pode ser desfeita e todas as conexões WhatsApp do usuário serão removidas.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteUserModal(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteUser} disabled={saving}>
+              {saving ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 
@@ -1275,15 +1307,15 @@ export default function AdminDashboard() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => updateURL("settings", "profile")}>
+                <DropdownMenuItem onClick={() => setSettingsSubTab("profile")}>
                   <User className="w-4 h-4 mr-2" />
                   Perfil
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => updateURL("settings", "branding")}>
+                <DropdownMenuItem onClick={() => setSettingsSubTab("branding")}>
                   <Palette className="w-4 h-4 mr-2" />
                   Branding
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => updateURL("settings", "integrations")}>
+                <DropdownMenuItem onClick={() => setSettingsSubTab("integrations")}>
                   <Plug className="w-4 h-4 mr-2" />
                   Integrações
                 </DropdownMenuItem>
@@ -1300,53 +1332,75 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="p-6">
-      {activeTab === "dashboard" && renderDashboard()}
-      {activeTab === "users" && renderUsers()}
-      {activeTab === "agents" && renderAgents()}
-      {activeTab === "whatsapp" && renderWhatsAppConnections()}
-      {activeTab === "admin" && (
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Administração Avançada</h1>
-          <p className="text-gray-600">Configurações avançadas do sistema</p>
+    <div className="flex h-screen bg-gray-50">
+      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center gap-2">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: theme.primaryColor }}
+            >
+              <span className="text-white">{theme.logoIcon}</span>
+            </div>
+            <span className="font-semibold text-lg">Admin Panel</span>
+          </div>
+          <p className="text-sm text-gray-600 mt-1">Olá, {user?.full_name}</p>
         </div>
-      )}
-      {activeTab === "settings" && renderSettings()}
 
-      {/* Manter todos os modais */}
-      <UserModal
-        open={userModalOpen}
-        onOpenChange={setUserModalOpen}
-        user={selectedUserForEdit}
-        onSuccess={fetchUsers}
-      />
+        <nav className="flex-1 p-4">
+          <ul className="space-y-2">
+            {sidebarItems.map((item, index) => (
+              <li key={index}>
+                <button
+                  onClick={() => setActiveTab(item.key)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    item.active ? "bg-red-50 text-red-700 border border-red-200" : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <item.icon className="w-5 h-5" />
+                  {item.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
-      <Dialog open={deleteUserModal} onOpenChange={setDeleteUserModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar Exclusão</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja excluir o usuário "{userToDelete?.full_name}" ({userToDelete?.email})? Esta ação
-              não pode ser desfeita e todas as conexões WhatsApp do usuário serão removidas.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteUserModal(false)}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteUser} disabled={saving}>
-              {saving ? "Excluindo..." : "Excluir"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <div className="p-4 border-t border-gray-200">
+          <Button variant="ghost" className="w-full justify-start gap-2 text-gray-600" onClick={handleLogout}>
+            <LogOut className="w-4 h-4" />
+            Sair
+          </Button>
+          <div className="text-xs text-gray-500 mt-2">
+            <div>{theme.systemName} Admin</div>
+            <div>v1.0.0</div>
+          </div>
+        </div>
+      </div>
 
+      <div className="flex-1 overflow-auto">
+        <div className="p-6">
+          {activeTab === "dashboard" && renderDashboard()}
+          {activeTab === "users" && renderUsers()}
+          {activeTab === "agents" && renderAgents()}
+          {activeTab === "whatsapp" && renderWhatsAppConnections()}
+          {activeTab === "admin" && (
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Administração Avançada</h1>
+              <p className="text-gray-600">Configurações avançadas do sistema</p>
+            </div>
+          )}
+          {activeTab === "settings" && renderSettings()}
+        </div>
+      </div>
+
+      {/* Modais WhatsApp */}
       <WhatsAppQRModal
         open={qrModalOpen}
         onOpenChange={setQrModalOpen}
         connection={selectedWhatsAppConnection}
         onStatusChange={(status) => {
           if (selectedWhatsAppConnection) {
+            // Atualizar status no banco
             supabase
               .from("whatsapp_connections")
               .update({ status })

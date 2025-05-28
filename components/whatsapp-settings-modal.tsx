@@ -35,108 +35,80 @@ interface SettingsConfig {
   syncFullHistory: boolean
 }
 
-const defaultSettings: SettingsConfig = {
-  groupsIgnore: false,
-  readMessages: true,
-  alwaysOnline: false,
-  readStatus: true,
-  rejectCall: false,
-  msgCall: "Não posso atender no momento, envie uma mensagem.",
-  syncFullHistory: false,
-}
-
 export default function WhatsAppSettingsModal({
   open,
   onOpenChange,
   connection,
   onSettingsSaved,
 }: WhatsAppSettingsModalProps) {
-  const [settings, setSettings] = useState<SettingsConfig>(defaultSettings)
+  const [settings, setSettings] = useState<SettingsConfig>({
+    groupsIgnore: false,
+    readMessages: false,
+    alwaysOnline: false,
+    readStatus: false,
+    rejectCall: false,
+    msgCall: "",
+    syncFullHistory: false,
+  })
   const [loading, setLoading] = useState(false)
   const [loadingSettings, setLoadingSettings] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
-  // Carregar configurações sempre que o modal abrir
   useEffect(() => {
-    if (open && connection?.instance_name) {
-      console.log("Modal aberto, carregando configurações para:", connection.instance_name)
+    if (open && connection) {
       loadCurrentSettings()
     }
-  }, [open, connection?.instance_name])
-
-  // Reset estados quando modal fechar
-  useEffect(() => {
-    if (!open) {
-      setError("")
-      setSuccess("")
-      setSettings(defaultSettings)
-    }
-  }, [open])
+  }, [open, connection])
 
   const loadCurrentSettings = async () => {
-    if (!connection?.instance_name) {
-      console.error("Nome da instância não encontrado")
-      return
-    }
+    if (!connection?.instance_name) return
 
     setLoadingSettings(true)
     setError("")
-    setSuccess("")
 
     try {
-      console.log("Buscando configurações da API para:", connection.instance_name)
-
       const result = await getInstanceSettings(connection.instance_name)
-      console.log("Resultado da API:", result)
 
       if (result.success && result.settings) {
-        console.log("Configurações recebidas:", result.settings)
-
         // Mapear as configurações da API para o estado local
-        const apiSettings = result.settings
-        const newSettings: SettingsConfig = {
-          groupsIgnore: apiSettings.groupsIgnore ?? defaultSettings.groupsIgnore,
-          readMessages: apiSettings.readMessages ?? defaultSettings.readMessages,
-          alwaysOnline: apiSettings.alwaysOnline ?? defaultSettings.alwaysOnline,
-          readStatus: apiSettings.readStatus ?? defaultSettings.readStatus,
-          rejectCall: apiSettings.rejectCall ?? defaultSettings.rejectCall,
-          msgCall: apiSettings.msgCall || defaultSettings.msgCall,
-          syncFullHistory: apiSettings.syncFullHistory ?? defaultSettings.syncFullHistory,
-        }
-
-        console.log("Configurações mapeadas:", newSettings)
-        setSettings(newSettings)
+        setSettings({
+          groupsIgnore: result.settings.groupsIgnore || false,
+          readMessages: result.settings.readMessages || false,
+          alwaysOnline: result.settings.alwaysOnline || false,
+          readStatus: result.settings.readStatus || false,
+          rejectCall: result.settings.rejectCall || false,
+          msgCall: result.settings.msgCall || "Não posso atender no momento, envie uma mensagem.",
+          syncFullHistory: result.settings.syncFullHistory || false,
+        })
       } else {
-        console.log("Usando configurações padrão devido a erro ou dados vazios")
-        setSettings(defaultSettings)
-
-        if (result.error) {
-          setError(`Aviso: ${result.error}. Usando configurações padrão.`)
-        }
+        // Se não conseguir buscar, usar valores padrão
+        setSettings({
+          groupsIgnore: false,
+          readMessages: true,
+          alwaysOnline: false,
+          readStatus: true,
+          rejectCall: false,
+          msgCall: "Não posso atender no momento, envie uma mensagem.",
+          syncFullHistory: false,
+        })
       }
     } catch (error) {
       console.error("Erro ao carregar configurações:", error)
-      setError("Erro ao carregar configurações. Usando valores padrão.")
-      setSettings(defaultSettings)
+      setError("Erro ao carregar configurações atuais")
     } finally {
       setLoadingSettings(false)
     }
   }
 
   const handleSaveSettings = async () => {
-    if (!connection?.instance_name) {
-      setError("Nome da instância não encontrado")
-      return
-    }
+    if (!connection?.instance_name) return
 
     setLoading(true)
     setError("")
     setSuccess("")
 
     try {
-      console.log("Salvando configurações:", settings)
-
       const settingsPayload = {
         groupsIgnore: settings.groupsIgnore,
         readMessages: settings.readMessages,
@@ -147,19 +119,11 @@ export default function WhatsAppSettingsModal({
         syncFullHistory: settings.syncFullHistory,
       }
 
-      console.log("Payload enviado:", settingsPayload)
-
       const result = await saveInstanceSettings(connection.instance_name, settingsPayload)
-      console.log("Resultado do salvamento:", result)
 
       if (result.success) {
         setSuccess("Configurações salvas com sucesso!")
         onSettingsSaved?.()
-
-        // Recarregar configurações após salvar para confirmar
-        setTimeout(() => {
-          loadCurrentSettings()
-        }, 1000)
 
         setTimeout(() => {
           setSuccess("")
@@ -169,7 +133,6 @@ export default function WhatsAppSettingsModal({
         setError(result.error || "Erro ao salvar configurações")
       }
     } catch (error) {
-      console.error("Erro ao salvar configurações:", error)
       setError("Erro ao salvar configurações")
     } finally {
       setLoading(false)
@@ -180,11 +143,6 @@ export default function WhatsAppSettingsModal({
     setSettings((prev) => ({ ...prev, [key]: value }))
   }
 
-  const handleRefresh = () => {
-    console.log("Botão refresh clicado")
-    loadCurrentSettings()
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
@@ -193,11 +151,7 @@ export default function WhatsAppSettingsModal({
             <Settings className="w-5 h-5" />
             Configurações de Privacidade - {connection?.connection_name}
           </DialogTitle>
-          <DialogDescription>
-            Configure o comportamento da sua conexão WhatsApp
-            <br />
-            <span className="text-xs text-gray-500">Instância: {connection?.instance_name}</span>
-          </DialogDescription>
+          <DialogDescription>Configure o comportamento da sua conexão WhatsApp</DialogDescription>
         </DialogHeader>
 
         {error && (
@@ -215,14 +169,14 @@ export default function WhatsAppSettingsModal({
         {loadingSettings ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin mr-2" />
-            <span>Carregando configurações atuais da API...</span>
+            <span>Carregando configurações atuais...</span>
           </div>
         ) : (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <p className="text-sm text-gray-600">Configurações sincronizadas com a Evolution API</p>
-              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loadingSettings}>
-                <RefreshCw className={`w-4 h-4 mr-2 ${loadingSettings ? "animate-spin" : ""}`} />
+              <p className="text-sm text-gray-600">Configurações sincronizadas com a API</p>
+              <Button variant="outline" size="sm" onClick={loadCurrentSettings} disabled={loadingSettings}>
+                <RefreshCw className="w-4 h-4 mr-2" />
                 Recarregar
               </Button>
             </div>
