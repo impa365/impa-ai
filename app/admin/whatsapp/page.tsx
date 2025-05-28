@@ -391,12 +391,28 @@ export default function AdminWhatsAppPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge
-                      variant={connection.status === "connected" ? "default" : "secondary"}
+                      variant={
+                        connection.status === "connected"
+                          ? "default"
+                          : connection.status === "connecting"
+                            ? "secondary"
+                            : "secondary"
+                      }
                       className={
-                        connection.status === "connected" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
+                        connection.status === "connected"
+                          ? "bg-green-100 text-green-700"
+                          : connection.status === "connecting"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-gray-100 text-gray-700"
                       }
                     >
-                      {connection.status === "connected" ? "Conectado" : "Desconectado"}
+                      {connection.status === "connected"
+                        ? "Conectado"
+                        : connection.status === "connecting"
+                          ? "Conectando"
+                          : connection.status === "error"
+                            ? "Erro"
+                            : "Desconectado"}
                     </Badge>
                     <div className="flex gap-1">
                       <Button
