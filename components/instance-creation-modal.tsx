@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { CheckCircle, Zap, Smartphone, Wifi, Settings, Rocket } from "lucide-react"
 
@@ -32,12 +31,14 @@ export default function InstanceCreationModal({
   const [currentStep, setCurrentStep] = useState(0)
   const [progress, setProgress] = useState(0)
   const [isComplete, setIsComplete] = useState(false)
+  const [hasCompleted, setHasCompleted] = useState(false)
 
   useEffect(() => {
     if (!open) {
       setCurrentStep(0)
       setProgress(0)
       setIsComplete(false)
+      setHasCompleted(false)
       return
     }
 
@@ -58,21 +59,31 @@ export default function InstanceCreationModal({
       }
 
       // Completar após 5 segundos
-      if (totalTime >= 5000) {
+      if (totalTime >= 5000 && !hasCompleted) {
         setIsComplete(true)
+        setHasCompleted(true)
         clearInterval(timer)
-        // Chamar onComplete para criar a instância
-        onComplete()
+
+        // Chamar onComplete apenas uma vez
+        setTimeout(() => {
+          onComplete()
+        }, 100)
       }
     }, 100)
 
     return () => clearInterval(timer)
-  }, [open, onComplete])
+  }, [open, onComplete, hasCompleted])
 
-  const handleConnectWhatsApp = () => {
-    onConnectWhatsApp()
-    onOpenChange(false)
-  }
+  useEffect(() => {
+    if (isComplete && hasCompleted) {
+      // Fechar o modal automaticamente após 2 segundos
+      const timer = setTimeout(() => {
+        onOpenChange(false)
+      }, 2000)
+
+      return () => clearTimeout(timer)
+    }
+  }, [isComplete, hasCompleted, onOpenChange])
 
   const CurrentIcon = isComplete ? CheckCircle : creationSteps[currentStep]?.icon || Zap
 
@@ -160,15 +171,11 @@ export default function InstanceCreationModal({
             })}
           </div>
 
-          {/* Botão de conectar WhatsApp - aparece apenas quando completo */}
+          {/* Mensagem de sucesso */}
           {isComplete && (
             <div className="pt-4 border-t">
-              <Button onClick={handleConnectWhatsApp} className="w-full" size="lg">
-                <Smartphone className="w-5 h-5 mr-2" />
-                CONECTAR WHATSAPP
-              </Button>
-              <p className="text-center text-xs text-gray-500 mt-2">
-                Clique para gerar o QR Code e conectar seu WhatsApp
+              <p className="text-center text-sm text-green-600">
+                Instância criada com sucesso! O modal fechará automaticamente...
               </p>
             </div>
           )}
