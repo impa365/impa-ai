@@ -1,6 +1,6 @@
 import { supabase } from "./supabase"
 
-// Modifique a função checkInstanceStatus para lidar melhor com erros de conexão
+// Função para verificar status de uma instância específica usando connectionState
 export async function checkInstanceStatus(instanceName: string): Promise<{
   success: boolean
   status?: string
@@ -27,21 +27,26 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
     const apiUrl = `${integrationData.config.apiUrl}/instance/connectionState/${instanceName}`
     console.log(`[API] Fazendo requisição para: ${apiUrl}`)
 
-    // Adicionar timeout para evitar que a requisição fique pendente por muito tempo
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 segundos de timeout
+    // Criar uma Promise com timeout manual em vez de usar AbortController
+    const fetchWithTimeout = async (url: string, options: any, timeoutMs: number) => {
+      return Promise.race([
+        fetch(url, options),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Request timeout")), timeoutMs)),
+      ])
+    }
 
     try {
-      const response = await fetch(apiUrl, {
-        method: "GET",
-        headers: {
-          apikey: integrationData.config.apiKey,
+      const response = await fetchWithTimeout(
+        apiUrl,
+        {
+          method: "GET",
+          headers: {
+            apikey: integrationData.config.apiKey,
+          },
+          cache: "no-cache",
         },
-        cache: "no-cache",
-        signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
+        8000,
+      ) // 8 segundos de timeout
 
       console.log(`[API] Status da resposta: ${response.status}`)
 
@@ -88,12 +93,19 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
         number: data.instance?.wuid || data.instance?.number || null,
       }
     } catch (fetchError) {
-      clearTimeout(timeoutId)
       console.error(`[API] Erro de fetch para ${instanceName}:`, fetchError)
+
+      // Verificar se é erro de timeout ou outro tipo de erro
+      if (fetchError.message === "Request timeout") {
+        return {
+          success: false,
+          error: "Timeout ao verificar status da conexão",
+        }
+      }
+
       return {
         success: false,
-        error:
-          fetchError.name === "AbortError" ? "Timeout ao verificar status da conexão" : "Falha na conexão com a API",
+        error: "Falha na conexão com a API",
       }
     }
   } catch (error) {
@@ -105,7 +117,7 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
   }
 }
 
-// Modifique a função syncInstanceStatus para continuar mesmo com erros
+// Função para sincronizar status de uma instância específica
 export async function syncInstanceStatus(instanceId: string): Promise<{
   success: boolean
   updated: boolean
