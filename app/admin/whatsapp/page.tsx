@@ -112,14 +112,23 @@ export default function AdminWhatsAppPage() {
     [syncing],
   )
 
+  // Modifique a função de sincronização manual para lidar melhor com erros
   const handleManualSync = async () => {
     if (syncing || !connections.length) return
 
     setSyncing(true)
     try {
-      for (const connection of connections) {
-        await syncInstanceStatus(connection.id)
-      }
+      // Sincronizar conexões em paralelo com Promise.allSettled para continuar mesmo com erros
+      const syncPromises = connections.map((connection) =>
+        syncInstanceStatus(connection.id).catch((error) => {
+          console.error(`Erro ao sincronizar conexão ${connection.id}:`, error)
+          return { success: false, updated: false, error: String(error) }
+        }),
+      )
+
+      await Promise.allSettled(syncPromises)
+
+      // Recarregar conexões após sincronização
       await fetchConnections()
     } catch (error) {
       console.error("Erro na sincronização manual:", error)
@@ -128,15 +137,22 @@ export default function AdminWhatsAppPage() {
     }
   }
 
-  // Sincronizar quando a página for carregada (uma vez)
+  // Modifique a função de sincronização silenciosa para lidar melhor com erros
   useEffect(() => {
     if (connections.length > 0) {
       // Sincronização silenciosa (sem indicador visual)
       const syncSilently = async () => {
         try {
-          for (const connection of connections) {
-            await syncInstanceStatus(connection.id)
-          }
+          // Sincronizar conexões em paralelo com Promise.allSettled para continuar mesmo com erros
+          const syncPromises = connections.map((connection) =>
+            syncInstanceStatus(connection.id).catch((error) => {
+              console.error(`Erro ao sincronizar conexão ${connection.id}:`, error)
+              return { success: false, updated: false, error: String(error) }
+            }),
+          )
+
+          await Promise.allSettled(syncPromises)
+
           // Recarregar conexões após sincronização
           await fetchConnections()
         } catch (error) {
@@ -146,7 +162,7 @@ export default function AdminWhatsAppPage() {
 
       syncSilently()
     }
-  }, [connections])
+  }, [connections.length])
 
   // Quando o modal QR é aberto, sincronizar a conexão selecionada
   useEffect(() => {

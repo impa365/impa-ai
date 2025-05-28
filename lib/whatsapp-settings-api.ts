@@ -1,6 +1,6 @@
 import { supabase } from "./supabase"
 
-// Função para verificar status de uma instância específica usando connectionState
+// Modifique a função checkInstanceStatus para lidar melhor com erros de conexão
 export async function checkInstanceStatus(instanceName: string): Promise<{
   success: boolean
   status?: string
@@ -27,57 +27,74 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
     const apiUrl = `${integrationData.config.apiUrl}/instance/connectionState/${instanceName}`
     console.log(`[API] Fazendo requisição para: ${apiUrl}`)
 
-    const response = await fetch(apiUrl, {
-      method: "GET",
-      headers: {
-        apikey: integrationData.config.apiKey,
-      },
-      cache: "no-cache",
-    })
+    // Adicionar timeout para evitar que a requisição fique pendente por muito tempo
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 segundos de timeout
 
-    console.log(`[API] Status da resposta: ${response.status}`)
+    try {
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          apikey: integrationData.config.apiKey,
+        },
+        cache: "no-cache",
+        signal: controller.signal,
+      })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`[API] Erro na resposta: ${errorText}`)
+      clearTimeout(timeoutId)
+
+      console.log(`[API] Status da resposta: ${response.status}`)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`[API] Erro na resposta: ${errorText}`)
+        return {
+          success: false,
+          error: `Erro ao verificar status: ${response.status}`,
+        }
+      }
+
+      const data = await response.json()
+      console.log(`[API] Dados do connectionState para ${instanceName}:`, JSON.stringify(data, null, 2))
+
+      // Extrair o estado da instância conforme o formato da API
+      // Formato esperado: { "instance": { "instanceName": "nome", "state": "estado" } }
+      let state = "close"
+
+      if (data && data.instance && data.instance.state) {
+        state = data.instance.state
+      }
+
+      // Mapear o estado da API para nosso formato interno
+      let mappedStatus
+      switch (state) {
+        case "open":
+          mappedStatus = "connected"
+          break
+        case "connecting":
+          mappedStatus = "connecting"
+          break
+        case "close":
+        default:
+          mappedStatus = "disconnected"
+          break
+      }
+
+      console.log(`[API] Estado da instância ${instanceName}: "${state}" -> mapeado para "${mappedStatus}"`)
+
+      return {
+        success: true,
+        status: mappedStatus,
+        number: data.instance?.wuid || data.instance?.number || null,
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId)
+      console.error(`[API] Erro de fetch para ${instanceName}:`, fetchError)
       return {
         success: false,
-        error: `Erro ao verificar status: ${response.status}`,
+        error:
+          fetchError.name === "AbortError" ? "Timeout ao verificar status da conexão" : "Falha na conexão com a API",
       }
-    }
-
-    const data = await response.json()
-    console.log(`[API] Dados do connectionState para ${instanceName}:`, JSON.stringify(data, null, 2))
-
-    // Extrair o estado da instância conforme o formato da API
-    // Formato esperado: { "instance": { "instanceName": "nome", "state": "estado" } }
-    let state = "close"
-
-    if (data && data.instance && data.instance.state) {
-      state = data.instance.state
-    }
-
-    // Mapear o estado da API para nosso formato interno
-    let mappedStatus
-    switch (state) {
-      case "open":
-        mappedStatus = "connected"
-        break
-      case "connecting":
-        mappedStatus = "connecting"
-        break
-      case "close":
-      default:
-        mappedStatus = "disconnected"
-        break
-    }
-
-    console.log(`[API] Estado da instância ${instanceName}: "${state}" -> mapeado para "${mappedStatus}"`)
-
-    return {
-      success: true,
-      status: mappedStatus,
-      number: data.instance?.wuid || data.instance?.number || null,
     }
   } catch (error) {
     console.error("Erro ao verificar status:", error)
@@ -88,7 +105,7 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
   }
 }
 
-// Função para sincronizar status de uma instância específica
+// Modifique a função syncInstanceStatus para continuar mesmo com erros
 export async function syncInstanceStatus(instanceId: string): Promise<{
   success: boolean
   updated: boolean
@@ -120,6 +137,15 @@ export async function syncInstanceStatus(instanceId: string): Promise<{
 
     if (!statusResult.success) {
       console.error(`[SYNC] Erro ao verificar status: ${statusResult.error}`)
+
+      // Atualizar apenas o timestamp de sincronização mesmo com erro
+      await supabase
+        .from("whatsapp_connections")
+        .update({
+          last_sync: new Date().toISOString(),
+        })
+        .eq("id", connection.id)
+
       return {
         success: false,
         updated: false,
