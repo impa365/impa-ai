@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Edit, Trash2, QrCode, Smartphone, PowerOff, UserPlus, Plus, Search, Filter, X, RefreshCw } from 'lucide-react'
+import { Edit, Trash2, QrCode, Smartphone, PowerOff, UserPlus, Plus, Search, Filter, X, RefreshCw } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
@@ -76,6 +76,24 @@ export default function AdminWhatsAppPage() {
     }
   }
 
+  // Filtrar conexões baseado nos critérios de busca
+  const filteredConnections = useMemo(() => {
+    return connections.filter((connection) => {
+      // Filtro por termo de busca (nome do usuário, email, nome da conexão, instância)
+      const searchMatch =
+        searchTerm === "" ||
+        connection.user_profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        connection.user_profiles?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        connection.connection_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        connection.instance_name?.toLowerCase().includes(searchTerm.toLowerCase())
+
+      // Filtro por status
+      const statusMatch = statusFilter === "all" || connection.status === statusFilter
+
+      return searchMatch && statusMatch
+    })
+  }, [connections, searchTerm, statusFilter])
+
   // Função para sincronizar status de uma conexão específica
   const syncConnection = useCallback(
     async (connectionId: string) => {
@@ -128,7 +146,7 @@ export default function AdminWhatsAppPage() {
 
       syncSilently()
     }
-  }, [connections.length])
+  }, [connections])
 
   // Quando o modal QR é aberto, sincronizar a conexão selecionada
   useEffect(() => {
