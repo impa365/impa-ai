@@ -5,22 +5,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Edit, Trash2, QrCode, Smartphone, PowerOff, UserPlus, Plus, Search, Filter, X, RefreshCw } from "lucide-react"
+import {
+  Edit,
+  Trash2,
+  QrCode,
+  Smartphone,
+  PowerOff,
+  UserPlus,
+  Plus,
+  Search,
+  Filter,
+  X,
+  RefreshCw,
+  Info,
+} from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
+import WhatsAppInfoModal from "@/components/whatsapp-info-modal"
 import { syncInstanceStatus, disconnectInstance } from "@/lib/whatsapp-settings-api"
 import { getCurrentUser } from "@/lib/auth"
 import AdminWhatsAppConnectionModal from "@/components/admin-whatsapp-connection-modal"
 import TransferConnectionModal from "@/components/transfer-connection-modal"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Dialog } from "@/components/ui/dialog"
 import { deleteEvolutionInstance } from "@/lib/whatsapp-api"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -29,6 +36,7 @@ export default function AdminWhatsAppPage() {
   const [loading, setLoading] = useState(true)
   const [qrModalOpen, setQrModalOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [infoModalOpen, setInfoModalOpen] = useState(false)
   const [selectedConnection, setSelectedConnection] = useState<any>(null)
   const [saveMessage, setSaveMessage] = useState("")
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -49,6 +57,9 @@ export default function AdminWhatsAppPage() {
   const [connectionToDelete, setConnectionToDelete] = useState<any>(null)
 
   const [syncing, setSyncing] = useState(false)
+  
+  // Estado para armazenar fotos de perfil
+  const [profilePictures, setProfilePictures] = useState<Record<string, string>>({})
 
   useEffect(() => {
     const user = getCurrentUser()
@@ -68,11 +79,64 @@ export default function AdminWhatsAppPage() {
         `)
         .order("created_at", { ascending: false })
 
-      if (data) setConnections(data)
+      if (data) {
+        setConnections(data)
+        
+        // Buscar fotos de perfil para conexões conectadas
+        const connectedInstances = data.filter(conn => conn.status === "connected") || []
+        if (connectedInstances.length > 0) {
+          fetchProfilePictures(connectedInstances)
+        }
+      }
     } catch (error) {
       console.error("Erro ao buscar conexões:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Função para buscar fotos de perfil
+  const fetchProfilePictures = async (connections: any[]) => {
+    try {
+      // Buscar configurações da Evolution API
+      const { data: integrationData } = await supabase
+        .from("integrations")
+        .select("config")
+        .eq("type", "evolution_api")
+        .eq("is_active", true)
+        .single()
+
+      if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
+        return
+      }
+
+      // Fazer requisição para a Evolution API
+      const response = await fetch(`${integrationData.config.apiUrl}/instance/fetchInstances`, {
+        method: "GET",
+        headers: {
+          apikey: integrationData.config.apiKey,
+        },
+      })
+
+      if (!response.ok) return
+
+      const data = await response.json()
+      
+      if (!Array.isArray(data)) return
+
+      // Criar mapa de fotos de perfil
+      const picturesMap: Record<string, string> = {}
+      
+      connections.forEach(connection => {
+        const instanceData = data.find((instance: any) => instance.name === connection.instance_name)
+        if (instanceData?.profilePicUrl) {
+          picturesMap[connection.id] = instanceData.profilePicUrl
+        }
+      })
+
+      setProfilePictures(picturesMap)
+    } catch (error) {
+      console.error("Erro ao buscar fotos de perfil:", error)
     }
   }
 
@@ -377,8 +441,25 @@ export default function AdminWhatsAppPage() {
               filteredConnections.map((connection) => (
                 <div key={connection.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                      <Smartphone className="w-5 h-5 text-green-600" />
+                    <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 flex items-center justify-center bg-gray-50">
+                      {profilePictures[connection.id] ? (
+                        <img 
+                          src={profilePictures[connection.id] || "/placeholder.svg"} 
+                          alt="Foto de perfil" 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "/placeholder.svg?height=40&width=40&query=user";
+                            // Remover a foto de perfil do estado para não tentar carregar novamente
+                            setProfilePictures(prev => {
+                              const newState = {...prev}
+                              delete newState[connection.id]
+                              return newState
+                            })
+                          }}
+                        />
+                      ) : (
+                        <Smartphone className="w-5 h-5 text-green-600" />
+                      )}
                     </div>
                     <div>
                       <div className="font-medium">{connection.connection_name}</div>
@@ -415,17 +496,31 @@ export default function AdminWhatsAppPage() {
                             : "Desconectado"}
                     </Badge>
                     <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedConnection(connection)
-                          setQrModalOpen(true)
-                        }}
-                        title="Ver QR Code"
-                      >
-                        <QrCode className="w-4 h-4" />
-                      </Button>
+                      {connection.status === "connected" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedConnection(connection)
+                            setInfoModalOpen(true)
+                          }}
+                          title="Ver Informações"
+                        >
+                          <Info className="w-4 h-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedConnection(connection)
+                            setQrModalOpen(true)
+                          }}
+                          title="Ver QR Code"
+                        >
+                          <QrCode className="w-4 h-4" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -525,26 +620,11 @@ export default function AdminWhatsAppPage() {
         }}
       />
 
+      <WhatsAppInfoModal
+        open={infoModalOpen}
+        onOpenChange={setInfoModalOpen}
+        connection={selectedConnection}
+      />
+
       {/* Modal de confirmação de exclusão */}
-      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar Exclusão</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja excluir a conexão "{connectionToDelete?.connection_name}"? Esta ação não pode ser
-              desfeita.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={confirmDeleteConnection}>
-              Excluir
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
+      <Dialog open\

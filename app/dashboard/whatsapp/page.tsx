@@ -15,13 +15,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Smartphone, Plus, Trash2, Edit, QrCode, PowerOff, RefreshCw, Search, Filter } from "lucide-react"
+import { Smartphone, Plus, Trash2, Edit, QrCode, PowerOff, RefreshCw, Search, Filter, Info } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import WhatsAppConnectionModal from "@/components/whatsapp-connection-modal"
 import { deleteEvolutionInstance } from "@/lib/whatsapp-api"
 import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
+import WhatsAppInfoModal from "@/components/whatsapp-info-modal"
 import { syncInstanceStatus, disconnectInstance } from "@/lib/whatsapp-settings-api"
 
 export default function WhatsAppPage() {
@@ -45,10 +46,14 @@ export default function WhatsAppPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [connectionToDelete, setConnectionToDelete] = useState<any>(null)
 
-  // Estados para QR Code e configurações
+  // Estados para modais
   const [qrModalOpen, setQrModalOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [infoModalOpen, setInfoModalOpen] = useState(false)
   const [selectedConnection, setSelectedConnection] = useState<any>(null)
+
+  // Estado para armazenar fotos de perfil
+  const [profilePictures, setProfilePictures] = useState<Record<string, string>>({})
 
   useEffect(() => {
     const currentUser = getCurrentUser()
@@ -106,10 +111,61 @@ export default function WhatsAppPage() {
           },
         ])
       }
+
+      // Buscar fotos de perfil para conexões conectadas
+      const connectedInstances = connections?.filter((conn) => conn.status === "connected") || []
+      if (connectedInstances.length > 0) {
+        fetchProfilePictures(connectedInstances)
+      }
     } catch (error) {
       console.error("Erro ao buscar conexões:", error)
     } finally {
       setLoadingConnections(false)
+    }
+  }
+
+  // Função para buscar fotos de perfil
+  const fetchProfilePictures = async (connections: any[]) => {
+    try {
+      // Buscar configurações da Evolution API
+      const { data: integrationData } = await supabase
+        .from("integrations")
+        .select("config")
+        .eq("type", "evolution_api")
+        .eq("is_active", true)
+        .single()
+
+      if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
+        return
+      }
+
+      // Fazer requisição para a Evolution API
+      const response = await fetch(`${integrationData.config.apiUrl}/instance/fetchInstances`, {
+        method: "GET",
+        headers: {
+          apikey: integrationData.config.apiKey,
+        },
+      })
+
+      if (!response.ok) return
+
+      const data = await response.json()
+
+      if (!Array.isArray(data)) return
+
+      // Criar mapa de fotos de perfil
+      const picturesMap: Record<string, string> = {}
+
+      connections.forEach((connection) => {
+        const instanceData = data.find((instance: any) => instance.name === connection.instance_name)
+        if (instanceData?.profilePicUrl) {
+          picturesMap[connection.id] = instanceData.profilePicUrl
+        }
+      })
+
+      setProfilePictures(picturesMap)
+    } catch (error) {
+      console.error("Erro ao buscar fotos de perfil:", error)
     }
   }
 
@@ -167,7 +223,7 @@ export default function WhatsAppPage() {
 
       syncSilently()
     }
-  }, [user, whatsappConnections])
+  }, [user, whatsappConnections.length])
 
   const handleDeleteConnection = async (connection: any) => {
     setConnectionToDelete(connection)
@@ -380,8 +436,25 @@ export default function WhatsAppPage() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                      <Smartphone className="w-5 h-5 text-green-600" />
+                    <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 flex items-center justify-center bg-gray-50">
+                      {profilePictures[connection.id] ? (
+                        <img
+                          src={profilePictures[connection.id] || "/placeholder.svg"}
+                          alt="Foto de perfil"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            ;(e.target as HTMLImageElement).src = "/placeholder.svg?height=40&width=40&query=user"
+                            // Remover a foto de perfil do estado para não tentar carregar novamente
+                            setProfilePictures((prev) => {
+                              const newState = { ...prev }
+                              delete newState[connection.id]
+                              return newState
+                            })
+                          }}
+                        />
+                      ) : (
+                        <Smartphone className="w-5 h-5 text-green-600" />
+                      )}
                     </div>
                     <div>
                       <div className="font-medium">{connection.connection_name}</div>
@@ -418,17 +491,31 @@ export default function WhatsAppPage() {
                             : "Desconectado"}
                     </Badge>
                     <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedConnection(connection)
-                          setQrModalOpen(true)
-                        }}
-                        title="Conectar/Ver QR Code"
-                      >
-                        <QrCode className="w-4 h-4" />
-                      </Button>
+                      {connection.status === "connected" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedConnection(connection)
+                            setInfoModalOpen(true)
+                          }}
+                          title="Ver Informações"
+                        >
+                          <Info className="w-4 h-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedConnection(connection)
+                            setQrModalOpen(true)
+                          }}
+                          title="Conectar/Ver QR Code"
+                        >
+                          <QrCode className="w-4 h-4" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -525,6 +612,8 @@ export default function WhatsAppPage() {
           console.log("Configurações salvas!")
         }}
       />
+
+      <WhatsAppInfoModal open={infoModalOpen} onOpenChange={setInfoModalOpen} connection={selectedConnection} />
     </div>
   )
 }
