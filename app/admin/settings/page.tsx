@@ -770,10 +770,19 @@ export default function AdminSettingsPage() {
             )}
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" onClick={handleResetBranding} disabled={!brandingChanged || saving}>
+            <Button
+              variant="outline"
+              onClick={handleResetBranding}
+              disabled={!brandingChanged || saving}
+              className="text-gray-700 border-gray-300 hover:bg-gray-100"
+            >
               Cancelar
             </Button>
-            <Button onClick={handleSaveBranding} disabled={!brandingChanged || saving} className="gap-2">
+            <Button
+              onClick={handleSaveBranding}
+              disabled={!brandingChanged || saving}
+              className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+            >
               {saving ? "Salvando..." : "Salvar Alterações"}
             </Button>
           </div>
