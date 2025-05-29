@@ -68,11 +68,30 @@ export default function AdminSettingsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingFavicon, setUploadingFavicon] = useState(false)
 
+  // Adicionar após os outros estados
+  const [brandingForm, setBrandingForm] = useState<ThemeConfig>({
+    systemName: "",
+    description: "",
+    logoIcon: "",
+    primaryColor: "",
+    secondaryColor: "",
+    accentColor: "",
+    logoUrl: "",
+    faviconUrl: "",
+    sidebarStyle: "",
+    brandingEnabled: true,
+  })
+  const [brandingChanged, setBrandingChanged] = useState(false)
+
   useEffect(() => {
     const currentUser = getCurrentUser()
     setUser(currentUser)
     fetchIntegrations()
     fetchSystemSettings()
+
+    // Inicializar formulário de branding com o tema atual
+    setBrandingForm(theme)
+
     if (currentUser) {
       setAdminProfileForm({
         full_name: currentUser.full_name || "",
@@ -82,7 +101,7 @@ export default function AdminSettingsPage() {
         confirmPassword: "",
       })
     }
-  }, [])
+  }, [theme])
 
   const fetchSystemSettings = async () => {
     const { data } = await supabase
@@ -491,246 +510,274 @@ export default function AdminSettingsPage() {
   )
 
   const renderBrandingSettings = () => {
-    const handleThemeUpdate = async (updates: Partial<ThemeConfig>) => {
+    const handleBrandingChange = (updates: Partial<ThemeConfig>) => {
+      setBrandingForm((prev) => ({ ...prev, ...updates }))
+      setBrandingChanged(true)
+    }
+
+    const handleSaveBranding = async () => {
       setSaving(true)
       setSaveMessage("")
 
       try {
-        await updateTheme(updates)
-        setSaveMessage("Configurações salvas com sucesso!")
+        await updateTheme(brandingForm)
+        setBrandingChanged(false)
+        setSaveMessage("Configurações de branding salvas com sucesso!")
         setTimeout(() => setSaveMessage(""), 3000)
       } catch (error) {
-        setSaveMessage("Erro ao salvar configurações")
+        setSaveMessage("Erro ao salvar configurações de branding")
         setTimeout(() => setSaveMessage(""), 3000)
       } finally {
         setSaving(false)
       }
     }
 
+    const handleResetBranding = () => {
+      setBrandingForm(theme)
+      setBrandingChanged(false)
+    }
+
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Branding e Identidade</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="systemName">Nome do Sistema</Label>
-              <Input
-                id="systemName"
-                value={theme.systemName}
-                onChange={(e) => handleThemeUpdate({ systemName: e.target.value })}
-                placeholder="Nome da sua plataforma"
-                disabled={saving}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="description">Descrição</Label>
-              <Textarea
-                id="description"
-                value={theme.description || ""}
-                onChange={(e) => handleThemeUpdate({ description: e.target.value })}
-                placeholder="Descrição da sua plataforma"
-                disabled={saving}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="logoIcon">Ícone/Emoji do Logo</Label>
-              <Input
-                id="logoIcon"
-                value={theme.logoIcon}
-                onChange={(e) => handleThemeUpdate({ logoIcon: e.target.value })}
-                placeholder="🤖"
-                maxLength={2}
-                disabled={saving}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="logoUpload">Upload de Logo</Label>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    className="gap-2"
-                    disabled={saving || uploadingLogo}
-                    onClick={() => logoInputRef.current?.click()}
-                  >
-                    <Upload className="w-4 h-4" />
-                    {uploadingLogo ? "Enviando..." : "Escolher Logo"}
-                  </Button>
-                  <input
-                    ref={logoInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/jpg"
-                    onChange={handleLogoUpload}
-                    className="hidden"
-                  />
-                </div>
-                <div className="text-xs text-gray-500 space-y-1">
-                  <p>• Formatos: PNG, JPG</p>
-                  <p>• Tamanho: 100x100 até 500x500 pixels</p>
-                  <p>• Máximo: 2MB</p>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="faviconUpload">Upload de Favicon</Label>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    className="gap-2"
-                    disabled={saving || uploadingFavicon}
-                    onClick={() => faviconInputRef.current?.click()}
-                  >
-                    <ImageIcon className="w-4 h-4" />
-                    {uploadingFavicon ? "Enviando..." : "Escolher Favicon"}
-                  </Button>
-                  <input
-                    ref={faviconInputRef}
-                    type="file"
-                    accept="image/x-icon,image/vnd.microsoft.icon,image/png"
-                    onChange={handleFaviconUpload}
-                    className="hidden"
-                  />
-                </div>
-                <div className="text-xs text-gray-500 space-y-1">
-                  <p>• Formatos: ICO, PNG</p>
-                  <p>• Tamanho: exatamente 32x32 pixels</p>
-                  <p>• Máximo: 1MB</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Esquema de Cores</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="primaryColor">Cor Primária</Label>
-              <div className="flex gap-2">
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Branding e Identidade</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="systemName">Nome do Sistema</Label>
                 <Input
-                  id="primaryColor"
-                  type="color"
-                  value={theme.primaryColor}
-                  onChange={(e) => handleThemeUpdate({ primaryColor: e.target.value })}
-                  className="w-16 h-10"
-                  disabled={saving}
-                />
-                <Input
-                  value={theme.primaryColor}
-                  onChange={(e) => handleThemeUpdate({ primaryColor: e.target.value })}
-                  placeholder="#2563eb"
-                  className="flex-1"
-                  disabled={saving}
+                  id="systemName"
+                  value={brandingForm.systemName}
+                  onChange={(e) => handleBrandingChange({ systemName: e.target.value })}
+                  placeholder="Nome da sua plataforma"
                 />
               </div>
-            </div>
 
-            <div>
-              <Label htmlFor="secondaryColor">Cor Secundária</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="secondaryColor"
-                  type="color"
-                  value={theme.secondaryColor}
-                  onChange={(e) => handleThemeUpdate({ secondaryColor: e.target.value })}
-                  className="w-16 h-10"
-                  disabled={saving}
-                />
-                <Input
-                  value={theme.secondaryColor}
-                  onChange={(e) => handleThemeUpdate({ secondaryColor: e.target.value })}
-                  placeholder="#10b981"
-                  className="flex-1"
-                  disabled={saving}
+              <div>
+                <Label htmlFor="description">Descrição</Label>
+                <Textarea
+                  id="description"
+                  value={brandingForm.description || ""}
+                  onChange={(e) => handleBrandingChange({ description: e.target.value })}
+                  placeholder="Descrição da sua plataforma"
                 />
               </div>
-            </div>
 
-            <div>
-              <Label htmlFor="accentColor">Cor de Destaque</Label>
-              <div className="flex gap-2">
+              <div>
+                <Label htmlFor="logoIcon">Ícone/Emoji do Logo</Label>
                 <Input
-                  id="accentColor"
-                  type="color"
-                  value={theme.accentColor}
-                  onChange={(e) => handleThemeUpdate({ accentColor: e.target.value })}
-                  className="w-16 h-10"
-                  disabled={saving}
-                />
-                <Input
-                  value={theme.accentColor}
-                  onChange={(e) => handleThemeUpdate({ accentColor: e.target.value })}
-                  placeholder="#8b5cf6"
-                  className="flex-1"
-                  disabled={saving}
+                  id="logoIcon"
+                  value={brandingForm.logoIcon}
+                  onChange={(e) => handleBrandingChange({ logoIcon: e.target.value })}
+                  placeholder="🤖"
+                  maxLength={2}
                 />
               </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Temas Predefinidos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              {Object.entries(themePresets).map(([key, preset]) => (
-                <Button
-                  key={key}
-                  variant="outline"
-                  className="h-auto p-4 flex flex-col items-center gap-2"
-                  onClick={() => handleThemeUpdate(preset)}
-                  disabled={saving}
-                >
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white"
-                    style={{ backgroundColor: preset.primaryColor }}
-                  >
-                    <span className="text-sm">{preset.logoIcon}</span>
+              <div>
+                <Label htmlFor="logoUpload">Upload de Logo</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      disabled={saving || uploadingLogo}
+                      onClick={() => logoInputRef.current?.click()}
+                    >
+                      <Upload className="w-4 h-4" />
+                      {uploadingLogo ? "Enviando..." : "Escolher Logo"}
+                    </Button>
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg"
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                    />
                   </div>
-                  <span className="text-sm font-medium capitalize">{key}</span>
-                </Button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Preview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="border rounded-lg p-4 bg-gray-50">
-              <div className="flex items-center gap-2 mb-4">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
-                  style={{ backgroundColor: theme.primaryColor }}
-                >
-                  <span className="text-sm">{theme.logoIcon}</span>
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <p>• Formatos: PNG, JPG</p>
+                    <p>• Tamanho: 100x100 até 500x500 pixels</p>
+                    <p>• Máximo: 2MB</p>
+                  </div>
                 </div>
-                <span className="font-semibold">{theme.systemName}</span>
               </div>
-              <div className="space-y-2">
-                <div className="h-3 rounded" style={{ backgroundColor: theme.primaryColor, opacity: 0.8 }}></div>
-                <div
-                  className="h-3 rounded w-3/4"
-                  style={{ backgroundColor: theme.secondaryColor, opacity: 0.6 }}
-                ></div>
-                <div className="h-3 rounded w-1/2" style={{ backgroundColor: theme.accentColor, opacity: 0.4 }}></div>
+
+              <div>
+                <Label htmlFor="faviconUpload">Upload de Favicon</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      disabled={saving || uploadingFavicon}
+                      onClick={() => faviconInputRef.current?.click()}
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      {uploadingFavicon ? "Enviando..." : "Escolher Favicon"}
+                    </Button>
+                    <input
+                      ref={faviconInputRef}
+                      type="file"
+                      accept="image/x-icon,image/vnd.microsoft.icon,image/png"
+                      onChange={handleFaviconUpload}
+                      className="hidden"
+                    />
+                  </div>
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <p>• Formatos: ICO, PNG</p>
+                    <p>• Tamanho: exatamente 32x32 pixels</p>
+                    <p>• Máximo: 1MB</p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Esquema de Cores</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="primaryColor">Cor Primária</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="primaryColor"
+                    type="color"
+                    value={brandingForm.primaryColor}
+                    onChange={(e) => handleBrandingChange({ primaryColor: e.target.value })}
+                    className="w-16 h-10"
+                  />
+                  <Input
+                    value={brandingForm.primaryColor}
+                    onChange={(e) => handleBrandingChange({ primaryColor: e.target.value })}
+                    placeholder="#2563eb"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="secondaryColor">Cor Secundária</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="secondaryColor"
+                    type="color"
+                    value={brandingForm.secondaryColor}
+                    onChange={(e) => handleBrandingChange({ secondaryColor: e.target.value })}
+                    className="w-16 h-10"
+                  />
+                  <Input
+                    value={brandingForm.secondaryColor}
+                    onChange={(e) => handleBrandingChange({ secondaryColor: e.target.value })}
+                    placeholder="#10b981"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="accentColor">Cor de Destaque</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="accentColor"
+                    type="color"
+                    value={brandingForm.accentColor}
+                    onChange={(e) => handleBrandingChange({ accentColor: e.target.value })}
+                    className="w-16 h-10"
+                  />
+                  <Input
+                    value={brandingForm.accentColor}
+                    onChange={(e) => handleBrandingChange({ accentColor: e.target.value })}
+                    placeholder="#8b5cf6"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Temas Predefinidos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                {Object.entries(themePresets).map(([key, preset]) => (
+                  <Button
+                    key={key}
+                    variant="outline"
+                    className="h-auto p-4 flex flex-col items-center gap-2"
+                    onClick={() => handleBrandingChange(preset)}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white"
+                      style={{ backgroundColor: preset.primaryColor }}
+                    >
+                      <span className="text-sm">{preset.logoIcon}</span>
+                    </div>
+                    <span className="text-sm font-medium capitalize">{key}</span>
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Preview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="border rounded-lg p-4 bg-gray-50">
+                <div className="flex items-center gap-2 mb-4">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
+                    style={{ backgroundColor: brandingForm.primaryColor }}
+                  >
+                    <span className="text-sm">{brandingForm.logoIcon}</span>
+                  </div>
+                  <span className="font-semibold">{brandingForm.systemName}</span>
+                </div>
+                <div className="space-y-2">
+                  <div
+                    className="h-3 rounded"
+                    style={{ backgroundColor: brandingForm.primaryColor, opacity: 0.8 }}
+                  ></div>
+                  <div
+                    className="h-3 rounded w-3/4"
+                    style={{ backgroundColor: brandingForm.secondaryColor, opacity: 0.6 }}
+                  ></div>
+                  <div
+                    className="h-3 rounded w-1/2"
+                    style={{ backgroundColor: brandingForm.accentColor, opacity: 0.4 }}
+                  ></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Botões de ação */}
+        <div className="flex justify-between items-center pt-6 border-t">
+          <div className="flex items-center gap-2">
+            {brandingChanged && (
+              <div className="text-sm text-amber-600 bg-amber-50 px-3 py-1 rounded-md">
+                Você tem alterações não salvas
+              </div>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={handleResetBranding} disabled={!brandingChanged || saving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveBranding} disabled={!brandingChanged || saving} className="gap-2">
+              {saving ? "Salvando..." : "Salvar Alterações"}
+            </Button>
+          </div>
+        </div>
       </div>
     )
   }
