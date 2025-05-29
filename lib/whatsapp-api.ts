@@ -144,6 +144,29 @@ export async function createEvolutionInstance(
   }
 }
 
+// Add this new function to fetch instance details
+export async function fetchInstanceDetails(instanceName: string, apiKey: string) {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_EVOLUTION_API_URL}/instance/fetchInstances`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: apiKey,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Error fetching instance details: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data
+  } catch (error) {
+    console.error("Error fetching instance details:", error)
+    throw error
+  }
+}
+
 // Função para buscar QR Code
 export async function getInstanceQRCode(instanceName: string): Promise<{
   success: boolean

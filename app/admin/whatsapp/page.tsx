@@ -1,630 +1,406 @@
 "use client"
 
-import { useEffect, useState, useMemo, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import {
-  Edit,
-  Trash2,
-  QrCode,
-  Smartphone,
-  PowerOff,
-  UserPlus,
-  Plus,
-  Search,
-  Filter,
-  X,
-  RefreshCw,
-  Info,
-} from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
-import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
-import WhatsAppInfoModal from "@/components/whatsapp-info-modal"
-import { syncInstanceStatus, disconnectInstance } from "@/lib/whatsapp-settings-api"
-import { getCurrentUser } from "@/lib/auth"
-import AdminWhatsAppConnectionModal from "@/components/admin-whatsapp-connection-modal"
-import TransferConnectionModal from "@/components/transfer-connection-modal"
-import { Dialog } from "@/components/ui/dialog"
-import { deleteEvolutionInstance } from "@/lib/whatsapp-api"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { Smartphone, QrCode, Settings, UserPlus, Trash2, RefreshCcw, Search, Info } from "lucide-react"
+import { WhatsAppQRModal } from "@/components/whatsapp-qr-modal"
+import { WhatsAppSettingsModal } from "@/components/whatsapp-settings-modal"
+import { TransferConnectionModal } from "@/components/transfer-connection-modal"
+import { WhatsAppInfoModal } from "@/components/whatsapp-info-modal"
+import { AdminWhatsAppConnectionModal } from "@/components/admin-whatsapp-connection-modal"
+import { fetchWhatsAppInstances, disconnectWhatsAppInstance, deleteWhatsAppInstance } from "@/lib/whatsapp-api"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
-export default function AdminWhatsAppPage() {
-  const [connections, setConnections] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [qrModalOpen, setQrModalOpen] = useState(false)
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
-  const [infoModalOpen, setInfoModalOpen] = useState(false)
-  const [selectedConnection, setSelectedConnection] = useState<any>(null)
-  const [saveMessage, setSaveMessage] = useState("")
-  const [currentUser, setCurrentUser] = useState<any>(null)
+interface User {
+  id: string
+  email: string
+  name?: string
+}
 
-  // Estados para filtros
+interface WhatsAppInstance {
+  id: string
+  name: string
+  status: "disconnected" | "connecting" | "connected"
+  user_id: string
+  api_key: string
+  user?: {
+    id: string
+    email: string
+    name?: string
+  }
+  profile_pic_url?: string
+}
+
+export default function WhatsAppPage() {
+  const [instances, setInstances] = useState<WhatsAppInstance[]>([])
+  const [filteredInstances, setFilteredInstances] = useState<WhatsAppInstance[]>([])
+  const [users, setUsers] = useState<User[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [showFilters, setShowFilters] = useState(false)
-
-  // Estados para o modal de criação
-  const [createModalOpen, setCreateModalOpen] = useState(false)
-
-  // Estados para o modal de transferência
-  const [transferModalOpen, setTransferModalOpen] = useState(false)
-
-  // Estados para confirmação de exclusão
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-  const [connectionToDelete, setConnectionToDelete] = useState<any>(null)
-
-  const [syncing, setSyncing] = useState(false)
-  
-  // Estado para armazenar fotos de perfil
-  const [profilePictures, setProfilePictures] = useState<Record<string, string>>({})
+  const [userFilter, setUserFilter] = useState("all")
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false)
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false)
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false)
+  const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false)
+  const [selectedInstance, setSelectedInstance] = useState<WhatsAppInstance | null>(null)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
-    const user = getCurrentUser()
-    if (user) {
-      setCurrentUser(user)
-    }
-    fetchConnections()
+    fetchData()
   }, [])
 
-  const fetchConnections = async () => {
-    try {
-      const { data } = await supabase
-        .from("whatsapp_connections")
-        .select(`
-          *,
-          user_profiles!whatsapp_connections_user_id_fkey(full_name, email)
-        `)
-        .order("created_at", { ascending: false })
+  useEffect(() => {
+    filterInstances()
+  }, [instances, searchTerm, statusFilter, userFilter])
 
-      if (data) {
-        setConnections(data)
-        
-        // Buscar fotos de perfil para conexões conectadas
-        const connectedInstances = data.filter(conn => conn.status === "connected") || []
-        if (connectedInstances.length > 0) {
-          fetchProfilePictures(connectedInstances)
-        }
+  async function fetchData() {
+    setIsLoading(true)
+    try {
+      // Fetch WhatsApp instances
+      const instancesData = await fetchWhatsAppInstances()
+      setInstances(instancesData)
+
+      // Fetch users
+      const { data: usersData, error: usersError } = await supabase.from("users").select("id, email, name")
+
+      if (usersError) {
+        throw usersError
       }
+
+      setUsers(usersData || [])
     } catch (error) {
-      console.error("Erro ao buscar conexões:", error)
+      console.error("Error fetching data:", error)
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
-  // Função para buscar fotos de perfil
-  const fetchProfilePictures = async (connections: any[]) => {
-    try {
-      // Buscar configurações da Evolution API
-      const { data: integrationData } = await supabase
-        .from("integrations")
-        .select("config")
-        .eq("type", "evolution_api")
-        .eq("is_active", true)
-        .single()
+  function filterInstances() {
+    let filtered = [...instances]
 
-      if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
-        return
-      }
-
-      // Fazer requisição para a Evolution API
-      const response = await fetch(`${integrationData.config.apiUrl}/instance/fetchInstances`, {
-        method: "GET",
-        headers: {
-          apikey: integrationData.config.apiKey,
-        },
-      })
-
-      if (!response.ok) return
-
-      const data = await response.json()
-      
-      if (!Array.isArray(data)) return
-
-      // Criar mapa de fotos de perfil
-      const picturesMap: Record<string, string> = {}
-      
-      connections.forEach(connection => {
-        const instanceData = data.find((instance: any) => instance.name === connection.instance_name)
-        if (instanceData?.profilePicUrl) {
-          picturesMap[connection.id] = instanceData.profilePicUrl
-        }
-      })
-
-      setProfilePictures(picturesMap)
-    } catch (error) {
-      console.error("Erro ao buscar fotos de perfil:", error)
-    }
-  }
-
-  // Filtrar conexões baseado nos critérios de busca
-  const filteredConnections = useMemo(() => {
-    return connections.filter((connection) => {
-      // Filtro por termo de busca (nome do usuário, email, nome da conexão, instância)
-      const searchMatch =
-        searchTerm === "" ||
-        connection.user_profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        connection.user_profiles?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        connection.connection_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        connection.instance_name?.toLowerCase().includes(searchTerm.toLowerCase())
-
-      // Filtro por status
-      const statusMatch = statusFilter === "all" || connection.status === statusFilter
-
-      return searchMatch && statusMatch
-    })
-  }, [connections, searchTerm, statusFilter])
-
-  // Função para sincronizar status de uma conexão específica
-  const syncConnection = useCallback(
-    async (connectionId: string) => {
-      if (syncing) return
-
-      setSyncing(true)
-      try {
-        await syncInstanceStatus(connectionId)
-        await fetchConnections()
-      } catch (error) {
-        console.error("Erro ao sincronizar:", error)
-      } finally {
-        setSyncing(false)
-      }
-    },
-    [syncing],
-  )
-
-  // Modifique a função de sincronização manual para lidar melhor com erros
-  const handleManualSync = async () => {
-    if (syncing || !connections.length) return
-
-    setSyncing(true)
-    try {
-      // Sincronizar conexões em paralelo com Promise.allSettled para continuar mesmo com erros
-      const syncPromises = connections.map((connection) =>
-        syncInstanceStatus(connection.id).catch((error) => {
-          console.error(`Erro ao sincronizar conexão ${connection.id}:`, error)
-          return { success: false, updated: false, error: String(error) }
-        }),
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (instance) =>
+          instance.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          instance.user?.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          instance.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()),
       )
+    }
 
-      await Promise.allSettled(syncPromises)
+    // Filter by status
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((instance) => instance.status === statusFilter)
+    }
 
-      // Recarregar conexões após sincronização
-      await fetchConnections()
+    // Filter by user
+    if (userFilter !== "all") {
+      filtered = filtered.filter((instance) => instance.user_id === userFilter)
+    }
+
+    setFilteredInstances(filtered)
+  }
+
+  async function handleDisconnect(instance: WhatsAppInstance) {
+    setActionLoading(instance.id)
+    try {
+      await disconnectWhatsAppInstance(instance.name, instance.api_key)
+      // Update the instance status in the local state
+      setInstances((prevInstances) =>
+        prevInstances.map((i) => (i.id === instance.id ? { ...i, status: "disconnected" } : i)),
+      )
     } catch (error) {
-      console.error("Erro na sincronização manual:", error)
+      console.error("Error disconnecting instance:", error)
     } finally {
-      setSyncing(false)
+      setActionLoading(null)
     }
   }
 
-  // Modifique a função de sincronização silenciosa para lidar melhor com erros
-  useEffect(() => {
-    if (connections.length > 0) {
-      // Sincronização silenciosa (sem indicador visual)
-      const syncSilently = async () => {
-        try {
-          // Sincronizar conexões em paralelo com Promise.allSettled para continuar mesmo com erros
-          const syncPromises = connections.map((connection) =>
-            syncInstanceStatus(connection.id).catch((error) => {
-              console.error(`Erro ao sincronizar conexão ${connection.id}:`, error)
-              return { success: false, updated: false, error: String(error) }
-            }),
-          )
-
-          await Promise.allSettled(syncPromises)
-
-          // Recarregar conexões após sincronização
-          await fetchConnections()
-        } catch (error) {
-          console.error("Erro na sincronização silenciosa:", error)
-        }
-      }
-
-      syncSilently()
-    }
-  }, [connections.length])
-
-  // Quando o modal QR é aberto, sincronizar a conexão selecionada
-  useEffect(() => {
-    if (qrModalOpen && selectedConnection) {
-      syncConnection(selectedConnection.id)
-    }
-  }, [qrModalOpen, selectedConnection, syncConnection])
-
-  // Quando o modal de configurações é aberto, sincronizar a conexão selecionada
-  useEffect(() => {
-    if (settingsModalOpen && selectedConnection) {
-      syncConnection(selectedConnection.id)
-    }
-  }, [settingsModalOpen, selectedConnection, syncConnection])
-
-  const handleDisconnectConnection = async (connection: any) => {
+  async function handleDelete(instance: WhatsAppInstance) {
+    setActionLoading(instance.id)
     try {
-      const result = await disconnectInstance(connection.instance_name)
-
-      if (result.success) {
-        // Sincronizar status após desconectar
-        await syncConnection(connection.id)
-        setSaveMessage("Conexão desconectada com sucesso!")
-        setTimeout(() => setSaveMessage(""), 3000)
-      }
+      await deleteWhatsAppInstance(instance.name, instance.api_key)
+      // Remove the instance from the local state
+      setInstances((prevInstances) => prevInstances.filter((i) => i.id !== instance.id))
     } catch (error) {
-      console.error("Erro ao desconectar:", error)
-      setSaveMessage("Erro ao desconectar conexão")
-      setTimeout(() => setSaveMessage(""), 3000)
+      console.error("Error deleting instance:", error)
+    } finally {
+      setActionLoading(null)
     }
   }
 
-  const handleDeleteConnection = (connection: any) => {
-    setConnectionToDelete(connection)
-    setDeleteConfirmOpen(true)
+  function handleQRCode(instance: WhatsAppInstance) {
+    setSelectedInstance(instance)
+    setIsQRModalOpen(true)
   }
 
-  const confirmDeleteConnection = async () => {
-    if (!connectionToDelete) return
+  function handleSettings(instance: WhatsAppInstance) {
+    setSelectedInstance(instance)
+    setIsSettingsModalOpen(true)
+  }
 
-    try {
-      // Deletar da Evolution API
-      await deleteEvolutionInstance(connectionToDelete.instance_name)
+  function handleTransfer(instance: WhatsAppInstance) {
+    setSelectedInstance(instance)
+    setIsTransferModalOpen(true)
+  }
 
-      // Deletar do banco
-      const { error } = await supabase.from("whatsapp_connections").delete().eq("id", connectionToDelete.id)
+  function handleInfo(instance: WhatsAppInstance) {
+    setSelectedInstance(instance)
+    setIsInfoModalOpen(true)
+  }
 
-      if (error) throw error
+  function handleCreateConnection() {
+    setIsConnectionModalOpen(true)
+  }
 
-      await fetchConnections()
-      setDeleteConfirmOpen(false)
-      setConnectionToDelete(null)
-      setSaveMessage("Conexão excluída com sucesso!")
-      setTimeout(() => setSaveMessage(""), 3000)
-    } catch (error) {
-      console.error("Erro ao deletar conexão:", error)
-      setSaveMessage("Erro ao excluir conexão")
-      setTimeout(() => setSaveMessage(""), 3000)
+  function getStatusBadge(status: string) {
+    switch (status) {
+      case "connected":
+        return <Badge variant="success">Conectado</Badge>
+      case "connecting":
+        return <Badge variant="warning">Conectando</Badge>
+      case "disconnected":
+        return <Badge variant="destructive">Desconectado</Badge>
+      default:
+        return <Badge variant="outline">Desconhecido</Badge>
     }
-  }
-
-  const clearFilters = () => {
-    setSearchTerm("")
-    setStatusFilter("all")
-  }
-
-  const hasActiveFilters = searchTerm !== "" || statusFilter !== "all"
-
-  if (loading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-start mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Conexões WhatsApp</h1>
-          <p className="text-gray-600">Todas as conexões WhatsApp dos usuários</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handleManualSync}
-            disabled={syncing}
-            className="gap-2"
-            title="Sincronizar status das conexões"
-          >
-            <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Sincronizando..." : "Sincronizar"}
-          </Button>
-          <Button onClick={() => setCreateModalOpen(true)} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Nova Conexão
-          </Button>
-        </div>
+    <div className="container mx-auto py-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Conexões WhatsApp</h1>
+        <Button onClick={handleCreateConnection}>
+          <UserPlus className="mr-2 h-4 w-4" />
+          Nova Conexão
+        </Button>
       </div>
 
-      {saveMessage && (
-        <div
-          className={`mb-6 px-4 py-2 rounded-lg text-sm ${
-            saveMessage.includes("sucesso") ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-          }`}
-        >
-          {saveMessage}
-        </div>
-      )}
-
-      {/* Filtros */}
       <Card className="mb-6">
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Filtros</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-2">
-              <Filter className="w-4 h-4" />
-              {showFilters ? "Ocultar" : "Mostrar"} Filtros
-            </Button>
-          </div>
+        <CardHeader>
+          <CardTitle>Filtros</CardTitle>
+          <CardDescription>Filtre as conexões por usuário, status ou nome</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Barra de busca sempre visível */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="Buscar por usuário, email, nome da conexão ou instância..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-10"
-            />
-            {searchTerm && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSearchTerm("")}
-                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
-
-          {/* Filtros adicionais */}
-          {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Status</label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos os status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os status</SelectItem>
-                    <SelectItem value="connected">Conectado</SelectItem>
-                    <SelectItem value="disconnected">Desconectado</SelectItem>
-                    <SelectItem value="connecting">Conectando</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-end">
-                {hasActiveFilters && (
-                  <Button variant="outline" onClick={clearFilters} className="gap-2">
-                    <X className="w-4 h-4" />
-                    Limpar Filtros
-                  </Button>
-                )}
-              </div>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center space-x-2">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1"
+              />
             </div>
-          )}
-
-          <div className="flex justify-between items-start mb-6">
-            <div className="text-sm text-gray-500">
-              Mostrando {filteredConnections.length} de {connections.length} conexões
-              {hasActiveFilters && " (filtrado)"}
-              {syncing && <span className="ml-2 text-blue-600">• Sincronizando status...</span>}
-            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filtrar por status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os status</SelectItem>
+                <SelectItem value="connected">Conectado</SelectItem>
+                <SelectItem value="connecting">Conectando</SelectItem>
+                <SelectItem value="disconnected">Desconectado</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={userFilter} onValueChange={setUserFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filtrar por usuário" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os usuários</SelectItem>
+                {users.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.name || user.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Conexões</CardTitle>
+          <CardTitle>Conexões ({filteredInstances.length})</CardTitle>
+          <CardDescription>Gerencie as conexões WhatsApp dos usuários</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {filteredConnections.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                {connections.length === 0
-                  ? "Nenhuma conexão WhatsApp encontrada"
-                  : "Nenhuma conexão encontrada com os filtros aplicados"}
-                {hasActiveFilters && (
-                  <div className="mt-2">
-                    <Button variant="link" onClick={clearFilters} className="text-sm">
-                      Limpar filtros para ver todas as conexões
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              filteredConnections.map((connection) => (
-                <div key={connection.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 flex items-center justify-center bg-gray-50">
-                      {profilePictures[connection.id] ? (
-                        <img 
-                          src={profilePictures[connection.id] || "/placeholder.svg"} 
-                          alt="Foto de perfil" 
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = "/placeholder.svg?height=40&width=40&query=user";
-                            // Remover a foto de perfil do estado para não tentar carregar novamente
-                            setProfilePictures(prev => {
-                              const newState = {...prev}
-                              delete newState[connection.id]
-                              return newState
-                            })
-                          }}
-                        />
-                      ) : (
-                        <Smartphone className="w-5 h-5 text-green-600" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="font-medium">{connection.connection_name}</div>
-                      <div className="text-sm text-gray-600">
-                        Usuário:{" "}
-                        {connection.user_profiles?.full_name || connection.user_profiles?.email || "Desconhecido"}
+          {isLoading ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : filteredInstances.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">Nenhuma conexão encontrada</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredInstances.map((instance) => (
+                <Card key={instance.id} className="overflow-hidden">
+                  <CardHeader className="bg-muted/50 pb-2">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <CardTitle className="text-lg truncate" title={instance.name}>
+                          {instance.name}
+                        </CardTitle>
+                        <CardDescription className="truncate">
+                          {instance.user?.name || instance.user?.email || "Usuário desconhecido"}
+                        </CardDescription>
                       </div>
-                      <div className="text-xs text-gray-500">Instância: {connection.instance_name}</div>
+                      <div className="ml-2">{getStatusBadge(instance.status)}</div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={
-                        connection.status === "connected"
-                          ? "default"
-                          : connection.status === "connecting"
-                            ? "secondary"
-                            : "secondary"
-                      }
-                      className={
-                        connection.status === "connected"
-                          ? "bg-green-100 text-green-700"
-                          : connection.status === "connecting"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : "bg-gray-100 text-gray-700"
-                      }
-                    >
-                      {connection.status === "connected"
-                        ? "Conectado"
-                        : connection.status === "connecting"
-                          ? "Conectando"
-                          : connection.status === "error"
-                            ? "Erro"
-                            : "Desconectado"}
-                    </Badge>
-                    <div className="flex gap-1">
-                      {connection.status === "connected" ? (
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="flex items-center mb-4">
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-muted flex items-center justify-center mr-3">
+                        {instance.profile_pic_url ? (
+                          <img
+                            src={instance.profile_pic_url || "/placeholder.svg"}
+                            alt="Perfil"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Smartphone className="h-6 w-6 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">ID: {instance.id.substring(0, 8)}...</div>
+                        <div className="text-xs text-muted-foreground">
+                          API Key: {instance.api_key.substring(0, 8)}...
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* Disconnect button - show only when status is connected or connecting */}
+                      {(instance.status === "connected" || instance.status === "connecting") && (
                         <Button
-                          variant="ghost"
+                          variant="destructive"
                           size="sm"
-                          onClick={() => {
-                            setSelectedConnection(connection)
-                            setInfoModalOpen(true)
-                          }}
-                          title="Ver Informações"
+                          onClick={() => handleDisconnect(instance)}
+                          disabled={actionLoading === instance.id}
+                          className="w-full"
                         >
-                          <Info className="w-4 h-4" />
+                          {actionLoading === instance.id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          ) : (
+                            <>
+                              <RefreshCcw className="mr-2 h-4 w-4" />
+                              Desconectar
+                            </>
+                          )}
+                        </Button>
+                      )}
+
+                      {/* QR Code button for disconnected/connecting or Info button for connected */}
+                      {instance.status === "connected" ? (
+                        <Button variant="outline" size="sm" onClick={() => handleInfo(instance)} className="w-full">
+                          <Info className="mr-2 h-4 w-4" />
+                          Informações
                         </Button>
                       ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedConnection(connection)
-                            setQrModalOpen(true)
-                          }}
-                          title="Ver QR Code"
-                        >
-                          <QrCode className="w-4 h-4" />
+                        <Button variant="outline" size="sm" onClick={() => handleQRCode(instance)} className="w-full">
+                          <QrCode className="mr-2 h-4 w-4" />
+                          QR Code
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedConnection(connection)
-                          setSettingsModalOpen(true)
-                        }}
-                        title="Configurações"
-                      >
-                        <Edit className="w-4 h-4" />
+
+                      {/* Settings button */}
+                      <Button variant="outline" size="sm" onClick={() => handleSettings(instance)} className="w-full">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Configurar
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedConnection(connection)
-                          setTransferModalOpen(true)
-                        }}
-                        title="Transferir Propriedade"
-                      >
-                        <UserPlus className="w-4 h-4" />
+
+                      {/* Transfer button */}
+                      <Button variant="outline" size="sm" onClick={() => handleTransfer(instance)} className="w-full">
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Transferir
                       </Button>
-                      {(connection.status === "connected" || connection.status === "connecting") && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-orange-600"
-                          onClick={() => handleDisconnectConnection(connection)}
-                          title="Desconectar"
-                        >
-                          <PowerOff className="w-4 h-4" />
-                        </Button>
-                      )}
+
+                      {/* Delete button */}
                       <Button
-                        variant="ghost"
+                        variant="destructive"
                         size="sm"
-                        className="text-red-600"
-                        onClick={() => handleDeleteConnection(connection)}
-                        title="Excluir"
+                        onClick={() => handleDelete(instance)}
+                        disabled={actionLoading === instance.id}
+                        className="w-full"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        {actionLoading === instance.id ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        ) : (
+                          <>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Excluir
+                          </>
+                        )}
                       </Button>
                     </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Modais */}
-      <WhatsAppQRModal
-        open={qrModalOpen}
-        onOpenChange={setQrModalOpen}
-        connection={selectedConnection}
-        onStatusChange={(status) => {
-          if (selectedConnection) {
-            supabase
-              .from("whatsapp_connections")
-              .update({ status })
-              .eq("id", selectedConnection.id)
-              .then(() => fetchConnections())
-          }
-        }}
-      />
+      {/* QR Code Modal */}
+      {selectedInstance && (
+        <WhatsAppQRModal
+          isOpen={isQRModalOpen}
+          onClose={() => setIsQRModalOpen(false)}
+          instanceName={selectedInstance.name}
+          apiKey={selectedInstance.api_key}
+          status={selectedInstance.status}
+        />
+      )}
 
-      <WhatsAppSettingsModal
-        open={settingsModalOpen}
-        onOpenChange={setSettingsModalOpen}
-        connection={selectedConnection}
-        onSettingsSaved={() => {
-          setSaveMessage("Configurações salvas com sucesso!")
-          setTimeout(() => setSaveMessage(""), 3000)
-        }}
-      />
+      {/* Settings Modal */}
+      {selectedInstance && (
+        <WhatsAppSettingsModal
+          isOpen={isSettingsModalOpen}
+          onClose={() => setIsSettingsModalOpen(false)}
+          instanceName={selectedInstance.name}
+          apiKey={selectedInstance.api_key}
+        />
+      )}
 
+      {/* Transfer Modal */}
+      {selectedInstance && (
+        <TransferConnectionModal
+          isOpen={isTransferModalOpen}
+          onClose={() => {
+            setIsTransferModalOpen(false)
+            fetchData() // Refresh data after transfer
+          }}
+          instance={selectedInstance}
+          users={users}
+        />
+      )}
+
+      {/* Info Modal */}
+      {selectedInstance && (
+        <WhatsAppInfoModal
+          isOpen={isInfoModalOpen}
+          onClose={() => setIsInfoModalOpen(false)}
+          instanceName={selectedInstance.name}
+          apiKey={selectedInstance.api_key}
+        />
+      )}
+
+      {/* Connection Modal */}
       <AdminWhatsAppConnectionModal
-        open={createModalOpen}
-        onOpenChange={setCreateModalOpen}
-        adminId={currentUser?.id}
-        onSuccess={() => {
-          fetchConnections()
-          setSaveMessage("Conexão criada com sucesso!")
-          setTimeout(() => setSaveMessage(""), 3000)
+        isOpen={isConnectionModalOpen}
+        onClose={() => {
+          setIsConnectionModalOpen(false)
+          fetchData() // Refresh data after creating a new connection
         }}
+        users={users}
       />
-
-      <TransferConnectionModal
-        open={transferModalOpen}
-        onOpenChange={setTransferModalOpen}
-        connection={selectedConnection}
-        onSuccess={() => {
-          fetchConnections()
-          setSaveMessage("Conexão transferida com sucesso!")
-          setTimeout(() => setSaveMessage(""), 3000)
-        }}
-      />
-
-      <WhatsAppInfoModal
-        open={infoModalOpen}
-        onOpenChange={setInfoModalOpen}
-        connection={selectedConnection}
-      />
-
-      {/* Modal de confirmação de exclusão */}
-      <Dialog open\
+    </div>
+  )
+}

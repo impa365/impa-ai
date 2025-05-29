@@ -6,26 +6,26 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatPhoneNumber(phoneNumber: string): string {
-  // Remove caracteres não numéricos
+  if (!phoneNumber) return ""
+
+  // Remove any non-digit characters
   const cleaned = phoneNumber.replace(/\D/g, "")
 
-  // Verifica se é um número brasileiro (começando com 55)
+  // Format based on length and country code patterns
   if (cleaned.startsWith("55") && cleaned.length >= 12) {
-    // Formato brasileiro: +55 (XX) XXXXX-XXXX
-    const country = cleaned.slice(0, 2)
-    const ddd = cleaned.slice(2, 4)
-    const part1 = cleaned.slice(4, 9)
-    const part2 = cleaned.slice(9, 13)
-    return `+${country} (${ddd}) ${part1}-${part2}`
+    // Brazilian format: +55 (XX) XXXXX-XXXX
+    const countryCode = cleaned.substring(0, 2)
+    const areaCode = cleaned.substring(2, 4)
+    const firstPart = cleaned.substring(4, 9)
+    const secondPart = cleaned.substring(9)
+    return `+${countryCode} (${areaCode}) ${firstPart}-${secondPart}`
+  } else if (cleaned.length > 10) {
+    // Generic international format
+    const countryCode = cleaned.substring(0, 2)
+    const rest = cleaned.substring(2)
+    return `+${countryCode} ${rest}`
   }
 
-  // Para outros formatos, tenta uma formatação genérica
-  if (cleaned.length > 10) {
-    const country = cleaned.slice(0, 2)
-    const rest = cleaned.slice(2)
-    return `+${country} ${rest}`
-  }
-
-  // Se não conseguir formatar, retorna o número original
-  return phoneNumber
+  // Fallback for unknown formats
+  return `+${cleaned}`
 }
