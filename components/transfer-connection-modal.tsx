@@ -138,7 +138,9 @@ export default function TransferConnectionModal({
             <UserPlus className="w-5 h-5" />
             Transferir Conexão WhatsApp
           </DialogTitle>
-          <DialogDescription>Transferir a conexão "{connection?.connection_name}" para outro usuário</DialogDescription>
+          <DialogDescription className="text-muted-foreground">
+            Transferir a conexão "{connection?.connection_name}" para outro usuário
+          </DialogDescription>
         </DialogHeader>
 
         {error && (
@@ -157,7 +159,7 @@ export default function TransferConnectionModal({
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="currentUser">Usuário Atual</Label>
-            <div className="p-2 border rounded-md bg-gray-50">
+            <div className="p-2 border rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200">
               {connection?.user_profiles?.full_name || connection?.user_profiles?.email || "Desconhecido"}
             </div>
           </div>

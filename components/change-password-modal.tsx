@@ -142,7 +142,7 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="absolute right-8 top-0 h-full px-2"
+                className="absolute right-8 top-0 h-full px-2 text-gray-700 dark:text-gray-300"
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={loading}
               >
@@ -152,7 +152,7 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="absolute right-0 top-0 h-full px-2"
+                className="absolute right-0 top-0 h-full px-2 text-gray-700 dark:text-gray-300"
                 onClick={generateRandomPassword}
                 disabled={loading}
                 title="Gerar senha aleatória"
@@ -174,9 +174,9 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
             />
           </div>
 
-          <div className="text-sm text-gray-600 bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-            <strong className="text-yellow-700">⚠️ Atenção:</strong> As senhas estão sendo salvas em texto plano para
-            fins de demonstração. Em um ambiente de produção, utilize hash de senhas (ex: bcrypt).
+          <div className="text-sm text-yellow-800 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/30 p-3 rounded-lg border border-yellow-200 dark:border-yellow-700/50">
+            <strong className="text-yellow-900 dark:text-yellow-200">⚠️ Atenção:</strong> As senhas estão sendo salvas em
+            texto plano para fins de demonstração. Em um ambiente de produção, utilize hash de senhas (ex: bcrypt).
             <br />
             <strong>Importante:</strong> Comunique a nova senha ao usuário por um canal seguro.
           </div>

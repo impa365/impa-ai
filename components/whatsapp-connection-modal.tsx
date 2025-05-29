@@ -145,7 +145,9 @@ export default function WhatsAppConnectionModal({
                 disabled={loading}
                 maxLength={20}
               />
-              <p className="text-xs text-gray-500">Use apenas letras, números e underscores. Mínimo 3 caracteres.</p>
+              <p className="text-xs text-muted-foreground">
+                Use apenas letras, números e underscores. Mínimo 3 caracteres.
+              </p>
             </div>
 
             <div className="flex justify-end gap-2">

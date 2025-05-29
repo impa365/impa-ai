@@ -196,7 +196,7 @@ export default function WhatsAppSettingsModal({
           <DialogDescription>
             Configure o comportamento da sua conexão WhatsApp
             <br />
-            <span className="text-xs text-gray-500">Instância: {connection?.instance_name}</span>
+            <span className="text-xs text-muted-foreground">Instância: {connection?.instance_name}</span>
           </DialogDescription>
         </DialogHeader>
 
@@ -220,8 +220,14 @@ export default function WhatsAppSettingsModal({
         ) : (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <p className="text-sm text-gray-600">Configurações sincronizadas com a Evolution API</p>
-              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loadingSettings}>
+              <p className="text-sm text-muted-foreground">Configurações sincronizadas com a Evolution API</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={loadingSettings}
+                className="text-foreground"
+              >
                 <RefreshCw className={`w-4 h-4 mr-2 ${loadingSettings ? "animate-spin" : ""}`} />
                 Recarregar
               </Button>
@@ -234,7 +240,7 @@ export default function WhatsAppSettingsModal({
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Ignorar Grupos</Label>
-                    <p className="text-sm text-gray-600">Não receber mensagens de grupos</p>
+                    <p className="text-sm text-muted-foreground">Não receber mensagens de grupos</p>
                   </div>
                   <Switch
                     checked={settings.groupsIgnore}
@@ -245,7 +251,7 @@ export default function WhatsAppSettingsModal({
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Marcar como Lidas</Label>
-                    <p className="text-sm text-gray-600">Marcar mensagens como lidas automaticamente</p>
+                    <p className="text-sm text-muted-foreground">Marcar mensagens como lidas automaticamente</p>
                   </div>
                   <Switch
                     checked={settings.readMessages}
@@ -256,7 +262,7 @@ export default function WhatsAppSettingsModal({
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Sincronizar Histórico</Label>
-                    <p className="text-sm text-gray-600">Sincronizar histórico completo de mensagens</p>
+                    <p className="text-sm text-muted-foreground">Sincronizar histórico completo de mensagens</p>
                   </div>
                   <Switch
                     checked={settings.syncFullHistory}
@@ -275,7 +281,7 @@ export default function WhatsAppSettingsModal({
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Sempre Online</Label>
-                    <p className="text-sm text-gray-600">Manter status online constantemente</p>
+                    <p className="text-sm text-muted-foreground">Manter status online constantemente</p>
                   </div>
                   <Switch
                     checked={settings.alwaysOnline}
@@ -286,7 +292,7 @@ export default function WhatsAppSettingsModal({
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Ver Status</Label>
-                    <p className="text-sm text-gray-600">Permitir visualizar status dos contatos</p>
+                    <p className="text-sm text-muted-foreground">Permitir visualizar status dos contatos</p>
                   </div>
                   <Switch
                     checked={settings.readStatus}
@@ -305,7 +311,7 @@ export default function WhatsAppSettingsModal({
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Rejeitar Chamadas</Label>
-                    <p className="text-sm text-gray-600">Rejeitar chamadas automaticamente</p>
+                    <p className="text-sm text-muted-foreground">Rejeitar chamadas automaticamente</p>
                   </div>
                   <Switch
                     checked={settings.rejectCall}
