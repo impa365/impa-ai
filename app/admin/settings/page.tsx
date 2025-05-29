@@ -341,7 +341,7 @@ export default function AdminSettingsPage() {
     <div>
       <div className="mb-6">
         <h3 className="text-xl font-bold text-black hover-text mb-2">Perfil do Administrador</h3>
-        <p className="text-gray-800 hover-text font-medium">Gerencie suas informações pessoais e senha</p>
+        <p className="text-gray-800 font-medium">Gerencie suas informações pessoais e senha</p>
       </div>
 
       {adminProfileMessage && (
@@ -353,7 +353,7 @@ export default function AdminSettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="border-2 border-gray-300">
           <CardHeader className="bg-gray-50">
-            <CardTitle className="text-black hover-text">Informações Pessoais</CardTitle>
+            <CardTitle className="text-black">Informações Pessoais</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 bg-white">
             <div>
@@ -386,7 +386,7 @@ export default function AdminSettingsPage() {
 
         <Card className="border-2 border-gray-300">
           <CardHeader className="bg-gray-50">
-            <CardTitle className="text-black hover-text">Alterar Senha</CardTitle>
+            <CardTitle className="text-black">Alterar Senha</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 bg-white">
             <div>
@@ -477,12 +477,12 @@ export default function AdminSettingsPage() {
     <div>
       <div className="mb-6">
         <h3 className="text-xl font-bold text-black hover-text mb-2">Configurações do Sistema</h3>
-        <p className="text-gray-800 hover-text font-medium">Configure parâmetros globais da plataforma</p>
+        <p className="text-gray-800 font-medium">Configure parâmetros globais da plataforma</p>
       </div>
 
       <Card className="border-2 border-gray-300">
         <CardHeader className="bg-gray-50">
-          <CardTitle className="text-black hover-text">Limites e Restrições</CardTitle>
+          <CardTitle className="text-black">Limites e Restrições</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 bg-white">
           <div>
@@ -539,11 +539,11 @@ export default function AdminSettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="border-2 border-gray-300">
           <CardHeader className="bg-gray-50">
-            <CardTitle className="text-black hover-text">Branding e Identidade</CardTitle>
+            <CardTitle className="text-black">Branding e Identidade</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 bg-white">
             <div>
-              <Label htmlFor="systemName" className="text-black hover-text font-semibold">
+              <Label htmlFor="systemName" className="text-black font-semibold">
                 Nome do Sistema
               </Label>
               <Input
@@ -557,7 +557,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="description" className="text-black hover-text font-semibold">
+              <Label htmlFor="description" className="text-black font-semibold">
                 Descrição
               </Label>
               <Textarea
@@ -571,7 +571,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="logoIcon" className="text-black hover-text font-semibold">
+              <Label htmlFor="logoIcon" className="text-black font-semibold">
                 Ícone/Emoji do Logo
               </Label>
               <Input
@@ -586,7 +586,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="logoUpload" className="text-black hover-text font-semibold">
+              <Label htmlFor="logoUpload" className="text-black font-semibold">
                 Upload de Logo
               </Label>
               <div className="space-y-2">
@@ -617,7 +617,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="faviconUpload" className="text-black hover-text font-semibold">
+              <Label htmlFor="faviconUpload" className="text-black font-semibold">
                 Upload de Favicon
               </Label>
               <div className="space-y-2">
@@ -651,11 +651,11 @@ export default function AdminSettingsPage() {
 
         <Card className="border-2 border-gray-300">
           <CardHeader className="bg-gray-50">
-            <CardTitle className="text-black hover-text">Esquema de Cores</CardTitle>
+            <CardTitle className="text-black">Esquema de Cores</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 bg-white">
             <div>
-              <Label htmlFor="primaryColor" className="text-black hover-text font-semibold">
+              <Label htmlFor="primaryColor" className="text-black font-semibold">
                 Cor Primária
               </Label>
               <div className="flex gap-2">
@@ -678,7 +678,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="secondaryColor" className="text-black hover-text font-semibold">
+              <Label htmlFor="secondaryColor" className="text-black font-semibold">
                 Cor Secundária
               </Label>
               <div className="flex gap-2">
@@ -701,7 +701,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="accentColor" className="text-black hover-text font-semibold">
+              <Label htmlFor="accentColor" className="text-black font-semibold">
                 Cor de Destaque
               </Label>
               <div className="flex gap-2">
@@ -724,7 +724,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="hoverColor" className="text-black hover-text font-semibold">
+              <Label htmlFor="hoverColor" className="text-black font-semibold">
                 Cor de Hover
               </Label>
               <div className="flex gap-2">
@@ -750,7 +750,7 @@ export default function AdminSettingsPage() {
 
         <Card className="border-2 border-gray-300">
           <CardHeader className="bg-gray-50">
-            <CardTitle className="text-black hover-text">Temas Predefinidos</CardTitle>
+            <CardTitle className="text-black">Temas Predefinidos</CardTitle>
           </CardHeader>
           <CardContent className="bg-white">
             <div className="grid grid-cols-2 gap-3">
@@ -790,7 +790,7 @@ export default function AdminSettingsPage() {
 
         <Card className="border-2 border-gray-300">
           <CardHeader className="bg-gray-50">
-            <CardTitle className="text-black hover-text">Preview</CardTitle>
+            <CardTitle className="text-black">Preview</CardTitle>
           </CardHeader>
           <CardContent className="bg-white">
             <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50">
@@ -801,7 +801,7 @@ export default function AdminSettingsPage() {
                 >
                   <span className="text-sm">{theme.logoIcon}</span>
                 </div>
-                <span className="font-semibold text-black hover-text">{theme.systemName}</span>
+                <span className="font-semibold text-black">{theme.systemName}</span>
               </div>
               <div className="space-y-2">
                 <div className="h-3 rounded" style={{ backgroundColor: theme.primaryColor, opacity: 0.8 }}></div>
@@ -850,7 +850,7 @@ export default function AdminSettingsPage() {
       <div>
         <div className="mb-6">
           <h3 className="text-xl font-bold text-black hover-text mb-2">Integrações Disponíveis</h3>
-          <p className="text-gray-800 hover-text font-medium">
+          <p className="text-gray-800 font-medium">
             Configure as integrações para expandir as funcionalidades da plataforma
           </p>
         </div>
@@ -867,7 +867,7 @@ export default function AdminSettingsPage() {
                   className="rounded"
                 />
               </div>
-              <h4 className="font-semibold mb-2 text-black hover-text">Evolution API</h4>
+              <h4 className="font-semibold mb-2 text-black">Evolution API</h4>
               <p className="text-sm text-gray-700 mb-4">Integração com WhatsApp Business</p>
               <Button
                 onClick={() => openIntegrationModal("evolution_api", "Evolution API")}
@@ -884,7 +884,7 @@ export default function AdminSettingsPage() {
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Image src="/images/n8n-logo.png" alt="n8n" width={40} height={40} className="rounded" />
               </div>
-              <h4 className="font-semibold mb-2 text-black hover-text">n8n</h4>
+              <h4 className="font-semibold mb-2 text-black">n8n</h4>
               <p className="text-sm text-gray-700 mb-4">Automação de fluxos de trabalho</p>
               <Button
                 onClick={() => openIntegrationModal("n8n", "n8n")}
@@ -901,7 +901,7 @@ export default function AdminSettingsPage() {
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Plus className="w-8 h-8 text-gray-400" />
               </div>
-              <h4 className="font-semibold mb-2 text-black hover-text">Em Breve</h4>
+              <h4 className="font-semibold mb-2 text-black">Em Breve</h4>
               <p className="text-sm text-gray-700 mb-4">Nova integração chegando</p>
               <Button className="w-full" variant="outline" disabled>
                 Em Breve
@@ -914,7 +914,7 @@ export default function AdminSettingsPage() {
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Plus className="w-8 h-8 text-gray-400" />
               </div>
-              <h4 className="font-semibold mb-2 text-black hover-text">Em Breve</h4>
+              <h4 className="font-semibold mb-2 text-black">Em Breve</h4>
               <p className="text-sm text-gray-700 mb-4">Nova integração chegando</p>
               <Button className="w-full" variant="outline" disabled>
                 Em Breve
@@ -1003,17 +1003,39 @@ export default function AdminSettingsPage() {
     )
   }
 
-  // Adicione este useEffect para aplicar estilos de hover
+  // Adicione este useEffect para aplicar estilos de hover apenas em elementos clicáveis
   React.useEffect(() => {
     const style = document.createElement("style")
     style.textContent = `
-    .hover-text:hover {
+    /* Hover para links e elementos clicáveis */
+    a:hover,
+    button:hover,
+    [role="menuitem"]:hover,
+    [role="button"]:hover,
+    .cursor-pointer:hover,
+    .hover-interactive:hover {
       color: ${theme.hoverColor} !important;
       transition: color 0.2s ease;
     }
+    
+    /* Hover para backgrounds de elementos interativos */
     .hover-bg:hover {
       background-color: ${theme.hoverColor} !important;
       transition: background-color 0.2s ease;
+    }
+    
+    /* Hover específico para itens de menu lateral */
+    nav a:hover,
+    nav button:hover,
+    .sidebar-item:hover,
+    .menu-item:hover {
+      color: ${theme.hoverColor} !important;
+      transition: color 0.2s ease;
+    }
+    
+    /* Hover para dropdown menu items */
+    [data-radix-collection-item]:hover {
+      color: ${theme.hoverColor} !important;
     }
   `
     document.head.appendChild(style)
@@ -1028,9 +1050,7 @@ export default function AdminSettingsPage() {
       <div className="flex justify-between items-start mb-8">
         <div>
           <h1 className="text-3xl font-bold text-black hover-text mb-2">Configurações do Sistema</h1>
-          <p className="text-gray-800 hover-text font-medium text-lg">
-            Personalize a plataforma e configure integrações
-          </p>
+          <p className="text-gray-800 font-medium text-lg">Personalize a plataforma e configure integrações</p>
         </div>
         <div className="flex items-center gap-4">
           {saveMessage && (
