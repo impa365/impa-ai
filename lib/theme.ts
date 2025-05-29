@@ -1,3 +1,6 @@
+"use client"
+
+import { createContext, useContext } from "react"
 import { supabase } from "./supabase"
 
 export interface ThemeConfig {
@@ -33,6 +36,20 @@ export const defaultTheme: ThemeConfig = {
   destructiveColor: "#ef4444",
   ringColor: "#3b82f6",
 }
+
+// Create the theme context
+export const ThemeContext = createContext<{
+  theme: ThemeConfig
+  updateTheme: (updates: Partial<ThemeConfig>) => Promise<void>
+  loadTheme: () => Promise<void>
+}>({
+  theme: defaultTheme,
+  updateTheme: async () => {},
+  loadTheme: async () => {},
+})
+
+// Create the useTheme hook
+export const useTheme = () => useContext(ThemeContext)
 
 export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
   try {
@@ -116,4 +133,36 @@ export function applyThemeColors(theme: ThemeConfig) {
   root.style.setProperty("--muted", theme.mutedColor)
   root.style.setProperty("--destructive", theme.destructiveColor)
   root.style.setProperty("--ring", theme.ringColor)
+}
+
+// Theme presets for quick selection
+export const themePresets = {
+  default: {
+    systemName: "Luna AI",
+    primaryColor: "#0f172a",
+    secondaryColor: "#f1f5f9",
+    accentColor: "#3b82f6",
+    logoEmoji: "🤖",
+  },
+  blue: {
+    systemName: "Luna AI",
+    primaryColor: "#1e40af",
+    secondaryColor: "#dbeafe",
+    accentColor: "#3b82f6",
+    logoEmoji: "💙",
+  },
+  green: {
+    systemName: "Luna AI",
+    primaryColor: "#166534",
+    secondaryColor: "#dcfce7",
+    accentColor: "#22c55e",
+    logoEmoji: "💚",
+  },
+  purple: {
+    systemName: "Luna AI",
+    primaryColor: "#7c3aed",
+    secondaryColor: "#ede9fe",
+    accentColor: "#8b5cf6",
+    logoEmoji: "💜",
+  },
 }
