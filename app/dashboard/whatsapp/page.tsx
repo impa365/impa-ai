@@ -277,7 +277,7 @@ export default function WhatsAppPage() {
           </Button>
           <Button
             onClick={() => setShowConnectionModal(true)}
-            className="gap-2"
+            className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
             disabled={whatsappConnections.length >= connectionLimit}
           >
             <Plus className="w-4 h-4" />
@@ -362,7 +362,7 @@ export default function WhatsAppPage() {
                 </p>
                 <Button
                   onClick={() => setShowConnectionModal(true)}
-                  className="gap-2"
+                  className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
                   disabled={whatsappConnections.length >= connectionLimit}
                 >
                   <Plus className="w-4 h-4" />

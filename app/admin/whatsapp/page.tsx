@@ -280,7 +280,7 @@ export default function AdminWhatsAppPage() {
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
             {syncing ? "Sincronizando..." : "Sincronizar"}
           </Button>
-          <Button onClick={() => setCreateModalOpen(true)} className="gap-2">
+          <Button onClick={() => setCreateModalOpen(true)} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
             <Plus className="w-4 h-4" />
             Nova Conexão
           </Button>

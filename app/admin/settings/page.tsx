@@ -480,7 +480,11 @@ export default function AdminSettingsPage() {
       </div>
 
       <div className="flex justify-end mt-6">
-        <Button onClick={handleUpdateAdminProfile} disabled={savingAdminProfile} className="gap-2">
+        <Button
+          onClick={handleUpdateAdminProfile}
+          disabled={savingAdminProfile}
+          className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+        >
           {savingAdminProfile ? "Salvando..." : "Salvar Alterações"}
         </Button>
       </div>

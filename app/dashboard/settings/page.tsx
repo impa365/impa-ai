@@ -245,7 +245,11 @@ export default function UserSettings() {
         </div>
 
         <div className="flex justify-end mt-6">
-          <Button onClick={handleUpdateProfile} disabled={savingProfile} className="gap-2">
+          <Button
+            onClick={handleUpdateProfile}
+            disabled={savingProfile}
+            className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+          >
             {savingProfile ? "Salvando..." : "Salvar Alterações"}
           </Button>
         </div>
