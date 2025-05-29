@@ -66,13 +66,10 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
     setSuccess("")
 
     try {
-      // Salvar a nova senha no banco de dados
-      // ATENÇÃO: Salvando senha em texto plano. NÃO FAÇA ISSO EM PRODUÇÃO!
-      // Em um ambiente real, use hash de senhas (ex: bcrypt).
       const { error: updateError } = await supabase
         .from("user_profiles")
         .update({
-          password: formData.newPassword, // Salva a nova senha
+          password: formData.newPassword,
           updated_at: new Date().toISOString(),
         })
         .eq("id", user.id)
@@ -85,7 +82,7 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
         onOpenChange(false)
         setFormData({ newPassword: "", confirmPassword: "" })
         setSuccess("")
-      }, 3000) // Aumentado o tempo para o admin ver a senha gerada/digitada
+      }, 3000)
     } catch (error: any) {
       console.error("Erro ao alterar senha:", error)
       setError("Erro ao alterar senha. Detalhes: " + error.message)
@@ -105,30 +102,32 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <Key className="w-5 h-5" />
             Alterar Senha do Usuário
           </DialogTitle>
-          <DialogDescription>
-            Alterando senha para: <strong>{user?.full_name}</strong> ({user?.email})
+          <DialogDescription className="text-muted-foreground">
+            Alterando senha para: <strong className="text-foreground">{user?.full_name}</strong> ({user?.email})
           </DialogDescription>
         </DialogHeader>
 
         {error && (
           <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription className="text-destructive-foreground">{error}</AlertDescription>
           </Alert>
         )}
 
         {success && (
-          <Alert className="border-green-200 bg-green-50">
-            <AlertDescription className="text-green-700">{success}</AlertDescription>
+          <Alert className="border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
+            <AlertDescription className="text-green-700 dark:text-green-300">{success}</AlertDescription>
           </Alert>
         )}
 
         <div className="space-y-4">
           <div>
-            <Label htmlFor="newPassword">Nova Senha *</Label>
+            <Label htmlFor="newPassword" className="text-foreground">
+              Nova Senha *
+            </Label>
             <div className="relative">
               <Input
                 id="newPassword"
@@ -137,12 +136,13 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
                 onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
                 placeholder="Digite a nova senha"
                 disabled={loading}
+                className="text-foreground"
               />
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="absolute right-8 top-0 h-full px-2 text-gray-700 dark:text-gray-300"
+                className="absolute right-8 top-0 h-full px-2 text-muted-foreground hover:text-foreground"
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={loading}
               >
@@ -152,7 +152,7 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="absolute right-0 top-0 h-full px-2 text-gray-700 dark:text-gray-300"
+                className="absolute right-0 top-0 h-full px-2 text-muted-foreground hover:text-foreground"
                 onClick={generateRandomPassword}
                 disabled={loading}
                 title="Gerar senha aleatória"
@@ -163,7 +163,9 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
           </div>
 
           <div>
-            <Label htmlFor="confirmPassword">Confirmar Nova Senha *</Label>
+            <Label htmlFor="confirmPassword" className="text-foreground">
+              Confirmar Nova Senha *
+            </Label>
             <Input
               id="confirmPassword"
               type={showPassword ? "text" : "password"}
@@ -171,19 +173,28 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
               onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
               placeholder="Confirme a nova senha"
               disabled={loading}
+              className="text-foreground"
             />
           </div>
 
-          <div className="text-sm text-yellow-800 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/30 p-3 rounded-lg border border-yellow-200 dark:border-yellow-700/50">
-            <strong className="text-yellow-900 dark:text-yellow-200">⚠️ Atenção:</strong> As senhas estão sendo salvas em
-            texto plano para fins de demonstração. Em um ambiente de produção, utilize hash de senhas (ex: bcrypt).
+          <div className="text-sm bg-yellow-50 dark:bg-yellow-950 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
+            <strong className="text-yellow-800 dark:text-yellow-200">⚠️ Atenção:</strong>
+            <span className="text-yellow-700 dark:text-yellow-300">
+              {" "}
+              As senhas estão sendo salvas em texto plano para fins de demonstração. Em um ambiente de produção, utilize
+              hash de senhas (ex: bcrypt).
+            </span>
             <br />
-            <strong>Importante:</strong> Comunique a nova senha ao usuário por um canal seguro.
+            <strong className="text-yellow-800 dark:text-yellow-200">Importante:</strong>
+            <span className="text-yellow-700 dark:text-yellow-300">
+              {" "}
+              Comunique a nova senha ao usuário por um canal seguro.
+            </span>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={loading}>
+          <Button variant="outline" onClick={handleClose} disabled={loading} className="text-foreground">
             Cancelar
           </Button>
           <Button

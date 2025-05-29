@@ -20,11 +20,11 @@ import { supabase } from "@/lib/supabase"
 interface UserModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  user?: any // Mantendo 'any' por enquanto, idealmente seria UserProfile
+  user?: any
   onSuccess: () => void
 }
 
-const DEFAULT_WHATSAPP_LIMIT = 1 // Definindo o padrão aqui
+const DEFAULT_WHATSAPP_LIMIT = 1
 
 export default function UserModal({ open, onOpenChange, user, onSuccess }: UserModalProps) {
   const [loading, setLoading] = useState(false)
@@ -35,7 +35,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     email: "",
     role: "user",
     status: "active",
-    whatsapp_limit: DEFAULT_WHATSAPP_LIMIT, // Usando o padrão
+    whatsapp_limit: DEFAULT_WHATSAPP_LIMIT,
   })
 
   useEffect(() => {
@@ -77,7 +77,6 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           setLoadingData(false)
         }
       } else if (!user && open) {
-        // Resetar para novo usuário apenas se o modal abrir sem usuário
         setFormData({
           full_name: "",
           email: "",
@@ -89,12 +88,9 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     }
 
     if (open) {
-      // Executar apenas quando o modal abrir
       fetchUserData()
     } else {
-      // Limpar o formulário e erros quando o modal fechar
       setError("")
-      // Não resetar formData aqui para manter os dados se o modal for reaberto rapidamente para o mesmo usuário
     }
   }, [user, open])
 
@@ -114,11 +110,9 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     setError("")
 
     try {
-      // Verificar se o email já existe para outro usuário
       let emailCheckQuery = supabase.from("user_profiles").select("id").eq("email", formData.email.trim())
 
       if (user) {
-        // Se estiver editando, excluir o próprio usuário da verificação
         emailCheckQuery = emailCheckQuery.neq("id", user.id)
       }
 
@@ -136,7 +130,6 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
       }
 
       if (user) {
-        // Editar usuário existente
         const { error: profileError } = await supabase
           .from("user_profiles")
           .update({
@@ -157,11 +150,10 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             updated_at: new Date().toISOString(),
           },
           { onConflict: "user_id" },
-        ) // Adicionado onConflict para upsert
+        )
 
         if (settingsError) throw settingsError
       } else {
-        // Criar novo usuário
         const { data: newUser, error: profileError } = await supabase
           .from("user_profiles")
           .insert([
@@ -170,8 +162,6 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
               email: formData.email.trim(),
               role: formData.role,
               status: formData.status,
-              // A senha será definida pelo admin no modal "Alterar Senha" ou um valor padrão/aleatório
-              // password: "default_password" // Considere uma senha inicial ou deixar para o admin definir
             },
           ])
           .select()
@@ -192,10 +182,8 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
 
       onSuccess()
       onOpenChange(false)
-      // Não resetar formData aqui, o useEffect cuidará disso na próxima abertura se for um novo usuário
     } catch (error: any) {
       console.error("Erro ao salvar usuário:", error)
-      // O erro de email duplicado já é tratado acima
       if (error.message !== "Este email já está em uso por outro usuário." && error.code !== "23505") {
         setError("Erro ao salvar usuário: " + error.message)
       }
@@ -206,7 +194,6 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
 
   const handleClose = () => {
     setError("")
-    // Não resetar formData aqui para manter os dados se o modal for reaberto rapidamente para o mesmo usuário
     onOpenChange(false)
   }
 
@@ -214,11 +201,11 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <User className="w-5 h-5" />
             {user ? "Editar Usuário" : "Novo Usuário"}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-muted-foreground">
             {user
               ? `Editando: ${formData.full_name || formData.email || user.full_name || user.email}`
               : "Preencha os dados do novo usuário"}
@@ -227,30 +214,35 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
 
         {error && (
           <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription className="text-destructive-foreground">{error}</AlertDescription>
           </Alert>
         )}
 
         {loadingData ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin mr-2" />
-            <span>Carregando dados do usuário...</span>
+            <Loader2 className="w-6 h-6 animate-spin mr-2 text-muted-foreground" />
+            <span className="text-muted-foreground">Carregando dados do usuário...</span>
           </div>
         ) : (
           <div className="space-y-4">
             <div>
-              <Label htmlFor="fullName">Nome Completo *</Label>
+              <Label htmlFor="fullName" className="text-foreground">
+                Nome Completo *
+              </Label>
               <Input
                 id="fullName"
                 value={formData.full_name}
                 onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                 placeholder="Nome completo do usuário"
                 disabled={loading}
+                className="text-foreground"
               />
             </div>
 
             <div>
-              <Label htmlFor="email">Email *</Label>
+              <Label htmlFor="email" className="text-foreground">
+                Email *
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -258,18 +250,21 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="email@exemplo.com"
                 disabled={loading}
+                className="text-foreground"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="role">Função</Label>
+                <Label htmlFor="role" className="text-foreground">
+                  Função
+                </Label>
                 <Select
                   value={formData.role}
                   onValueChange={(value) => setFormData({ ...formData, role: value })}
                   disabled={loading}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="text-foreground">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -280,13 +275,15 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
               </div>
 
               <div>
-                <Label htmlFor="status">Status</Label>
+                <Label htmlFor="status" className="text-foreground">
+                  Status
+                </Label>
                 <Select
                   value={formData.status}
                   onValueChange={(value) => setFormData({ ...formData, status: value })}
                   disabled={loading}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="text-foreground">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -300,7 +297,9 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             </div>
 
             <div>
-              <Label htmlFor="whatsappLimit">Limite de Conexões WhatsApp</Label>
+              <Label htmlFor="whatsappLimit" className="text-foreground">
+                Limite de Conexões WhatsApp
+              </Label>
               <Input
                 id="whatsappLimit"
                 type="number"
@@ -311,23 +310,27 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                     whatsapp_limit: Number.parseInt(e.target.value) || DEFAULT_WHATSAPP_LIMIT,
                   })
                 }
-                min="0" // Permitir 0 se necessário
-                max="100" // Aumentar o limite máximo se necessário
+                min="0"
+                max="100"
                 disabled={loading}
+                className="text-foreground"
               />
             </div>
 
             {user && (
-              <div className="text-sm text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg">
-                <strong>Dica:</strong> Para alterar a senha deste usuário, use o botão específico "Alterar Senha" na
-                lista de usuários.
+              <div className="text-sm bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                <strong className="text-blue-800 dark:text-blue-200">Dica:</strong>
+                <span className="text-blue-700 dark:text-blue-300">
+                  {" "}
+                  Para alterar a senha deste usuário, use o botão específico "Alterar Senha" na lista de usuários.
+                </span>
               </div>
             )}
           </div>
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={loading || loadingData}>
+          <Button variant="outline" onClick={handleClose} disabled={loading || loadingData} className="text-foreground">
             Cancelar
           </Button>
           <Button

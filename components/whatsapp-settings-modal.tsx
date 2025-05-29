@@ -57,7 +57,6 @@ export default function WhatsAppSettingsModal({
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
-  // Carregar configurações sempre que o modal abrir
   useEffect(() => {
     if (open && connection?.instance_name) {
       console.log("Modal aberto, carregando configurações para:", connection.instance_name)
@@ -65,7 +64,6 @@ export default function WhatsAppSettingsModal({
     }
   }, [open, connection?.instance_name])
 
-  // Reset estados quando modal fechar
   useEffect(() => {
     if (!open) {
       setError("")
@@ -93,7 +91,6 @@ export default function WhatsAppSettingsModal({
       if (result.success && result.settings) {
         console.log("Configurações recebidas:", result.settings)
 
-        // Mapear as configurações da API para o estado local
         const apiSettings = result.settings
         const newSettings: SettingsConfig = {
           groupsIgnore: apiSettings.groupsIgnore ?? defaultSettings.groupsIgnore,
@@ -156,7 +153,6 @@ export default function WhatsAppSettingsModal({
         setSuccess("Configurações salvas com sucesso!")
         onSettingsSaved?.()
 
-        // Recarregar configurações após salvar para confirmar
         setTimeout(() => {
           loadCurrentSettings()
         }, 1000)
@@ -189,11 +185,11 @@ export default function WhatsAppSettingsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <Settings className="w-5 h-5" />
             Configurações de Privacidade - {connection?.connection_name}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-muted-foreground">
             Configure o comportamento da sua conexão WhatsApp
             <br />
             <span className="text-xs text-muted-foreground">Instância: {connection?.instance_name}</span>
@@ -202,20 +198,20 @@ export default function WhatsAppSettingsModal({
 
         {error && (
           <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription className="text-destructive-foreground">{error}</AlertDescription>
           </Alert>
         )}
 
         {success && (
-          <Alert>
-            <AlertDescription>{success}</AlertDescription>
+          <Alert className="border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
+            <AlertDescription className="text-green-700 dark:text-green-300">{success}</AlertDescription>
           </Alert>
         )}
 
         {loadingSettings ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin mr-2" />
-            <span>Carregando configurações atuais da API...</span>
+            <Loader2 className="w-6 h-6 animate-spin mr-2 text-muted-foreground" />
+            <span className="text-muted-foreground">Carregando configurações atuais da API...</span>
           </div>
         ) : (
           <div className="space-y-6">
@@ -226,20 +222,19 @@ export default function WhatsAppSettingsModal({
                 size="sm"
                 onClick={handleRefresh}
                 disabled={loadingSettings}
-                className="text-foreground"
+                className="text-foreground hover:text-foreground"
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${loadingSettings ? "animate-spin" : ""}`} />
                 Recarregar
               </Button>
             </div>
 
-            {/* Configurações de Mensagens */}
             <div>
-              <h4 className="font-medium mb-4">Configurações de Mensagens</h4>
+              <h4 className="font-medium mb-4 text-foreground">Configurações de Mensagens</h4>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Ignorar Grupos</Label>
+                    <Label className="text-foreground">Ignorar Grupos</Label>
                     <p className="text-sm text-muted-foreground">Não receber mensagens de grupos</p>
                   </div>
                   <Switch
@@ -250,7 +245,7 @@ export default function WhatsAppSettingsModal({
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Marcar como Lidas</Label>
+                    <Label className="text-foreground">Marcar como Lidas</Label>
                     <p className="text-sm text-muted-foreground">Marcar mensagens como lidas automaticamente</p>
                   </div>
                   <Switch
@@ -261,7 +256,7 @@ export default function WhatsAppSettingsModal({
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Sincronizar Histórico</Label>
+                    <Label className="text-foreground">Sincronizar Histórico</Label>
                     <p className="text-sm text-muted-foreground">Sincronizar histórico completo de mensagens</p>
                   </div>
                   <Switch
@@ -274,13 +269,12 @@ export default function WhatsAppSettingsModal({
 
             <Separator />
 
-            {/* Configurações de Status */}
             <div>
-              <h4 className="font-medium mb-4">Configurações de Status</h4>
+              <h4 className="font-medium mb-4 text-foreground">Configurações de Status</h4>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Sempre Online</Label>
+                    <Label className="text-foreground">Sempre Online</Label>
                     <p className="text-sm text-muted-foreground">Manter status online constantemente</p>
                   </div>
                   <Switch
@@ -291,7 +285,7 @@ export default function WhatsAppSettingsModal({
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Ver Status</Label>
+                    <Label className="text-foreground">Ver Status</Label>
                     <p className="text-sm text-muted-foreground">Permitir visualizar status dos contatos</p>
                   </div>
                   <Switch
@@ -304,13 +298,12 @@ export default function WhatsAppSettingsModal({
 
             <Separator />
 
-            {/* Configurações de Chamadas */}
             <div>
-              <h4 className="font-medium mb-4">Configurações de Chamadas</h4>
+              <h4 className="font-medium mb-4 text-foreground">Configurações de Chamadas</h4>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Rejeitar Chamadas</Label>
+                    <Label className="text-foreground">Rejeitar Chamadas</Label>
                     <p className="text-sm text-muted-foreground">Rejeitar chamadas automaticamente</p>
                   </div>
                   <Switch
@@ -321,12 +314,15 @@ export default function WhatsAppSettingsModal({
 
                 {settings.rejectCall && (
                   <div className="space-y-2">
-                    <Label htmlFor="msgCall">Mensagem ao Rejeitar Chamadas</Label>
+                    <Label htmlFor="msgCall" className="text-foreground">
+                      Mensagem ao Rejeitar Chamadas
+                    </Label>
                     <Input
                       id="msgCall"
                       value={settings.msgCall}
                       onChange={(e) => updateSetting("msgCall", e.target.value)}
                       placeholder="Ex: Não posso atender no momento, envie uma mensagem."
+                      className="text-foreground"
                     />
                   </div>
                 )}
@@ -336,7 +332,7 @@ export default function WhatsAppSettingsModal({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="text-foreground">
             Cancelar
           </Button>
           <Button
