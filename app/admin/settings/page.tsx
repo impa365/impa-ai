@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { Palette, BarChart3 } from "lucide-react"
 import { useState } from "react"
 
@@ -20,6 +22,29 @@ import { Textarea } from "@/components/ui/textarea"
 
 const SettingsPage = () => {
   const [open, setOpen] = useState(false)
+
+  // Add state for form fields
+  const [formData, setFormData] = useState({
+    name: "shadcn",
+    username: "@shadcn",
+    email: "shadcn@example.com",
+    bio: "",
+    emailNotifications: false,
+    pushNotifications: false,
+    themeName: "shadcn",
+    themeUsername: "@shadcn",
+  })
+
+  // Handle input changes
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { id, value } = e.target
+    setFormData((prev) => ({ ...prev, [id]: value }))
+  }
+
+  // Handle switch changes
+  const handleSwitchChange = (id: string, checked: boolean) => {
+    setFormData((prev) => ({ ...prev, [id]: checked }))
+  }
 
   return (
     <div className="container relative">
@@ -43,16 +68,21 @@ const SettingsPage = () => {
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
+                  <Label htmlFor="themeName" className="text-right">
                     Name
                   </Label>
-                  <Input id="name" value="shadcn" className="col-span-3" />
+                  <Input id="themeName" value={formData.themeName} onChange={handleChange} className="col-span-3" />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="username" className="text-right">
+                  <Label htmlFor="themeUsername" className="text-right">
                     Username
                   </Label>
-                  <Input id="username" value="@shadcn" className="col-span-3" />
+                  <Input
+                    id="themeUsername"
+                    value={formData.themeUsername}
+                    onChange={handleChange}
+                    className="col-span-3"
+                  />
                 </div>
               </div>
               <DialogFooter>
@@ -76,13 +106,13 @@ const SettingsPage = () => {
             <Label htmlFor="name" className="text-right">
               Name
             </Label>
-            <Input id="name" value="shadcn" className="col-span-3" />
+            <Input id="name" value={formData.name} onChange={handleChange} className="col-span-3" />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="username" className="text-right">
               Username
             </Label>
-            <Input id="username" value="@shadcn" className="col-span-3" />
+            <Input id="username" value={formData.username} onChange={handleChange} className="col-span-3" />
           </div>
         </div>
         <div>
@@ -94,7 +124,7 @@ const SettingsPage = () => {
             <Label htmlFor="email" className="text-right">
               Email
             </Label>
-            <Input id="email" value="shadcn@example.com" className="col-span-3" type="email" />
+            <Input id="email" value={formData.email} onChange={handleChange} className="col-span-3" type="email" />
           </div>
         </div>
         <div>
@@ -106,7 +136,7 @@ const SettingsPage = () => {
             <Label htmlFor="bio" className="text-right">
               Bio
             </Label>
-            <Textarea id="bio" className="col-span-3" />
+            <Textarea id="bio" value={formData.bio} onChange={handleChange} className="col-span-3" />
           </div>
         </div>
         <div>
@@ -115,16 +145,24 @@ const SettingsPage = () => {
         </div>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="email-notifications" className="text-right">
+            <Label htmlFor="emailNotifications" className="text-right">
               Email Notifications
             </Label>
-            <Switch id="email-notifications" />
+            <Switch
+              id="emailNotifications"
+              checked={formData.emailNotifications}
+              onCheckedChange={(checked) => handleSwitchChange("emailNotifications", checked)}
+            />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="push-notifications" className="text-right">
+            <Label htmlFor="pushNotifications" className="text-right">
               Push Notifications
             </Label>
-            <Switch id="push-notifications" />
+            <Switch
+              id="pushNotifications"
+              checked={formData.pushNotifications}
+              onCheckedChange={(checked) => handleSwitchChange("pushNotifications", checked)}
+            />
           </div>
         </div>
       </div>
