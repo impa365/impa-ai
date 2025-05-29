@@ -1,29 +1,28 @@
 "use client"
 
 import { createContext, useContext } from "react"
-import { supabase } from "./supabase"
+import { createClient } from "./supabase"
 
 export interface ThemeConfig {
-  id?: string
-  systemName: string
   primaryColor: string
   secondaryColor: string
   accentColor: string
-  logoIcon: string
-  sidebarStyle: "light" | "dark"
-  brandingEnabled: boolean
-  description?: string
+  backgroundColor: string
+  textColor: string
+  systemName: string
+  description: string
+  logoEmoji: string
 }
 
 export const defaultTheme: ThemeConfig = {
-  systemName: "Impa AI",
-  primaryColor: "#2563eb", // blue-600
-  secondaryColor: "#10b981", // green-500
-  accentColor: "#8b5cf6", // purple-500
-  logoIcon: "🤖",
-  sidebarStyle: "light",
-  brandingEnabled: true,
+  primaryColor: "#0070f3",
+  secondaryColor: "#1e293b",
+  accentColor: "#10b981",
+  backgroundColor: "#ffffff",
+  textColor: "#1e293b",
+  systemName: "Luna AI",
   description: "Plataforma de construção de agentes de IA",
+  logoEmoji: "🌙",
 }
 
 export const ThemeContext = createContext<{
@@ -36,41 +35,33 @@ export const ThemeContext = createContext<{
   loadTheme: async () => {},
 })
 
-export const useTheme = () => useContext(ThemeContext)
-
-// Função para aplicar cores CSS customizadas
-export const applyThemeColors = (theme: ThemeConfig) => {
-  const root = document.documentElement
-  root.style.setProperty("--primary-color", theme.primaryColor)
-  root.style.setProperty("--secondary-color", theme.secondaryColor)
-  root.style.setProperty("--accent-color", theme.accentColor)
+export function useTheme() {
+  return useContext(ThemeContext)
 }
 
-// Função para carregar tema do banco de dados
-export const loadThemeFromDatabase = async (): Promise<ThemeConfig> => {
+export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
   try {
-    const { data, error } = await supabase
-      .from("global_theme_config")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single()
+    const supabase = createClient()
+    const { data, error } = await supabase.from("global_theme_config").select("*").single()
 
-    if (error || !data) {
-      console.log("Usando tema padrão")
+    if (error) {
+      console.error("Erro ao carregar tema:", error)
+      return defaultTheme
+    }
+
+    if (!data) {
       return defaultTheme
     }
 
     return {
-      id: data.id,
-      systemName: data.system_name,
-      primaryColor: data.primary_color,
-      secondaryColor: data.secondary_color,
-      accentColor: data.accent_color,
-      logoIcon: data.logo_icon,
-      sidebarStyle: data.sidebar_style as "light" | "dark",
-      brandingEnabled: data.branding_enabled,
+      primaryColor: data.primary_color || defaultTheme.primaryColor,
+      secondaryColor: data.secondary_color || defaultTheme.secondaryColor,
+      accentColor: data.accent_color || defaultTheme.accentColor,
+      backgroundColor: data.background_color || defaultTheme.backgroundColor,
+      textColor: data.text_color || defaultTheme.textColor,
+      systemName: data.system_name || defaultTheme.systemName,
       description: data.description || defaultTheme.description,
+      logoEmoji: data.logo_emoji || defaultTheme.logoEmoji,
     }
   } catch (error) {
     console.error("Erro ao carregar tema:", error)
@@ -78,77 +69,35 @@ export const loadThemeFromDatabase = async (): Promise<ThemeConfig> => {
   }
 }
 
-// Função para salvar tema no banco de dados
-export const saveThemeToDatabase = async (theme: Partial<ThemeConfig>): Promise<void> => {
+export async function saveThemeToDatabase(theme: ThemeConfig): Promise<void> {
   try {
-    // Primeiro, verificar se já existe uma configuração
-    const { data: existing } = await supabase
-      .from("global_theme_config")
-      .select("id")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single()
-
-    const themeData = {
-      system_name: theme.systemName,
+    const supabase = createClient()
+    const { error } = await supabase.from("global_theme_config").upsert({
+      id: 1, // Usando um ID fixo para o tema global
       primary_color: theme.primaryColor,
       secondary_color: theme.secondaryColor,
       accent_color: theme.accentColor,
-      logo_icon: theme.logoIcon,
-      sidebar_style: theme.sidebarStyle,
-      branding_enabled: theme.brandingEnabled,
+      background_color: theme.backgroundColor,
+      text_color: theme.textColor,
+      system_name: theme.systemName,
       description: theme.description,
-    }
+      logo_emoji: theme.logoEmoji,
+    })
 
-    if (existing) {
-      // Atualizar configuração existente
-      const { error } = await supabase.from("global_theme_config").update(themeData).eq("id", existing.id)
-
-      if (error) throw error
-    } else {
-      // Criar nova configuração
-      const { error } = await supabase.from("global_theme_config").insert([themeData])
-
-      if (error) throw error
+    if (error) {
+      console.error("Erro ao salvar tema:", error)
     }
   } catch (error) {
     console.error("Erro ao salvar tema:", error)
-    throw error
   }
 }
 
-// Predefinições de temas
-export const themePresets = {
-  blue: {
-    systemName: "Impa AI",
-    primaryColor: "#2563eb",
-    secondaryColor: "#10b981",
-    accentColor: "#8b5cf6",
-    logoIcon: "🤖",
-    description: "Plataforma de construção de agentes de IA",
-  },
-  green: {
-    systemName: "Impa AI",
-    primaryColor: "#059669",
-    secondaryColor: "#2563eb",
-    accentColor: "#f59e0b",
-    logoIcon: "🌱",
-    description: "Plataforma de construção de agentes de IA",
-  },
-  purple: {
-    systemName: "Impa AI",
-    primaryColor: "#7c3aed",
-    secondaryColor: "#ec4899",
-    accentColor: "#06b6d4",
-    logoIcon: "💜",
-    description: "Plataforma de construção de agentes de IA",
-  },
-  orange: {
-    systemName: "Impa AI",
-    primaryColor: "#ea580c",
-    secondaryColor: "#dc2626",
-    accentColor: "#7c2d12",
-    logoIcon: "🔥",
-    description: "Plataforma de construção de agentes de IA",
-  },
+export function applyThemeColors(theme: ThemeConfig): void {
+  if (typeof document === "undefined") return
+
+  document.documentElement.style.setProperty("--primary-color", theme.primaryColor)
+  document.documentElement.style.setProperty("--secondary-color", theme.secondaryColor)
+  document.documentElement.style.setProperty("--accent-color", theme.accentColor)
+  document.documentElement.style.setProperty("--background-color", theme.backgroundColor)
+  document.documentElement.style.setProperty("--text-color", theme.textColor)
 }

@@ -10,6 +10,7 @@ import {
   loadThemeFromDatabase,
   saveThemeToDatabase,
   applyThemeColors,
+  useTheme,
 } from "../lib/theme"
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
@@ -57,5 +58,5 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   )
 }
 
-// Export the useTheme hook from lib/theme
-export { useTheme } from "../lib/theme"
+// Re-export the useTheme hook
+export { useTheme }
