@@ -29,13 +29,24 @@ export default function LoginForm() {
   useEffect(() => {
     // Verificar se o cadastro público está habilitado
     const checkRegistrationSetting = async () => {
-      const { data } = await supabase
-        .from("system_settings")
-        .select("setting_value")
-        .eq("setting_key", "allow_public_registration")
-        .single()
+      try {
+        const { data, error } = await supabase
+          .from("system_settings")
+          .select("setting_value")
+          .eq("setting_key", "allow_public_registration")
+          .single()
 
-      setAllowRegistration(data?.setting_value === true)
+        console.log("Registration setting data:", data) // Debug
+
+        if (data && data.setting_value !== null) {
+          setAllowRegistration(data.setting_value === true)
+        } else {
+          setAllowRegistration(false)
+        }
+      } catch (error) {
+        console.error("Error checking registration setting:", error)
+        setAllowRegistration(false)
+      }
     }
 
     checkRegistrationSetting()
@@ -70,6 +81,8 @@ export default function LoginForm() {
   if (showRegister) {
     return <RegisterForm onBackToLogin={() => setShowRegister(false)} />
   }
+
+  console.log("Allow registration state:", allowRegistration)
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
