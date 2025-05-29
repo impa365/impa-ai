@@ -20,9 +20,11 @@ import { supabase } from "@/lib/supabase"
 interface UserModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  user?: any
+  user?: any // Mantendo 'any' por enquanto, idealmente seria UserProfile
   onSuccess: () => void
 }
+
+const DEFAULT_WHATSAPP_LIMIT = 1 // Definindo o padrão aqui
 
 export default function UserModal({ open, onOpenChange, user, onSuccess }: UserModalProps) {
   const [loading, setLoading] = useState(false)
@@ -33,16 +35,14 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     email: "",
     role: "user",
     status: "active",
-    whatsapp_limit: 2,
+    whatsapp_limit: DEFAULT_WHATSAPP_LIMIT, // Usando o padrão
   })
 
-  // Buscar dados completos do usuário quando for edição
   useEffect(() => {
     const fetchUserData = async () => {
       if (user && open) {
         setLoadingData(true)
         try {
-          // Buscar dados do usuário e suas configurações
           const { data: userData, error: userError } = await supabase
             .from("user_profiles")
             .select("*")
@@ -62,34 +62,40 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             email: userData.email || "",
             role: userData.role || "user",
             status: userData.status || "active",
-            whatsapp_limit: settingsData?.whatsapp_connections_limit || 2,
+            whatsapp_limit: settingsData?.whatsapp_connections_limit || DEFAULT_WHATSAPP_LIMIT,
           })
         } catch (error) {
           console.error("Erro ao buscar dados do usuário:", error)
-          // Fallback para os dados básicos
           setFormData({
             full_name: user.full_name || "",
             email: user.email || "",
             role: user.role || "user",
             status: user.status || "active",
-            whatsapp_limit: user.whatsapp_connections_limit || 2,
+            whatsapp_limit: user.whatsapp_connections_limit || DEFAULT_WHATSAPP_LIMIT,
           })
         } finally {
           setLoadingData(false)
         }
-      } else if (!user) {
-        // Resetar para novo usuário
+      } else if (!user && open) {
+        // Resetar para novo usuário apenas se o modal abrir sem usuário
         setFormData({
           full_name: "",
           email: "",
           role: "user",
           status: "active",
-          whatsapp_limit: 2,
+          whatsapp_limit: DEFAULT_WHATSAPP_LIMIT,
         })
       }
     }
 
-    fetchUserData()
+    if (open) {
+      // Executar apenas quando o modal abrir
+      fetchUserData()
+    } else {
+      // Limpar o formulário e erros quando o modal fechar
+      setError("")
+      // Não resetar formData aqui para manter os dados se o modal for reaberto rapidamente para o mesmo usuário
+    }
   }, [user, open])
 
   const handleSave = async () => {
@@ -98,7 +104,6 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
       return
     }
 
-    // Validar email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(formData.email)) {
       setError("Email inválido")
@@ -109,6 +114,27 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     setError("")
 
     try {
+      // Verificar se o email já existe para outro usuário
+      let emailCheckQuery = supabase.from("user_profiles").select("id").eq("email", formData.email.trim())
+
+      if (user) {
+        // Se estiver editando, excluir o próprio usuário da verificação
+        emailCheckQuery = emailCheckQuery.neq("id", user.id)
+      }
+
+      const { data: existingUserWithEmail, error: emailCheckError } = await emailCheckQuery.maybeSingle()
+
+      if (emailCheckError) {
+        console.error("Erro ao verificar email:", emailCheckError)
+        throw new Error("Erro ao verificar duplicidade de email.")
+      }
+
+      if (existingUserWithEmail) {
+        setError("Este email já está em uso por outro usuário.")
+        setLoading(false)
+        return
+      }
+
       if (user) {
         // Editar usuário existente
         const { error: profileError } = await supabase
@@ -124,12 +150,14 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
 
         if (profileError) throw profileError
 
-        // Atualizar configurações do usuário
-        const { error: settingsError } = await supabase.from("user_settings").upsert({
-          user_id: user.id,
-          whatsapp_connections_limit: formData.whatsapp_limit,
-          updated_at: new Date().toISOString(),
-        })
+        const { error: settingsError } = await supabase.from("user_settings").upsert(
+          {
+            user_id: user.id,
+            whatsapp_connections_limit: formData.whatsapp_limit,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" },
+        ) // Adicionado onConflict para upsert
 
         if (settingsError) throw settingsError
       } else {
@@ -142,14 +170,16 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
               email: formData.email.trim(),
               role: formData.role,
               status: formData.status,
+              // A senha será definida pelo admin no modal "Alterar Senha" ou um valor padrão/aleatório
+              // password: "default_password" // Considere uma senha inicial ou deixar para o admin definir
             },
           ])
           .select()
           .single()
 
         if (profileError) throw profileError
+        if (!newUser) throw new Error("Falha ao criar perfil do usuário.")
 
-        // Criar configurações do usuário
         const { error: settingsError } = await supabase.from("user_settings").insert([
           {
             user_id: newUser.id,
@@ -162,19 +192,12 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
 
       onSuccess()
       onOpenChange(false)
-      setFormData({
-        full_name: "",
-        email: "",
-        role: "user",
-        status: "active",
-        whatsapp_limit: 2,
-      })
+      // Não resetar formData aqui, o useEffect cuidará disso na próxima abertura se for um novo usuário
     } catch (error: any) {
       console.error("Erro ao salvar usuário:", error)
-      if (error.code === "23505") {
-        setError("Este email já está em uso")
-      } else {
-        setError("Erro ao salvar usuário")
+      // O erro de email duplicado já é tratado acima
+      if (error.message !== "Este email já está em uso por outro usuário." && error.code !== "23505") {
+        setError("Erro ao salvar usuário: " + error.message)
       }
     } finally {
       setLoading(false)
@@ -183,6 +206,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
 
   const handleClose = () => {
     setError("")
+    // Não resetar formData aqui para manter os dados se o modal for reaberto rapidamente para o mesmo usuário
     onOpenChange(false)
   }
 
@@ -195,7 +219,9 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             {user ? "Editar Usuário" : "Novo Usuário"}
           </DialogTitle>
           <DialogDescription>
-            {user ? `Editando: ${user.full_name || user.email}` : "Preencha os dados do novo usuário"}
+            {user
+              ? `Editando: ${formData.full_name || formData.email || user.full_name || user.email}`
+              : "Preencha os dados do novo usuário"}
           </DialogDescription>
         </DialogHeader>
 
@@ -279,9 +305,14 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                 id="whatsappLimit"
                 type="number"
                 value={formData.whatsapp_limit}
-                onChange={(e) => setFormData({ ...formData, whatsapp_limit: Number.parseInt(e.target.value) || 2 })}
-                min="1"
-                max="10"
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    whatsapp_limit: Number.parseInt(e.target.value) || DEFAULT_WHATSAPP_LIMIT,
+                  })
+                }
+                min="0" // Permitir 0 se necessário
+                max="100" // Aumentar o limite máximo se necessário
                 disabled={loading}
               />
             </div>

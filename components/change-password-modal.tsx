@@ -66,31 +66,29 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
     setSuccess("")
 
     try {
-      // Aqui você implementaria a lógica real de alteração de senha
-      // Por enquanto, vamos simular um sucesso
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Simular atualização no banco (em um sistema real, isso seria feito via API segura)
-      const { error } = await supabase
+      // Salvar a nova senha no banco de dados
+      // ATENÇÃO: Salvando senha em texto plano. NÃO FAÇA ISSO EM PRODUÇÃO!
+      // Em um ambiente real, use hash de senhas (ex: bcrypt).
+      const { error: updateError } = await supabase
         .from("user_profiles")
         .update({
+          password: formData.newPassword, // Salva a nova senha
           updated_at: new Date().toISOString(),
-          // password_changed_at: new Date().toISOString() // campo que você pode adicionar
         })
         .eq("id", user.id)
 
-      if (error) throw error
+      if (updateError) throw updateError
 
-      setSuccess(`Senha alterada com sucesso para ${user.full_name}!`)
+      setSuccess(`Senha alterada com sucesso para ${user.full_name}! A nova senha é: ${formData.newPassword}`)
       setTimeout(() => {
         onSuccess()
         onOpenChange(false)
         setFormData({ newPassword: "", confirmPassword: "" })
         setSuccess("")
-      }, 2000)
+      }, 3000) // Aumentado o tempo para o admin ver a senha gerada/digitada
     } catch (error: any) {
       console.error("Erro ao alterar senha:", error)
-      setError("Erro ao alterar senha")
+      setError("Erro ao alterar senha. Detalhes: " + error.message)
     } finally {
       setLoading(false)
     }
@@ -176,8 +174,9 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
             />
           </div>
 
-          <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-            <strong>Dica:</strong> Use o botão 🔄 para gerar uma senha segura automaticamente.
+          <div className="text-sm text-gray-600 bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+            <strong className="text-yellow-700">⚠️ Atenção:</strong> As senhas estão sendo salvas em texto plano para
+            fins de demonstração. Em um ambiente de produção, utilize hash de senhas (ex: bcrypt).
             <br />
             <strong>Importante:</strong> Comunique a nova senha ao usuário por um canal seguro.
           </div>

@@ -16,6 +16,7 @@ export interface UserProfile {
   last_login: string | null
   created_at: string
   updated_at: string
+  password?: string // Adicionado campo password
 }
 
 export interface Organization {
