@@ -12,6 +12,7 @@ export interface ThemeConfig {
   logoIcon: string
   sidebarStyle: "light" | "dark"
   brandingEnabled: boolean
+  description?: string
 }
 
 export const defaultTheme: ThemeConfig = {
@@ -22,6 +23,7 @@ export const defaultTheme: ThemeConfig = {
   logoIcon: "🤖",
   sidebarStyle: "light",
   brandingEnabled: true,
+  description: "Plataforma de construção de agentes de IA",
 }
 
 export const ThemeContext = createContext<{
@@ -68,6 +70,7 @@ export const loadThemeFromDatabase = async (): Promise<ThemeConfig> => {
       logoIcon: data.logo_icon,
       sidebarStyle: data.sidebar_style as "light" | "dark",
       brandingEnabled: data.branding_enabled,
+      description: data.description || defaultTheme.description,
     }
   } catch (error) {
     console.error("Erro ao carregar tema:", error)
@@ -94,6 +97,7 @@ export const saveThemeToDatabase = async (theme: Partial<ThemeConfig>): Promise<
       logo_icon: theme.logoIcon,
       sidebar_style: theme.sidebarStyle,
       branding_enabled: theme.brandingEnabled,
+      description: theme.description,
     }
 
     if (existing) {
@@ -121,6 +125,7 @@ export const themePresets = {
     secondaryColor: "#10b981",
     accentColor: "#8b5cf6",
     logoIcon: "🤖",
+    description: "Plataforma de construção de agentes de IA",
   },
   green: {
     systemName: "Impa AI",
@@ -128,6 +133,7 @@ export const themePresets = {
     secondaryColor: "#2563eb",
     accentColor: "#f59e0b",
     logoIcon: "🌱",
+    description: "Plataforma de construção de agentes de IA",
   },
   purple: {
     systemName: "Impa AI",
@@ -135,6 +141,7 @@ export const themePresets = {
     secondaryColor: "#ec4899",
     accentColor: "#06b6d4",
     logoIcon: "💜",
+    description: "Plataforma de construção de agentes de IA",
   },
   orange: {
     systemName: "Impa AI",
@@ -142,5 +149,6 @@ export const themePresets = {
     secondaryColor: "#dc2626",
     accentColor: "#7c2d12",
     logoIcon: "🔥",
+    description: "Plataforma de construção de agentes de IA",
   },
 }

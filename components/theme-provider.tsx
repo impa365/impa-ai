@@ -1,75 +1,61 @@
 "use client"
 
-import type React from "react"
-
-import { createContext, useContext, useEffect, useState } from "react"
+import * as React from "react"
+import { ThemeProvider as NextThemesProvider } from "next-themes"
+import type { ThemeProviderProps } from "next-themes"
 import {
+  ThemeContext,
   type ThemeConfig,
   defaultTheme,
-  applyThemeColors,
   loadThemeFromDatabase,
   saveThemeToDatabase,
+  applyThemeColors,
 } from "@/lib/theme"
 
-const ThemeContext = createContext<{
-  theme: ThemeConfig
-  updateTheme: (updates: Partial<ThemeConfig>) => Promise<void>
-  loadTheme: () => Promise<void>
-}>({
-  theme: defaultTheme,
-  updateTheme: async () => {},
-  loadTheme: async () => {},
-})
+export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
+  const [theme, setTheme] = React.useState<ThemeConfig>(defaultTheme)
 
-export const useTheme = () => useContext(ThemeContext)
+  const updateTheme = React.useCallback(
+    async (updates: Partial<ThemeConfig>) => {
+      const newTheme = { ...theme, ...updates }
+      setTheme(newTheme)
+      applyThemeColors(newTheme)
+      await saveThemeToDatabase(newTheme)
+    },
+    [theme],
+  )
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<ThemeConfig>(defaultTheme)
-  const [loading, setLoading] = useState(true)
-
-  // Função para carregar tema do banco
-  const loadTheme = async () => {
+  const loadTheme = React.useCallback(async () => {
     try {
       const loadedTheme = await loadThemeFromDatabase()
       setTheme(loadedTheme)
       applyThemeColors(loadedTheme)
     } catch (error) {
       console.error("Erro ao carregar tema:", error)
+      setTheme(defaultTheme)
       applyThemeColors(defaultTheme)
-    } finally {
-      setLoading(false)
     }
-  }
-
-  // Função para atualizar tema
-  const updateTheme = async (updates: Partial<ThemeConfig>) => {
-    try {
-      const newTheme = { ...theme, ...updates }
-
-      // Salvar no banco de dados
-      await saveThemeToDatabase(newTheme)
-
-      // Atualizar estado local
-      setTheme(newTheme)
-      applyThemeColors(newTheme)
-    } catch (error) {
-      console.error("Erro ao atualizar tema:", error)
-      throw error
-    }
-  }
-
-  // Carregar tema na inicialização
-  useEffect(() => {
-    loadTheme()
   }, [])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
+  React.useEffect(() => {
+    loadTheme()
+  }, [loadTheme])
 
-  return <ThemeContext.Provider value={{ theme, updateTheme, loadTheme }}>{children}</ThemeContext.Provider>
+  const contextValue = React.useMemo(
+    () => ({
+      theme,
+      updateTheme,
+      loadTheme,
+    }),
+    [theme, updateTheme, loadTheme],
+  )
+
+  return (
+    <NextThemesProvider {...props}>
+      <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>
+    </NextThemesProvider>
+  )
 }
+
+// Export the useTheme hook from lib/theme
+export { useTheme } from "@/lib/theme"
