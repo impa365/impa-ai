@@ -387,7 +387,13 @@ export default function WhatsAppPage() {
                     </div>
                     <div>
                       <div className="font-medium">{connection.connection_name}</div>
-                      <div className="text-sm text-gray-600">{connection.phone_number || "Não conectado"}</div>
+                      <div className="text-sm text-gray-600">
+                        {connection.status === "connected"
+                          ? connection.phone_number || "Conectado"
+                          : connection.status === "connecting"
+                            ? "Conectando..."
+                            : "Desconectado"}
+                      </div>
                       <div className="text-xs text-gray-500">
                         Criado em {new Date(connection.created_at).toLocaleDateString()}
                         {connection.last_sync && (
