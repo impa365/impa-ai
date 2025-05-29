@@ -126,16 +126,21 @@ export default function AdminSettingsPage() {
   const saveSystemSettings = async () => {
     setSaving(true)
     try {
-      await supabase.from("system_settings").upsert([
-        {
-          setting_key: "default_whatsapp_connections_limit",
-          setting_value: systemSettings.defaultWhatsAppLimit,
-        },
-        {
-          setting_key: "allow_public_registration",
-          setting_value: systemSettings.allowPublicRegistration,
-        },
-      ])
+      // Salvar cada configuração individualmente para garantir que funcione
+      const { error: limitError } = await supabase.from("system_settings").upsert({
+        setting_key: "default_whatsapp_connections_limit",
+        setting_value: systemSettings.defaultWhatsAppLimit,
+      })
+
+      const { error: registrationError } = await supabase.from("system_settings").upsert({
+        setting_key: "allow_public_registration",
+        setting_value: systemSettings.allowPublicRegistration,
+      })
+
+      if (limitError || registrationError) {
+        throw new Error("Erro ao salvar configurações")
+      }
+
       setSaveMessage("Configurações do sistema salvas com sucesso!")
       setTimeout(() => setSaveMessage(""), 3000)
     } catch (error) {

@@ -23,6 +23,7 @@ export default function LoginForm() {
   const [error, setError] = useState("")
   const [showRegister, setShowRegister] = useState(false)
   const [allowRegistration, setAllowRegistration] = useState(false)
+  const [checkingRegistration, setCheckingRegistration] = useState(true)
   const router = useRouter()
   const { theme } = useTheme()
 
@@ -30,22 +31,28 @@ export default function LoginForm() {
     // Verificar se o cadastro público está habilitado
     const checkRegistrationSetting = async () => {
       try {
+        setCheckingRegistration(true)
         const { data, error } = await supabase
           .from("system_settings")
           .select("setting_value")
           .eq("setting_key", "allow_public_registration")
           .single()
 
-        console.log("Registration setting data:", data) // Debug
+        console.log("Registration setting data:", data)
 
         if (data && data.setting_value !== null) {
-          setAllowRegistration(data.setting_value === true)
+          // Garantir que estamos comparando corretamente o valor boolean
+          const isEnabled = data.setting_value === true || data.setting_value === "true"
+          setAllowRegistration(isEnabled)
+          console.log("Registration enabled:", isEnabled)
         } else {
           setAllowRegistration(false)
         }
       } catch (error) {
         console.error("Error checking registration setting:", error)
         setAllowRegistration(false)
+      } finally {
+        setCheckingRegistration(false)
       }
     }
 
@@ -82,8 +89,6 @@ export default function LoginForm() {
     return <RegisterForm onBackToLogin={() => setShowRegister(false)} />
   }
 
-  console.log("Allow registration state:", allowRegistration)
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
       <Card className="w-full max-w-md">
@@ -93,7 +98,7 @@ export default function LoginForm() {
               className="w-12 h-12 rounded-lg flex items-center justify-center text-white text-2xl"
               style={{ backgroundColor: theme.primaryColor }}
             >
-              {theme.logoEmoji || "🤖"}
+              {theme.logoIcon || "🤖"}
             </div>
           </div>
           <CardTitle className="text-2xl font-bold">{theme.systemName}</CardTitle>
@@ -116,6 +121,7 @@ export default function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="seu@email.com"
                 required
+                className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
 
@@ -129,6 +135,7 @@ export default function LoginForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
+                  className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500 pr-10"
                 />
                 <Button
                   type="button"
@@ -152,12 +159,20 @@ export default function LoginForm() {
             </Button>
           </form>
 
-          {allowRegistration && (
+          {!checkingRegistration && allowRegistration && (
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600 mb-2">Não tem uma conta?</p>
               <Button variant="outline" onClick={() => setShowRegister(true)} className="w-full" disabled={loading}>
                 Criar Conta
               </Button>
+            </div>
+          )}
+
+          {/* Debug info - remover em produção */}
+          {process.env.NODE_ENV === "development" && (
+            <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
+              <p>Debug: Registration allowed = {allowRegistration.toString()}</p>
+              <p>Debug: Checking = {checkingRegistration.toString()}</p>
             </div>
           )}
         </CardContent>
