@@ -1008,11 +1008,11 @@ export default function AdminSettingsPage() {
     const style = document.createElement("style")
     style.textContent = `
     .hover-text:hover {
-      color: var(--text-hover) !important;
+      color: ${theme.hoverColor} !important;
       transition: color 0.2s ease;
     }
     .hover-bg:hover {
-      background-color: var(--hover) !important;
+      background-color: ${theme.hoverColor} !important;
       transition: background-color 0.2s ease;
     }
   `
