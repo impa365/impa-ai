@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Edit, Trash2, Users } from "lucide-react"
+import { Plus, Edit, Trash2, Users, Key } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import UserModal from "@/components/user-modal"
 import {
@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import ChangeUserPasswordModal from "@/components/change-user-password-modal"
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([])
@@ -25,6 +26,8 @@ export default function AdminUsersPage() {
   const [userToDelete, setUserToDelete] = useState<any>(null)
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState("")
+  const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false)
+  const [selectedUserForPassword, setSelectedUserForPassword] = useState<any>(null)
 
   useEffect(() => {
     fetchUsers()
@@ -38,6 +41,26 @@ export default function AdminUsersPage() {
       console.error("Erro ao buscar usuários:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchUserWithSettings = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select(`*, user_settings(*)`)
+        .eq("id", userId)
+        .single()
+
+      if (error) {
+        console.error("Erro ao buscar usuário com configurações:", error)
+        return null
+      }
+
+      return data
+    } catch (error) {
+      console.error("Erro ao buscar usuário com configurações:", error)
+      return null
     }
   }
 
@@ -169,6 +192,17 @@ export default function AdminUsersPage() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="text-blue-600"
+                      onClick={async () => {
+                        setSelectedUserForPassword(user)
+                        setChangePasswordModalOpen(true)
+                      }}
+                    >
+                      <Key className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       className="text-red-600"
                       onClick={() => {
                         setUserToDelete(user)
@@ -211,6 +245,12 @@ export default function AdminUsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ChangeUserPasswordModal
+        open={changePasswordModalOpen}
+        onOpenChange={setChangePasswordModalOpen}
+        user={selectedUserForPassword}
+      />
     </div>
   )
 }

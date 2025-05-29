@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
@@ -34,6 +34,26 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     status: user?.status || "active",
     whatsapp_limit: user?.whatsapp_connections_limit || 2,
   })
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        full_name: user.full_name || "",
+        email: user.email || "",
+        role: user.role || "user",
+        status: user.status || "active",
+        whatsapp_limit: user.whatsapp_connections_limit || 2,
+      })
+    } else {
+      setFormData({
+        full_name: "",
+        email: "",
+        role: "user",
+        status: "active",
+        whatsapp_limit: 2,
+      })
+    }
+  }, [user])
 
   const handleSave = async () => {
     if (!formData.full_name.trim() || !formData.email.trim()) {

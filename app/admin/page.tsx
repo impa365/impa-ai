@@ -39,6 +39,7 @@ import {
   Users,
   Bot,
   Smartphone,
+  Key,
 } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
@@ -49,6 +50,7 @@ import UserModal from "@/components/user-modal"
 import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
 import { disconnectInstance } from "@/lib/whatsapp-settings-api"
+import ChangeUserPasswordModal from "@/components/change-user-password-modal"
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null)
@@ -112,6 +114,9 @@ export default function AdminDashboard() {
   const [qrModalOpen, setQrModalOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [selectedWhatsAppConnection, setSelectedWhatsAppConnection] = useState<any>(null)
+
+  const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false)
+  const [selectedUserForPassword, setSelectedUserForPassword] = useState<any>(null)
 
   const fetchWhatsAppConnections = async () => {
     const { data } = await supabase
@@ -380,6 +385,17 @@ export default function AdminDashboard() {
     </div>
   )
 
+  const fetchUserWithSettings = async (userId: string) => {
+    const { data: userProfile } = await supabase.from("user_profiles").select("*").eq("id", userId).single()
+
+    const { data: userSettings } = await supabase.from("user_settings").select("*").eq("user_id", userId).single()
+
+    return {
+      ...userProfile,
+      whatsapp_connections_limit: userSettings?.whatsapp_connections_limit || 2,
+    }
+  }
+
   const renderUsers = () => (
     <div>
       <div className="flex justify-between items-start mb-8">
@@ -483,12 +499,26 @@ export default function AdminDashboard() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        setSelectedUserForEdit(user)
+                      onClick={async () => {
+                        const userWithSettings = await fetchUserWithSettings(user.id)
+                        setSelectedUserForEdit(userWithSettings)
                         setUserModalOpen(true)
                       }}
+                      title="Editar usuário"
                     >
                       <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-blue-600"
+                      onClick={() => {
+                        setSelectedUserForPassword(user)
+                        setChangePasswordModalOpen(true)
+                      }}
+                      title="Alterar senha"
+                    >
+                      <Key className="w-4 h-4" />
                     </Button>
                     <Button
                       variant="ghost"
@@ -498,6 +528,7 @@ export default function AdminDashboard() {
                         setUserToDelete(user)
                         setDeleteUserModal(true)
                       }}
+                      title="Excluir usuário"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -1376,6 +1407,16 @@ export default function AdminDashboard() {
         connection={selectedWhatsAppConnection}
         onSettingsSaved={() => {
           setSaveMessage("Configurações salvas com sucesso!")
+          setTimeout(() => setSaveMessage(""), 3000)
+        }}
+      />
+
+      <ChangeUserPasswordModal
+        open={changePasswordModalOpen}
+        onOpenChange={setChangePasswordModalOpen}
+        user={selectedUserForPassword}
+        onSuccess={() => {
+          setSaveMessage("Senha alterada com sucesso!")
           setTimeout(() => setSaveMessage(""), 3000)
         }}
       />
