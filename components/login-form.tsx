@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff } from "lucide-react"
 import { signIn } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
+import { supabase } from "@/lib/supabase"
+import RegisterForm from "./register-form"
 
 export default function LoginForm() {
   const [email, setEmail] = useState("")
@@ -19,8 +21,25 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [showRegister, setShowRegister] = useState(false)
+  const [allowRegistration, setAllowRegistration] = useState(false)
   const router = useRouter()
   const { theme } = useTheme()
+
+  useEffect(() => {
+    // Verificar se o cadastro público está habilitado
+    const checkRegistrationSetting = async () => {
+      const { data } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", "allow_public_registration")
+        .single()
+
+      setAllowRegistration(data?.setting_value === true)
+    }
+
+    checkRegistrationSetting()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,6 +65,10 @@ export default function LoginForm() {
     }
 
     setLoading(false)
+  }
+
+  if (showRegister) {
+    return <RegisterForm onBackToLogin={() => setShowRegister(false)} />
   }
 
   return (
@@ -116,17 +139,14 @@ export default function LoginForm() {
             </Button>
           </form>
 
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm font-medium text-gray-700 mb-2">Contas de teste:</p>
-            <div className="text-xs text-gray-600 space-y-1">
-              <div>
-                <strong>Admin:</strong> admin@impa365.com / impa@senha2025
-              </div>
-              <div>
-                <strong>Usuário:</strong> lorranimpa@gmail.com / impa@senha2025
-              </div>
+          {allowRegistration && (
+            <div className="mt-6 text-center">
+              <p className="text-sm text-gray-600 mb-2">Não tem uma conta?</p>
+              <Button variant="outline" onClick={() => setShowRegister(true)} className="w-full" disabled={loading}>
+                Criar Conta
+              </Button>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

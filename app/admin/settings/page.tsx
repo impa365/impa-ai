@@ -60,6 +60,7 @@ export default function AdminSettingsPage() {
   // Estados para configurações do sistema
   const [systemSettings, setSystemSettings] = useState({
     defaultWhatsAppLimit: 2,
+    allowPublicRegistration: false,
   })
 
   // Estados para upload de arquivos
@@ -104,24 +105,37 @@ export default function AdminSettingsPage() {
   }, [theme])
 
   const fetchSystemSettings = async () => {
-    const { data } = await supabase
+    const { data: limitData } = await supabase
       .from("system_settings")
       .select("setting_value")
       .eq("setting_key", "default_whatsapp_connections_limit")
       .single()
 
-    if (data) {
-      setSystemSettings({ defaultWhatsAppLimit: data.setting_value })
-    }
+    const { data: registrationData } = await supabase
+      .from("system_settings")
+      .select("setting_value")
+      .eq("setting_key", "allow_public_registration")
+      .single()
+
+    setSystemSettings({
+      defaultWhatsAppLimit: limitData?.setting_value || 2,
+      allowPublicRegistration: registrationData?.setting_value === true,
+    })
   }
 
   const saveSystemSettings = async () => {
     setSaving(true)
     try {
-      await supabase.from("system_settings").upsert({
-        setting_key: "default_whatsapp_connections_limit",
-        setting_value: systemSettings.defaultWhatsAppLimit,
-      })
+      await supabase.from("system_settings").upsert([
+        {
+          setting_key: "default_whatsapp_connections_limit",
+          setting_value: systemSettings.defaultWhatsAppLimit,
+        },
+        {
+          setting_key: "allow_public_registration",
+          setting_value: systemSettings.allowPublicRegistration,
+        },
+      ])
       setSaveMessage("Configurações do sistema salvas com sucesso!")
       setTimeout(() => setSaveMessage(""), 3000)
     } catch (error) {
@@ -473,39 +487,67 @@ export default function AdminSettingsPage() {
         <p className="text-gray-600">Configure parâmetros globais da plataforma</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Limites e Restrições</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="defaultWhatsAppLimit">Limite Padrão de Conexões WhatsApp</Label>
-            <Input
-              id="defaultWhatsAppLimit"
-              type="number"
-              value={systemSettings.defaultWhatsAppLimit}
-              onChange={(e) =>
-                setSystemSettings({
-                  ...systemSettings,
-                  defaultWhatsAppLimit: Number.parseInt(e.target.value) || 2,
-                })
-              }
-              min="1"
-              max="50"
-              className="w-32"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Número máximo de conexões WhatsApp que novos usuários podem criar
-            </p>
-          </div>
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Limites e Restrições</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="defaultWhatsAppLimit">Limite Padrão de Conexões WhatsApp</Label>
+              <Input
+                id="defaultWhatsAppLimit"
+                type="number"
+                value={systemSettings.defaultWhatsAppLimit}
+                onChange={(e) =>
+                  setSystemSettings({
+                    ...systemSettings,
+                    defaultWhatsAppLimit: Number.parseInt(e.target.value) || 2,
+                  })
+                }
+                min="1"
+                max="50"
+                className="w-32"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Número máximo de conexões WhatsApp que novos usuários podem criar
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
-          <div className="flex justify-end">
-            <Button onClick={saveSystemSettings} disabled={saving} className="gap-2">
-              {saving ? "Salvando..." : "Salvar Configurações"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Cadastro de Usuários</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="allowRegistration">Permitir Cadastro Público</Label>
+                <p className="text-xs text-gray-500 mt-1">Permite que novos usuários se cadastrem na tela de login</p>
+              </div>
+              <Button
+                variant={systemSettings.allowPublicRegistration ? "default" : "outline"}
+                onClick={() =>
+                  setSystemSettings({
+                    ...systemSettings,
+                    allowPublicRegistration: !systemSettings.allowPublicRegistration,
+                  })
+                }
+                className={systemSettings.allowPublicRegistration ? "bg-green-600 hover:bg-green-700" : ""}
+              >
+                {systemSettings.allowPublicRegistration ? "Habilitado" : "Desabilitado"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end">
+          <Button onClick={saveSystemSettings} disabled={saving} className="gap-2">
+            {saving ? "Salvando..." : "Salvar Configurações"}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 
