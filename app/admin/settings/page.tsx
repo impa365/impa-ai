@@ -329,8 +329,8 @@ export default function AdminSettingsPage() {
   const renderAdminProfileSettings = () => (
     <div>
       <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2">Perfil do Administrador</h3>
-        <p className="text-gray-600">Gerencie suas informações pessoais e senha</p>
+        <h3 className="text-slate-900 font-semibold mb-2">Perfil do Administrador</h3>
+        <p className="text-slate-700">Gerencie suas informações pessoais e senha</p>
       </div>
 
       {adminProfileMessage && (
@@ -450,8 +450,8 @@ export default function AdminSettingsPage() {
   const renderSystemSettings = () => (
     <div>
       <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2">Configurações do Sistema</h3>
-        <p className="text-gray-600">Configure parâmetros globais da plataforma</p>
+        <h3 className="text-slate-900 font-semibold mb-2">Configurações do Sistema</h3>
+        <p className="text-slate-700">Configure parâmetros globais da plataforma</p>
       </div>
 
       <Card>
@@ -608,69 +608,75 @@ export default function AdminSettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border border-gray-200">
           <CardHeader>
             <CardTitle>Esquema de Cores</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 bg-white">
             <div>
-              <Label htmlFor="primaryColor">Cor Primária</Label>
+              <Label htmlFor="primaryColor" className="text-slate-900 font-medium">
+                Cor Primária
+              </Label>
               <div className="flex gap-2">
                 <Input
                   id="primaryColor"
                   type="color"
                   value={theme.primaryColor}
                   onChange={(e) => handleThemeUpdate({ primaryColor: e.target.value })}
-                  className="w-16 h-10"
+                  className="w-16 h-10 border-2 border-gray-400"
                   disabled={saving}
                 />
                 <Input
                   value={theme.primaryColor}
                   onChange={(e) => handleThemeUpdate({ primaryColor: e.target.value })}
                   placeholder="#2563eb"
-                  className="flex-1"
+                  className="flex-1 text-slate-900 bg-white"
                   disabled={saving}
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="secondaryColor">Cor Secundária</Label>
+              <Label htmlFor="secondaryColor" className="text-slate-900 font-medium">
+                Cor Secundária
+              </Label>
               <div className="flex gap-2">
                 <Input
                   id="secondaryColor"
                   type="color"
                   value={theme.secondaryColor}
                   onChange={(e) => handleThemeUpdate({ secondaryColor: e.target.value })}
-                  className="w-16 h-10"
+                  className="w-16 h-10 border-2 border-gray-400"
                   disabled={saving}
                 />
                 <Input
                   value={theme.secondaryColor}
                   onChange={(e) => handleThemeUpdate({ secondaryColor: e.target.value })}
                   placeholder="#10b981"
-                  className="flex-1"
+                  className="flex-1 text-slate-900 bg-white"
                   disabled={saving}
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="accentColor">Cor de Destaque</Label>
+              <Label htmlFor="accentColor" className="text-slate-900 font-medium">
+                Cor de Destaque
+              </Label>
               <div className="flex gap-2">
                 <Input
                   id="accentColor"
                   type="color"
                   value={theme.accentColor}
                   onChange={(e) => handleThemeUpdate({ accentColor: e.target.value })}
-                  className="w-16 h-10"
+                  className="w-16 h-10 border-2 border-gray-400"
                   disabled={saving}
                 />
                 <Input
                   value={theme.accentColor}
                   onChange={(e) => handleThemeUpdate({ accentColor: e.target.value })}
                   placeholder="#8b5cf6"
-                  className="flex-1"
+                  className="flex-1 text-slate-900 bg-white"
                   disabled={saving}
                 />
               </div>
@@ -765,8 +771,8 @@ export default function AdminSettingsPage() {
     return (
       <div>
         <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-2">Integrações Disponíveis</h3>
-          <p className="text-gray-600">Configure as integrações para expandir as funcionalidades da plataforma</p>
+          <h3 className="text-slate-900 font-semibold mb-2">Integrações Disponíveis</h3>
+          <p className="text-slate-700">Configure as integrações para expandir as funcionalidades da plataforma</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -921,8 +927,8 @@ export default function AdminSettingsPage() {
     <div className="p-6">
       <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Configurações do Sistema</h1>
-          <p className="text-gray-600">Personalize a plataforma e configure integrações</p>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Configurações do Sistema</h1>
+          <p className="text-slate-700">Personalize a plataforma e configure integrações</p>
         </div>
         <div className="flex items-center gap-4">
           {saveMessage && (
