@@ -1254,7 +1254,7 @@ export default function AdminDashboard() {
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" className="gap-2 text-gray-700 border-gray-300 hover:bg-gray-50">
                   {settingsSubTab === "profile" ? (
                     <>
                       <User className="w-4 h-4" />
@@ -1274,16 +1274,25 @@ export default function AdminDashboard() {
                   <ChevronDown className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => updateURL("settings", "profile")}>
+              <DropdownMenuContent align="end" className="bg-white border border-gray-200">
+                <DropdownMenuItem
+                  onClick={() => updateURL("settings", "profile")}
+                  className="text-gray-700 hover:bg-gray-100 focus:bg-gray-100"
+                >
                   <User className="w-4 h-4 mr-2" />
                   Perfil
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => updateURL("settings", "branding")}>
+                <DropdownMenuItem
+                  onClick={() => updateURL("settings", "branding")}
+                  className="text-gray-700 hover:bg-gray-100 focus:bg-gray-100"
+                >
                   <Palette className="w-4 h-4 mr-2" />
                   Branding
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => updateURL("settings", "integrations")}>
+                <DropdownMenuItem
+                  onClick={() => updateURL("settings", "integrations")}
+                  className="text-gray-700 hover:bg-gray-100 focus:bg-gray-100"
+                >
                   <Plug className="w-4 h-4 mr-2" />
                   Integrações
                 </DropdownMenuItem>
