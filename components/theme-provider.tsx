@@ -10,7 +10,7 @@ import {
   loadThemeFromDatabase,
   saveThemeToDatabase,
   applyThemeColors,
-} from "@/lib/theme"
+} from "../lib/theme"
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   const [theme, setTheme] = React.useState<ThemeConfig>(defaultTheme)
@@ -58,4 +58,4 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 }
 
 // Export the useTheme hook from lib/theme
-export { useTheme } from "@/lib/theme"
+export { useTheme } from "../lib/theme"
