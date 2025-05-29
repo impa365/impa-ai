@@ -10,6 +10,7 @@ export interface ThemeConfig {
   primaryColor: string
   secondaryColor: string
   accentColor: string
+  hoverColor: string
   logoUrl?: string
   faviconUrl?: string
   sidebarStyle?: string
@@ -23,6 +24,7 @@ export const defaultTheme: ThemeConfig = {
   primaryColor: "#0f172a",
   secondaryColor: "#f1f5f9",
   accentColor: "#3b82f6",
+  hoverColor: "#1e293b",
   sidebarStyle: "default",
   brandingEnabled: true,
 }
@@ -67,6 +69,7 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
       primaryColor: themeData.primary_color || defaultTheme.primaryColor,
       secondaryColor: themeData.secondary_color || defaultTheme.secondaryColor,
       accentColor: themeData.accent_color || defaultTheme.accentColor,
+      hoverColor: themeData.hover_color || defaultTheme.hoverColor,
       logoUrl: themeData.logo_url,
       faviconUrl: themeData.favicon_url,
       sidebarStyle: themeData.sidebar_style || defaultTheme.sidebarStyle,
@@ -101,6 +104,7 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
       primary_color: theme.primaryColor,
       secondary_color: theme.secondaryColor,
       accent_color: theme.accentColor,
+      hover_color: theme.hoverColor,
       logo_url: theme.logoUrl,
       favicon_url: theme.faviconUrl,
       sidebar_style: theme.sidebarStyle,
@@ -129,6 +133,7 @@ export function applyThemeColors(theme: ThemeConfig) {
   root.style.setProperty("--primary", theme.primaryColor)
   root.style.setProperty("--secondary", theme.secondaryColor)
   root.style.setProperty("--accent", theme.accentColor)
+  root.style.setProperty("--hover", theme.hoverColor)
 
   // Set document title if system name is available
   if (theme.systemName && typeof document !== "undefined") {
@@ -143,6 +148,7 @@ export const themePresets = {
     primaryColor: "#0f172a",
     secondaryColor: "#f1f5f9",
     accentColor: "#3b82f6",
+    hoverColor: "#1e293b",
     logoIcon: "🤖",
   },
   blue: {
@@ -150,6 +156,7 @@ export const themePresets = {
     primaryColor: "#1e40af",
     secondaryColor: "#dbeafe",
     accentColor: "#3b82f6",
+    hoverColor: "#1e3a8a",
     logoIcon: "💙",
   },
   green: {
@@ -157,6 +164,7 @@ export const themePresets = {
     primaryColor: "#166534",
     secondaryColor: "#dcfce7",
     accentColor: "#22c55e",
+    hoverColor: "#14532d",
     logoIcon: "💚",
   },
   purple: {
@@ -164,6 +172,23 @@ export const themePresets = {
     primaryColor: "#7c3aed",
     secondaryColor: "#ede9fe",
     accentColor: "#8b5cf6",
+    hoverColor: "#6d28d9",
     logoIcon: "💜",
+  },
+  dark: {
+    systemName: "Luna AI",
+    primaryColor: "#1f2937",
+    secondaryColor: "#374151",
+    accentColor: "#60a5fa",
+    hoverColor: "#111827",
+    logoIcon: "🌙",
+  },
+  ocean: {
+    systemName: "Luna AI",
+    primaryColor: "#0891b2",
+    secondaryColor: "#cffafe",
+    accentColor: "#06b6d4",
+    hoverColor: "#0e7490",
+    logoIcon: "🌊",
   },
 }

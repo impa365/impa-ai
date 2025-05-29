@@ -329,8 +329,8 @@ export default function AdminSettingsPage() {
   const renderAdminProfileSettings = () => (
     <div>
       <div className="mb-6">
-        <h3 className="text-slate-900 font-semibold mb-2">Perfil do Administrador</h3>
-        <p className="text-slate-700">Gerencie suas informações pessoais e senha</p>
+        <h3 className="text-xl font-bold text-black mb-2">Perfil do Administrador</h3>
+        <p className="text-gray-800 font-medium">Gerencie suas informações pessoais e senha</p>
       </div>
 
       {adminProfileMessage && (
@@ -340,40 +340,48 @@ export default function AdminSettingsPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Informações Pessoais</CardTitle>
+        <Card className="border-2 border-gray-300">
+          <CardHeader className="bg-gray-50">
+            <CardTitle className="text-black">Informações Pessoais</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 bg-white">
             <div>
-              <Label htmlFor="adminFullName">Nome Completo</Label>
+              <Label htmlFor="adminFullName" className="text-black font-semibold">
+                Nome Completo
+              </Label>
               <Input
                 id="adminFullName"
                 value={adminProfileForm.full_name}
                 onChange={(e) => setAdminProfileForm({ ...adminProfileForm, full_name: e.target.value })}
                 placeholder="Seu nome completo"
+                className="border-2 border-gray-300 text-black"
               />
             </div>
             <div>
-              <Label htmlFor="adminEmail">Email</Label>
+              <Label htmlFor="adminEmail" className="text-black font-semibold">
+                Email
+              </Label>
               <Input
                 id="adminEmail"
                 type="email"
                 value={adminProfileForm.email}
                 onChange={(e) => setAdminProfileForm({ ...adminProfileForm, email: e.target.value })}
                 placeholder="seu@email.com"
+                className="border-2 border-gray-300 text-black"
               />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Alterar Senha</CardTitle>
+        <Card className="border-2 border-gray-300">
+          <CardHeader className="bg-gray-50">
+            <CardTitle className="text-black">Alterar Senha</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 bg-white">
             <div>
-              <Label htmlFor="adminCurrentPassword">Senha Atual</Label>
+              <Label htmlFor="adminCurrentPassword" className="text-black font-semibold">
+                Senha Atual
+              </Label>
               <div className="relative">
                 <Input
                   id="adminCurrentPassword"
@@ -381,6 +389,7 @@ export default function AdminSettingsPage() {
                   value={adminProfileForm.currentPassword}
                   onChange={(e) => setAdminProfileForm({ ...adminProfileForm, currentPassword: e.target.value })}
                   placeholder="Senha atual"
+                  className="border-2 border-gray-300 text-black"
                 />
                 <Button
                   type="button"
@@ -394,7 +403,9 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div>
-              <Label htmlFor="adminNewPassword">Nova Senha</Label>
+              <Label htmlFor="adminNewPassword" className="text-black font-semibold">
+                Nova Senha
+              </Label>
               <div className="relative">
                 <Input
                   id="adminNewPassword"
@@ -402,6 +413,7 @@ export default function AdminSettingsPage() {
                   value={adminProfileForm.newPassword}
                   onChange={(e) => setAdminProfileForm({ ...adminProfileForm, newPassword: e.target.value })}
                   placeholder="Nova senha"
+                  className="border-2 border-gray-300 text-black"
                 />
                 <Button
                   type="button"
@@ -415,7 +427,9 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div>
-              <Label htmlFor="adminConfirmPassword">Confirmar Nova Senha</Label>
+              <Label htmlFor="adminConfirmPassword" className="text-black font-semibold">
+                Confirmar Nova Senha
+              </Label>
               <div className="relative">
                 <Input
                   id="adminConfirmPassword"
@@ -423,6 +437,7 @@ export default function AdminSettingsPage() {
                   value={adminProfileForm.confirmPassword}
                   onChange={(e) => setAdminProfileForm({ ...adminProfileForm, confirmPassword: e.target.value })}
                   placeholder="Confirme a nova senha"
+                  className="border-2 border-gray-300 text-black"
                 />
                 <Button
                   type="button"
@@ -450,17 +465,19 @@ export default function AdminSettingsPage() {
   const renderSystemSettings = () => (
     <div>
       <div className="mb-6">
-        <h3 className="text-slate-900 font-semibold mb-2">Configurações do Sistema</h3>
-        <p className="text-slate-700">Configure parâmetros globais da plataforma</p>
+        <h3 className="text-xl font-bold text-black mb-2">Configurações do Sistema</h3>
+        <p className="text-gray-800 font-medium">Configure parâmetros globais da plataforma</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Limites e Restrições</CardTitle>
+      <Card className="border-2 border-gray-300">
+        <CardHeader className="bg-gray-50">
+          <CardTitle className="text-black">Limites e Restrições</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 bg-white">
           <div>
-            <Label htmlFor="defaultWhatsAppLimit">Limite Padrão de Conexões WhatsApp</Label>
+            <Label htmlFor="defaultWhatsAppLimit" className="text-black font-semibold">
+              Limite Padrão de Conexões WhatsApp
+            </Label>
             <Input
               id="defaultWhatsAppLimit"
               type="number"
@@ -473,9 +490,9 @@ export default function AdminSettingsPage() {
               }
               min="1"
               max="50"
-              className="w-32"
+              className="w-32 border-2 border-gray-300 text-black"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-600 mt-1">
               Número máximo de conexões WhatsApp que novos usuários podem criar
             </p>
           </div>
@@ -509,35 +526,43 @@ export default function AdminSettingsPage() {
 
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Branding e Identidade</CardTitle>
+        <Card className="border-2 border-gray-300">
+          <CardHeader className="bg-gray-50">
+            <CardTitle className="text-black">Branding e Identidade</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 bg-white">
             <div>
-              <Label htmlFor="systemName">Nome do Sistema</Label>
+              <Label htmlFor="systemName" className="text-black font-semibold">
+                Nome do Sistema
+              </Label>
               <Input
                 id="systemName"
                 value={theme.systemName}
                 onChange={(e) => handleThemeUpdate({ systemName: e.target.value })}
                 placeholder="Nome da sua plataforma"
                 disabled={saving}
+                className="border-2 border-gray-300 text-black"
               />
             </div>
 
             <div>
-              <Label htmlFor="description">Descrição</Label>
+              <Label htmlFor="description" className="text-black font-semibold">
+                Descrição
+              </Label>
               <Textarea
                 id="description"
                 value={theme.description || ""}
                 onChange={(e) => handleThemeUpdate({ description: e.target.value })}
                 placeholder="Descrição da sua plataforma"
                 disabled={saving}
+                className="border-2 border-gray-300 text-black"
               />
             </div>
 
             <div>
-              <Label htmlFor="logoIcon">Ícone/Emoji do Logo</Label>
+              <Label htmlFor="logoIcon" className="text-black font-semibold">
+                Ícone/Emoji do Logo
+              </Label>
               <Input
                 id="logoIcon"
                 value={theme.logoIcon}
@@ -545,16 +570,19 @@ export default function AdminSettingsPage() {
                 placeholder="🤖"
                 maxLength={2}
                 disabled={saving}
+                className="border-2 border-gray-300 text-black"
               />
             </div>
 
             <div>
-              <Label htmlFor="logoUpload">Upload de Logo</Label>
+              <Label htmlFor="logoUpload" className="text-black font-semibold">
+                Upload de Logo
+              </Label>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
-                    className="gap-2"
+                    className="gap-2 border-2 border-gray-300"
                     disabled={saving || uploadingLogo}
                     onClick={() => logoInputRef.current?.click()}
                   >
@@ -569,7 +597,7 @@ export default function AdminSettingsPage() {
                     className="hidden"
                   />
                 </div>
-                <div className="text-xs text-gray-500 space-y-1">
+                <div className="text-xs text-gray-600 space-y-1">
                   <p>• Formatos: PNG, JPG</p>
                   <p>• Tamanho: 100x100 até 500x500 pixels</p>
                   <p>• Máximo: 2MB</p>
@@ -578,12 +606,14 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="faviconUpload">Upload de Favicon</Label>
+              <Label htmlFor="faviconUpload" className="text-black font-semibold">
+                Upload de Favicon
+              </Label>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
-                    className="gap-2"
+                    className="gap-2 border-2 border-gray-300"
                     disabled={saving || uploadingFavicon}
                     onClick={() => faviconInputRef.current?.click()}
                   >
@@ -598,7 +628,7 @@ export default function AdminSettingsPage() {
                     className="hidden"
                   />
                 </div>
-                <div className="text-xs text-gray-500 space-y-1">
+                <div className="text-xs text-gray-600 space-y-1">
                   <p>• Formatos: ICO, PNG</p>
                   <p>• Tamanho: exatamente 32x32 pixels</p>
                   <p>• Máximo: 1MB</p>
@@ -608,13 +638,13 @@ export default function AdminSettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200">
-          <CardHeader>
-            <CardTitle>Esquema de Cores</CardTitle>
+        <Card className="border-2 border-gray-300">
+          <CardHeader className="bg-gray-50">
+            <CardTitle className="text-black">Esquema de Cores</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 bg-white">
             <div>
-              <Label htmlFor="primaryColor" className="text-slate-900 font-medium">
+              <Label htmlFor="primaryColor" className="text-black font-semibold">
                 Cor Primária
               </Label>
               <div className="flex gap-2">
@@ -630,14 +660,14 @@ export default function AdminSettingsPage() {
                   value={theme.primaryColor}
                   onChange={(e) => handleThemeUpdate({ primaryColor: e.target.value })}
                   placeholder="#2563eb"
-                  className="flex-1 text-slate-900 bg-white"
+                  className="flex-1 text-black bg-white border-2 border-gray-300"
                   disabled={saving}
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="secondaryColor" className="text-slate-900 font-medium">
+              <Label htmlFor="secondaryColor" className="text-black font-semibold">
                 Cor Secundária
               </Label>
               <div className="flex gap-2">
@@ -653,14 +683,14 @@ export default function AdminSettingsPage() {
                   value={theme.secondaryColor}
                   onChange={(e) => handleThemeUpdate({ secondaryColor: e.target.value })}
                   placeholder="#10b981"
-                  className="flex-1 text-slate-900 bg-white"
+                  className="flex-1 text-black bg-white border-2 border-gray-300"
                   disabled={saving}
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="accentColor" className="text-slate-900 font-medium">
+              <Label htmlFor="accentColor" className="text-black font-semibold">
                 Cor de Destaque
               </Label>
               <div className="flex gap-2">
@@ -676,7 +706,30 @@ export default function AdminSettingsPage() {
                   value={theme.accentColor}
                   onChange={(e) => handleThemeUpdate({ accentColor: e.target.value })}
                   placeholder="#8b5cf6"
-                  className="flex-1 text-slate-900 bg-white"
+                  className="flex-1 text-black bg-white border-2 border-gray-300"
+                  disabled={saving}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="hoverColor" className="text-black font-semibold">
+                Cor de Hover
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="hoverColor"
+                  type="color"
+                  value={theme.hoverColor}
+                  onChange={(e) => handleThemeUpdate({ hoverColor: e.target.value })}
+                  className="w-16 h-10 border-2 border-gray-400"
+                  disabled={saving}
+                />
+                <Input
+                  value={theme.hoverColor}
+                  onChange={(e) => handleThemeUpdate({ hoverColor: e.target.value })}
+                  placeholder="#1e293b"
+                  className="flex-1 text-black bg-white border-2 border-gray-300"
                   disabled={saving}
                 />
               </div>
@@ -684,17 +737,17 @@ export default function AdminSettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Temas Predefinidos</CardTitle>
+        <Card className="border-2 border-gray-300">
+          <CardHeader className="bg-gray-50">
+            <CardTitle className="text-black">Temas Predefinidos</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="bg-white">
             <div className="grid grid-cols-2 gap-3">
               {Object.entries(themePresets).map(([key, preset]) => (
                 <Button
                   key={key}
                   variant="outline"
-                  className="h-auto p-4 flex flex-col items-center gap-2"
+                  className="h-auto p-4 flex flex-col items-center gap-2 border-2 border-gray-300 hover:border-gray-400"
                   onClick={() => handleThemeUpdate(preset)}
                   disabled={saving}
                 >
@@ -704,19 +757,19 @@ export default function AdminSettingsPage() {
                   >
                     <span className="text-sm">{preset.logoIcon}</span>
                   </div>
-                  <span className="text-sm font-medium capitalize">{key}</span>
+                  <span className="text-sm font-medium capitalize text-black">{key}</span>
                 </Button>
               ))}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Preview</CardTitle>
+        <Card className="border-2 border-gray-300">
+          <CardHeader className="bg-gray-50">
+            <CardTitle className="text-black">Preview</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="border rounded-lg p-4 bg-gray-50">
+          <CardContent className="bg-white">
+            <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50">
               <div className="flex items-center gap-2 mb-4">
                 <div
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
@@ -724,7 +777,7 @@ export default function AdminSettingsPage() {
                 >
                   <span className="text-sm">{theme.logoIcon}</span>
                 </div>
-                <span className="font-semibold">{theme.systemName}</span>
+                <span className="font-semibold text-black">{theme.systemName}</span>
               </div>
               <div className="space-y-2">
                 <div className="h-3 rounded" style={{ backgroundColor: theme.primaryColor, opacity: 0.8 }}></div>
@@ -733,6 +786,7 @@ export default function AdminSettingsPage() {
                   style={{ backgroundColor: theme.secondaryColor, opacity: 0.6 }}
                 ></div>
                 <div className="h-3 rounded w-1/2" style={{ backgroundColor: theme.accentColor, opacity: 0.4 }}></div>
+                <div className="h-3 rounded w-2/3" style={{ backgroundColor: theme.hoverColor, opacity: 0.5 }}></div>
               </div>
             </div>
           </CardContent>
@@ -771,13 +825,15 @@ export default function AdminSettingsPage() {
     return (
       <div>
         <div className="mb-6">
-          <h3 className="text-slate-900 font-semibold mb-2">Integrações Disponíveis</h3>
-          <p className="text-slate-700">Configure as integrações para expandir as funcionalidades da plataforma</p>
+          <h3 className="text-xl font-bold text-black mb-2">Integrações Disponíveis</h3>
+          <p className="text-gray-800 font-medium">
+            Configure as integrações para expandir as funcionalidades da plataforma
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow">
-            <CardContent className="p-6 text-center">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow border-2 border-gray-300">
+            <CardContent className="p-6 text-center bg-white">
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Image
                   src="/images/evolution-api-logo.png"
@@ -787,8 +843,8 @@ export default function AdminSettingsPage() {
                   className="rounded"
                 />
               </div>
-              <h4 className="font-semibold mb-2">Evolution API</h4>
-              <p className="text-sm text-gray-600 mb-4">Integração com WhatsApp Business</p>
+              <h4 className="font-semibold mb-2 text-black">Evolution API</h4>
+              <p className="text-sm text-gray-700 mb-4">Integração com WhatsApp Business</p>
               <Button
                 onClick={() => openIntegrationModal("evolution_api", "Evolution API")}
                 className="w-full"
@@ -799,13 +855,13 @@ export default function AdminSettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="cursor-pointer hover:shadow-md transition-shadow">
-            <CardContent className="p-6 text-center">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow border-2 border-gray-300">
+            <CardContent className="p-6 text-center bg-white">
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Image src="/images/n8n-logo.png" alt="n8n" width={40} height={40} className="rounded" />
               </div>
-              <h4 className="font-semibold mb-2">n8n</h4>
-              <p className="text-sm text-gray-600 mb-4">Automação de fluxos de trabalho</p>
+              <h4 className="font-semibold mb-2 text-black">n8n</h4>
+              <p className="text-sm text-gray-700 mb-4">Automação de fluxos de trabalho</p>
               <Button
                 onClick={() => openIntegrationModal("n8n", "n8n")}
                 className="w-full"
@@ -816,26 +872,26 @@ export default function AdminSettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="opacity-50">
-            <CardContent className="p-6 text-center">
+          <Card className="opacity-50 border-2 border-gray-300">
+            <CardContent className="p-6 text-center bg-white">
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Plus className="w-8 h-8 text-gray-400" />
               </div>
-              <h4 className="font-semibold mb-2">Em Breve</h4>
-              <p className="text-sm text-gray-600 mb-4">Nova integração chegando</p>
+              <h4 className="font-semibold mb-2 text-black">Em Breve</h4>
+              <p className="text-sm text-gray-700 mb-4">Nova integração chegando</p>
               <Button className="w-full" variant="outline" disabled>
                 Em Breve
               </Button>
             </CardContent>
           </Card>
 
-          <Card className="opacity-50">
-            <CardContent className="p-6 text-center">
+          <Card className="opacity-50 border-2 border-gray-300">
+            <CardContent className="p-6 text-center bg-white">
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Plus className="w-8 h-8 text-gray-400" />
               </div>
-              <h4 className="font-semibold mb-2">Em Breve</h4>
-              <p className="text-sm text-gray-600 mb-4">Nova integração chegando</p>
+              <h4 className="font-semibold mb-2 text-black">Em Breve</h4>
+              <p className="text-sm text-gray-700 mb-4">Nova integração chegando</p>
               <Button className="w-full" variant="outline" disabled>
                 Em Breve
               </Button>
@@ -924,17 +980,19 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6 bg-gray-100 min-h-screen">
       <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Configurações do Sistema</h1>
-          <p className="text-slate-700">Personalize a plataforma e configure integrações</p>
+          <h1 className="text-3xl font-bold text-black mb-2">Configurações do Sistema</h1>
+          <p className="text-gray-800 font-medium text-lg">Personalize a plataforma e configure integrações</p>
         </div>
         <div className="flex items-center gap-4">
           {saveMessage && (
             <div
-              className={`px-4 py-2 rounded-lg text-sm ${
-                saveMessage.includes("sucesso") ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+              className={`px-4 py-2 rounded-lg text-sm font-semibold ${
+                saveMessage.includes("sucesso")
+                  ? "bg-green-100 text-green-800 border border-green-300"
+                  : "bg-red-100 text-red-800 border border-red-300"
               }`}
             >
               {saveMessage}
@@ -942,7 +1000,7 @@ export default function AdminSettingsPage() {
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2">
+              <Button variant="outline" className="gap-2 border-2 border-gray-400 text-black font-semibold">
                 {settingsSubTab === "profile" ? (
                   <>
                     <User className="w-4 h-4" />
