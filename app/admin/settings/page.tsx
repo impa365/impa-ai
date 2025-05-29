@@ -526,18 +526,23 @@ export default function AdminSettingsPage() {
                 <Label htmlFor="allowRegistration">Permitir Cadastro Público</Label>
                 <p className="text-xs text-gray-500 mt-1">Permite que novos usuários se cadastrem na tela de login</p>
               </div>
-              <Button
-                variant={systemSettings.allowPublicRegistration ? "default" : "outline"}
-                onClick={() =>
-                  setSystemSettings({
-                    ...systemSettings,
-                    allowPublicRegistration: !systemSettings.allowPublicRegistration,
-                  })
-                }
-                className={systemSettings.allowPublicRegistration ? "bg-green-600 hover:bg-green-700" : ""}
-              >
-                {systemSettings.allowPublicRegistration ? "Habilitado" : "Desabilitado"}
-              </Button>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="allowRegistration"
+                  checked={systemSettings.allowPublicRegistration}
+                  onChange={(e) =>
+                    setSystemSettings({
+                      ...systemSettings,
+                      allowPublicRegistration: e.target.checked,
+                    })
+                  }
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium">
+                  {systemSettings.allowPublicRegistration ? "Habilitado" : "Desabilitado"}
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -904,19 +909,6 @@ export default function AdminSettingsPage() {
                 variant={getIntegrationConfig("n8n").flowUrl ? "default" : "outline"}
               >
                 {getIntegrationConfig("n8n").flowUrl ? "Configurado" : "Configurar"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="opacity-50">
-            <CardContent className="p-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Plus className="w-8 h-8 text-gray-400" />
-              </div>
-              <h4 className="font-semibold mb-2">Em Breve</h4>
-              <p className="text-sm text-gray-600 mb-4">Nova integração chegando</p>
-              <Button className="w-full" variant="outline" disabled>
-                Em Breve
               </Button>
             </CardContent>
           </Card>
