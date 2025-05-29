@@ -302,7 +302,12 @@ export default function AdminWhatsAppPage() {
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Filtros</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className="gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
+            >
               <Filter className="w-4 h-4" />
               {showFilters ? "Ocultar" : "Mostrar"} Filtros
             </Button>
@@ -432,68 +437,72 @@ export default function AdminWhatsAppPage() {
                     <div className="flex gap-1">
                       {connection.status === "connected" ? (
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
                           onClick={() => {
                             setSelectedConnection(connection)
                             setInfoModalOpen(true)
                           }}
                           title="Ver Informações"
+                          className="border-blue-200 text-blue-600 hover:bg-blue-50"
                         >
                           <Info className="w-4 h-4" />
                         </Button>
                       ) : (
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
                           onClick={() => {
                             setSelectedConnection(connection)
                             setQrModalOpen(true)
                           }}
                           title="Ver QR Code"
+                          className="border-green-200 text-green-600 hover:bg-green-50"
                         >
                           <QrCode className="w-4 h-4" />
                         </Button>
                       )}
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => {
                           setSelectedConnection(connection)
                           setSettingsModalOpen(true)
                         }}
                         title="Configurações"
+                        className="border-gray-200 text-gray-600 hover:bg-gray-50"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => {
                           setSelectedConnection(connection)
                           setTransferModalOpen(true)
                         }}
                         title="Transferir Propriedade"
+                        className="border-purple-200 text-purple-600 hover:bg-purple-50"
                       >
                         <UserPlus className="w-4 h-4" />
                       </Button>
                       {(connection.status === "connected" || connection.status === "connecting") && (
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="text-orange-600"
                           onClick={() => handleDisconnectConnection(connection)}
                           title="Desconectar"
+                          className="border-orange-200 text-orange-600 hover:bg-orange-50"
                         >
                           <PowerOff className="w-4 h-4" />
                         </Button>
                       )}
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        className="text-red-600"
                         onClick={() => handleDeleteConnection(connection)}
                         title="Excluir"
+                        className="border-red-200 text-red-600 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
