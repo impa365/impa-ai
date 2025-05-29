@@ -448,7 +448,7 @@ export default function AdminWhatsAppPage() {
                       >
                         <UserPlus className="w-4 h-4" />
                       </Button>
-                      {connection.status === "connected" && (
+                      {(connection.status === "connected" || connection.status === "connecting") && (
                         <Button
                           variant="ghost"
                           size="sm"

@@ -167,7 +167,7 @@ export default function WhatsAppPage() {
 
       syncSilently()
     }
-  }, [user, whatsappConnections.length])
+  }, [user, whatsappConnections])
 
   const handleDeleteConnection = async (connection: any) => {
     setConnectionToDelete(connection)
@@ -440,7 +440,7 @@ export default function WhatsAppPage() {
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
-                      {connection.status === "connected" && (
+                      {(connection.status === "connected" || connection.status === "connecting") && (
                         <Button
                           variant="ghost"
                           size="sm"
