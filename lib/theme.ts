@@ -6,35 +6,25 @@ import { supabase } from "./supabase"
 export interface ThemeConfig {
   systemName: string
   description: string
-  logoEmoji: string
+  logoIcon: string
   primaryColor: string
   secondaryColor: string
   accentColor: string
-  backgroundColor: string
-  textColor: string
-  borderColor: string
-  cardColor: string
-  mutedColor: string
-  destructiveColor: string
-  ringColor: string
   logoUrl?: string
   faviconUrl?: string
+  sidebarStyle?: string
+  brandingEnabled?: boolean
 }
 
 export const defaultTheme: ThemeConfig = {
   systemName: "Luna AI",
   description: "Plataforma de construção de agentes de IA",
-  logoEmoji: "🤖",
+  logoIcon: "🤖",
   primaryColor: "#0f172a",
   secondaryColor: "#f1f5f9",
   accentColor: "#3b82f6",
-  backgroundColor: "#ffffff",
-  textColor: "#0f172a",
-  borderColor: "#e2e8f0",
-  cardColor: "#ffffff",
-  mutedColor: "#f8fafc",
-  destructiveColor: "#ef4444",
-  ringColor: "#3b82f6",
+  sidebarStyle: "default",
+  brandingEnabled: true,
 }
 
 // Create the theme context
@@ -60,22 +50,21 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
       return defaultTheme
     }
 
+    if (!data) {
+      return defaultTheme
+    }
+
     return {
       systemName: data.system_name || defaultTheme.systemName,
       description: data.description || defaultTheme.description,
-      logoEmoji: data.logo_emoji || defaultTheme.logoEmoji,
+      logoIcon: data.logo_icon || defaultTheme.logoIcon,
       primaryColor: data.primary_color || defaultTheme.primaryColor,
       secondaryColor: data.secondary_color || defaultTheme.secondaryColor,
       accentColor: data.accent_color || defaultTheme.accentColor,
-      backgroundColor: data.background_color || defaultTheme.backgroundColor,
-      textColor: data.text_color || defaultTheme.textColor,
-      borderColor: data.border_color || defaultTheme.borderColor,
-      cardColor: data.card_color || defaultTheme.cardColor,
-      mutedColor: data.muted_color || defaultTheme.mutedColor,
-      destructiveColor: data.destructive_color || defaultTheme.destructiveColor,
-      ringColor: data.ring_color || defaultTheme.ringColor,
       logoUrl: data.logo_url,
       faviconUrl: data.favicon_url,
+      sidebarStyle: data.sidebar_style || defaultTheme.sidebarStyle,
+      brandingEnabled: data.branding_enabled ?? defaultTheme.brandingEnabled,
     }
   } catch (error) {
     console.error("Error loading theme from database:", error)
@@ -86,22 +75,17 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
 export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
   try {
     const { error } = await supabase.from("global_theme_config").upsert({
-      id: 1,
+      id: "550e8400-e29b-41d4-a716-446655440000", // Using a fixed UUID for the global theme
       system_name: theme.systemName,
       description: theme.description,
-      logo_emoji: theme.logoEmoji,
+      logo_icon: theme.logoIcon,
       primary_color: theme.primaryColor,
       secondary_color: theme.secondaryColor,
       accent_color: theme.accentColor,
-      background_color: theme.backgroundColor,
-      text_color: theme.textColor,
-      border_color: theme.borderColor,
-      card_color: theme.cardColor,
-      muted_color: theme.mutedColor,
-      destructive_color: theme.destructiveColor,
-      ring_color: theme.ringColor,
       logo_url: theme.logoUrl,
       favicon_url: theme.faviconUrl,
+      sidebar_style: theme.sidebarStyle,
+      branding_enabled: theme.brandingEnabled,
       updated_at: new Date().toISOString(),
     })
 
@@ -122,17 +106,15 @@ export function applyThemeColors(theme: ThemeConfig) {
 
   const root = document.documentElement
 
-  // Apply CSS custom properties
+  // Apply CSS custom properties using the available colors
   root.style.setProperty("--primary", theme.primaryColor)
   root.style.setProperty("--secondary", theme.secondaryColor)
   root.style.setProperty("--accent", theme.accentColor)
-  root.style.setProperty("--background", theme.backgroundColor)
-  root.style.setProperty("--foreground", theme.textColor)
-  root.style.setProperty("--border", theme.borderColor)
-  root.style.setProperty("--card", theme.cardColor)
-  root.style.setProperty("--muted", theme.mutedColor)
-  root.style.setProperty("--destructive", theme.destructiveColor)
-  root.style.setProperty("--ring", theme.ringColor)
+
+  // Set document title if system name is available
+  if (theme.systemName && typeof document !== "undefined") {
+    document.title = theme.systemName
+  }
 }
 
 // Theme presets for quick selection
@@ -142,27 +124,27 @@ export const themePresets = {
     primaryColor: "#0f172a",
     secondaryColor: "#f1f5f9",
     accentColor: "#3b82f6",
-    logoEmoji: "🤖",
+    logoIcon: "🤖",
   },
   blue: {
     systemName: "Luna AI",
     primaryColor: "#1e40af",
     secondaryColor: "#dbeafe",
     accentColor: "#3b82f6",
-    logoEmoji: "💙",
+    logoIcon: "💙",
   },
   green: {
     systemName: "Luna AI",
     primaryColor: "#166534",
     secondaryColor: "#dcfce7",
     accentColor: "#22c55e",
-    logoEmoji: "💚",
+    logoIcon: "💚",
   },
   purple: {
     systemName: "Luna AI",
     primaryColor: "#7c3aed",
     secondaryColor: "#ede9fe",
     accentColor: "#8b5cf6",
-    logoEmoji: "💜",
+    logoIcon: "💜",
   },
 }
