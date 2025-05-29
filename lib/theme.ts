@@ -43,28 +43,34 @@ export const useTheme = () => useContext(ThemeContext)
 
 export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
   try {
-    const { data, error } = await supabase.from("global_theme_config").select("*").single()
+    // First, try to get the first available theme configuration
+    const { data, error } = await supabase.from("global_theme_config").select("*").limit(1)
 
     if (error) {
       console.error("Error loading theme:", error)
       return defaultTheme
     }
 
-    if (!data) {
+    // If no data found, return default theme
+    if (!data || data.length === 0) {
+      console.log("No theme configuration found, using default theme")
       return defaultTheme
     }
 
+    // Use the first row found
+    const themeData = data[0]
+
     return {
-      systemName: data.system_name || defaultTheme.systemName,
-      description: data.description || defaultTheme.description,
-      logoIcon: data.logo_icon || defaultTheme.logoIcon,
-      primaryColor: data.primary_color || defaultTheme.primaryColor,
-      secondaryColor: data.secondary_color || defaultTheme.secondaryColor,
-      accentColor: data.accent_color || defaultTheme.accentColor,
-      logoUrl: data.logo_url,
-      faviconUrl: data.favicon_url,
-      sidebarStyle: data.sidebar_style || defaultTheme.sidebarStyle,
-      brandingEnabled: data.branding_enabled ?? defaultTheme.brandingEnabled,
+      systemName: themeData.system_name || defaultTheme.systemName,
+      description: themeData.description || defaultTheme.description,
+      logoIcon: themeData.logo_icon || defaultTheme.logoIcon,
+      primaryColor: themeData.primary_color || defaultTheme.primaryColor,
+      secondaryColor: themeData.secondary_color || defaultTheme.secondaryColor,
+      accentColor: themeData.accent_color || defaultTheme.accentColor,
+      logoUrl: themeData.logo_url,
+      faviconUrl: themeData.favicon_url,
+      sidebarStyle: themeData.sidebar_style || defaultTheme.sidebarStyle,
+      brandingEnabled: themeData.branding_enabled ?? defaultTheme.brandingEnabled,
     }
   } catch (error) {
     console.error("Error loading theme from database:", error)
@@ -74,8 +80,21 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
 
 export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
   try {
+    // First, check if any theme configuration exists
+    const { data: existingData } = await supabase.from("global_theme_config").select("id").limit(1)
+
+    let themeId: string
+
+    if (existingData && existingData.length > 0) {
+      // Use existing ID
+      themeId = existingData[0].id
+    } else {
+      // Generate new ID
+      themeId = "550e8400-e29b-41d4-a716-446655440000"
+    }
+
     const { error } = await supabase.from("global_theme_config").upsert({
-      id: "550e8400-e29b-41d4-a716-446655440000", // Using a fixed UUID for the global theme
+      id: themeId,
       system_name: theme.systemName,
       description: theme.description,
       logo_icon: theme.logoIcon,
