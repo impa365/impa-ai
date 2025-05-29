@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff } from "lucide-react"
 import { signIn } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
 
@@ -54,14 +54,10 @@ export default function LoginForm() {
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <div
-              className="w-12 h-12 rounded-lg flex items-center justify-center text-white"
+              className="w-12 h-12 rounded-lg flex items-center justify-center text-white text-2xl"
               style={{ backgroundColor: theme.primaryColor }}
             >
-              {theme.logoIcon === "🤖" ? (
-                <Bot className="w-7 h-7" />
-              ) : (
-                <span className="text-2xl">{theme.logoIcon}</span>
-              )}
+              {theme.logoEmoji || "🤖"}
             </div>
           </div>
           <CardTitle className="text-2xl font-bold">{theme.systemName}</CardTitle>
