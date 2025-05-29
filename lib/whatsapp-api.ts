@@ -144,26 +144,64 @@ export async function createEvolutionInstance(
   }
 }
 
-// Add this new function to fetch instance details
-export async function fetchInstanceDetails(instanceName: string, apiKey: string) {
+// Função para buscar detalhes da instância
+export async function fetchInstanceDetails(instanceName: string): Promise<{
+  success: boolean
+  data?: any
+  error?: string
+}> {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_EVOLUTION_API_URL}/instance/fetchInstances`, {
+    // Buscar configurações da Evolution API
+    const { data: integrationData } = await supabase
+      .from("integrations")
+      .select("config")
+      .eq("type", "evolution_api")
+      .eq("is_active", true)
+      .single()
+
+    if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
+      return {
+        success: false,
+        error: "Evolution API não configurada.",
+      }
+    }
+
+    const response = await fetch(`${integrationData.config.apiUrl}/instance/fetchInstances`, {
       method: "GET",
       headers: {
-        "Content-Type": "application/json",
-        apikey: apiKey,
+        apikey: integrationData.config.apiKey,
       },
     })
 
     if (!response.ok) {
-      throw new Error(`Error fetching instance details: ${response.status}`)
+      return {
+        success: false,
+        error: `Erro ao buscar detalhes: ${response.status}`,
+      }
     }
 
     const data = await response.json()
-    return data
+
+    // Filtrar para obter apenas a instância solicitada
+    const instanceDetails = Array.isArray(data) ? data.find((instance) => instance.name === instanceName) : data
+
+    if (!instanceDetails) {
+      return {
+        success: false,
+        error: "Instância não encontrada",
+      }
+    }
+
+    return {
+      success: true,
+      data: instanceDetails,
+    }
   } catch (error) {
-    console.error("Error fetching instance details:", error)
-    throw error
+    console.error("Erro ao buscar detalhes da instância:", error)
+    return {
+      success: false,
+      error: "Erro interno do servidor.",
+    }
   }
 }
 

@@ -1,242 +1,562 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Smartphone, QrCode, Settings, RefreshCcw, Info } from "lucide-react"
-import { WhatsAppQRModal } from "@/components/whatsapp-qr-modal"
-import { WhatsAppSettingsModal } from "@/components/whatsapp-settings-modal"
-import { WhatsAppInfoModal } from "@/components/whatsapp-info-modal"
-import { InstanceCreationModal } from "@/components/instance-creation-modal"
-import { fetchUserWhatsAppInstances, disconnectWhatsAppInstance } from "@/lib/whatsapp-api"
-
-interface WhatsAppInstance {
-  id: string
-  name: string
-  status: "disconnected" | "connecting" | "connected"
-  user_id: string
-  api_key: string
-  profile_pic_url?: string
-}
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Smartphone, Plus, Trash2, Edit, QrCode, PowerOff, RefreshCw, Search, Filter, Info } from "lucide-react"
+import { getCurrentUser } from "@/lib/auth"
+import { supabase } from "@/lib/supabase"
+import WhatsAppConnectionModal from "@/components/whatsapp-connection-modal"
+import { deleteEvolutionInstance } from "@/lib/whatsapp-api"
+import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
+import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
+import WhatsAppInfoModal from "@/components/whatsapp-info-modal"
+import { syncInstanceStatus, disconnectInstance } from "@/lib/whatsapp-settings-api"
 
 export default function WhatsAppPage() {
-  const [instances, setInstances] = useState<WhatsAppInstance[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isQRModalOpen, setIsQRModalOpen] = useState(false)
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
-  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false)
-  const [isCreationModalOpen, setIsCreationModalOpen] = useState(false)
-  const [selectedInstance, setSelectedInstance] = useState<WhatsAppInstance | null>(null)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const router = useRouter()
+
+  // Estados para WhatsApp
+  const [whatsappConnections, setWhatsappConnections] = useState([])
+  const [connectionLimit, setConnectionLimit] = useState(2)
+  const [showConnectionModal, setShowConnectionModal] = useState(false)
+  const [loadingConnections, setLoadingConnections] = useState(false)
+
+  // Estados para filtros
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [showFilters, setShowFilters] = useState(false)
+
+  // Estados para confirmação de exclusão
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [connectionToDelete, setConnectionToDelete] = useState<any>(null)
+
+  // Estados para QR Code, configurações e informações
+  const [qrModalOpen, setQrModalOpen] = useState(false)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [infoModalOpen, setInfoModalOpen] = useState(false)
+  const [selectedConnection, setSelectedConnection] = useState<any>(null)
 
   useEffect(() => {
-    fetchData()
-  }, [])
+    const currentUser = getCurrentUser()
+    if (!currentUser) {
+      router.push("/")
+      return
+    }
+    if (currentUser.role === "admin") {
+      router.push("/admin")
+      return
+    }
+    setUser(currentUser)
+    setLoading(false)
+  }, [router])
 
-  async function fetchData() {
-    setIsLoading(true)
+  // Função para buscar conexões WhatsApp do banco
+  const fetchWhatsAppConnections = async () => {
+    if (!user) return
+
+    setLoadingConnections(true)
     try {
-      const instancesData = await fetchUserWhatsAppInstances()
-      setInstances(instancesData)
+      const { data: connections } = await supabase
+        .from("whatsapp_connections")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+
+      setWhatsappConnections(connections || [])
+
+      // Buscar limite de conexões do usuário
+      const { data: userSettings } = await supabase
+        .from("user_settings")
+        .select("whatsapp_connections_limit")
+        .eq("user_id", user.id)
+        .single()
+
+      if (userSettings) {
+        setConnectionLimit(userSettings.whatsapp_connections_limit)
+      } else {
+        // Buscar limite padrão do sistema
+        const { data: systemSettings } = await supabase
+          .from("system_settings")
+          .select("setting_value")
+          .eq("setting_key", "default_whatsapp_connections_limit")
+          .single()
+
+        const defaultLimit = systemSettings?.setting_value || 2
+        setConnectionLimit(defaultLimit)
+
+        // Criar configuração para o usuário
+        await supabase.from("user_settings").insert([
+          {
+            user_id: user.id,
+            whatsapp_connections_limit: defaultLimit,
+          },
+        ])
+      }
     } catch (error) {
-      console.error("Error fetching instances:", error)
+      console.error("Erro ao buscar conexões:", error)
     } finally {
-      setIsLoading(false)
+      setLoadingConnections(false)
     }
   }
 
-  async function handleDisconnect(instance: WhatsAppInstance) {
-    setActionLoading(instance.id)
+  // Função para filtrar conexões
+  const filteredConnections = whatsappConnections.filter((connection) => {
+    const matchesSearch =
+      connection.connection_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (connection.phone_number && connection.phone_number.includes(searchTerm))
+
+    const matchesStatus = statusFilter === "all" || connection.status === statusFilter
+
+    return matchesSearch && matchesStatus
+  })
+
+  // Função para sincronizar status de uma conexão específica
+  const syncConnection = useCallback(
+    async (connectionId: string) => {
+      if (syncing) return
+
+      setSyncing(true)
+      try {
+        await syncInstanceStatus(connectionId)
+        await fetchWhatsAppConnections()
+      } catch (error) {
+        console.error("Erro ao sincronizar:", error)
+      } finally {
+        setSyncing(false)
+      }
+    },
+    [syncing],
+  )
+
+  // Carregar conexões quando usuário estiver disponível
+  useEffect(() => {
+    if (user) {
+      fetchWhatsAppConnections()
+    }
+  }, [user])
+
+  // Sincronizar quando a página for carregada (uma vez)
+  useEffect(() => {
+    if (user && whatsappConnections.length > 0) {
+      // Sincronização silenciosa (sem indicador visual)
+      const syncSilently = async () => {
+        try {
+          for (const connection of whatsappConnections) {
+            await syncInstanceStatus(connection.id)
+          }
+          // Recarregar conexões após sincronização
+          await fetchWhatsAppConnections()
+        } catch (error) {
+          console.error("Erro na sincronização silenciosa:", error)
+        }
+      }
+
+      syncSilently()
+    }
+  }, [user, whatsappConnections])
+
+  const handleDeleteConnection = async (connection: any) => {
+    setConnectionToDelete(connection)
+    setDeleteConfirmOpen(true)
+  }
+
+  const confirmDeleteConnection = async () => {
+    if (!connectionToDelete) return
+
     try {
-      await disconnectWhatsAppInstance(instance.name, instance.api_key)
-      // Update the instance status in the local state
-      setInstances((prevInstances) =>
-        prevInstances.map((i) => (i.id === instance.id ? { ...i, status: "disconnected" } : i)),
-      )
+      // Deletar da Evolution API
+      await deleteEvolutionInstance(connectionToDelete.instance_name)
+
+      // Deletar do banco
+      const { error } = await supabase.from("whatsapp_connections").delete().eq("id", connectionToDelete.id)
+
+      if (error) throw error
+
+      await fetchWhatsAppConnections()
+      setDeleteConfirmOpen(false)
+      setConnectionToDelete(null)
     } catch (error) {
-      console.error("Error disconnecting instance:", error)
+      console.error("Erro ao deletar conexão:", error)
+    }
+  }
+
+  const handleDisconnectConnection = async (connection: any) => {
+    try {
+      const result = await disconnectInstance(connection.instance_name)
+
+      if (result.success) {
+        // Sincronizar status após desconectar
+        await syncConnection(connection.id)
+      }
+    } catch (error) {
+      console.error("Erro ao desconectar:", error)
+    }
+  }
+
+  const handleConnectionSuccess = () => {
+    fetchWhatsAppConnections()
+    setShowConnectionModal(false)
+  }
+
+  const handleManualSync = async () => {
+    if (syncing || !whatsappConnections.length) return
+
+    setSyncing(true)
+    try {
+      for (const connection of whatsappConnections) {
+        await syncInstanceStatus(connection.id)
+      }
+      await fetchWhatsAppConnections()
+    } catch (error) {
+      console.error("Erro na sincronização manual:", error)
     } finally {
-      setActionLoading(null)
+      setSyncing(false)
     }
   }
 
-  function handleQRCode(instance: WhatsAppInstance) {
-    setSelectedInstance(instance)
-    setIsQRModalOpen(true)
+  const clearFilters = () => {
+    setSearchTerm("")
+    setStatusFilter("all")
   }
 
-  function handleSettings(instance: WhatsAppInstance) {
-    setSelectedInstance(instance)
-    setIsSettingsModalOpen(true)
-  }
-
-  function handleInfo(instance: WhatsAppInstance) {
-    setSelectedInstance(instance)
-    setIsInfoModalOpen(true)
-  }
-
-  function handleCreateInstance() {
-    setIsCreationModalOpen(true)
-  }
-
-  function getStatusBadge(status: string) {
-    switch (status) {
-      case "connected":
-        return <Badge variant="success">Conectado</Badge>
-      case "connecting":
-        return <Badge variant="warning">Conectando</Badge>
-      case "disconnected":
-        return <Badge variant="destructive">Desconectado</Badge>
-      default:
-        return <Badge variant="outline">Desconhecido</Badge>
+  // Quando o modal QR é aberto, sincronizar a conexão selecionada
+  useEffect(() => {
+    if (qrModalOpen && selectedConnection) {
+      syncConnection(selectedConnection.id)
     }
+  }, [qrModalOpen, selectedConnection, syncConnection])
+
+  // Quando o modal de configurações é aberto, sincronizar a conexão selecionada
+  useEffect(() => {
+    if (settingsModalOpen && selectedConnection) {
+      syncConnection(selectedConnection.id)
+    }
+  }, [settingsModalOpen, selectedConnection, syncConnection])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    )
   }
 
   return (
-    <div className="container mx-auto py-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Minhas Conexões WhatsApp</h1>
-        <Button onClick={handleCreateInstance}>Nova Conexão</Button>
+    <div className="p-6">
+      <div className="flex justify-between items-start mb-8">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Conexões WhatsApp</h1>
+          <p className="text-gray-600">Gerencie suas conexões do WhatsApp Business</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleManualSync}
+            disabled={syncing}
+            className="gap-2"
+            title="Sincronizar status das conexões"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Sincronizando..." : "Sincronizar"}
+          </Button>
+          <Button
+            onClick={() => setShowConnectionModal(true)}
+            className="gap-2"
+            disabled={whatsappConnections.length >= connectionLimit}
+          >
+            <Plus className="w-4 h-4" />
+            Nova Conexão
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Conexões ({instances.length})</CardTitle>
-          <CardDescription>Gerencie suas conexões WhatsApp</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center items-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : instances.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Você não possui conexões WhatsApp. Clique em "Nova Conexão" para criar uma.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {instances.map((instance) => (
-                <Card key={instance.id} className="overflow-hidden">
-                  <CardHeader className="bg-muted/50 pb-2">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <CardTitle className="text-lg truncate" title={instance.name}>
-                          {instance.name}
-                        </CardTitle>
-                        <CardDescription>ID: {instance.id.substring(0, 8)}...</CardDescription>
-                      </div>
-                      <div className="ml-2">{getStatusBadge(instance.status)}</div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="flex items-center mb-4">
-                      <div className="w-12 h-12 rounded-full overflow-hidden bg-muted flex items-center justify-center mr-3">
-                        {instance.profile_pic_url ? (
-                          <img
-                            src={instance.profile_pic_url || "/placeholder.svg"}
-                            alt="Perfil"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <Smartphone className="h-6 w-6 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">API Key</div>
-                        <div className="text-xs text-muted-foreground">{instance.api_key.substring(0, 12)}...</div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {/* Disconnect button - show only when status is connected or connecting */}
-                      {(instance.status === "connected" || instance.status === "connecting") && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDisconnect(instance)}
-                          disabled={actionLoading === instance.id}
-                          className="w-full"
-                        >
-                          {actionLoading === instance.id ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          ) : (
-                            <>
-                              <RefreshCcw className="mr-2 h-4 w-4" />
-                              Desconectar
-                            </>
-                          )}
-                        </Button>
-                      )}
+      {/* Filtros */}
+      <Card className="mb-6">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Filtros</h3>
+            <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-2">
+              <Filter className="w-4 h-4" />
+              {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
+            </Button>
+          </div>
 
-                      {/* QR Code button for disconnected/connecting or Info button for connected */}
-                      {instance.status === "connected" ? (
-                        <Button variant="outline" size="sm" onClick={() => handleInfo(instance)} className="w-full">
-                          <Info className="mr-2 h-4 w-4" />
-                          Informações
-                        </Button>
-                      ) : (
-                        <Button variant="outline" size="sm" onClick={() => handleQRCode(instance)} className="w-full">
-                          <QrCode className="mr-2 h-4 w-4" />
-                          QR Code
-                        </Button>
-                      )}
+          {showFilters && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Buscar por nome da conexão ou telefone..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
 
-                      {/* Settings button */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleSettings(instance)}
-                        className={`w-full ${instance.status === "connected" || instance.status === "connecting" ? "col-span-1" : "col-span-2"}`}
-                      >
-                        <Settings className="mr-2 h-4 w-4" />
-                        Configurações
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os status</SelectItem>
+                  <SelectItem value="connected">Conectado</SelectItem>
+                  <SelectItem value="connecting">Conectando</SelectItem>
+                  <SelectItem value="disconnected">Desconectado</SelectItem>
+                  <SelectItem value="error">Erro</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={clearFilters} className="flex-1">
+                  Limpar Filtros
+                </Button>
+              </div>
             </div>
           )}
+
+          <div className="text-sm text-gray-500 mt-4">
+            Mostrando {filteredConnections.length} de {whatsappConnections.length} conexões
+            {searchTerm && <span> • Busca: "{searchTerm}"</span>}
+            {statusFilter !== "all" && <span> • Status: {statusFilter}</span>}
+            {syncing && <span className="ml-2 text-blue-600">• Sincronizando status...</span>}
+          </div>
         </CardContent>
       </Card>
 
-      {/* QR Code Modal */}
-      {selectedInstance && (
-        <WhatsAppQRModal
-          isOpen={isQRModalOpen}
-          onClose={() => setIsQRModalOpen(false)}
-          instanceName={selectedInstance.name}
-          apiKey={selectedInstance.api_key}
-          status={selectedInstance.status}
-        />
+      <div className="flex justify-between items-start mb-6">
+        <div className="text-sm text-gray-500">
+          {whatsappConnections.length} de {connectionLimit} conexões utilizadas
+        </div>
+      </div>
+
+      {filteredConnections.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Smartphone className="w-16 h-16 text-gray-300 mb-4" />
+            {whatsappConnections.length === 0 ? (
+              <>
+                <h4 className="text-lg font-medium mb-2">Nenhuma conexão WhatsApp</h4>
+                <p className="text-gray-600 text-center mb-6">
+                  Conecte seu WhatsApp para começar a usar os agentes de IA
+                </p>
+                <Button
+                  onClick={() => setShowConnectionModal(true)}
+                  className="gap-2"
+                  disabled={whatsappConnections.length >= connectionLimit}
+                >
+                  <Plus className="w-4 h-4" />
+                  Primeira Conexão
+                </Button>
+              </>
+            ) : (
+              <>
+                <h4 className="text-lg font-medium mb-2">Nenhuma conexão encontrada</h4>
+                <p className="text-gray-600 text-center mb-6">Nenhuma conexão corresponde aos filtros aplicados</p>
+                <Button variant="outline" onClick={clearFilters}>
+                  Limpar Filtros
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4">
+          {filteredConnections.map((connection) => (
+            <Card key={connection.id}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <Smartphone className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <div className="font-medium">{connection.connection_name}</div>
+                      <div className="text-sm text-gray-600">{connection.phone_number || "Não conectado"}</div>
+                      <div className="text-xs text-gray-500">
+                        Criado em {new Date(connection.created_at).toLocaleDateString()}
+                        {connection.last_sync && (
+                          <span className="ml-2">
+                            • Última sync: {new Date(connection.last_sync).toLocaleTimeString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={connection.status === "connected" ? "default" : "secondary"}
+                      className={
+                        connection.status === "connected"
+                          ? "bg-green-100 text-green-700"
+                          : connection.status === "connecting"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : connection.status === "error"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-gray-100 text-gray-700"
+                      }
+                    >
+                      {connection.status === "connected"
+                        ? "Conectado"
+                        : connection.status === "connecting"
+                          ? "Conectando"
+                          : connection.status === "error"
+                            ? "Erro"
+                            : "Desconectado"}
+                    </Badge>
+                    <div className="flex gap-1">
+                      {connection.status === "connected" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedConnection(connection)
+                            setInfoModalOpen(true)
+                          }}
+                          title="Ver Informações"
+                        >
+                          <Info className="w-4 h-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedConnection(connection)
+                            setQrModalOpen(true)
+                          }}
+                          title="Conectar/Ver QR Code"
+                        >
+                          <QrCode className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedConnection(connection)
+                          setSettingsModalOpen(true)
+                        }}
+                        title="Configurações"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      {(connection.status === "connected" || connection.status === "connecting") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-orange-600"
+                          onClick={() => handleDisconnectConnection(connection)}
+                          title="Desconectar"
+                        >
+                          <PowerOff className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600"
+                        onClick={() => handleDeleteConnection(connection)}
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
 
-      {/* Settings Modal */}
-      {selectedInstance && (
-        <WhatsAppSettingsModal
-          isOpen={isSettingsModalOpen}
-          onClose={() => setIsSettingsModalOpen(false)}
-          instanceName={selectedInstance.name}
-          apiKey={selectedInstance.api_key}
-        />
-      )}
+      {/* Modais */}
+      <WhatsAppConnectionModal
+        open={showConnectionModal}
+        onOpenChange={setShowConnectionModal}
+        userId={user?.id}
+        onSuccess={handleConnectionSuccess}
+      />
 
-      {/* Info Modal */}
-      {selectedInstance && (
-        <WhatsAppInfoModal
-          isOpen={isInfoModalOpen}
-          onClose={() => setIsInfoModalOpen(false)}
-          instanceName={selectedInstance.name}
-          apiKey={selectedInstance.api_key}
-        />
-      )}
+      {/* Modal de confirmação de exclusão */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Exclusão</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir a conexão "{connectionToDelete?.connection_name}"? Esta ação não pode ser
+              desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteConnection}>
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Instance Creation Modal */}
-      <InstanceCreationModal
-        isOpen={isCreationModalOpen}
-        onClose={() => {
-          setIsCreationModalOpen(false)
-          fetchData() // Refresh data after creating a new instance
+      {/* Modais */}
+      <WhatsAppQRModal
+        open={qrModalOpen}
+        onOpenChange={setQrModalOpen}
+        connection={selectedConnection}
+        onStatusChange={(status) => {
+          if (selectedConnection) {
+            // Atualizar status no banco e sincronizar
+            supabase
+              .from("whatsapp_connections")
+              .update({ status })
+              .eq("id", selectedConnection.id)
+              .then(() => {
+                fetchWhatsAppConnections()
+              })
+          }
+        }}
+      />
+
+      <WhatsAppSettingsModal
+        open={settingsModalOpen}
+        onOpenChange={setSettingsModalOpen}
+        connection={selectedConnection}
+        onSettingsSaved={() => {
+          console.log("Configurações salvas!")
+        }}
+      />
+
+      <WhatsAppInfoModal
+        open={infoModalOpen}
+        onOpenChange={setInfoModalOpen}
+        connection={selectedConnection}
+        onStatusChange={(status) => {
+          if (selectedConnection) {
+            // Atualizar status no banco e sincronizar
+            supabase
+              .from("whatsapp_connections")
+              .update({ status })
+              .eq("id", selectedConnection.id)
+              .then(() => {
+                fetchWhatsAppConnections()
+              })
+          }
         }}
       />
     </div>

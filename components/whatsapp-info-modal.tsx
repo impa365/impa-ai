@@ -2,66 +2,82 @@
 
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { fetchInstanceDetails } from "@/lib/whatsapp-api"
 import { Separator } from "@/components/ui/separator"
 import { MessageSquare, Users, MessageCircle, Phone } from "lucide-react"
 import { formatPhoneNumber } from "@/lib/utils"
+import { supabase } from "@/lib/supabase"
 
 interface WhatsAppInfoModalProps {
-  isOpen: boolean
-  onClose: () => void
-  instanceName: string
-  apiKey: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  connection: any
+  onStatusChange?: (status: string) => void
 }
 
-interface InstanceDetails {
-  id: string
-  name: string
-  connectionStatus: string
-  ownerJid: string
-  profileName: string
-  profilePicUrl: string
-  integration: string
-  number: string | null
-  businessId: string | null
-  token: string
-  clientName: string
-  _count?: {
-    Message: number
-    Contact: number
-    Chat: number
-  }
-}
-
-export function WhatsAppInfoModal({ isOpen, onClose, instanceName, apiKey }: WhatsAppInfoModalProps) {
-  const [instanceDetails, setInstanceDetails] = useState<InstanceDetails | null>(null)
+export default function WhatsAppInfoModal({ open, onOpenChange, connection, onStatusChange }: WhatsAppInfoModalProps) {
+  const [instanceDetails, setInstanceDetails] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (isOpen) {
+    if (open && connection) {
       setLoading(true)
       setError(null)
 
-      fetchInstanceDetails(instanceName, apiKey)
-        .then((data) => {
-          setInstanceDetails(data)
-        })
-        .catch((err) => {
-          setError("Falha ao carregar informações da conexão")
-          console.error(err)
-        })
-        .finally(() => {
+      const fetchDetails = async () => {
+        try {
+          // Buscar configurações da Evolution API
+          const { data: integrationData } = await supabase
+            .from("integrations")
+            .select("config")
+            .eq("type", "evolution_api")
+            .eq("is_active", true)
+            .single()
+
+          if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
+            throw new Error("Evolution API não configurada.")
+          }
+
+          const response = await fetch(`${integrationData.config.apiUrl}/instance/fetchInstances`, {
+            method: "GET",
+            headers: {
+              apikey: integrationData.config.apiKey,
+            },
+          })
+
+          if (!response.ok) {
+            throw new Error(`Erro ao buscar detalhes: ${response.status}`)
+          }
+
+          const data = await response.json()
+
+          // Filtrar para obter apenas a instância solicitada
+          const instanceDetails = Array.isArray(data)
+            ? data.find((instance) => instance.name === connection.instance_name)
+            : data
+
+          if (!instanceDetails) {
+            throw new Error("Instância não encontrada")
+          }
+
+          setInstanceDetails(instanceDetails)
+        } catch (err) {
+          console.error("Erro ao buscar detalhes:", err)
+          setError(err instanceof Error ? err.message : "Erro desconhecido")
+        } finally {
           setLoading(false)
-        })
+        }
+      }
+
+      fetchDetails()
     }
-  }, [isOpen, instanceName, apiKey])
+  }, [open, connection])
 
   // Extract phone number from ownerJid (remove the @s.whatsapp.net part)
   const phoneNumber = instanceDetails?.ownerJid ? instanceDetails.ownerJid.split("@")[0] : ""
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Informações da Conexão</DialogTitle>
