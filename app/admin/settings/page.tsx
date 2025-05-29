@@ -126,18 +126,20 @@ export default function AdminSettingsPage() {
   const saveSystemSettings = async () => {
     setSaving(true)
     try {
-      // Salvar cada configuração individualmente para garantir que funcione
-      const { error: limitError } = await supabase.from("system_settings").upsert({
-        setting_key: "default_whatsapp_connections_limit",
-        setting_value: systemSettings.defaultWhatsAppLimit,
-      })
+      // Atualizar cada configuração individualmente
+      const { error: limitError } = await supabase
+        .from("system_settings")
+        .update({ setting_value: systemSettings.defaultWhatsAppLimit })
+        .eq("setting_key", "default_whatsapp_connections_limit")
 
-      const { error: registrationError } = await supabase.from("system_settings").upsert({
-        setting_key: "allow_public_registration",
-        setting_value: systemSettings.allowPublicRegistration,
-      })
+      const { error: registrationError } = await supabase
+        .from("system_settings")
+        .update({ setting_value: systemSettings.allowPublicRegistration })
+        .eq("setting_key", "allow_public_registration")
 
       if (limitError || registrationError) {
+        console.error("Limit error:", limitError)
+        console.error("Registration error:", registrationError)
         throw new Error("Erro ao salvar configurações")
       }
 
@@ -553,7 +555,11 @@ export default function AdminSettingsPage() {
         </Card>
 
         <div className="flex justify-end">
-          <Button onClick={saveSystemSettings} disabled={saving} className="gap-2">
+          <Button
+            onClick={saveSystemSettings}
+            disabled={saving}
+            className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+          >
             {saving ? "Salvando..." : "Salvar Configurações"}
           </Button>
         </div>
