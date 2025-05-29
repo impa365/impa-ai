@@ -333,7 +333,11 @@ export default function WhatsAppSettingsModal({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSaveSettings} disabled={loading || loadingSettings}>
+          <Button
+            onClick={handleSaveSettings}
+            disabled={loading || loadingSettings}
+            className="bg-blue-600 text-white hover:bg-blue-700"
+          >
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />

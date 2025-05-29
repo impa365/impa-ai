@@ -903,8 +903,12 @@ export default function AdminSettingsPage() {
               <p className="text-sm text-gray-600 mb-4">Integração com WhatsApp Business</p>
               <Button
                 onClick={() => openIntegrationModal("evolution_api", "Evolution API")}
-                className="w-full"
-                variant={getIntegrationConfig("evolution_api").apiUrl ? "default" : "outline"}
+                className={
+                  getIntegrationConfig("evolution_api").apiUrl
+                    ? "w-full bg-green-600 text-white hover:bg-green-700"
+                    : "w-full"
+                }
+                variant={getIntegrationConfig("evolution_api").apiUrl ? undefined : "outline"}
               >
                 {getIntegrationConfig("evolution_api").apiUrl ? "Configurado" : "Configurar"}
               </Button>
@@ -920,8 +924,10 @@ export default function AdminSettingsPage() {
               <p className="text-sm text-gray-600 mb-4">Automação de fluxos de trabalho</p>
               <Button
                 onClick={() => openIntegrationModal("n8n", "n8n")}
-                className="w-full"
-                variant={getIntegrationConfig("n8n").flowUrl ? "default" : "outline"}
+                className={
+                  getIntegrationConfig("n8n").flowUrl ? "w-full bg-green-600 text-white hover:bg-green-700" : "w-full"
+                }
+                variant={getIntegrationConfig("n8n").flowUrl ? undefined : "outline"}
               >
                 {getIntegrationConfig("n8n").flowUrl ? "Configurado" : "Configurar"}
               </Button>
@@ -1011,7 +1017,7 @@ export default function AdminSettingsPage() {
               <Button
                 onClick={() => handleIntegrationSave(selectedIntegration?.type)}
                 disabled={saving}
-                className="gap-2"
+                className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
               >
                 {saving ? "Salvando..." : "Salvar"}
               </Button>

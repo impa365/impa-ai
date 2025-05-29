@@ -325,11 +325,11 @@ export default function AdminDashboard() {
           <p className="text-gray-600">Visão geral do sistema {theme.systemName}</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2 text-gray-700 border-gray-300 hover:bg-gray-100">
             <Download className="w-4 h-4" />
             Relatório Geral
           </Button>
-          <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
             <Settings className="w-4 h-4" />
             Configurações Sistema
           </Button>
@@ -388,7 +388,7 @@ export default function AdminDashboard() {
           <p className="text-gray-600">Controle total sobre usuários do sistema</p>
         </div>
         <Button
-          className="gap-2 bg-blue-600 hover:bg-blue-700"
+          className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
           onClick={() => {
             setSelectedUserForEdit(null)
             setUserModalOpen(true)
@@ -426,6 +426,7 @@ export default function AdminDashboard() {
                   setSaveMessage("Configurações salvas!")
                   setTimeout(() => setSaveMessage(""), 3000)
                 }}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 Salvar Configurações
               </Button>
@@ -836,7 +837,11 @@ export default function AdminDashboard() {
       </div>
 
       <div className="flex justify-end mt-6">
-        <Button onClick={handleUpdateAdminProfile} disabled={savingAdminProfile} className="gap-2">
+        <Button
+          onClick={handleUpdateAdminProfile}
+          disabled={savingAdminProfile}
+          className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+        >
           {savingAdminProfile ? "Salvando..." : "Salvar Alterações"}
         </Button>
       </div>
@@ -1049,6 +1054,14 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+      <div
+    className = "flex justify-end mt-6">\ < Button
+    onClick = { handleUpdateAdminProfile }
+    disabled = { savingAdminProfile }
+    className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+          {savingAdminProfile ? "Salvando..." : "Salvar Alterações"}
+    </Button>
+      </div>
     )
   }
 
@@ -1102,7 +1115,7 @@ export default function AdminDashboard() {
               <p className="text-sm text-gray-600 mb-4">Integração com WhatsApp Business</p>
               <Button
                 onClick={() => openIntegrationModal("evolution_api", "Evolution API")}
-                className="w-full"
+                className={`w-full ${getIntegrationConfig("evolution_api").apiUrl ? "bg-green-600 text-white hover:bg-green-700" : ""}`}
                 variant={getIntegrationConfig("evolution_api").apiUrl ? "default" : "outline"}
               >
                 {getIntegrationConfig("evolution_api").apiUrl ? "Configurado" : "Configurar"}
@@ -1119,7 +1132,7 @@ export default function AdminDashboard() {
               <p className="text-sm text-gray-600 mb-4">Automação de fluxos de trabalho</p>
               <Button
                 onClick={() => openIntegrationModal("n8n", "n8n")}
-                className="w-full"
+                className={`w-full ${getIntegrationConfig("n8n").flowUrl ? "bg-green-600 text-white hover:bg-green-700" : ""}`}
                 variant={getIntegrationConfig("n8n").flowUrl ? "default" : "outline"}
               >
                 {getIntegrationConfig("n8n").flowUrl ? "Configurado" : "Configurar"}
@@ -1223,7 +1236,7 @@ export default function AdminDashboard() {
               <Button
                 onClick={() => handleIntegrationSave(selectedIntegration?.type)}
                 disabled={saving}
-                className="gap-2"
+                className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
               >
                 {saving ? "Salvando..." : "Salvar"}
               </Button>

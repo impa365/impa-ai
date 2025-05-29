@@ -233,7 +233,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           <Button variant="outline" onClick={handleClose} disabled={loading}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={loading}>
+          <Button onClick={handleSave} disabled={loading} className="bg-blue-600 text-white hover:bg-blue-700">
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
