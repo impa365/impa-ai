@@ -135,6 +135,9 @@ export function applyThemeColors(theme: ThemeConfig) {
   root.style.setProperty("--accent", theme.accentColor)
   root.style.setProperty("--hover", theme.hoverColor)
 
+  // Apply hover color to text elements
+  root.style.setProperty("--text-hover", theme.hoverColor)
+
   // Set document title if system name is available
   if (theme.systemName && typeof document !== "undefined") {
     document.title = theme.systemName
@@ -177,10 +180,10 @@ export const themePresets = {
   },
   dark: {
     systemName: "Luna AI",
-    primaryColor: "#1f2937",
-    secondaryColor: "#374151",
+    primaryColor: "#000000",
+    secondaryColor: "#1f2937",
     accentColor: "#60a5fa",
-    hoverColor: "#111827",
+    hoverColor: "#374151",
     logoIcon: "🌙",
   },
   ocean: {

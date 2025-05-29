@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 
 import { useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -67,6 +67,17 @@ export default function AdminSettingsPage() {
   const faviconInputRef = useRef<HTMLInputElement>(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingFavicon, setUploadingFavicon] = useState(false)
+
+  const [customThemeModalOpen, setCustomThemeModalOpen] = useState(false)
+  const [customThemeForm, setCustomThemeForm] = useState({
+    name: "",
+    systemName: theme.systemName,
+    logoIcon: "🎨",
+    primaryColor: "#2563eb",
+    secondaryColor: "#f1f5f9",
+    accentColor: "#3b82f6",
+    hoverColor: "#1e40af",
+  })
 
   useEffect(() => {
     const currentUser = getCurrentUser()
@@ -329,8 +340,8 @@ export default function AdminSettingsPage() {
   const renderAdminProfileSettings = () => (
     <div>
       <div className="mb-6">
-        <h3 className="text-xl font-bold text-black mb-2">Perfil do Administrador</h3>
-        <p className="text-gray-800 font-medium">Gerencie suas informações pessoais e senha</p>
+        <h3 className="text-xl font-bold text-black hover-text mb-2">Perfil do Administrador</h3>
+        <p className="text-gray-800 hover-text font-medium">Gerencie suas informações pessoais e senha</p>
       </div>
 
       {adminProfileMessage && (
@@ -342,11 +353,11 @@ export default function AdminSettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="border-2 border-gray-300">
           <CardHeader className="bg-gray-50">
-            <CardTitle className="text-black">Informações Pessoais</CardTitle>
+            <CardTitle className="text-black hover-text">Informações Pessoais</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 bg-white">
             <div>
-              <Label htmlFor="adminFullName" className="text-black font-semibold">
+              <Label htmlFor="adminFullName" className="text-black hover-text font-semibold">
                 Nome Completo
               </Label>
               <Input
@@ -358,7 +369,7 @@ export default function AdminSettingsPage() {
               />
             </div>
             <div>
-              <Label htmlFor="adminEmail" className="text-black font-semibold">
+              <Label htmlFor="adminEmail" className="text-black hover-text font-semibold">
                 Email
               </Label>
               <Input
@@ -375,11 +386,11 @@ export default function AdminSettingsPage() {
 
         <Card className="border-2 border-gray-300">
           <CardHeader className="bg-gray-50">
-            <CardTitle className="text-black">Alterar Senha</CardTitle>
+            <CardTitle className="text-black hover-text">Alterar Senha</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 bg-white">
             <div>
-              <Label htmlFor="adminCurrentPassword" className="text-black font-semibold">
+              <Label htmlFor="adminCurrentPassword" className="text-black hover-text font-semibold">
                 Senha Atual
               </Label>
               <div className="relative">
@@ -403,7 +414,7 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div>
-              <Label htmlFor="adminNewPassword" className="text-black font-semibold">
+              <Label htmlFor="adminNewPassword" className="text-black hover-text font-semibold">
                 Nova Senha
               </Label>
               <div className="relative">
@@ -427,7 +438,7 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div>
-              <Label htmlFor="adminConfirmPassword" className="text-black font-semibold">
+              <Label htmlFor="adminConfirmPassword" className="text-black hover-text font-semibold">
                 Confirmar Nova Senha
               </Label>
               <div className="relative">
@@ -465,17 +476,17 @@ export default function AdminSettingsPage() {
   const renderSystemSettings = () => (
     <div>
       <div className="mb-6">
-        <h3 className="text-xl font-bold text-black mb-2">Configurações do Sistema</h3>
-        <p className="text-gray-800 font-medium">Configure parâmetros globais da plataforma</p>
+        <h3 className="text-xl font-bold text-black hover-text mb-2">Configurações do Sistema</h3>
+        <p className="text-gray-800 hover-text font-medium">Configure parâmetros globais da plataforma</p>
       </div>
 
       <Card className="border-2 border-gray-300">
         <CardHeader className="bg-gray-50">
-          <CardTitle className="text-black">Limites e Restrições</CardTitle>
+          <CardTitle className="text-black hover-text">Limites e Restrições</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 bg-white">
           <div>
-            <Label htmlFor="defaultWhatsAppLimit" className="text-black font-semibold">
+            <Label htmlFor="defaultWhatsAppLimit" className="text-black hover-text font-semibold">
               Limite Padrão de Conexões WhatsApp
             </Label>
             <Input
@@ -528,11 +539,11 @@ export default function AdminSettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="border-2 border-gray-300">
           <CardHeader className="bg-gray-50">
-            <CardTitle className="text-black">Branding e Identidade</CardTitle>
+            <CardTitle className="text-black hover-text">Branding e Identidade</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 bg-white">
             <div>
-              <Label htmlFor="systemName" className="text-black font-semibold">
+              <Label htmlFor="systemName" className="text-black hover-text font-semibold">
                 Nome do Sistema
               </Label>
               <Input
@@ -546,7 +557,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="description" className="text-black font-semibold">
+              <Label htmlFor="description" className="text-black hover-text font-semibold">
                 Descrição
               </Label>
               <Textarea
@@ -560,7 +571,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="logoIcon" className="text-black font-semibold">
+              <Label htmlFor="logoIcon" className="text-black hover-text font-semibold">
                 Ícone/Emoji do Logo
               </Label>
               <Input
@@ -575,7 +586,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="logoUpload" className="text-black font-semibold">
+              <Label htmlFor="logoUpload" className="text-black hover-text font-semibold">
                 Upload de Logo
               </Label>
               <div className="space-y-2">
@@ -606,7 +617,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="faviconUpload" className="text-black font-semibold">
+              <Label htmlFor="faviconUpload" className="text-black hover-text font-semibold">
                 Upload de Favicon
               </Label>
               <div className="space-y-2">
@@ -640,11 +651,11 @@ export default function AdminSettingsPage() {
 
         <Card className="border-2 border-gray-300">
           <CardHeader className="bg-gray-50">
-            <CardTitle className="text-black">Esquema de Cores</CardTitle>
+            <CardTitle className="text-black hover-text">Esquema de Cores</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 bg-white">
             <div>
-              <Label htmlFor="primaryColor" className="text-black font-semibold">
+              <Label htmlFor="primaryColor" className="text-black hover-text font-semibold">
                 Cor Primária
               </Label>
               <div className="flex gap-2">
@@ -667,7 +678,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="secondaryColor" className="text-black font-semibold">
+              <Label htmlFor="secondaryColor" className="text-black hover-text font-semibold">
                 Cor Secundária
               </Label>
               <div className="flex gap-2">
@@ -690,7 +701,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="accentColor" className="text-black font-semibold">
+              <Label htmlFor="accentColor" className="text-black hover-text font-semibold">
                 Cor de Destaque
               </Label>
               <div className="flex gap-2">
@@ -713,7 +724,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <Label htmlFor="hoverColor" className="text-black font-semibold">
+              <Label htmlFor="hoverColor" className="text-black hover-text font-semibold">
                 Cor de Hover
               </Label>
               <div className="flex gap-2">
@@ -739,7 +750,7 @@ export default function AdminSettingsPage() {
 
         <Card className="border-2 border-gray-300">
           <CardHeader className="bg-gray-50">
-            <CardTitle className="text-black">Temas Predefinidos</CardTitle>
+            <CardTitle className="text-black hover-text">Temas Predefinidos</CardTitle>
           </CardHeader>
           <CardContent className="bg-white">
             <div className="grid grid-cols-2 gap-3">
@@ -747,7 +758,7 @@ export default function AdminSettingsPage() {
                 <Button
                   key={key}
                   variant="outline"
-                  className="h-auto p-4 flex flex-col items-center gap-2 border-2 border-gray-300 hover:border-gray-400"
+                  className="h-auto p-4 flex flex-col items-center gap-2 border-2 border-gray-300 hover:border-gray-400 hover-bg"
                   onClick={() => handleThemeUpdate(preset)}
                   disabled={saving}
                 >
@@ -757,16 +768,29 @@ export default function AdminSettingsPage() {
                   >
                     <span className="text-sm">{preset.logoIcon}</span>
                   </div>
-                  <span className="text-sm font-medium capitalize text-black">{key}</span>
+                  <span className="text-sm font-medium capitalize text-black hover-text">{key}</span>
                 </Button>
               ))}
+
+              {/* Botão para criar tema personalizado */}
+              <Button
+                variant="outline"
+                className="h-auto p-4 flex flex-col items-center gap-2 border-2 border-dashed border-gray-400 hover:border-gray-600 hover-bg"
+                onClick={() => setCustomThemeModalOpen(true)}
+                disabled={saving}
+              >
+                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <span className="text-sm font-medium text-black hover-text">Personalizado</span>
+              </Button>
             </div>
           </CardContent>
         </Card>
 
         <Card className="border-2 border-gray-300">
           <CardHeader className="bg-gray-50">
-            <CardTitle className="text-black">Preview</CardTitle>
+            <CardTitle className="text-black hover-text">Preview</CardTitle>
           </CardHeader>
           <CardContent className="bg-white">
             <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50">
@@ -777,7 +801,7 @@ export default function AdminSettingsPage() {
                 >
                   <span className="text-sm">{theme.logoIcon}</span>
                 </div>
-                <span className="font-semibold text-black">{theme.systemName}</span>
+                <span className="font-semibold text-black hover-text">{theme.systemName}</span>
               </div>
               <div className="space-y-2">
                 <div className="h-3 rounded" style={{ backgroundColor: theme.primaryColor, opacity: 0.8 }}></div>
@@ -825,8 +849,8 @@ export default function AdminSettingsPage() {
     return (
       <div>
         <div className="mb-6">
-          <h3 className="text-xl font-bold text-black mb-2">Integrações Disponíveis</h3>
-          <p className="text-gray-800 font-medium">
+          <h3 className="text-xl font-bold text-black hover-text mb-2">Integrações Disponíveis</h3>
+          <p className="text-gray-800 hover-text font-medium">
             Configure as integrações para expandir as funcionalidades da plataforma
           </p>
         </div>
@@ -843,7 +867,7 @@ export default function AdminSettingsPage() {
                   className="rounded"
                 />
               </div>
-              <h4 className="font-semibold mb-2 text-black">Evolution API</h4>
+              <h4 className="font-semibold mb-2 text-black hover-text">Evolution API</h4>
               <p className="text-sm text-gray-700 mb-4">Integração com WhatsApp Business</p>
               <Button
                 onClick={() => openIntegrationModal("evolution_api", "Evolution API")}
@@ -860,7 +884,7 @@ export default function AdminSettingsPage() {
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Image src="/images/n8n-logo.png" alt="n8n" width={40} height={40} className="rounded" />
               </div>
-              <h4 className="font-semibold mb-2 text-black">n8n</h4>
+              <h4 className="font-semibold mb-2 text-black hover-text">n8n</h4>
               <p className="text-sm text-gray-700 mb-4">Automação de fluxos de trabalho</p>
               <Button
                 onClick={() => openIntegrationModal("n8n", "n8n")}
@@ -877,7 +901,7 @@ export default function AdminSettingsPage() {
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Plus className="w-8 h-8 text-gray-400" />
               </div>
-              <h4 className="font-semibold mb-2 text-black">Em Breve</h4>
+              <h4 className="font-semibold mb-2 text-black hover-text">Em Breve</h4>
               <p className="text-sm text-gray-700 mb-4">Nova integração chegando</p>
               <Button className="w-full" variant="outline" disabled>
                 Em Breve
@@ -890,7 +914,7 @@ export default function AdminSettingsPage() {
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Plus className="w-8 h-8 text-gray-400" />
               </div>
-              <h4 className="font-semibold mb-2 text-black">Em Breve</h4>
+              <h4 className="font-semibold mb-2 text-black hover-text">Em Breve</h4>
               <p className="text-sm text-gray-700 mb-4">Nova integração chegando</p>
               <Button className="w-full" variant="outline" disabled>
                 Em Breve
@@ -979,12 +1003,34 @@ export default function AdminSettingsPage() {
     )
   }
 
+  // Adicione este useEffect para aplicar estilos de hover
+  React.useEffect(() => {
+    const style = document.createElement("style")
+    style.textContent = `
+    .hover-text:hover {
+      color: var(--text-hover) !important;
+      transition: color 0.2s ease;
+    }
+    .hover-bg:hover {
+      background-color: var(--hover) !important;
+      transition: background-color 0.2s ease;
+    }
+  `
+    document.head.appendChild(style)
+
+    return () => {
+      document.head.removeChild(style)
+    }
+  }, [theme.hoverColor])
+
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
       <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-black mb-2">Configurações do Sistema</h1>
-          <p className="text-gray-800 font-medium text-lg">Personalize a plataforma e configure integrações</p>
+          <h1 className="text-3xl font-bold text-black hover-text mb-2">Configurações do Sistema</h1>
+          <p className="text-gray-800 hover-text font-medium text-lg">
+            Personalize a plataforma e configure integrações
+          </p>
         </div>
         <div className="flex items-center gap-4">
           {saveMessage && (
@@ -1000,7 +1046,7 @@ export default function AdminSettingsPage() {
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2 border-2 border-gray-400 text-black font-semibold">
+              <Button variant="outline" className="gap-2 border-2 border-gray-400 text-black hover-text font-semibold">
                 {settingsSubTab === "profile" ? (
                   <>
                     <User className="w-4 h-4" />
@@ -1051,6 +1097,174 @@ export default function AdminSettingsPage() {
       {settingsSubTab === "system" && renderSystemSettings()}
       {settingsSubTab === "branding" && renderBrandingSettings()}
       {settingsSubTab === "integrations" && renderIntegrationsSettings()}
+
+      {/* Modal para criar tema personalizado */}
+      <Dialog open={customThemeModalOpen} onOpenChange={setCustomThemeModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-black hover-text">Criar Tema Personalizado</DialogTitle>
+            <DialogDescription className="text-gray-700">
+              Configure as cores para criar seu tema personalizado
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="customThemeName" className="text-black hover-text font-semibold">
+                Nome do Tema
+              </Label>
+              <Input
+                id="customThemeName"
+                value={customThemeForm.name}
+                onChange={(e) => setCustomThemeForm({ ...customThemeForm, name: e.target.value })}
+                placeholder="Ex: Meu Tema Azul"
+                className="border-2 border-gray-300 text-black"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="customLogoIcon" className="text-black hover-text font-semibold">
+                Ícone/Emoji
+              </Label>
+              <Input
+                id="customLogoIcon"
+                value={customThemeForm.logoIcon}
+                onChange={(e) => setCustomThemeForm({ ...customThemeForm, logoIcon: e.target.value })}
+                placeholder="🎨"
+                maxLength={2}
+                className="border-2 border-gray-300 text-black"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-black hover-text font-semibold">Cor Primária</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={customThemeForm.primaryColor}
+                    onChange={(e) => setCustomThemeForm({ ...customThemeForm, primaryColor: e.target.value })}
+                    className="w-16 h-10 border-2 border-gray-400"
+                  />
+                  <Input
+                    value={customThemeForm.primaryColor}
+                    onChange={(e) => setCustomThemeForm({ ...customThemeForm, primaryColor: e.target.value })}
+                    className="flex-1 text-black bg-white border-2 border-gray-300"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-black hover-text font-semibold">Cor Secundária</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={customThemeForm.secondaryColor}
+                    onChange={(e) => setCustomThemeForm({ ...customThemeForm, secondaryColor: e.target.value })}
+                    className="w-16 h-10 border-2 border-gray-400"
+                  />
+                  <Input
+                    value={customThemeForm.secondaryColor}
+                    onChange={(e) => setCustomThemeForm({ ...customThemeForm, secondaryColor: e.target.value })}
+                    className="flex-1 text-black bg-white border-2 border-gray-300"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-black hover-text font-semibold">Cor de Destaque</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={customThemeForm.accentColor}
+                    onChange={(e) => setCustomThemeForm({ ...customThemeForm, accentColor: e.target.value })}
+                    className="w-16 h-10 border-2 border-gray-400"
+                  />
+                  <Input
+                    value={customThemeForm.accentColor}
+                    onChange={(e) => setCustomThemeForm({ ...customThemeForm, accentColor: e.target.value })}
+                    className="flex-1 text-black bg-white border-2 border-gray-300"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-black hover-text font-semibold">Cor de Hover</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={customThemeForm.hoverColor}
+                    onChange={(e) => setCustomThemeForm({ ...customThemeForm, hoverColor: e.target.value })}
+                    className="w-16 h-10 border-2 border-gray-400"
+                  />
+                  <Input
+                    value={customThemeForm.hoverColor}
+                    onChange={(e) => setCustomThemeForm({ ...customThemeForm, hoverColor: e.target.value })}
+                    className="flex-1 text-black bg-white border-2 border-gray-300"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Preview do tema personalizado */}
+            <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50">
+              <Label className="text-black hover-text font-semibold mb-2 block">Preview</Label>
+              <div className="flex items-center gap-2 mb-4">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
+                  style={{ backgroundColor: customThemeForm.primaryColor }}
+                >
+                  <span className="text-sm">{customThemeForm.logoIcon}</span>
+                </div>
+                <span className="font-semibold text-black hover-text">
+                  {customThemeForm.name || "Tema Personalizado"}
+                </span>
+              </div>
+              <div className="space-y-2">
+                <div
+                  className="h-3 rounded"
+                  style={{ backgroundColor: customThemeForm.primaryColor, opacity: 0.8 }}
+                ></div>
+                <div
+                  className="h-3 rounded w-3/4"
+                  style={{ backgroundColor: customThemeForm.secondaryColor, opacity: 0.6 }}
+                ></div>
+                <div
+                  className="h-3 rounded w-1/2"
+                  style={{ backgroundColor: customThemeForm.accentColor, opacity: 0.4 }}
+                ></div>
+                <div
+                  className="h-3 rounded w-2/3"
+                  style={{ backgroundColor: customThemeForm.hoverColor, opacity: 0.5 }}
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCustomThemeModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                handleThemeUpdate({
+                  systemName: customThemeForm.systemName,
+                  logoIcon: customThemeForm.logoIcon,
+                  primaryColor: customThemeForm.primaryColor,
+                  secondaryColor: customThemeForm.secondaryColor,
+                  accentColor: customThemeForm.accentColor,
+                  hoverColor: customThemeForm.hoverColor,
+                })
+                setCustomThemeModalOpen(false)
+              }}
+              disabled={saving || !customThemeForm.name.trim()}
+              className="gap-2"
+            >
+              {saving ? "Aplicando..." : "Aplicar Tema"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
