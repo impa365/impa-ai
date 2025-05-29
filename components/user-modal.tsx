@@ -26,34 +26,71 @@ interface UserModalProps {
 
 export default function UserModal({ open, onOpenChange, user, onSuccess }: UserModalProps) {
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(false)
   const [error, setError] = useState("")
   const [formData, setFormData] = useState({
-    full_name: user?.full_name || "",
-    email: user?.email || "",
-    role: user?.role || "user",
-    status: user?.status || "active",
-    whatsapp_limit: user?.whatsapp_connections_limit || 2,
+    full_name: "",
+    email: "",
+    role: "user",
+    status: "active",
+    whatsapp_limit: 2,
   })
 
+  // Buscar dados completos do usuário quando for edição
   useEffect(() => {
-    if (user) {
-      setFormData({
-        full_name: user.full_name || "",
-        email: user.email || "",
-        role: user.role || "user",
-        status: user.status || "active",
-        whatsapp_limit: user.whatsapp_connections_limit || 2,
-      })
-    } else {
-      setFormData({
-        full_name: "",
-        email: "",
-        role: "user",
-        status: "active",
-        whatsapp_limit: 2,
-      })
+    const fetchUserData = async () => {
+      if (user && open) {
+        setLoadingData(true)
+        try {
+          // Buscar dados do usuário e suas configurações
+          const { data: userData, error: userError } = await supabase
+            .from("user_profiles")
+            .select("*")
+            .eq("id", user.id)
+            .single()
+
+          if (userError) throw userError
+
+          const { data: settingsData } = await supabase
+            .from("user_settings")
+            .select("*")
+            .eq("user_id", user.id)
+            .single()
+
+          setFormData({
+            full_name: userData.full_name || "",
+            email: userData.email || "",
+            role: userData.role || "user",
+            status: userData.status || "active",
+            whatsapp_limit: settingsData?.whatsapp_connections_limit || 2,
+          })
+        } catch (error) {
+          console.error("Erro ao buscar dados do usuário:", error)
+          // Fallback para os dados básicos
+          setFormData({
+            full_name: user.full_name || "",
+            email: user.email || "",
+            role: user.role || "user",
+            status: user.status || "active",
+            whatsapp_limit: user.whatsapp_connections_limit || 2,
+          })
+        } finally {
+          setLoadingData(false)
+        }
+      } else if (!user) {
+        // Resetar para novo usuário
+        setFormData({
+          full_name: "",
+          email: "",
+          role: "user",
+          status: "active",
+          whatsapp_limit: 2,
+        })
+      }
     }
-  }, [user])
+
+    fetchUserData()
+  }, [user, open])
 
   const handleSave = async () => {
     if (!formData.full_name.trim() || !formData.email.trim()) {
@@ -81,6 +118,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             email: formData.email.trim(),
             role: formData.role,
             status: formData.status,
+            updated_at: new Date().toISOString(),
           })
           .eq("id", user.id)
 
@@ -90,6 +128,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         const { error: settingsError } = await supabase.from("user_settings").upsert({
           user_id: user.id,
           whatsapp_connections_limit: formData.whatsapp_limit,
+          updated_at: new Date().toISOString(),
         })
 
         if (settingsError) throw settingsError
@@ -144,13 +183,6 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
 
   const handleClose = () => {
     setError("")
-    setFormData({
-      full_name: user?.full_name || "",
-      email: user?.email || "",
-      role: user?.role || "user",
-      status: user?.status || "active",
-      whatsapp_limit: user?.whatsapp_connections_limit || 2,
-    })
     onOpenChange(false)
   }
 
@@ -163,7 +195,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             {user ? "Editar Usuário" : "Novo Usuário"}
           </DialogTitle>
           <DialogDescription>
-            {user ? "Altere as informações do usuário" : "Preencha os dados do novo usuário"}
+            {user ? `Editando: ${user.full_name || user.email}` : "Preencha os dados do novo usuário"}
           </DialogDescription>
         </DialogHeader>
 
@@ -173,87 +205,105 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           </Alert>
         )}
 
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="fullName">Nome Completo *</Label>
-            <Input
-              id="fullName"
-              value={formData.full_name}
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-              placeholder="Nome completo do usuário"
-              disabled={loading}
-            />
+        {loadingData ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin mr-2" />
+            <span>Carregando dados do usuário...</span>
           </div>
-
-          <div>
-            <Label htmlFor="email">Email *</Label>
-            <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="email@exemplo.com"
-              disabled={loading}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+        ) : (
+          <div className="space-y-4">
             <div>
-              <Label htmlFor="role">Função</Label>
-              <Select
-                value={formData.role}
-                onValueChange={(value) => setFormData({ ...formData, role: value })}
+              <Label htmlFor="fullName">Nome Completo *</Label>
+              <Input
+                id="fullName"
+                value={formData.full_name}
+                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                placeholder="Nome completo do usuário"
                 disabled={loading}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">Usuário</SelectItem>
-                  <SelectItem value="admin">Administrador</SelectItem>
-                </SelectContent>
-              </Select>
+              />
             </div>
 
             <div>
-              <Label htmlFor="status">Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value) => setFormData({ ...formData, status: value })}
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="email@exemplo.com"
                 disabled={loading}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Ativo</SelectItem>
-                  <SelectItem value="inactive">Inativo</SelectItem>
-                  <SelectItem value="suspended">Suspenso</SelectItem>
-                  <SelectItem value="hibernated">Hibernado</SelectItem>
-                </SelectContent>
-              </Select>
+              />
             </div>
-          </div>
 
-          <div>
-            <Label htmlFor="whatsappLimit">Limite de Conexões WhatsApp</Label>
-            <Input
-              id="whatsappLimit"
-              type="number"
-              value={formData.whatsapp_limit}
-              onChange={(e) => setFormData({ ...formData, whatsapp_limit: Number.parseInt(e.target.value) || 2 })}
-              min="1"
-              max="10"
-              disabled={loading}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="role">Função</Label>
+                <Select
+                  value={formData.role}
+                  onValueChange={(value) => setFormData({ ...formData, role: value })}
+                  disabled={loading}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">Usuário</SelectItem>
+                    <SelectItem value="admin">Administrador</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="status">Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) => setFormData({ ...formData, status: value })}
+                  disabled={loading}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Ativo</SelectItem>
+                    <SelectItem value="inactive">Inativo</SelectItem>
+                    <SelectItem value="suspended">Suspenso</SelectItem>
+                    <SelectItem value="hibernated">Hibernado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="whatsappLimit">Limite de Conexões WhatsApp</Label>
+              <Input
+                id="whatsappLimit"
+                type="number"
+                value={formData.whatsapp_limit}
+                onChange={(e) => setFormData({ ...formData, whatsapp_limit: Number.parseInt(e.target.value) || 2 })}
+                min="1"
+                max="10"
+                disabled={loading}
+              />
+            </div>
+
+            {user && (
+              <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
+                <strong>Dica:</strong> Para alterar a senha deste usuário, use o botão específico "Alterar Senha" na
+                lista de usuários.
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={loading}>
+          <Button variant="outline" onClick={handleClose} disabled={loading || loadingData}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={loading} className="bg-blue-600 text-white hover:bg-blue-700">
+          <Button
+            onClick={handleSave}
+            disabled={loading || loadingData}
+            className="bg-blue-600 text-white hover:bg-blue-700"
+          >
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Plus, Edit, Trash2, Users, Key } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import UserModal from "@/components/user-modal"
+import ChangePasswordModal from "@/components/change-password-modal"
 import {
   Dialog,
   DialogContent,
@@ -15,19 +16,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import ChangeUserPasswordModal from "@/components/change-user-password-modal"
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [userModalOpen, setUserModalOpen] = useState(false)
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false)
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<any>(null)
+  const [selectedUserForPassword, setSelectedUserForPassword] = useState<any>(null)
   const [deleteUserModal, setDeleteUserModal] = useState(false)
   const [userToDelete, setUserToDelete] = useState<any>(null)
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState("")
-  const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false)
-  const [selectedUserForPassword, setSelectedUserForPassword] = useState<any>(null)
 
   useEffect(() => {
     fetchUsers()
@@ -35,32 +35,27 @@ export default function AdminUsersPage() {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase.from("user_profiles").select("*").order("created_at", { ascending: false })
-      if (data) setUsers(data)
+      // Buscar usuários com suas configurações
+      const { data: usersData, error } = await supabase
+        .from("user_profiles")
+        .select(`
+          *,
+          user_settings(whatsapp_connections_limit)
+        `)
+        .order("created_at", { ascending: false })
+
+      if (usersData) {
+        // Mapear os dados para incluir o limite de conexões
+        const usersWithSettings = usersData.map((user) => ({
+          ...user,
+          whatsapp_connections_limit: user.user_settings?.[0]?.whatsapp_connections_limit || 2,
+        }))
+        setUsers(usersWithSettings)
+      }
     } catch (error) {
       console.error("Erro ao buscar usuários:", error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const fetchUserWithSettings = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("user_profiles")
-        .select(`*, user_settings(*)`)
-        .eq("id", userId)
-        .single()
-
-      if (error) {
-        console.error("Erro ao buscar usuário com configurações:", error)
-        return null
-      }
-
-      return data
-    } catch (error) {
-      console.error("Erro ao buscar usuário com configurações:", error)
-      return null
     }
   }
 
@@ -113,7 +108,7 @@ export default function AdminUsersPage() {
           <p className="text-gray-600">Controle total sobre usuários do sistema</p>
         </div>
         <Button
-          className="gap-2 bg-blue-600 hover:bg-blue-700"
+          className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
           onClick={() => {
             setSelectedUserForEdit(null)
             setUserModalOpen(true)
@@ -151,6 +146,8 @@ export default function AdminUsersPage() {
                     <div className="text-sm text-gray-600">{user.email}</div>
                     <div className="text-xs text-gray-500">
                       Último login: {user.last_login ? new Date(user.last_login).toLocaleDateString() : "Nunca"}
+                      {" • "}
+                      Limite WhatsApp: {user.whatsapp_connections_limit} conexões
                     </div>
                   </div>
                 </div>
@@ -180,34 +177,38 @@ export default function AdminUsersPage() {
                   </Badge>
                   <div className="flex gap-1">
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
+                      className="text-blue-600 border-blue-200 hover:bg-blue-50"
                       onClick={() => {
                         setSelectedUserForEdit(user)
                         setUserModalOpen(true)
                       }}
+                      title="Editar usuário"
                     >
                       <Edit className="w-4 h-4" />
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="text-blue-600"
-                      onClick={async () => {
+                      className="text-orange-600 border-orange-200 hover:bg-orange-50"
+                      onClick={() => {
                         setSelectedUserForPassword(user)
-                        setChangePasswordModalOpen(true)
+                        setPasswordModalOpen(true)
                       }}
+                      title="Alterar senha"
                     >
                       <Key className="w-4 h-4" />
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="text-red-600"
+                      className="text-red-600 border-red-200 hover:bg-red-50"
                       onClick={() => {
                         setUserToDelete(user)
                         setDeleteUserModal(true)
                       }}
+                      title="Excluir usuário"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -223,6 +224,13 @@ export default function AdminUsersPage() {
         open={userModalOpen}
         onOpenChange={setUserModalOpen}
         user={selectedUserForEdit}
+        onSuccess={fetchUsers}
+      />
+
+      <ChangePasswordModal
+        open={passwordModalOpen}
+        onOpenChange={setPasswordModalOpen}
+        user={selectedUserForPassword}
         onSuccess={fetchUsers}
       />
 
@@ -245,12 +253,6 @@ export default function AdminUsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ChangeUserPasswordModal
-        open={changePasswordModalOpen}
-        onOpenChange={setChangePasswordModalOpen}
-        user={selectedUserForPassword}
-      />
     </div>
   )
 }
