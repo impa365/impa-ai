@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -13,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Smartphone, Plus, Trash2, Edit, QrCode, PowerOff, RefreshCw } from "lucide-react"
+import { Smartphone, Plus, Trash2, Edit, QrCode, PowerOff, RefreshCw, Search, Filter } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import WhatsAppConnectionModal from "@/components/whatsapp-connection-modal"
@@ -33,6 +35,11 @@ export default function WhatsAppPage() {
   const [connectionLimit, setConnectionLimit] = useState(2)
   const [showConnectionModal, setShowConnectionModal] = useState(false)
   const [loadingConnections, setLoadingConnections] = useState(false)
+
+  // Estados para filtros
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [showFilters, setShowFilters] = useState(false)
 
   // Estados para confirmação de exclusão
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
@@ -105,6 +112,17 @@ export default function WhatsAppPage() {
       setLoadingConnections(false)
     }
   }
+
+  // Função para filtrar conexões
+  const filteredConnections = whatsappConnections.filter((connection) => {
+    const matchesSearch =
+      connection.connection_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (connection.phone_number && connection.phone_number.includes(searchTerm))
+
+    const matchesStatus = statusFilter === "all" || connection.status === statusFilter
+
+    return matchesSearch && matchesStatus
+  })
 
   // Função para sincronizar status de uma conexão específica
   const syncConnection = useCallback(
@@ -210,6 +228,11 @@ export default function WhatsAppPage() {
     }
   }
 
+  const clearFilters = () => {
+    setSearchTerm("")
+    setStatusFilter("all")
+  }
+
   // Quando o modal QR é aberto, sincronizar a conexão selecionada
   useEffect(() => {
     if (qrModalOpen && selectedConnection) {
@@ -261,32 +284,98 @@ export default function WhatsAppPage() {
         </div>
       </div>
 
+      {/* Filtros */}
+      <Card className="mb-6">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Filtros</h3>
+            <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-2">
+              <Filter className="w-4 h-4" />
+              {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
+            </Button>
+          </div>
+
+          {showFilters && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Buscar por nome da conexão ou telefone..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os status</SelectItem>
+                  <SelectItem value="connected">Conectado</SelectItem>
+                  <SelectItem value="connecting">Conectando</SelectItem>
+                  <SelectItem value="disconnected">Desconectado</SelectItem>
+                  <SelectItem value="error">Erro</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={clearFilters} className="flex-1">
+                  Limpar Filtros
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="text-sm text-gray-500 mt-4">
+            Mostrando {filteredConnections.length} de {whatsappConnections.length} conexões
+            {searchTerm && <span> • Busca: "{searchTerm}"</span>}
+            {statusFilter !== "all" && <span> • Status: {statusFilter}</span>}
+            {syncing && <span className="ml-2 text-blue-600">• Sincronizando status...</span>}
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex justify-between items-start mb-6">
         <div className="text-sm text-gray-500">
           {whatsappConnections.length} de {connectionLimit} conexões utilizadas
-          {syncing && <span className="ml-2 text-blue-600">• Sincronizando status...</span>}
         </div>
       </div>
 
-      {whatsappConnections.length === 0 ? (
+      {filteredConnections.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Smartphone className="w-16 h-16 text-gray-300 mb-4" />
-            <h4 className="text-lg font-medium mb-2">Nenhuma conexão WhatsApp</h4>
-            <p className="text-gray-600 text-center mb-6">Conecte seu WhatsApp para começar a usar os agentes de IA</p>
-            <Button
-              onClick={() => setShowConnectionModal(true)}
-              className="gap-2"
-              disabled={whatsappConnections.length >= connectionLimit}
-            >
-              <Plus className="w-4 h-4" />
-              Primeira Conexão
-            </Button>
+            {whatsappConnections.length === 0 ? (
+              <>
+                <h4 className="text-lg font-medium mb-2">Nenhuma conexão WhatsApp</h4>
+                <p className="text-gray-600 text-center mb-6">
+                  Conecte seu WhatsApp para começar a usar os agentes de IA
+                </p>
+                <Button
+                  onClick={() => setShowConnectionModal(true)}
+                  className="gap-2"
+                  disabled={whatsappConnections.length >= connectionLimit}
+                >
+                  <Plus className="w-4 h-4" />
+                  Primeira Conexão
+                </Button>
+              </>
+            ) : (
+              <>
+                <h4 className="text-lg font-medium mb-2">Nenhuma conexão encontrada</h4>
+                <p className="text-gray-600 text-center mb-6">Nenhuma conexão corresponde aos filtros aplicados</p>
+                <Button variant="outline" onClick={clearFilters}>
+                  Limpar Filtros
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4">
-          {whatsappConnections.map((connection) => (
+          {filteredConnections.map((connection) => (
             <Card key={connection.id}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
@@ -315,14 +404,18 @@ export default function WhatsAppPage() {
                           ? "bg-green-100 text-green-700"
                           : connection.status === "connecting"
                             ? "bg-yellow-100 text-yellow-700"
-                            : "bg-gray-100 text-gray-700"
+                            : connection.status === "error"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-gray-100 text-gray-700"
                       }
                     >
                       {connection.status === "connected"
                         ? "Conectado"
                         : connection.status === "connecting"
                           ? "Conectando"
-                          : "Desconectado"}
+                          : connection.status === "error"
+                            ? "Erro"
+                            : "Desconectado"}
                     </Badge>
                     <div className="flex gap-1">
                       <Button
