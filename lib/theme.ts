@@ -17,7 +17,7 @@ export interface ThemeConfig {
 }
 
 export const defaultTheme: ThemeConfig = {
-  systemName: "Luna AI",
+  systemName: "Impa AI",
   description: "Plataforma de construção de agentes de IA",
   logoIcon: "🤖",
   primaryColor: "#0f172a",
@@ -139,28 +139,28 @@ export function applyThemeColors(theme: ThemeConfig) {
 // Theme presets for quick selection
 export const themePresets = {
   default: {
-    systemName: "Luna AI",
+    systemName: "Impa AI",
     primaryColor: "#0f172a",
     secondaryColor: "#f1f5f9",
     accentColor: "#3b82f6",
     logoIcon: "🤖",
   },
   blue: {
-    systemName: "Luna AI",
+    systemName: "Impa AI",
     primaryColor: "#1e40af",
     secondaryColor: "#dbeafe",
     accentColor: "#3b82f6",
     logoIcon: "💙",
   },
   green: {
-    systemName: "Luna AI",
+    systemName: "Impa AI",
     primaryColor: "#166534",
     secondaryColor: "#dcfce7",
     accentColor: "#22c55e",
     logoIcon: "💚",
   },
   purple: {
-    systemName: "Luna AI",
+    systemName: "Impa AI",
     primaryColor: "#7c3aed",
     secondaryColor: "#ede9fe",
     accentColor: "#8b5cf6",
