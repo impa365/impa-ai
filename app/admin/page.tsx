@@ -117,9 +117,9 @@ export default function AdminDashboard() {
     const { data } = await supabase
       .from("whatsapp_connections")
       .select(`
-        *,
-        user_profiles!whatsapp_connections_user_id_fkey(full_name, email)
-      `)
+      *,
+      user_profiles!whatsapp_connections_user_id_fkey(full_name, email)
+    `)
       .order("created_at", { ascending: false })
 
     if (data) setWhatsappConnections(data)
@@ -172,9 +172,9 @@ export default function AdminDashboard() {
     const { data, error } = await supabase
       .from("ai_agents")
       .select(`
-        *,
-        user_profiles!ai_agents_organization_id_fkey(email)
-      `)
+      *,
+      user_profiles!ai_agents_organization_id_fkey(email)
+    `)
       .order("created_at", { ascending: false })
 
     if (data) setAgents(data)
@@ -1053,14 +1053,6 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
-      </div>
-      <div
-    className = "flex justify-end mt-6">\ < Button
-    onClick = { handleUpdateAdminProfile }
-    disabled = { savingAdminProfile }
-    className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
-          {savingAdminProfile ? "Salvando..." : "Salvar Alterações"}
-    </Button>
       </div>
     )
   }
