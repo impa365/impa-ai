@@ -26,7 +26,6 @@ export default function WhatsAppInfoModal({ open, onOpenChange, connection, onSt
 
       const fetchDetails = async () => {
         try {
-          // Buscar configurações da Evolution API
           const { data: integrationData } = await supabase
             .from("integrations")
             .select("config")
@@ -51,7 +50,6 @@ export default function WhatsAppInfoModal({ open, onOpenChange, connection, onSt
 
           const data = await response.json()
 
-          // Filtrar para obter apenas a instância solicitada
           const instanceDetails = Array.isArray(data)
             ? data.find((instance) => instance.name === connection.instance_name)
             : data
@@ -73,14 +71,13 @@ export default function WhatsAppInfoModal({ open, onOpenChange, connection, onSt
     }
   }, [open, connection])
 
-  // Extract phone number from ownerJid (remove the @s.whatsapp.net part)
   const phoneNumber = instanceDetails?.ownerJid ? instanceDetails.ownerJid.split("@")[0] : ""
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Informações da Conexão</DialogTitle>
+          <DialogTitle className="text-foreground">Informações da Conexão</DialogTitle>
         </DialogHeader>
 
         {loading ? (
@@ -88,7 +85,7 @@ export default function WhatsAppInfoModal({ open, onOpenChange, connection, onSt
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         ) : error ? (
-          <div className="text-center text-red-500 py-4">{error}</div>
+          <div className="text-center text-destructive py-4">{error}</div>
         ) : instanceDetails ? (
           <div className="space-y-6">
             <div className="flex flex-col items-center space-y-3">
@@ -105,7 +102,7 @@ export default function WhatsAppInfoModal({ open, onOpenChange, connection, onSt
                   <Phone className="h-12 w-12 text-muted-foreground" />
                 </div>
               )}
-              <h3 className="text-xl font-semibold">{instanceDetails.profileName}</h3>
+              <h3 className="text-xl font-semibold text-foreground">{instanceDetails.profileName}</h3>
               <div className="text-sm text-muted-foreground">{formatPhoneNumber(phoneNumber)}</div>
             </div>
 
@@ -113,27 +110,27 @@ export default function WhatsAppInfoModal({ open, onOpenChange, connection, onSt
 
             <div className="grid grid-cols-1 gap-4">
               <div>
-                <h4 className="text-sm font-medium mb-1">Nome da Instância</h4>
-                <p className="text-sm">{instanceDetails.name}</p>
+                <h4 className="text-sm font-medium mb-1 text-foreground">Nome da Instância</h4>
+                <p className="text-sm text-muted-foreground">{instanceDetails.name}</p>
               </div>
 
               <div>
-                <h4 className="text-sm font-medium mb-1">Status</h4>
+                <h4 className="text-sm font-medium mb-1 text-foreground">Status</h4>
                 <div className="flex items-center">
                   <span
                     className={`inline-block w-2 h-2 rounded-full mr-2 ${
                       instanceDetails.connectionStatus === "open" ? "bg-green-500" : "bg-red-500"
                     }`}
                   ></span>
-                  <span className="text-sm">
+                  <span className="text-sm text-foreground">
                     {instanceDetails.connectionStatus === "open" ? "Conectado" : "Desconectado"}
                   </span>
                 </div>
               </div>
 
               <div>
-                <h4 className="text-sm font-medium mb-1">Integração</h4>
-                <p className="text-sm">{instanceDetails.integration}</p>
+                <h4 className="text-sm font-medium mb-1 text-foreground">Integração</h4>
+                <p className="text-sm text-muted-foreground">{instanceDetails.integration}</p>
               </div>
             </div>
 
@@ -144,19 +141,25 @@ export default function WhatsAppInfoModal({ open, onOpenChange, connection, onSt
                 <div className="grid grid-cols-3 gap-4">
                   <div className="flex flex-col items-center p-3 bg-muted/50 rounded-lg">
                     <MessageSquare className="h-5 w-5 text-primary mb-1" />
-                    <span className="text-lg font-semibold">{instanceDetails._count.Message.toLocaleString()}</span>
+                    <span className="text-lg font-semibold text-foreground">
+                      {instanceDetails._count.Message.toLocaleString()}
+                    </span>
                     <span className="text-xs text-muted-foreground">Mensagens</span>
                   </div>
 
                   <div className="flex flex-col items-center p-3 bg-muted/50 rounded-lg">
                     <Users className="h-5 w-5 text-primary mb-1" />
-                    <span className="text-lg font-semibold">{instanceDetails._count.Contact.toLocaleString()}</span>
+                    <span className="text-lg font-semibold text-foreground">
+                      {instanceDetails._count.Contact.toLocaleString()}
+                    </span>
                     <span className="text-xs text-muted-foreground">Contatos</span>
                   </div>
 
                   <div className="flex flex-col items-center p-3 bg-muted/50 rounded-lg">
                     <MessageCircle className="h-5 w-5 text-primary mb-1" />
-                    <span className="text-lg font-semibold">{instanceDetails._count.Chat.toLocaleString()}</span>
+                    <span className="text-lg font-semibold text-foreground">
+                      {instanceDetails._count.Chat.toLocaleString()}
+                    </span>
                     <span className="text-xs text-muted-foreground">Chats</span>
                   </div>
                 </div>

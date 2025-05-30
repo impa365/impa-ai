@@ -951,8 +951,8 @@ export default function AdminSettingsPage() {
         <Dialog open={integrationModalOpen} onOpenChange={setIntegrationModalOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Configurar {selectedIntegration?.name}</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-foreground">Configurar {selectedIntegration?.name}</DialogTitle>
+              <DialogDescription className="text-muted-foreground">
                 Configure as credenciais para integração com {selectedIntegration?.name}
               </DialogDescription>
             </DialogHeader>
@@ -961,17 +961,22 @@ export default function AdminSettingsPage() {
               {selectedIntegration?.type === "evolution_api" && (
                 <>
                   <div>
-                    <Label htmlFor="evolutionApiUrl">URL da API Evolution *</Label>
+                    <Label htmlFor="evolutionApiUrl" className="text-foreground">
+                      URL da API Evolution *
+                    </Label>
                     <Input
                       id="evolutionApiUrl"
                       value={integrationForm.evolutionApiUrl}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, evolutionApiUrl: e.target.value })}
                       placeholder="https://api.evolution.com"
                       required
+                      className="text-foreground"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="evolutionApiKey">API Key Global *</Label>
+                    <Label htmlFor="evolutionApiKey" className="text-foreground">
+                      API Key Global *
+                    </Label>
                     <Input
                       id="evolutionApiKey"
                       type="password"
@@ -979,6 +984,7 @@ export default function AdminSettingsPage() {
                       onChange={(e) => setIntegrationForm({ ...integrationForm, evolutionApiKey: e.target.value })}
                       placeholder="Sua API Key"
                       required
+                      className="text-foreground"
                     />
                   </div>
                 </>
@@ -987,23 +993,29 @@ export default function AdminSettingsPage() {
               {selectedIntegration?.type === "n8n" && (
                 <>
                   <div>
-                    <Label htmlFor="n8nFlowUrl">URL do Fluxo *</Label>
+                    <Label htmlFor="n8nFlowUrl" className="text-foreground">
+                      URL do Fluxo *
+                    </Label>
                     <Input
                       id="n8nFlowUrl"
                       value={integrationForm.n8nFlowUrl}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, n8nFlowUrl: e.target.value })}
                       placeholder="https://n8n.exemplo.com/webhook/..."
                       required
+                      className="text-foreground"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="n8nApiKey">API Key do Fluxo (Opcional)</Label>
+                    <Label htmlFor="n8nApiKey" className="text-foreground">
+                      API Key do Fluxo (Opcional)
+                    </Label>
                     <Input
                       id="n8nApiKey"
                       type="password"
                       value={integrationForm.n8nApiKey}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, n8nApiKey: e.target.value })}
                       placeholder="API Key (se necessário)"
+                      className="text-foreground"
                     />
                   </div>
                 </>
@@ -1011,7 +1023,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIntegrationModalOpen(false)}>
+              <Button variant="outline" onClick={() => setIntegrationModalOpen(false)} className="text-foreground">
                 Cancelar
               </Button>
               <Button

@@ -43,28 +43,24 @@ export default function InstanceCreationModal({
     }
 
     let totalTime = 0
-    const stepDuration = 1000 // 1 segundo por step
+    const stepDuration = 1000
 
     const timer = setInterval(() => {
       totalTime += 100
 
-      // Atualizar progresso
       const newProgress = Math.min((totalTime / 5000) * 100, 100)
       setProgress(newProgress)
 
-      // Atualizar step atual
       const newStep = Math.floor(totalTime / stepDuration)
       if (newStep < creationSteps.length) {
         setCurrentStep(newStep)
       }
 
-      // Completar após 5 segundos
       if (totalTime >= 5000 && !hasCompleted) {
         setIsComplete(true)
         setHasCompleted(true)
         clearInterval(timer)
 
-        // Chamar onComplete apenas uma vez
         setTimeout(() => {
           onComplete()
         }, 100)
@@ -76,7 +72,6 @@ export default function InstanceCreationModal({
 
   useEffect(() => {
     if (isComplete && hasCompleted) {
-      // Fechar o modal automaticamente após 2 segundos
       const timer = setTimeout(() => {
         onOpenChange(false)
       }, 2000)
@@ -91,33 +86,35 @@ export default function InstanceCreationModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle className="text-center">{isComplete ? "Instância Criada!" : "Criando Instância"}</DialogTitle>
-          <DialogDescription className="text-center">
+          <DialogTitle className="text-center text-foreground">
+            {isComplete ? "Instância Criada!" : "Criando Instância"}
+          </DialogTitle>
+          <DialogDescription className="text-center text-muted-foreground">
             {isComplete ? (
               <>
-                Sua conexão <strong>{connectionName}</strong> foi criada com sucesso!
+                Sua conexão <strong className="text-foreground">{connectionName}</strong> foi criada com sucesso!
               </>
             ) : (
               <>
-                Configurando sua conexão WhatsApp: <strong>{connectionName}</strong>
+                Configurando sua conexão WhatsApp: <strong className="text-foreground">{connectionName}</strong>
               </>
             )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Ícone animado */}
           <div className="flex justify-center">
             <div className={`relative ${isComplete ? "animate-bounce" : "animate-pulse"}`}>
               <div
                 className={`w-20 h-20 rounded-full flex items-center justify-center ${
-                  isComplete ? "bg-green-100 text-green-600" : "bg-blue-100 text-blue-600"
+                  isComplete
+                    ? "bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400"
+                    : "bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400"
                 }`}
               >
                 <CurrentIcon className="w-10 h-10" />
               </div>
 
-              {/* Círculos animados ao redor */}
               {!isComplete && (
                 <>
                   <div className="absolute inset-0 rounded-full border-2 border-blue-200 animate-ping"></div>
@@ -127,20 +124,17 @@ export default function InstanceCreationModal({
             </div>
           </div>
 
-          {/* Texto do step atual */}
           <div className="text-center">
-            <p className={`font-medium ${isComplete ? "text-green-600" : "text-gray-700"}`}>
+            <p className={`font-medium ${isComplete ? "text-green-600 dark:text-green-400" : "text-foreground"}`}>
               {isComplete ? "✨ Instância criada com sucesso!" : creationSteps[currentStep]?.text}
             </p>
           </div>
 
-          {/* Barra de progresso */}
           <div className="space-y-2">
             <Progress value={progress} className="h-3" />
-            <p className="text-center text-sm text-gray-500">{Math.round(progress)}% concluído</p>
+            <p className="text-center text-sm text-muted-foreground">{Math.round(progress)}% concluído</p>
           </div>
 
-          {/* Lista de steps */}
           <div className="space-y-2">
             {creationSteps.map((step, index) => {
               const StepIcon = step.icon
@@ -152,15 +146,19 @@ export default function InstanceCreationModal({
                   key={index}
                   className={`flex items-center gap-3 p-2 rounded-lg transition-all ${
                     isCurrentStep
-                      ? "bg-blue-50 text-blue-700"
+                      ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
                       : isCompletedStep
-                        ? "bg-green-50 text-green-700"
-                        : "text-gray-400"
+                        ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300"
+                        : "text-muted-foreground"
                   }`}
                 >
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                      isCompletedStep ? "bg-green-100" : isCurrentStep ? "bg-blue-100" : "bg-gray-100"
+                      isCompletedStep
+                        ? "bg-green-100 dark:bg-green-900"
+                        : isCurrentStep
+                          ? "bg-blue-100 dark:bg-blue-900"
+                          : "bg-gray-100 dark:bg-gray-800"
                     }`}
                   >
                     {isCompletedStep ? <CheckCircle className="w-4 h-4" /> : <StepIcon className="w-4 h-4" />}
@@ -171,10 +169,9 @@ export default function InstanceCreationModal({
             })}
           </div>
 
-          {/* Mensagem de sucesso */}
           {isComplete && (
             <div className="pt-4 border-t">
-              <p className="text-center text-sm text-green-600">
+              <p className="text-center text-sm text-green-600 dark:text-green-400">
                 Instância criada com sucesso! O modal fechará automaticamente...
               </p>
             </div>
