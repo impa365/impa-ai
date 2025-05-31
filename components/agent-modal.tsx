@@ -181,22 +181,75 @@ export default function AgentModal({
   }
 
   const createEvolutionBot = async (data: any): Promise<string> => {
-    // Aqui você implementaria a criação do bot na Evolution API
-    // Por enquanto, vamos simular
-    const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    try {
+      // Buscar configurações de integração do banco em vez de variáveis de ambiente
+      const { data: integrationData, error } = await supabase
+        .from("integrations")
+        .select("config")
+        .eq("type", "evolution_api")
+        .eq("is_active", true)
+        .single()
 
-    // TODO: Implementar integração real com Evolution API
-    // const response = await fetch('/api/evolution/create-bot', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({
-    //     name: data.name,
-    //     prompt: data.training_prompt,
-    //     webhookUrl: `${process.env.NEXT_PUBLIC_N8N_URL}?id_evobot=${botId}`
-    //   })
-    // })
+      if (error || !integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
+        throw new Error("Evolution API não configurada pelo administrador")
+      }
 
-    return botId
+      // Gerar um ID único para o bot
+      const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      // Buscar configurações do n8n do banco também
+      const { data: n8nData } = await supabase
+        .from("integrations")
+        .select("config")
+        .eq("type", "n8n")
+        .eq("is_active", true)
+        .single()
+
+      const webhookUrl = n8nData?.config?.flowUrl
+        ? `${n8nData.config.flowUrl}?id_evobot=${botId}`
+        : `https://webhook.site/unique-id?id_evobot=${botId}` // fallback para teste
+
+      // TODO: Implementar integração real com Evolution API
+      // const response = await fetch(`${integrationData.config.apiUrl}/instance/create`, {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //     'apikey': integrationData.config.apiKey
+      //   },
+      //   body: JSON.stringify({
+      //     instanceName: botId,
+      //     token: generateInstanceToken(),
+      //     qrcode: true,
+      //     webhook: webhookUrl,
+      //     webhook_by_events: true,
+      //     events: [
+      //       'APPLICATION_STARTUP',
+      //       'QRCODE_UPDATED',
+      //       'CONNECTION_UPDATE',
+      //       'MESSAGES_UPSERT',
+      //       'MESSAGES_UPDATE',
+      //       'SEND_MESSAGE'
+      //     ]
+      //   })
+      // })
+
+      // if (!response.ok) {
+      //   throw new Error(`Erro na Evolution API: ${response.statusText}`)
+      // }
+
+      // const result = await response.json()
+
+      console.log(`Bot criado com ID: ${botId}, Webhook: ${webhookUrl}`)
+
+      return botId
+    } catch (error: any) {
+      console.error("Erro ao criar bot na Evolution API:", error)
+      throw error
+    }
+  }
+
+  function generateInstanceToken(): string {
+    return `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   }
 
   const voiceTones = [
