@@ -156,6 +156,7 @@ export default function AgentModal({
         calendar_api_key: formData.calendar_integration ? formData.calendar_api_key : null,
         is_default: formData.is_default,
         status: "active",
+        type: "whatsapp", // Adicionar este campo obrigatório
       }
 
       if (agent) {
