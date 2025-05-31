@@ -2,35 +2,45 @@ import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 import { updateEvolutionBot } from "@/lib/evolution-bot-api"
 
+// POST - Ativar/Desativar agente
 export async function POST(request: NextRequest, { params }: { params: { agentId: string } }) {
   try {
     const { agentId } = params
-    const body = await request.json()
-    const { userId, status } = body
+    const { userId, enabled } = await request.json()
 
-    if (!userId) {
-      return NextResponse.json({ error: "userId é obrigatório" }, { status: 400 })
+    if (!userId || typeof enabled !== "boolean") {
+      return NextResponse.json({ error: "userId e enabled são obrigatórios" }, { status: 400 })
     }
 
-    // Verificar se o agente existe e pertence ao usuário
-    const { data: agent, error: agentError } = await supabase
+    // Buscar agente atual
+    const { data: agent, error: fetchError } = await supabase
       .from("ai_agents")
       .select(`
         *,
-        whatsapp_connections!inner(instance_name)
+        whatsapp_connections!inner(instance_name, status)
       `)
       .eq("id", agentId)
       .eq("user_id", userId)
       .single()
 
-    if (agentError || !agent) {
+    if (fetchError || !agent) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    // Atualizar status do agente no banco
+    // Verificar se a conexão WhatsApp está conectada
+    if (enabled && agent.whatsapp_connections?.status !== "connected") {
+      return NextResponse.json({ error: "Conexão WhatsApp deve estar conectada para ativar o agente" }, { status: 400 })
+    }
+
+    const newStatus = enabled ? "active" : "inactive"
+
+    // Atualizar status no banco
     const { error: updateError } = await supabase
       .from("ai_agents")
-      .update({ status })
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", agentId)
       .eq("user_id", userId)
 
@@ -41,41 +51,46 @@ export async function POST(request: NextRequest, { params }: { params: { agentId
 
     // Atualizar bot na Evolution API se existir
     if (agent.evolution_bot_id && agent.whatsapp_connections?.instance_name) {
-      // Buscar configurações atuais do bot
-      const { data: botConfig } = await supabase.from("ai_agents").select("*").eq("id", agentId).single()
+      const evolutionBotConfig = {
+        enabled,
+        description: agent.name,
+        apiUrl: "", // Será preenchido pela função
+        apiKey: "",
+        triggerType: agent.trigger_type as "all" | "keyword",
+        triggerOperator: agent.trigger_operator as any,
+        triggerValue: agent.trigger_value || "",
+        expire: agent.expire_time,
+        keywordFinish: agent.keyword_finish,
+        delayMessage: agent.delay_message,
+        unknownMessage: agent.unknown_message,
+        listeningFromMe: agent.listening_from_me,
+        stopBotFromMe: agent.stop_bot_from_me,
+        keepOpen: agent.keep_open,
+        debounceTime: agent.debounce_time,
+        ignoreJids: agent.ignore_groups ? ["@g.us"] : [],
+        splitMessages: agent.split_messages,
+        timePerChar: agent.time_per_char,
+      }
 
-      if (botConfig) {
-        const evolutionBotConfig = {
-          enabled: status === "active",
-          description: botConfig.name,
-          apiUrl: "", // Será preenchido pela função
-          apiKey: "",
-          triggerType: botConfig.trigger_type as "all" | "keyword",
-          triggerOperator: botConfig.trigger_operator as any,
-          triggerValue: botConfig.trigger_value || "",
-          expire: botConfig.expire_time,
-          keywordFinish: botConfig.keyword_finish,
-          delayMessage: botConfig.delay_message,
-          unknownMessage: botConfig.unknown_message,
-          listeningFromMe: botConfig.listening_from_me,
-          stopBotFromMe: botConfig.stop_bot_from_me,
-          keepOpen: botConfig.keep_open,
-          debounceTime: botConfig.debounce_time,
-          ignoreJids: botConfig.ignore_groups ? ["@g.us"] : [],
-          splitMessages: botConfig.split_messages,
-          timePerChar: botConfig.time_per_char,
-        }
+      const evolutionResult = await updateEvolutionBot(
+        agent.whatsapp_connections.instance_name,
+        agent.evolution_bot_id,
+        agentId,
+        evolutionBotConfig,
+      )
 
-        await updateEvolutionBot(
-          agent.whatsapp_connections.instance_name,
-          agent.evolution_bot_id,
-          agentId,
-          evolutionBotConfig,
-        )
+      if (!evolutionResult.success) {
+        // Reverter status no banco se falhou na Evolution API
+        await supabase
+          .from("ai_agents")
+          .update({ status: enabled ? "inactive" : "active" })
+          .eq("id", agentId)
+
+        return NextResponse.json({ error: evolutionResult.error }, { status: 500 })
       }
     }
 
-    return NextResponse.json({ success: true, status })
+    return NextResponse.json({ success: true, status: newStatus })
   } catch (error) {
     console.error("Erro na API de toggle de agente:", error)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
