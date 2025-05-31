@@ -121,11 +121,8 @@ export default function AgentsPage() {
   const fetchWhatsAppConnections = async () => {
     try {
       const currentUser = getCurrentUser()
-      const { data, error } = await supabase
-        .from("whatsapp_connections")
-        .select("*")
-        .eq("user_id", currentUser?.id)
-        .eq("status", "connected")
+      const { data, error } = await supabase.from("whatsapp_connections").select("*").eq("user_id", currentUser?.id)
+      // Não filtrar por status, permitir qualquer conexão existente
 
       if (error) throw error
       if (data) setWhatsappConnections(data)
@@ -146,7 +143,7 @@ export default function AgentsPage() {
     }
 
     if (whatsappConnections.length === 0) {
-      setMessage("Você precisa ter pelo menos uma conexão WhatsApp ativa para criar um agente.")
+      setMessage("Você precisa ter pelo menos uma conexão WhatsApp para criar um agente.")
       setTimeout(() => setMessage(""), 5000)
       return
     }
@@ -268,7 +265,7 @@ export default function AgentsPage() {
       {whatsappConnections.length === 0 && (
         <Alert className="mb-6 border-yellow-200 bg-yellow-50">
           <AlertDescription className="text-yellow-700">
-            Você precisa ter pelo menos uma conexão WhatsApp ativa para criar agentes.
+            Você precisa ter pelo menos uma conexão WhatsApp para criar agentes.
             <a href="/dashboard/whatsapp" className="underline ml-1">
               Configurar WhatsApp
             </a>

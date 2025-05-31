@@ -134,8 +134,23 @@ export default function AgentModal({
 
       const currentUser = getCurrentUser()
 
-      // Criar bot na Evolution API primeiro
-      const evolutionBotId = await createEvolutionBot(formData)
+      // Verificar se a conexão WhatsApp existe
+      const { data: connectionData, error: connectionError } = await supabase
+        .from("whatsapp_connections")
+        .select("instance_name")
+        .eq("id", formData.whatsapp_connection_id)
+        .single()
+
+      if (connectionError) {
+        throw new Error("Conexão WhatsApp não encontrada")
+      }
+
+      // Gerar ID único para o bot
+      const evolutionBotId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      // Aqui você pode implementar a integração real com a Evolution API
+      // usando a biblioteca whatsapp-api.ts
+      // Por enquanto, apenas simulamos a criação do bot
 
       const agentData = {
         user_id: currentUser?.id,
@@ -156,7 +171,7 @@ export default function AgentModal({
         calendar_api_key: formData.calendar_integration ? formData.calendar_api_key : null,
         is_default: formData.is_default,
         status: "active",
-        type: "whatsapp", // Adicionar este campo obrigatório
+        type: "whatsapp", // Campo obrigatório
       }
 
       if (agent) {
@@ -179,78 +194,6 @@ export default function AgentModal({
     } finally {
       setSaving(false)
     }
-  }
-
-  const createEvolutionBot = async (data: any): Promise<string> => {
-    try {
-      // Buscar configurações de integração do banco em vez de variáveis de ambiente
-      const { data: integrationData, error } = await supabase
-        .from("integrations")
-        .select("config")
-        .eq("type", "evolution_api")
-        .eq("is_active", true)
-        .single()
-
-      if (error || !integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
-        throw new Error("Evolution API não configurada pelo administrador")
-      }
-
-      // Gerar um ID único para o bot
-      const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-      // Buscar configurações do n8n do banco também
-      const { data: n8nData } = await supabase
-        .from("integrations")
-        .select("config")
-        .eq("type", "n8n")
-        .eq("is_active", true)
-        .single()
-
-      const webhookUrl = n8nData?.config?.flowUrl
-        ? `${n8nData.config.flowUrl}?id_evobot=${botId}`
-        : `https://webhook.site/unique-id?id_evobot=${botId}` // fallback para teste
-
-      // TODO: Implementar integração real com Evolution API
-      // const response = await fetch(`${integrationData.config.apiUrl}/instance/create`, {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'apikey': integrationData.config.apiKey
-      //   },
-      //   body: JSON.stringify({
-      //     instanceName: botId,
-      //     token: generateInstanceToken(),
-      //     qrcode: true,
-      //     webhook: webhookUrl,
-      //     webhook_by_events: true,
-      //     events: [
-      //       'APPLICATION_STARTUP',
-      //       'QRCODE_UPDATED',
-      //       'CONNECTION_UPDATE',
-      //       'MESSAGES_UPSERT',
-      //       'MESSAGES_UPDATE',
-      //       'SEND_MESSAGE'
-      //     ]
-      //   })
-      // })
-
-      // if (!response.ok) {
-      //   throw new Error(`Erro na Evolution API: ${response.statusText}`)
-      // }
-
-      // const result = await response.json()
-
-      console.log(`Bot criado com ID: ${botId}, Webhook: ${webhookUrl}`)
-
-      return botId
-    } catch (error: any) {
-      console.error("Erro ao criar bot na Evolution API:", error)
-      throw error
-    }
-  }
-
-  function generateInstanceToken(): string {
-    return `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   }
 
   const voiceTones = [
@@ -425,10 +368,16 @@ export default function AgentModal({
                     {whatsappConnections.map((connection) => (
                       <SelectItem key={connection.id} value={connection.id} className="text-foreground">
                         {connection.connection_name}
+                        {connection.status !== "connected" && " (Desconectado)"}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {whatsappConnections.find((c) => c.id === formData.whatsapp_connection_id)?.status !== "connected" && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Esta conexão está desconectada. O agente só funcionará quando a conexão estiver ativa.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
