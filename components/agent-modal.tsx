@@ -13,9 +13,10 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, Bot, MessageSquare, Mic, ImageIcon, Calendar, Volume2 } from "lucide-react"
+import { Eye, EyeOff, Bot, MessageSquare, Mic, ImageIcon, Calendar, Volume2, Settings } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
+import { createEvolutionBot, updateEvolutionBot } from "@/lib/evolution-api"
 
 interface AgentModalProps {
   open: boolean
@@ -35,6 +36,7 @@ export default function AgentModal({
   onSuccess,
 }: AgentModalProps) {
   const [loading, setSaving] = useState(false)
+  const [loadingStep, setLoadingStep] = useState("")
   const [error, setError] = useState("")
   const [showApiKeys, setShowApiKeys] = useState({
     voice: false,
@@ -57,6 +59,19 @@ export default function AgentModal({
     calendar_integration: false,
     calendar_api_key: "",
     is_default: false,
+    // Configurações do bot Evolution
+    trigger_type: "keyword",
+    trigger_operator: "contains",
+    trigger_value: "",
+    keyword_finish: "#SAIR",
+    delay_message: 1000,
+    unknown_message: "Desculpe, não entendi sua mensagem. Digite #SAIR para encerrar.",
+    listening_from_me: true,
+    stop_bot_from_me: true,
+    keep_open: true,
+    debounce_time: 5,
+    split_messages: true,
+    time_per_char: 50,
   })
 
   useEffect(() => {
@@ -77,6 +92,19 @@ export default function AgentModal({
         calendar_integration: agent.calendar_integration || false,
         calendar_api_key: agent.calendar_api_key || "",
         is_default: agent.is_default || false,
+        // Configurações do bot Evolution
+        trigger_type: agent.trigger_type || "keyword",
+        trigger_operator: agent.trigger_operator || "contains",
+        trigger_value: agent.trigger_value || "",
+        keyword_finish: agent.keyword_finish || "#SAIR",
+        delay_message: agent.delay_message || 1000,
+        unknown_message: agent.unknown_message || "Desculpe, não entendi sua mensagem. Digite #SAIR para encerrar.",
+        listening_from_me: agent.listening_from_me !== false,
+        stop_bot_from_me: agent.stop_bot_from_me !== false,
+        keep_open: agent.keep_open !== false,
+        debounce_time: agent.debounce_time || 5,
+        split_messages: agent.split_messages !== false,
+        time_per_char: agent.time_per_char || 50,
       })
     } else {
       // Reset form for new agent
@@ -96,6 +124,19 @@ export default function AgentModal({
         calendar_integration: false,
         calendar_api_key: "",
         is_default: false,
+        // Configurações do bot Evolution
+        trigger_type: "keyword",
+        trigger_operator: "contains",
+        trigger_value: "",
+        keyword_finish: "#SAIR",
+        delay_message: 1000,
+        unknown_message: "Desculpe, não entendi sua mensagem. Digite #SAIR para encerrar.",
+        listening_from_me: true,
+        stop_bot_from_me: true,
+        keep_open: true,
+        debounce_time: 5,
+        split_messages: true,
+        time_per_char: 50,
       })
     }
     setError("")
@@ -120,6 +161,10 @@ export default function AgentModal({
         throw new Error("Conexão WhatsApp é obrigatória")
       }
 
+      if (!formData.trigger_value.trim()) {
+        throw new Error("Palavra-chave de ativação é obrigatória")
+      }
+
       if (formData.voice_response_enabled && !formData.voice_provider) {
         throw new Error("Selecione um provedor de voz")
       }
@@ -135,6 +180,7 @@ export default function AgentModal({
       const currentUser = getCurrentUser()
 
       // Verificar se a conexão WhatsApp existe
+      setLoadingStep("Verificando conexão WhatsApp...")
       const { data: connectionData, error: connectionError } = await supabase
         .from("whatsapp_connections")
         .select("instance_name")
@@ -145,12 +191,61 @@ export default function AgentModal({
         throw new Error("Conexão WhatsApp não encontrada")
       }
 
-      // Gerar ID único para o bot
-      const evolutionBotId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      let evolutionBotId = agent?.evolution_bot_id
 
-      // Aqui você pode implementar a integração real com a Evolution API
-      // usando a biblioteca whatsapp-api.ts
-      // Por enquanto, apenas simulamos a criação do bot
+      if (!agent) {
+        // Criar novo bot na Evolution API
+        setLoadingStep("Criando bot na Evolution API...")
+
+        // Buscar configurações do n8n
+        const { data: n8nData } = await supabase
+          .from("integrations")
+          .select("config")
+          .eq("type", "n8n")
+          .eq("is_active", true)
+          .single()
+
+        const apiUrl = n8nData?.config?.flowUrl || "https://webhook.site/unique-id"
+        const apiKey = n8nData?.config?.apiKey || ""
+
+        const botData = {
+          enabled: true,
+          description: formData.name,
+          apiUrl: `${apiUrl}?id_bot=`, // O ID será adicionado após a criação
+          apiKey: apiKey,
+          triggerType: formData.trigger_type,
+          triggerOperator: formData.trigger_operator,
+          triggerValue: formData.trigger_value,
+          expire: 0,
+          keywordFinish: formData.keyword_finish,
+          delayMessage: formData.delay_message,
+          unknownMessage: formData.unknown_message,
+          listeningFromMe: formData.listening_from_me,
+          stopBotFromMe: formData.stop_bot_from_me,
+          keepOpen: formData.keep_open,
+          debounceTime: formData.debounce_time,
+          ignoreJids: ["@g.us"],
+          splitMessages: formData.split_messages,
+          timePerChar: formData.time_per_char,
+        }
+
+        const evolutionResult = await createEvolutionBot(connectionData.instance_name, botData)
+
+        if (!evolutionResult.success) {
+          throw new Error(evolutionResult.error || "Erro ao criar bot na Evolution API")
+        }
+
+        evolutionBotId = evolutionResult.botId
+
+        // Atualizar URL do webhook com o ID do bot
+        setLoadingStep("Configurando webhook...")
+        await updateEvolutionBot(connectionData.instance_name, evolutionBotId, {
+          ...botData,
+          apiUrl: `${apiUrl}?id_bot=${evolutionBotId}`,
+        })
+      }
+
+      setLoadingStep("Salvando agente no banco de dados...")
 
       const agentData = {
         user_id: currentUser?.id,
@@ -171,7 +266,20 @@ export default function AgentModal({
         calendar_api_key: formData.calendar_integration ? formData.calendar_api_key : null,
         is_default: formData.is_default,
         status: "active",
-        type: "whatsapp", // Campo obrigatório
+        type: "whatsapp",
+        // Configurações do bot Evolution
+        trigger_type: formData.trigger_type,
+        trigger_operator: formData.trigger_operator,
+        trigger_value: formData.trigger_value,
+        keyword_finish: formData.keyword_finish,
+        delay_message: formData.delay_message,
+        unknown_message: formData.unknown_message,
+        listening_from_me: formData.listening_from_me,
+        stop_bot_from_me: formData.stop_bot_from_me,
+        keep_open: formData.keep_open,
+        debounce_time: formData.debounce_time,
+        split_messages: formData.split_messages,
+        time_per_char: formData.time_per_char,
       }
 
       if (agent) {
@@ -179,6 +287,43 @@ export default function AgentModal({
         const { error } = await supabase.from("ai_agents").update(agentData).eq("id", agent.id)
 
         if (error) throw error
+
+        // Atualizar bot na Evolution API se necessário
+        if (evolutionBotId) {
+          setLoadingStep("Atualizando bot na Evolution API...")
+          const { data: n8nData } = await supabase
+            .from("integrations")
+            .select("config")
+            .eq("type", "n8n")
+            .eq("is_active", true)
+            .single()
+
+          const apiUrl = n8nData?.config?.flowUrl || "https://webhook.site/unique-id"
+          const apiKey = n8nData?.config?.apiKey || ""
+
+          const botData = {
+            enabled: true,
+            description: formData.name,
+            apiUrl: `${apiUrl}?id_bot=${evolutionBotId}`,
+            apiKey: apiKey,
+            triggerType: formData.trigger_type,
+            triggerOperator: formData.trigger_operator,
+            triggerValue: formData.trigger_value,
+            expire: 0,
+            keywordFinish: formData.keyword_finish,
+            delayMessage: formData.delay_message,
+            unknownMessage: formData.unknown_message,
+            listeningFromMe: formData.listening_from_me,
+            stopBotFromMe: formData.stop_bot_from_me,
+            keepOpen: formData.keep_open,
+            debounceTime: formData.debounce_time,
+            ignoreJids: ["@g.us"],
+            splitMessages: formData.split_messages,
+            timePerChar: formData.time_per_char,
+          }
+
+          await updateEvolutionBot(connectionData.instance_name, evolutionBotId, botData)
+        }
       } else {
         // Criar novo agente
         const { error } = await supabase.from("ai_agents").insert([agentData])
@@ -186,6 +331,7 @@ export default function AgentModal({
         if (error) throw error
       }
 
+      setLoadingStep("Finalizando...")
       onSuccess()
       onOpenChange(false)
     } catch (error: any) {
@@ -193,6 +339,7 @@ export default function AgentModal({
       setError(error.message || "Erro ao salvar agente")
     } finally {
       setSaving(false)
+      setLoadingStep("")
     }
   }
 
@@ -217,9 +364,49 @@ export default function AgentModal({
     { value: "eleven_labs", label: "Eleven Labs" },
   ]
 
+  const triggerTypes = [
+    { value: "keyword", label: "Palavra-chave" },
+    { value: "all", label: "Todas as mensagens" },
+  ]
+
+  const triggerOperators = [
+    { value: "contains", label: "Contém" },
+    { value: "equals", label: "Igual a" },
+    { value: "startsWith", label: "Começa com" },
+    { value: "endsWith", label: "Termina com" },
+    { value: "regex", label: "Expressão regular" },
+    { value: "none", label: "Nenhum" },
+  ]
+
+  if (loading) {
+    return (
+      <Dialog open={open} onOpenChange={() => {}}>
+        <DialogContent className="max-w-md">
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Bot className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+            <h3 className="mt-4 text-lg font-semibold text-foreground">
+              {agent ? "Atualizando Agente" : "Criando Agente"}
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground text-center">{loadingStep || "Processando..."}</p>
+            <div className="mt-4 w-full max-w-xs">
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-600 rounded-full animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-foreground">
             <Bot className="w-5 h-5" />
@@ -293,46 +480,48 @@ export default function AgentModal({
               <CardTitle className="text-lg flex items-center gap-2 text-foreground">💬 Tom de Voz e Função</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="voice_tone" className="text-foreground">
-                  Tom de Voz
-                </Label>
-                <Select
-                  value={formData.voice_tone}
-                  onValueChange={(value) => setFormData({ ...formData, voice_tone: value })}
-                >
-                  <SelectTrigger className="text-foreground">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {voiceTones.map((tone) => (
-                      <SelectItem key={tone.value} value={tone.value} className="text-foreground">
-                        {tone.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="voice_tone" className="text-foreground">
+                    Tom de Voz
+                  </Label>
+                  <Select
+                    value={formData.voice_tone}
+                    onValueChange={(value) => setFormData({ ...formData, voice_tone: value })}
+                  >
+                    <SelectTrigger className="text-foreground">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {voiceTones.map((tone) => (
+                        <SelectItem key={tone.value} value={tone.value} className="text-foreground">
+                          {tone.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div>
-                <Label htmlFor="main_function" className="text-foreground">
-                  Função Principal
-                </Label>
-                <Select
-                  value={formData.main_function}
-                  onValueChange={(value) => setFormData({ ...formData, main_function: value })}
-                >
-                  <SelectTrigger className="text-foreground">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mainFunctions.map((func) => (
-                      <SelectItem key={func.value} value={func.value} className="text-foreground">
-                        {func.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div>
+                  <Label htmlFor="main_function" className="text-foreground">
+                    Função Principal
+                  </Label>
+                  <Select
+                    value={formData.main_function}
+                    onValueChange={(value) => setFormData({ ...formData, main_function: value })}
+                  >
+                    <SelectTrigger className="text-foreground">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {mainFunctions.map((func) => (
+                        <SelectItem key={func.value} value={func.value} className="text-foreground">
+                          {func.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div>
@@ -378,6 +567,154 @@ export default function AgentModal({
                     Esta conexão está desconectada. O agente só funcionará quando a conexão estiver ativa.
                   </p>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Configurações do Bot */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+                <Settings className="w-5 h-5" />
+                Configurações do Bot
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="trigger_type" className="text-foreground">
+                    Tipo de Ativação
+                  </Label>
+                  <Select
+                    value={formData.trigger_type}
+                    onValueChange={(value) => setFormData({ ...formData, trigger_type: value })}
+                  >
+                    <SelectTrigger className="text-foreground">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {triggerTypes.map((type) => (
+                        <SelectItem key={type.value} value={type.value} className="text-foreground">
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="trigger_operator" className="text-foreground">
+                    Operador
+                  </Label>
+                  <Select
+                    value={formData.trigger_operator}
+                    onValueChange={(value) => setFormData({ ...formData, trigger_operator: value })}
+                  >
+                    <SelectTrigger className="text-foreground">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {triggerOperators.map((operator) => (
+                        <SelectItem key={operator.value} value={operator.value} className="text-foreground">
+                          {operator.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="trigger_value" className="text-foreground">
+                  Palavra-chave de Ativação *
+                </Label>
+                <Input
+                  id="trigger_value"
+                  value={formData.trigger_value}
+                  onChange={(e) => setFormData({ ...formData, trigger_value: e.target.value })}
+                  placeholder="Ex: oi, olá, menu"
+                  required
+                  className="text-foreground"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="keyword_finish" className="text-foreground">
+                    Palavra para Sair
+                  </Label>
+                  <Input
+                    id="keyword_finish"
+                    value={formData.keyword_finish}
+                    onChange={(e) => setFormData({ ...formData, keyword_finish: e.target.value })}
+                    placeholder="#SAIR"
+                    className="text-foreground"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="debounce_time" className="text-foreground">
+                    Tempo de Espera (segundos)
+                  </Label>
+                  <Input
+                    id="debounce_time"
+                    type="number"
+                    value={formData.debounce_time}
+                    onChange={(e) => setFormData({ ...formData, debounce_time: Number.parseInt(e.target.value) || 5 })}
+                    min="1"
+                    max="30"
+                    className="text-foreground"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="unknown_message" className="text-foreground">
+                  Mensagem para Comando Não Reconhecido
+                </Label>
+                <Textarea
+                  id="unknown_message"
+                  value={formData.unknown_message}
+                  onChange={(e) => setFormData({ ...formData, unknown_message: e.target.value })}
+                  placeholder="Mensagem exibida quando o bot não entende o comando"
+                  rows={2}
+                  className="text-foreground"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="listening_from_me"
+                    checked={formData.listening_from_me}
+                    onCheckedChange={(checked) => setFormData({ ...formData, listening_from_me: checked })}
+                  />
+                  <Label htmlFor="listening_from_me" className="text-sm text-foreground">
+                    Escutar minhas mensagens
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="keep_open"
+                    checked={formData.keep_open}
+                    onCheckedChange={(checked) => setFormData({ ...formData, keep_open: checked })}
+                  />
+                  <Label htmlFor="keep_open" className="text-sm text-foreground">
+                    Manter conversa aberta
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="split_messages"
+                    checked={formData.split_messages}
+                    onCheckedChange={(checked) => setFormData({ ...formData, split_messages: checked })}
+                  />
+                  <Label htmlFor="split_messages" className="text-sm text-foreground">
+                    Dividir mensagens longas
+                  </Label>
+                </div>
               </div>
             </CardContent>
           </Card>

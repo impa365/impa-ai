@@ -1,11 +1,24 @@
 import { supabase } from "./supabase"
 
-// API para integração com Evolution API
 export interface CreateBotRequest {
-  name: string
-  prompt: string
-  webhookUrl: string
-  instanceName: string
+  enabled: boolean
+  description: string
+  apiUrl: string
+  apiKey?: string
+  triggerType: string
+  triggerOperator: string
+  triggerValue: string
+  expire: number
+  keywordFinish: string
+  delayMessage: number
+  unknownMessage: string
+  listeningFromMe: boolean
+  stopBotFromMe: boolean
+  keepOpen: boolean
+  debounceTime: number
+  ignoreJids: string[]
+  splitMessages: boolean
+  timePerChar: number
 }
 
 export interface CreateBotResponse {
@@ -29,51 +42,29 @@ async function getEvolutionConfig() {
   return data.config
 }
 
-async function getN8nConfig() {
-  const { data } = await supabase.from("integrations").select("config").eq("type", "n8n").eq("is_active", true).single()
-
-  return data?.config || null
-}
-
-export async function createEvolutionBot(data: CreateBotRequest): Promise<CreateBotResponse> {
+export async function createEvolutionBot(instanceName: string, botData: CreateBotRequest): Promise<CreateBotResponse> {
   try {
     const config = await getEvolutionConfig()
-    const n8nConfig = await getN8nConfig()
 
-    const webhookUrl = n8nConfig?.flowUrl ? `${n8nConfig.flowUrl}?id_evobot=${data.instanceName}` : data.webhookUrl
-
-    const response = await fetch(`${config.apiUrl}/instance/create`, {
+    const response = await fetch(`${config.apiUrl}/evolutionBot/create/${instanceName}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: config.apiKey,
       },
-      body: JSON.stringify({
-        instanceName: data.instanceName,
-        token: generateInstanceToken(),
-        qrcode: true,
-        webhook: webhookUrl,
-        webhook_by_events: true,
-        events: [
-          "APPLICATION_STARTUP",
-          "QRCODE_UPDATED",
-          "CONNECTION_UPDATE",
-          "MESSAGES_UPSERT",
-          "MESSAGES_UPDATE",
-          "SEND_MESSAGE",
-        ],
-      }),
+      body: JSON.stringify(botData),
     })
 
     if (!response.ok) {
-      throw new Error(`Erro na Evolution API: ${response.statusText}`)
+      const errorData = await response.text()
+      throw new Error(`Erro na Evolution API: ${response.statusText} - ${errorData}`)
     }
 
     const result = await response.json()
 
     return {
       success: true,
-      botId: result.instance?.instanceName || data.instanceName,
+      botId: result.id,
     }
   } catch (error: any) {
     console.error("Erro ao criar bot na Evolution API:", error)
@@ -84,11 +75,35 @@ export async function createEvolutionBot(data: CreateBotRequest): Promise<Create
   }
 }
 
-export async function deleteEvolutionBot(instanceName: string): Promise<boolean> {
+export async function updateEvolutionBot(
+  instanceName: string,
+  botId: string,
+  botData: CreateBotRequest,
+): Promise<boolean> {
   try {
     const config = await getEvolutionConfig()
 
-    const response = await fetch(`${config.apiUrl}/instance/delete/${instanceName}`, {
+    const response = await fetch(`${config.apiUrl}/evolutionBot/update/${botId}/${instanceName}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: config.apiKey,
+      },
+      body: JSON.stringify(botData),
+    })
+
+    return response.ok
+  } catch (error) {
+    console.error("Erro ao atualizar bot na Evolution API:", error)
+    return false
+  }
+}
+
+export async function deleteEvolutionBot(instanceName: string, botId: string): Promise<boolean> {
+  try {
+    const config = await getEvolutionConfig()
+
+    const response = await fetch(`${config.apiUrl}/evolutionBot/delete/${botId}/${instanceName}`, {
       method: "DELETE",
       headers: {
         apikey: config.apiKey,
@@ -102,37 +117,46 @@ export async function deleteEvolutionBot(instanceName: string): Promise<boolean>
   }
 }
 
-export async function updateEvolutionBot(instanceName: string, webhookUrl: string): Promise<boolean> {
+export async function fetchEvolutionBot(instanceName: string, botId: string): Promise<any> {
   try {
     const config = await getEvolutionConfig()
 
-    const response = await fetch(`${config.apiUrl}/webhook/set/${instanceName}`, {
-      method: "POST",
+    const response = await fetch(`${config.apiUrl}/evolutionBot/fetch/${botId}/${instanceName}`, {
+      method: "GET",
       headers: {
-        "Content-Type": "application/json",
         apikey: config.apiKey,
       },
-      body: JSON.stringify({
-        webhook: webhookUrl,
-        webhook_by_events: true,
-        events: [
-          "APPLICATION_STARTUP",
-          "QRCODE_UPDATED",
-          "CONNECTION_UPDATE",
-          "MESSAGES_UPSERT",
-          "MESSAGES_UPDATE",
-          "SEND_MESSAGE",
-        ],
-      }),
     })
 
-    return response.ok
+    if (!response.ok) {
+      throw new Error(`Erro ao buscar bot: ${response.statusText}`)
+    }
+
+    return await response.json()
   } catch (error) {
-    console.error("Erro ao atualizar webhook do bot:", error)
-    return false
+    console.error("Erro ao buscar bot na Evolution API:", error)
+    return null
   }
 }
 
-function generateInstanceToken(): string {
-  return `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+export async function fetchEvolutionBotSettings(instanceName: string): Promise<any> {
+  try {
+    const config = await getEvolutionConfig()
+
+    const response = await fetch(`${config.apiUrl}/evolutionBot/fetchSettings/${instanceName}`, {
+      method: "GET",
+      headers: {
+        apikey: config.apiKey,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Erro ao buscar configurações: ${response.statusText}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error("Erro ao buscar configurações do bot:", error)
+    return null
+  }
 }
