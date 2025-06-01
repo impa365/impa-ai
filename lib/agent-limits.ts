@@ -1,121 +1,63 @@
 import { supabase } from "@/lib/supabase"
 
-export interface AgentLimitResponse {
-  canCreate: boolean
-  currentCount: number
-  maxAllowed: number
-  message?: string
-}
-
-export async function checkAgentLimit(userId: string): Promise<AgentLimitResponse> {
+export async function getUserAgentLimit(userId: string): Promise<number> {
   try {
-    // Buscar configurações do usuário
-    const { data: userSettings, error: settingsError } = await supabase
+    // Primeiro, tenta obter o limite específico do usuário
+    const { data: userSettings, error: userError } = await supabase
       .from("user_settings")
-      .select("ai_agents_limit")
+      .select("agents_limit")
       .eq("user_id", userId)
       .single()
 
-    if (settingsError && settingsError.code !== "PGRST116") {
-      throw settingsError
+    if (userSettings?.agents_limit !== undefined && userSettings?.agents_limit !== null) {
+      return userSettings.agents_limit
     }
 
-    const maxAllowed = userSettings?.ai_agents_limit || 3 // Limite padrão
+    // Se não encontrar configuração específica, usa o padrão do sistema
+    const { data: systemSettings, error: systemError } = await supabase
+      .from("system_settings")
+      .select("setting_value")
+      .eq("setting_key", "default_agents_limit")
+      .single()
 
-    // Contar agentes existentes
-    const { count, error: countError } = await supabase
-      .from("ai_agents")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("status", "active")
-
-    if (countError) throw countError
-
-    const currentCount = count || 0
-    const canCreate = currentCount < maxAllowed
-
-    let message = ""
-    if (!canCreate) {
-      message = `Você atingiu o limite de ${maxAllowed} agentes. Exclua um agente existente ou faça upgrade do seu plano.`
-    } else if (currentCount >= maxAllowed - 1) {
-      message = `Você está próximo do limite de agentes (${currentCount}/${maxAllowed}).`
+    if (systemSettings?.setting_value) {
+      return Number.parseInt(systemSettings.setting_value)
     }
 
-    return {
-      canCreate,
-      currentCount,
-      maxAllowed,
-      message,
-    }
+    // Valor padrão caso não encontre nenhuma configuração
+    return 5
   } catch (error) {
-    console.error("Erro ao verificar limite de agentes:", error)
-    return {
-      canCreate: false,
-      currentCount: 0,
-      maxAllowed: 0,
-      message: "Erro ao verificar limite de agentes",
-    }
+    console.error("Erro ao obter limite de agentes:", error)
+    return 5 // Valor padrão em caso de erro
   }
 }
 
-export async function checkAdminAgentLimit(userId: string): Promise<AgentLimitResponse> {
+export async function getUserAgentCount(userId: string): Promise<number> {
   try {
-    // Para admins, verificar se o usuário existe
-    const { data: user, error: userError } = await supabase
-      .from("user_profiles")
-      .select("id, role")
-      .eq("id", userId)
-      .single()
-
-    if (userError) {
-      throw new Error("Usuário não encontrado")
-    }
-
-    // Buscar configurações do usuário
-    const { data: userSettings, error: settingsError } = await supabase
-      .from("user_settings")
-      .select("ai_agents_limit")
-      .eq("user_id", userId)
-      .single()
-
-    if (settingsError && settingsError.code !== "PGRST116") {
-      throw settingsError
-    }
-
-    const maxAllowed = userSettings?.ai_agents_limit || 3 // Limite padrão
-
-    // Contar agentes existentes
-    const { count, error: countError } = await supabase
+    const { count, error } = await supabase
       .from("ai_agents")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
-      .eq("status", "active")
 
-    if (countError) throw countError
-
-    const currentCount = count || 0
-    const canCreate = currentCount < maxAllowed
-
-    let message = ""
-    if (!canCreate) {
-      message = `O usuário atingiu o limite de ${maxAllowed} agentes. Aumente o limite nas configurações do usuário.`
-    } else if (currentCount >= maxAllowed - 1) {
-      message = `O usuário está próximo do limite de agentes (${currentCount}/${maxAllowed}).`
-    }
-
-    return {
-      canCreate,
-      currentCount,
-      maxAllowed,
-      message,
-    }
+    if (error) throw error
+    return count || 0
   } catch (error) {
-    console.error("Erro ao verificar limite de agentes:", error)
-    return {
-      canCreate: false,
-      currentCount: 0,
-      maxAllowed: 0,
-      message: "Erro ao verificar limite de agentes",
-    }
+    console.error("Erro ao contar agentes do usuário:", error)
+    return 0
+  }
+}
+
+export async function checkUserCanCreateAgent(userId: string): Promise<{
+  canCreate: boolean
+  currentCount: number
+  limit: number
+}> {
+  const limit = await getUserAgentLimit(userId)
+  const currentCount = await getUserAgentCount(userId)
+
+  return {
+    canCreate: currentCount < limit,
+    currentCount,
+    limit,
   }
 }
