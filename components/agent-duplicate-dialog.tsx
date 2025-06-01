@@ -16,7 +16,7 @@ interface AgentDuplicateDialogProps {
   onSuccess: () => void
 }
 
-export default function AgentDuplicateDialog({ open, onOpenChange, agent, onSuccess }: AgentDuplicateDialogProps) {
+export function AgentDuplicateDialog({ open, onOpenChange, agent, onSuccess }: AgentDuplicateDialogProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [newName, setNewName] = useState(`${agent?.name || ""} (cópia)`)
@@ -115,3 +115,6 @@ export default function AgentDuplicateDialog({ open, onOpenChange, agent, onSucc
     </Dialog>
   )
 }
+
+// Exportar como default também
+export default AgentDuplicateDialog

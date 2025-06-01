@@ -5,6 +5,9 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+// Exportar createClient como named export
+export { createClient }
+
 // Tipos para o banco de dados
 export interface UserProfile {
   id: string
@@ -16,7 +19,7 @@ export interface UserProfile {
   last_login: string | null
   created_at: string
   updated_at: string
-  password?: string // Adicionado campo password
+  password?: string
 }
 
 export interface Organization {
@@ -41,7 +44,6 @@ export interface AIAgent {
   updated_at: string
 }
 
-// Adicionar novos tipos para WhatsApp e configurações
 export interface WhatsAppConnection {
   id: string
   user_id: string
