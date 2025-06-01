@@ -25,6 +25,7 @@ interface UserModalProps {
 }
 
 const DEFAULT_WHATSAPP_LIMIT = 1
+const DEFAULT_AGENTS_LIMIT = 5
 
 export default function UserModal({ open, onOpenChange, user, onSuccess }: UserModalProps) {
   const [loading, setLoading] = useState(false)
@@ -36,6 +37,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     role: "user",
     status: "active",
     whatsapp_limit: DEFAULT_WHATSAPP_LIMIT,
+    agents_limit: DEFAULT_AGENTS_LIMIT,
   })
 
   useEffect(() => {
@@ -63,6 +65,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             role: userData.role || "user",
             status: userData.status || "active",
             whatsapp_limit: settingsData?.whatsapp_connections_limit || DEFAULT_WHATSAPP_LIMIT,
+            agents_limit: settingsData?.agents_limit || DEFAULT_AGENTS_LIMIT,
           })
         } catch (error) {
           console.error("Erro ao buscar dados do usuário:", error)
@@ -72,6 +75,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             role: user.role || "user",
             status: user.status || "active",
             whatsapp_limit: user.whatsapp_connections_limit || DEFAULT_WHATSAPP_LIMIT,
+            agents_limit: user.agents_limit || DEFAULT_AGENTS_LIMIT,
           })
         } finally {
           setLoadingData(false)
@@ -83,6 +87,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           role: "user",
           status: "active",
           whatsapp_limit: DEFAULT_WHATSAPP_LIMIT,
+          agents_limit: DEFAULT_AGENTS_LIMIT,
         })
       }
     }
@@ -129,6 +134,8 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         return
       }
 
+      let newUser
+
       if (user) {
         const { error: profileError } = await supabase
           .from("user_profiles")
@@ -145,8 +152,9 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
 
         const { error: settingsError } = await supabase.from("user_settings").upsert(
           {
-            user_id: user.id,
+            user_id: user ? user.id : newUser ? newUser.id : undefined,
             whatsapp_connections_limit: formData.whatsapp_limit,
+            agents_limit: formData.agents_limit,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "user_id" },
@@ -154,7 +162,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
 
         if (settingsError) throw settingsError
       } else {
-        const { data: newUser, error: profileError } = await supabase
+        const { data: newUserResult, error: profileError } = await supabase
           .from("user_profiles")
           .insert([
             {
@@ -167,6 +175,8 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           .select()
           .single()
 
+        newUser = newUserResult
+
         if (profileError) throw profileError
         if (!newUser) throw new Error("Falha ao criar perfil do usuário.")
 
@@ -174,6 +184,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           {
             user_id: newUser.id,
             whatsapp_connections_limit: formData.whatsapp_limit,
+            agents_limit: formData.agents_limit,
           },
         ])
 
@@ -308,6 +319,27 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                   setFormData({
                     ...formData,
                     whatsapp_limit: Number.parseInt(e.target.value) || DEFAULT_WHATSAPP_LIMIT,
+                  })
+                }
+                min="0"
+                max="100"
+                disabled={loading}
+                className="text-foreground"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="agentsLimit" className="text-foreground">
+                Limite de Agentes IA
+              </Label>
+              <Input
+                id="agentsLimit"
+                type="number"
+                value={formData.agents_limit}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    agents_limit: Number.parseInt(e.target.value) || DEFAULT_AGENTS_LIMIT,
                   })
                 }
                 min="0"

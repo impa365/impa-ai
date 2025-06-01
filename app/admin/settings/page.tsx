@@ -60,6 +60,7 @@ export default function AdminSettingsPage() {
   // Estados para configurações do sistema
   const [systemSettings, setSystemSettings] = useState({
     defaultWhatsAppLimit: 2,
+    defaultAgentsLimit: 5,
     allowPublicRegistration: false,
   })
 
@@ -111,6 +112,12 @@ export default function AdminSettingsPage() {
       .eq("setting_key", "default_whatsapp_connections_limit")
       .single()
 
+    const { data: agentsLimitData } = await supabase
+      .from("system_settings")
+      .select("setting_value")
+      .eq("setting_key", "default_agents_limit")
+      .single()
+
     const { data: registrationData } = await supabase
       .from("system_settings")
       .select("setting_value")
@@ -119,6 +126,7 @@ export default function AdminSettingsPage() {
 
     setSystemSettings({
       defaultWhatsAppLimit: limitData?.setting_value || 2,
+      defaultAgentsLimit: agentsLimitData?.setting_value || 5,
       allowPublicRegistration: registrationData?.setting_value === true,
     })
   }
@@ -132,13 +140,19 @@ export default function AdminSettingsPage() {
         .update({ setting_value: systemSettings.defaultWhatsAppLimit })
         .eq("setting_key", "default_whatsapp_connections_limit")
 
+      const { error: agentsLimitError } = await supabase
+        .from("system_settings")
+        .update({ setting_value: systemSettings.defaultAgentsLimit })
+        .eq("setting_key", "default_agents_limit")
+
       const { error: registrationError } = await supabase
         .from("system_settings")
         .update({ setting_value: systemSettings.allowPublicRegistration })
         .eq("setting_key", "allow_public_registration")
 
-      if (limitError || registrationError) {
+      if (limitError || agentsLimitError || registrationError) {
         console.error("Limit error:", limitError)
+        console.error("Agents limit error:", agentsLimitError)
         console.error("Registration error:", registrationError)
         throw new Error("Erro ao salvar configurações")
       }
@@ -523,6 +537,24 @@ export default function AdminSettingsPage() {
               <p className="text-xs text-gray-500 mt-1">
                 Número máximo de conexões WhatsApp que novos usuários podem criar
               </p>
+            </div>
+            <div>
+              <Label htmlFor="defaultAgentsLimit">Limite Padrão de Agentes IA</Label>
+              <Input
+                id="defaultAgentsLimit"
+                type="number"
+                value={systemSettings.defaultAgentsLimit}
+                onChange={(e) =>
+                  setSystemSettings({
+                    ...systemSettings,
+                    defaultAgentsLimit: Number.parseInt(e.target.value) || 5,
+                  })
+                }
+                min="1"
+                max="100"
+                className="w-32"
+              />
+              <p className="text-xs text-gray-500 mt-1">Número máximo de agentes IA que novos usuários podem criar</p>
             </div>
           </CardContent>
         </Card>
