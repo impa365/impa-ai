@@ -2,592 +2,415 @@
 
 import type React from "react"
 
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+import { useState, useEffect } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
-import { Textarea } from "@/components/ui/textarea"
-import { useToast } from "@/components/ui/use-toast"
-import { zodResolver } from "@hookform/resolvers/zod"
-import type { Agent } from "@prisma/client"
-import { Loader2 } from "lucide-react"
-import { useCallback, useState } from "react"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
-import { api } from "@/convex/_generated/api"
-import { useMutation } from "convex/react"
-import { Switch } from "@/components/ui/switch"
-import { Separator } from "@/components/ui/separator"
-import type { WhatsappConnection } from "@/types/whatsapp"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Check, ChevronsUpDown } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { useUser } from "@clerk/nextjs"
-import { checkAgentLimit, checkAdminAgentLimit, type AgentLimitResponse } from "@/lib/agent-limits"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
-
-const formSchema = z.object({
-  name: z.string().min(2, {
-    message: "Agent name must be at least 2 characters.",
-  }),
-  description: z.string().optional(),
-  prompt: z.string().min(10, {
-    message: "Prompt must be at least 10 characters.",
-  }),
-  model: z.string(),
-  temperature: z.number(),
-  max_tokens: z.number(),
-  whatsapp_connection_id: z.string().optional(),
-  type: z.enum(["chat", "scheduled"]),
-  voice_provider: z.string().optional(),
-  voice_api_key: z.string().optional(),
-  voice_voice_id: z.string().optional(),
-  calendar_provider: z.string().optional(),
-  calendar_api_key: z.string().optional(),
-  calendar_calendar_id: z.string().optional(),
-})
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Bot } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { getCurrentUser } from "@/lib/auth"
 
 interface AgentModalProps {
-  isOpen: boolean
-  setIsOpen: (open: boolean) => void
-  agent?: Agent
-  userId?: string
-  isAdmin?: boolean
-  selectedUserId?: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  agent?: any
+  whatsappConnections: any[]
+  userSettings: any
+  onSuccess: () => void
 }
 
-export default function AgentModal({ isOpen, setIsOpen, agent, userId, isAdmin, selectedUserId }: AgentModalProps) {
-  const { toast } = useToast()
-  const [isScheduled, setIsScheduled] = useState(agent?.type === "scheduled")
-  const [isVoiceEnabled, setIsVoiceEnabled] = useState(!!agent?.voice_provider)
-  const [isCalendarEnabled, setIsCalendarEnabled] = useState(!!agent?.calendar_provider)
-  const [whatsappConnections, setWhatsappConnections] = useState<WhatsappConnection[]>([])
-  const [whatsappConnectionOpen, setWhatsappConnectionOpen] = useState(false)
-  const [limitInfo, setLimitInfo] = useState<AgentLimitResponse | null>(null)
-  const { user } = useUser()
-
-  const resetForm = useCallback(() => {
-    form.reset()
-    setIsScheduled(false)
-    setIsVoiceEnabled(false)
-    setIsCalendarEnabled(false)
-  }, [])
-
-  const loadWhatsappConnections = useCallback(async () => {
-    if (!userId) return
-    const connections = await fetch(`/api/whatsapp/connections?userId=${userId}`).then((res) => res.json())
-    setWhatsappConnections(connections)
-  }, [userId])
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-      prompt: "",
-      model: "gpt-3.5-turbo",
-      temperature: 0.5,
-      max_tokens: 200,
-      whatsapp_connection_id: "",
-      type: "chat",
-      voice_provider: "",
-      voice_api_key: "",
-      voice_voice_id: "",
-      calendar_provider: "",
-      calendar_api_key: "",
-      calendar_calendar_id: "",
-    },
+export default function AgentModal({
+  open,
+  onOpenChange,
+  agent,
+  whatsappConnections,
+  userSettings,
+  onSuccess,
+}: AgentModalProps) {
+  const [loading, setLoading] = useState(false)
+  const [loadingStep, setLoadingStep] = useState("")
+  const [error, setError] = useState("")
+  const [showApiKeys, setShowApiKeys] = useState({
+    voice: false,
+    calendar: false,
   })
 
-  const onOpenChange = useCallback(
-    async (open: boolean) => {
-      if (open) {
-        if (agent) {
-          setFormData({
-            name: agent.name,
-            description: agent.description,
-            prompt: agent.prompt,
-            model: agent.model,
-            temperature: agent.temperature,
-            max_tokens: agent.max_tokens,
-            whatsapp_connection_id: agent.whatsapp_connection_id,
-            type: agent.type || "chat",
-            voice_provider: agent.voice_provider || "",
-            voice_api_key: agent.voice_api_key || "",
-            voice_voice_id: agent.voice_voice_id || "",
-            calendar_provider: agent.calendar_provider || "",
-            calendar_api_key: agent.calendar_api_key || "",
-            calendar_calendar_id: agent.calendar_calendar_id || "",
-          })
-        } else {
-          resetForm()
-        }
+  const [formData, setFormData] = useState({
+    name: "",
+    identity_description: "",
+    training_prompt: "",
+    voice_tone: "humanizado",
+    main_function: "atendimento",
+    temperature: [0.7],
+    whatsapp_connection_id: "",
+    transcribe_audio: false,
+    understand_images: false,
+    voice_response_enabled: false,
+    voice_provider: "",
+    voice_api_key: "",
+    calendar_integration: false,
+    calendar_api_key: "",
+    is_default: false,
+    trigger_type: "keyword",
+    trigger_operator: "contains",
+    trigger_value: "",
+    keyword_finish: "#SAIR",
+    delay_message: 1000,
+    unknown_message: "Desculpe, não entendi sua mensagem. Digite #SAIR para encerrar.",
+    listening_from_me: true,
+    stop_bot_from_me: true,
+    keep_open: true,
+    debounce_time: 5,
+    split_messages: true,
+    time_per_char: 50,
+    voice_id: "",
+    calendar_meeting_id: "",
+  })
 
-        // Verifica o limite de agentes
-        if (!agent && userId) {
-          const limitCheck = isAdmin
-            ? await checkAdminAgentLimit(selectedUserId || userId)
-            : await checkAgentLimit(userId)
-          setLimitInfo(limitCheck)
-        } else {
-          setLimitInfo(null)
-        }
-
-        // Carrega as conexões WhatsApp
-        loadWhatsappConnections()
-      }
-      setIsOpen(open)
-    },
-    [agent, userId, isAdmin, selectedUserId, loadWhatsappConnections, resetForm],
-  )
-
-  const setFormData = useCallback(
-    (data: Partial<z.infer<typeof formSchema>>) => {
-      form.setValue("name", data.name || "")
-      form.setValue("description", data.description || "")
-      form.setValue("prompt", data.prompt || "")
-      form.setValue("model", data.model || "gpt-3.5-turbo")
-      form.setValue("temperature", data.temperature || 0.5)
-      form.setValue("max_tokens", data.max_tokens || 200)
-      form.setValue("whatsapp_connection_id", data.whatsapp_connection_id || "")
-      form.setValue("type", data.type || "chat")
-      form.setValue("voice_provider", data.voice_provider || "")
-      form.setValue("voice_api_key", data.voice_api_key || "")
-      form.setValue("voice_voice_id", data.voice_voice_id || "")
-      form.setValue("calendar_provider", data.calendar_provider || "")
-      form.setValue("calendar_api_key", data.calendar_api_key || "")
-      form.setValue("calendar_calendar_id", data.calendar_calendar_id || "")
-      setIsScheduled(data.type === "scheduled")
-      setIsVoiceEnabled(!!data.voice_provider)
-      setIsCalendarEnabled(!!data.calendar_provider)
-    },
-    [form],
-  )
-
-  const utils = api.agents
-  const createAgent = useMutation(utils.createAgent)
-  const updateAgent = useMutation(utils.updateAgent)
-
-  const isLoading = createAgent.isLoading || updateAgent.isLoading
-
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
-      if (agent) {
-        await updateAgent({ ...values, _id: agent._id })
-        toast({
-          title: "Success!",
-          description: "Agent updated successfully.",
-        })
-      } else {
-        if (!userId) return
-        await createAgent({ ...values, userId })
-        toast({
-          title: "Success!",
-          description: "Agent created successfully.",
-        })
-      }
-      form.reset()
-      setIsOpen(false)
-    } catch (error) {
-      toast({
-        title: "Error!",
-        description: "Failed to create agent. Please try again.",
-        variant: "destructive",
+  useEffect(() => {
+    if (agent) {
+      setFormData({
+        name: agent.name || "",
+        identity_description: agent.identity_description || "",
+        training_prompt: agent.training_prompt || "",
+        voice_tone: agent.voice_tone || "humanizado",
+        main_function: agent.main_function || "atendimento",
+        temperature: [agent.temperature || 0.7],
+        whatsapp_connection_id: agent.whatsapp_connection_id || "",
+        transcribe_audio: agent.transcribe_audio || false,
+        understand_images: agent.understand_images || false,
+        voice_response_enabled: agent.voice_response_enabled || false,
+        voice_provider: agent.voice_provider || "",
+        voice_api_key: agent.voice_api_key || "",
+        calendar_integration: agent.calendar_integration || false,
+        calendar_api_key: agent.calendar_api_key || "",
+        is_default: agent.is_default || false,
+        trigger_type: agent.trigger_type || "keyword",
+        trigger_operator: agent.trigger_operator || "contains",
+        trigger_value: agent.trigger_value || "",
+        keyword_finish: agent.keyword_finish || "#SAIR",
+        delay_message: agent.delay_message || 1000,
+        unknown_message: agent.unknown_message || "Desculpe, não entendi sua mensagem. Digite #SAIR para encerrar.",
+        listening_from_me: agent.listening_from_me !== false,
+        stop_bot_from_me: agent.stop_bot_from_me !== false,
+        keep_open: agent.keep_open !== false,
+        debounce_time: agent.debounce_time || 5,
+        split_messages: agent.split_messages !== false,
+        time_per_char: agent.time_per_char || 50,
+        voice_id: agent.voice_id || "",
+        calendar_meeting_id: agent.calendar_meeting_id || "",
       })
+    } else {
+      setFormData({
+        name: "",
+        identity_description: "",
+        training_prompt: "",
+        voice_tone: "humanizado",
+        main_function: "atendimento",
+        temperature: [0.7],
+        whatsapp_connection_id: whatsappConnections[0]?.id || "",
+        transcribe_audio: false,
+        understand_images: false,
+        voice_response_enabled: false,
+        voice_provider: "",
+        voice_api_key: "",
+        calendar_integration: false,
+        calendar_api_key: "",
+        is_default: false,
+        trigger_type: "keyword",
+        trigger_operator: "contains",
+        trigger_value: "",
+        keyword_finish: "#SAIR",
+        delay_message: 1000,
+        unknown_message: "Desculpe, não entendi sua mensagem. Digite #SAIR para encerrar.",
+        listening_from_me: true,
+        stop_bot_from_me: true,
+        keep_open: true,
+        debounce_time: 5,
+        split_messages: true,
+        time_per_char: 50,
+        voice_id: "",
+        calendar_meeting_id: "",
+      })
+    }
+    setError("")
+  }, [agent, whatsappConnections, open])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError("")
+
+    try {
+      // Validações básicas
+      if (!formData.name.trim()) {
+        throw new Error("Nome do agente é obrigatório")
+      }
+
+      if (!formData.training_prompt.trim()) {
+        throw new Error("Prompt de treinamento é obrigatório")
+      }
+
+      if (!formData.whatsapp_connection_id) {
+        throw new Error("Conexão WhatsApp é obrigatória")
+      }
+
+      const currentUser = getCurrentUser()
+
+      setLoadingStep("Salvando agente...")
+
+      const agentData = {
+        user_id: currentUser?.id,
+        name: formData.name.trim(),
+        identity_description: formData.identity_description.trim(),
+        training_prompt: formData.training_prompt.trim(),
+        voice_tone: formData.voice_tone,
+        main_function: formData.main_function,
+        temperature: formData.temperature[0],
+        whatsapp_connection_id: formData.whatsapp_connection_id,
+        transcribe_audio: formData.transcribe_audio,
+        understand_images: formData.understand_images,
+        voice_response_enabled: formData.voice_response_enabled,
+        voice_provider: formData.voice_response_enabled ? formData.voice_provider : null,
+        voice_api_key: formData.voice_response_enabled ? formData.voice_api_key : null,
+        calendar_integration: formData.calendar_integration,
+        calendar_api_key: formData.calendar_integration ? formData.calendar_api_key : null,
+        is_default: formData.is_default,
+        status: "active",
+        type: "whatsapp",
+        trigger_type: formData.trigger_type,
+        trigger_operator: formData.trigger_operator,
+        trigger_value: formData.trigger_value,
+        keyword_finish: formData.keyword_finish,
+        delay_message: formData.delay_message,
+        unknown_message: formData.unknown_message,
+        listening_from_me: formData.listening_from_me,
+        stop_bot_from_me: formData.stop_bot_from_me,
+        keep_open: formData.keep_open,
+        debounce_time: formData.debounce_time,
+        split_messages: formData.split_messages,
+        time_per_char: formData.time_per_char,
+        voice_id: formData.voice_response_enabled ? formData.voice_id : null,
+        calendar_meeting_id: formData.calendar_integration ? formData.calendar_meeting_id : null,
+      }
+
+      if (agent) {
+        const { error } = await supabase.from("ai_agents").update(agentData).eq("id", agent.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from("ai_agents").insert([agentData])
+        if (error) throw error
+      }
+
+      onSuccess()
+      onOpenChange(false)
+    } catch (error: any) {
+      console.error("Erro ao salvar agente:", error)
+      setError(error.message || "Erro ao salvar agente")
+    } finally {
+      setLoading(false)
+      setLoadingStep("")
     }
   }
 
-  return (
-    <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{agent ? "Edit Agent" : "Create Agent"}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {agent
-              ? "Update your agent here. Click save when you're done."
-              : "Create a new agent here. After creating, you can configure it."}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {limitInfo && !limitInfo.canCreate && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Limite atingido</AlertTitle>
-                <AlertDescription>{limitInfo.message}</AlertDescription>
-              </Alert>
-            )}
+  const voiceTones = [
+    { value: "humanizado", label: "Humanizado - Natural e empático" },
+    { value: "formal", label: "Formal - Profissional e respeitoso" },
+    { value: "tecnico", label: "Técnico - Preciso e detalhado" },
+    { value: "casual", label: "Casual - Descontraído e amigável" },
+    { value: "comercial", label: "Comercial - Persuasivo e vendedor" },
+  ]
 
-            {limitInfo && limitInfo.canCreate && limitInfo.message && (
-              <Alert variant="warning" className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Atenção</AlertTitle>
-                <AlertDescription>{limitInfo.message}</AlertDescription>
-              </Alert>
-            )}
+  const mainFunctions = [
+    { value: "atendimento", label: "Atendimento ao Cliente" },
+    { value: "vendas", label: "Vendas" },
+    { value: "agendamento", label: "Agendamento" },
+    { value: "suporte", label: "Suporte Técnico" },
+    { value: "qualificacao", label: "Qualificação de Leads" },
+  ]
 
-            {limitInfo && limitInfo.canCreate && (
-              <div className="mb-4 text-sm text-muted-foreground">
-                Agentes: {limitInfo.currentCount} de {limitInfo.maxAllowed} utilizados
+  if (loading) {
+    return (
+      <Dialog open={open} onOpenChange={() => {}}>
+        <DialogContent className="max-w-md">
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Bot className="w-6 h-6 text-blue-600" />
               </div>
-            )}
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Agent Name" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Tell us a little bit about this agent" className="resize-none" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="prompt"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Prompt</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Act as a personal assistant" className="resize-none" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="model"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Model</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a model" />
-                      </SelectTrigger>
-                    </FormControl>
+            </div>
+            <h3 className="mt-4 text-lg font-semibold text-gray-900">
+              {agent ? "Atualizando Agente" : "Criando Agente"}
+            </h3>
+            <p className="mt-2 text-sm text-gray-600 text-center">{loadingStep || "Processando..."}</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Bot className="w-5 h-5" />
+            {agent ? "Editar Agente" : "Criar Novo Agente"}
+          </DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Informações Básicas */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">🧠 Nome e Identidade do Agente</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="name">Nome do Agente *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Ex: Luna - Assistente de Vendas"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="identity_description">Descrição da Identidade</Label>
+                <Textarea
+                  id="identity_description"
+                  value={formData.identity_description}
+                  onChange={(e) => setFormData({ ...formData, identity_description: e.target.value })}
+                  placeholder="Descreva a personalidade e características do seu agente..."
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="training_prompt">Prompt de Treinamento *</Label>
+                <Textarea
+                  id="training_prompt"
+                  value={formData.training_prompt}
+                  onChange={(e) => setFormData({ ...formData, training_prompt: e.target.value })}
+                  placeholder="Instruções detalhadas sobre como o agente deve se comportar, responder e interagir..."
+                  rows={5}
+                  required
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Configurações de Comportamento */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">💬 Tom de Voz e Função</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="voice_tone">Tom de Voz</Label>
+                  <Select
+                    value={formData.voice_tone}
+                    onValueChange={(value) => setFormData({ ...formData, voice_tone: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="gpt-3.5-turbo">GPT 3.5 Turbo</SelectItem>
-                      <SelectItem value="gpt-4">GPT 4</SelectItem>
+                      {voiceTones.map((tone) => (
+                        <SelectItem key={tone.value} value={tone.value}>
+                          {tone.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="temperature"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Temperature</FormLabel>
-                    <FormControl>
-                      <Slider
-                        defaultValue={[field.value]}
-                        max={1}
-                        step={0.1}
-                        onValueChange={(value) => field.onChange(value[0])}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="max_tokens"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Max Tokens</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                </div>
 
-            <FormField
-              control={form.control}
-              name="type"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel>Scheduled Agent</FormLabel>
-                    <FormDescription>
-                      Enable this if you want to schedule messages to be sent to your contacts.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={isScheduled}
-                      onCheckedChange={(checked) => {
-                        setIsScheduled(checked)
-                        field.onChange(checked ? "scheduled" : "chat")
-                      }}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+                <div>
+                  <Label htmlFor="main_function">Função Principal</Label>
+                  <Select
+                    value={formData.main_function}
+                    onValueChange={(value) => setFormData({ ...formData, main_function: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {mainFunctions.map((func) => (
+                        <SelectItem key={func.value} value={func.value}>
+                          {func.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-            {isScheduled && (
-              <>
-                <Separator />
-                <p className="text-sm font-medium">Whatsapp Connection</p>
-                <FormItem>
-                  <FormField
-                    control={form.control}
-                    name="whatsapp_connection_id"
-                    render={({ field }) => (
-                      <FormItem className="w-full">
-                        <Popover open={whatsappConnectionOpen} onOpenChange={setWhatsappConnectionOpen}>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                role="combobox"
-                                aria-expanded={whatsappConnectionOpen}
-                                className="w-full justify-between"
-                              >
-                                {field.value
-                                  ? whatsappConnections.find((connection) => connection.id === field.value)?.name
-                                  : "Select Whatsapp Connection..."}
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[200px] p-0">
-                            <Command>
-                              <CommandList>
-                                <CommandInput placeholder="Search Whatsapp Connection..." />
-                                <CommandEmpty>No Whatsapp Connection found.</CommandEmpty>
-                                <CommandGroup>
-                                  {whatsappConnections.map((connection) => (
-                                    <CommandItem
-                                      value={connection.name}
-                                      key={connection.id}
-                                      onSelect={() => {
-                                        form.setValue("whatsapp_connection_id", connection.id)
-                                        setWhatsappConnectionOpen(false)
-                                      }}
-                                    >
-                                      <Check
-                                        className={cn(
-                                          "mr-2 h-4 w-4",
-                                          connection.id === field.value ? "opacity-100" : "opacity-0",
-                                        )}
-                                      />
-                                      {connection.name}
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                              <CommandSeparator />
-                              <CommandList>
-                                <CommandGroup>
-                                  <CommandItem
-                                    onSelect={() => {
-                                      setWhatsappConnectionOpen(false)
-                                      window.open("/dashboard/whatsapp", "_blank")
-                                    }}
-                                  >
-                                    Manage Whatsapp Connections
-                                  </CommandItem>
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </FormItem>
-              </>
-            )}
-
-            <Separator />
-
-            <FormField
-              control={form.control}
-              name="voice_provider"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel>Voice Provider</FormLabel>
-                    <FormDescription>Enable this if you want to use a voice provider for your agent.</FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={isVoiceEnabled}
-                      onCheckedChange={(checked) => {
-                        setIsVoiceEnabled(checked)
-                        field.onChange(checked ? "ElevenLabs" : "")
-                      }}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            {isVoiceEnabled && (
-              <>
-                <FormField
-                  control={form.control}
-                  name="voice_api_key"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Voice API Key</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Voice API Key" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+              <div>
+                <Label htmlFor="temperature">Temperatura (Criatividade): {formData.temperature[0]}</Label>
+                <Slider
+                  value={formData.temperature}
+                  onValueChange={(value) => setFormData({ ...formData, temperature: value })}
+                  max={2}
+                  min={0}
+                  step={0.1}
+                  className="mt-2"
                 />
-                <FormField
-                  control={form.control}
-                  name="voice_voice_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Voice ID</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Voice ID" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </>
-            )}
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>Conservador (0)</span>
+                  <span>Criativo (2)</span>
+                </div>
+              </div>
 
-            <Separator />
+              <div>
+                <Label htmlFor="whatsapp_connection">Conexão WhatsApp *</Label>
+                <Select
+                  value={formData.whatsapp_connection_id}
+                  onValueChange={(value) => setFormData({ ...formData, whatsapp_connection_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma conexão" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {whatsappConnections.map((connection) => (
+                      <SelectItem key={connection.id} value={connection.id}>
+                        {connection.connection_name}
+                        {connection.status !== "connected" && " (Desconectado)"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
 
-            <FormField
-              control={form.control}
-              name="calendar_provider"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel>Calendar Provider</FormLabel>
-                    <FormDescription>
-                      Enable this if you want to use a calendar provider for your agent.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={isCalendarEnabled}
-                      onCheckedChange={(checked) => {
-                        setIsCalendarEnabled(checked)
-                        field.onChange(checked ? "GoogleCalendar" : "")
-                      }}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            {isCalendarEnabled && (
-              <>
-                <FormField
-                  control={form.control}
-                  name="calendar_api_key"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Calendar API Key</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Calendar API Key" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="calendar_calendar_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Calendar ID</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Calendar ID" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </>
-            )}
-
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <Button
-                type="submit"
-                disabled={isLoading || (!isAdmin && limitInfo && !limitInfo.canCreate)}
-                className="w-full"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {agent ? "Atualizando..." : "Criando..."}
-                  </>
-                ) : agent ? (
-                  "Atualizar Agente"
-                ) : (
-                  "Criar Agente"
-                )}
-              </Button>
-            </AlertDialogFooter>
-          </form>
-        </Form>
-      </AlertDialogContent>
-    </AlertDialog>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Salvando..." : agent ? "Atualizar Agente" : "Criar Agente"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
-}
-
-interface FormProps {
-  children: React.ReactNode
-}
-function FormDescription({ children }: FormProps) {
-  return <p className="text-sm text-muted-foreground">{children}</p>
 }
 
 // Exportação nomeada para compatibilidade
