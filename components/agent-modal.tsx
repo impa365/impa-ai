@@ -309,8 +309,8 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
       const evolutionBotData = {
         enabled: true,
         description: formData.identity_description || formData.name,
-        apiUrl: n8nConfig.config.flowUrl, // URL do n8n configurada pelo admin
-        apiKey: `AGENT_${result.id}_TOKEN`, // Token único do agente
+        apiUrl: `${n8nConfig.config.flowUrl}?bot_token=AGENT_${result.id}_TOKEN`, // URL do n8n + parâmetro bot_token
+        apiKey: "", // Deixar vazio já que o token vai na URL
         triggerType: formData.trigger_type,
         triggerOperator: formData.trigger_operator,
         triggerValue: formData.trigger_value,
