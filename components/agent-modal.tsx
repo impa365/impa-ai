@@ -546,7 +546,7 @@ export default function AgentModal({
                   max={2}
                   min={0}
                   step={0.1}
-                  className="mt-2"
+                  className="mt-2 [&_[role=slider]]:bg-blue-600 [&_[role=slider]]:border-blue-600 [&_.bg-primary]:bg-blue-600 [&_[data-orientation=horizontal]]:bg-gray-200 dark:[&_[data-orientation=horizontal]]:bg-gray-700"
                 />
                 <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
                   <span>Conservador (0)</span>
@@ -709,6 +709,7 @@ export default function AgentModal({
               <div className="grid grid-cols-3 gap-4">
                 <div className="flex items-center space-x-2">
                   <Switch
+                    className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-gray-600"
                     id="listening_from_me"
                     checked={formData.listening_from_me}
                     onCheckedChange={(checked) => setFormData({ ...formData, listening_from_me: checked })}
@@ -720,6 +721,7 @@ export default function AgentModal({
 
                 <div className="flex items-center space-x-2">
                   <Switch
+                    className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-gray-600"
                     id="keep_open"
                     checked={formData.keep_open}
                     onCheckedChange={(checked) => setFormData({ ...formData, keep_open: checked })}
@@ -731,6 +733,7 @@ export default function AgentModal({
 
                 <div className="flex items-center space-x-2">
                   <Switch
+                    className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-gray-600"
                     id="split_messages"
                     checked={formData.split_messages}
                     onCheckedChange={(checked) => setFormData({ ...formData, split_messages: checked })}
@@ -761,6 +764,7 @@ export default function AgentModal({
                   </div>
                 </div>
                 <Switch
+                  className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-gray-600"
                   checked={formData.transcribe_audio}
                   onCheckedChange={(checked) => setFormData({ ...formData, transcribe_audio: checked })}
                   disabled={!userSettings?.transcribe_audio_enabled}
@@ -777,6 +781,7 @@ export default function AgentModal({
                   </div>
                 </div>
                 <Switch
+                  className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-gray-600"
                   checked={formData.understand_images}
                   onCheckedChange={(checked) => setFormData({ ...formData, understand_images: checked })}
                   disabled={!userSettings?.understand_images_enabled}
@@ -794,6 +799,7 @@ export default function AgentModal({
                     </div>
                   </div>
                   <Switch
+                    className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-gray-600"
                     checked={formData.voice_response_enabled}
                     onCheckedChange={(checked) => setFormData({ ...formData, voice_response_enabled: checked })}
                     disabled={!userSettings?.voice_response_enabled}
@@ -866,6 +872,7 @@ export default function AgentModal({
                     </div>
                   </div>
                   <Switch
+                    className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-gray-600"
                     checked={formData.calendar_integration}
                     onCheckedChange={(checked) => setFormData({ ...formData, calendar_integration: checked })}
                     disabled={!userSettings?.calendar_integration_enabled}
@@ -910,6 +917,7 @@ export default function AgentModal({
                   </div>
                 </div>
                 <Switch
+                  className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-gray-600"
                   checked={formData.is_default}
                   onCheckedChange={(checked) => setFormData({ ...formData, is_default: checked })}
                 />
