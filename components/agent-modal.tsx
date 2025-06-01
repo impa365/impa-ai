@@ -13,7 +13,7 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, Bot, MessageSquare, Mic, ImageIcon, Calendar, Volume2 } from "lucide-react"
+import { Eye, EyeOff, Bot, MessageSquare, Mic, ImageIcon, Calendar, Volume2, Settings } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 
@@ -36,7 +36,7 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
 
   const [formData, setFormData] = useState({
     name: "",
-    description: "",
+    identity_description: "",
     training_prompt: "",
     voice_tone: "humanizado",
     main_function: "atendimento",
@@ -50,8 +50,19 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
     calendar_integration: false,
     calendar_api_key: "",
     is_default: false,
-    type: "vendas",
-    status: "active",
+    // Configurações do bot Evolution
+    trigger_type: "keyword",
+    trigger_operator: "contains",
+    trigger_value: "",
+    keyword_finish: "#SAIR",
+    delay_message: 1000,
+    unknown_message: "Desculpe, não entendi sua mensagem. Digite #SAIR para encerrar.",
+    listening_from_me: true,
+    stop_bot_from_me: true,
+    keep_open: true,
+    debounce_time: 5,
+    split_messages: true,
+    time_per_char: 50,
   })
 
   useEffect(() => {
@@ -64,7 +75,7 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
     if (agent && isOpen) {
       setFormData({
         name: agent.name || "",
-        description: agent.description || "",
+        identity_description: agent.identity_description || "",
         training_prompt: agent.training_prompt || "",
         voice_tone: agent.voice_tone || "humanizado",
         main_function: agent.main_function || "atendimento",
@@ -78,14 +89,25 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
         calendar_integration: agent.calendar_integration || false,
         calendar_api_key: agent.calendar_api_key || "",
         is_default: agent.is_default || false,
-        type: agent.type || "vendas",
-        status: agent.status || "active",
+        // Configurações do bot Evolution
+        trigger_type: agent.trigger_type || "keyword",
+        trigger_operator: agent.trigger_operator || "contains",
+        trigger_value: agent.trigger_value || "",
+        keyword_finish: agent.keyword_finish || "#SAIR",
+        delay_message: agent.delay_message || 1000,
+        unknown_message: agent.unknown_message || "Desculpe, não entendi sua mensagem. Digite #SAIR para encerrar.",
+        listening_from_me: agent.listening_from_me !== false,
+        stop_bot_from_me: agent.stop_bot_from_me !== false,
+        keep_open: agent.keep_open !== false,
+        debounce_time: agent.debounce_time || 5,
+        split_messages: agent.split_messages !== false,
+        time_per_char: agent.time_per_char || 50,
       })
     } else if (!agent && isOpen) {
       // Reset form for new agent
       setFormData({
         name: "",
-        description: "",
+        identity_description: "",
         training_prompt: "",
         voice_tone: "humanizado",
         main_function: "atendimento",
@@ -99,8 +121,19 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
         calendar_integration: false,
         calendar_api_key: "",
         is_default: false,
-        type: "vendas",
-        status: "active",
+        // Configurações do bot Evolution
+        trigger_type: "keyword",
+        trigger_operator: "contains",
+        trigger_value: "",
+        keyword_finish: "#SAIR",
+        delay_message: 1000,
+        unknown_message: "Desculpe, não entendi sua mensagem. Digite #SAIR para encerrar.",
+        listening_from_me: true,
+        stop_bot_from_me: true,
+        keep_open: true,
+        debounce_time: 5,
+        split_messages: true,
+        time_per_char: 50,
       })
     }
     setError("")
@@ -142,6 +175,26 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
         throw new Error("Prompt de treinamento é obrigatório")
       }
 
+      if (!formData.whatsapp_connection_id) {
+        throw new Error("Conexão WhatsApp é obrigatória")
+      }
+
+      if (!formData.trigger_value.trim()) {
+        throw new Error("Palavra-chave de ativação é obrigatória")
+      }
+
+      if (formData.voice_response_enabled && !formData.voice_provider) {
+        throw new Error("Selecione um provedor de voz")
+      }
+
+      if (formData.voice_response_enabled && !formData.voice_api_key.trim()) {
+        throw new Error("API Key de voz é obrigatória quando resposta por voz está habilitada")
+      }
+
+      if (formData.calendar_integration && !formData.calendar_api_key.trim()) {
+        throw new Error("API Key do calendário é obrigatória quando integração está habilitada")
+      }
+
       const currentUser = getCurrentUser()
       if (!currentUser) {
         throw new Error("Usuário não autenticado")
@@ -149,30 +202,30 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
 
       setLoadingStep("Salvando agente no banco de dados...")
 
-      // Preparar model_config como JSON
+      // Armazenar configurações avançadas em model_config
       const modelConfig = {
         voice_tone: formData.voice_tone,
         main_function: formData.main_function,
-        prompt: formData.training_prompt,
-        transcribe_audio: formData.transcribe_audio,
-        understand_images: formData.understand_images,
-        voice_response_enabled: formData.voice_response_enabled,
-        voice_provider: formData.voice_provider,
-        voice_api_key: formData.voice_api_key,
-        calendar_integration: formData.calendar_integration,
-        calendar_api_key: formData.calendar_api_key,
+        trigger_type: formData.trigger_type,
+        trigger_operator: formData.trigger_operator,
+        keyword_finish: formData.keyword_finish,
+        delay_message: formData.delay_message,
+        unknown_message: formData.unknown_message,
+        listening_from_me: formData.listening_from_me,
+        stop_bot_from_me: formData.stop_bot_from_me,
+        keep_open: formData.keep_open,
+        debounce_time: formData.debounce_time,
+        split_messages: formData.split_messages,
+        time_per_char: formData.time_per_char,
       }
 
       const agentData = {
         user_id: currentUser.id,
         name: formData.name.trim(),
-        type: formData.type,
-        description: formData.description.trim(),
-        status: formData.status,
-        model_config: modelConfig,
-        prompt_template: formData.training_prompt.trim(),
-        whatsapp_connection_id: formData.whatsapp_connection_id || null,
+        identity_description: formData.identity_description.trim(),
+        training_prompt: formData.training_prompt.trim(),
         temperature: formData.temperature[0],
+        whatsapp_connection_id: formData.whatsapp_connection_id,
         transcribe_audio: formData.transcribe_audio,
         understand_images: formData.understand_images,
         voice_response_enabled: formData.voice_response_enabled,
@@ -181,14 +234,25 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
         calendar_integration: formData.calendar_integration,
         calendar_api_key: formData.calendar_integration ? formData.calendar_api_key : null,
         is_default: formData.is_default,
-        updated_at: new Date().toISOString(),
+        status: "active",
+        type: "whatsapp",
+        trigger_value: formData.trigger_value.trim(),
+        model_config: modelConfig,
       }
 
       let result
 
       if (agent) {
         // Atualizar agente existente
-        const { data, error } = await supabase.from("ai_agents").update(agentData).eq("id", agent.id).select().single()
+        const { data, error } = await supabase
+          .from("ai_agents")
+          .update({
+            ...agentData,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", agent.id)
+          .select()
+          .single()
 
         if (error) throw error
         result = data
@@ -196,7 +260,13 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
         // Criar novo agente
         const { data, error } = await supabase
           .from("ai_agents")
-          .insert([{ ...agentData, created_at: new Date().toISOString() }])
+          .insert([
+            {
+              ...agentData,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ])
           .select()
           .single()
 
@@ -237,11 +307,18 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
     { value: "eleven_labs", label: "Eleven Labs" },
   ]
 
-  const agentTypes = [
-    { value: "vendas", label: "Vendas" },
-    { value: "suporte", label: "Suporte" },
-    { value: "marketing", label: "Marketing" },
-    { value: "geral", label: "Geral" },
+  const triggerTypes = [
+    { value: "keyword", label: "Palavra-chave" },
+    { value: "all", label: "Todas as mensagens" },
+  ]
+
+  const triggerOperators = [
+    { value: "contains", label: "Contém" },
+    { value: "equals", label: "Igual a" },
+    { value: "startsWith", label: "Começa com" },
+    { value: "endsWith", label: "Termina com" },
+    { value: "regex", label: "Expressão regular" },
+    { value: "none", label: "Nenhum" },
   ]
 
   if (loading) {
@@ -293,7 +370,7 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
           <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                🧠 Informações Básicas
+                🧠 Nome e Identidade do Agente
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -312,38 +389,17 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
               </div>
 
               <div>
-                <Label htmlFor="description" className="text-gray-900 dark:text-gray-100">
-                  Descrição
+                <Label htmlFor="identity_description" className="text-gray-900 dark:text-gray-100">
+                  Descrição da Identidade
                 </Label>
-                <Input
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Breve descrição do agente"
+                <Textarea
+                  id="identity_description"
+                  value={formData.identity_description}
+                  onChange={(e) => setFormData({ ...formData, identity_description: e.target.value })}
+                  placeholder="Descreva a personalidade e características do seu agente..."
+                  rows={3}
                   className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
                 />
-              </div>
-
-              <div>
-                <Label htmlFor="type" className="text-gray-900 dark:text-gray-100">
-                  Tipo do Agente
-                </Label>
-                <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
-                  <SelectTrigger className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                    {agentTypes.map((type) => (
-                      <SelectItem
-                        key={type.value}
-                        value={type.value}
-                        className="text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 cursor-pointer"
-                      >
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               <div>
@@ -367,7 +423,7 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
           <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                💬 Configurações de Comportamento
+                💬 Tom de Voz e Função
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -443,7 +499,7 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
 
               <div>
                 <Label htmlFor="whatsapp_connection" className="text-gray-900 dark:text-gray-100">
-                  Conexão WhatsApp
+                  Conexão WhatsApp *
                 </Label>
                 <Select
                   value={formData.whatsapp_connection_id}
@@ -465,6 +521,170 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
                     ))}
                   </SelectContent>
                 </Select>
+                {whatsappConnections.find((c) => c.id === formData.whatsapp_connection_id)?.status !== "connected" && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Esta conexão está desconectada. O agente só funcionará quando a conexão estiver ativa.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Configurações do Bot */}
+          <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2 text-gray-900 dark:text-gray-100">
+                <Settings className="w-5 h-5" />
+                Configurações do Bot
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="trigger_type" className="text-gray-900 dark:text-gray-100">
+                    Tipo de Ativação
+                  </Label>
+                  <Select
+                    value={formData.trigger_type}
+                    onValueChange={(value) => setFormData({ ...formData, trigger_type: value })}
+                  >
+                    <SelectTrigger className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                      {triggerTypes.map((type) => (
+                        <SelectItem
+                          key={type.value}
+                          value={type.value}
+                          className="text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 cursor-pointer"
+                        >
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="trigger_operator" className="text-gray-900 dark:text-gray-100">
+                    Operador
+                  </Label>
+                  <Select
+                    value={formData.trigger_operator}
+                    onValueChange={(value) => setFormData({ ...formData, trigger_operator: value })}
+                  >
+                    <SelectTrigger className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                      {triggerOperators.map((operator) => (
+                        <SelectItem
+                          key={operator.value}
+                          value={operator.value}
+                          className="text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 cursor-pointer"
+                        >
+                          {operator.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="trigger_value" className="text-gray-900 dark:text-gray-100">
+                  Palavra-chave de Ativação *
+                </Label>
+                <Input
+                  id="trigger_value"
+                  value={formData.trigger_value}
+                  onChange={(e) => setFormData({ ...formData, trigger_value: e.target.value })}
+                  placeholder="Ex: oi, olá, menu"
+                  required
+                  className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="keyword_finish" className="text-gray-900 dark:text-gray-100">
+                    Palavra para Sair
+                  </Label>
+                  <Input
+                    id="keyword_finish"
+                    value={formData.keyword_finish}
+                    onChange={(e) => setFormData({ ...formData, keyword_finish: e.target.value })}
+                    placeholder="#SAIR"
+                    className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="debounce_time" className="text-gray-900 dark:text-gray-100">
+                    Tempo de Espera (segundos)
+                  </Label>
+                  <Input
+                    id="debounce_time"
+                    type="number"
+                    value={formData.debounce_time}
+                    onChange={(e) => setFormData({ ...formData, debounce_time: Number.parseInt(e.target.value) || 5 })}
+                    min="1"
+                    max="30"
+                    className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="unknown_message" className="text-gray-900 dark:text-gray-100">
+                  Mensagem para Comando Não Reconhecido
+                </Label>
+                <Textarea
+                  id="unknown_message"
+                  value={formData.unknown_message}
+                  onChange={(e) => setFormData({ ...formData, unknown_message: e.target.value })}
+                  placeholder="Mensagem exibida quando o bot não entende o comando"
+                  rows={2}
+                  className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-gray-600"
+                    id="listening_from_me"
+                    checked={formData.listening_from_me}
+                    onCheckedChange={(checked) => setFormData({ ...formData, listening_from_me: checked })}
+                  />
+                  <Label htmlFor="listening_from_me" className="text-sm text-gray-900 dark:text-gray-100">
+                    Escutar minhas mensagens
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-gray-600"
+                    id="keep_open"
+                    checked={formData.keep_open}
+                    onCheckedChange={(checked) => setFormData({ ...formData, keep_open: checked })}
+                  />
+                  <Label htmlFor="keep_open" className="text-sm text-gray-900 dark:text-gray-100">
+                    Manter conversa aberta
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-gray-600"
+                    id="split_messages"
+                    checked={formData.split_messages}
+                    onCheckedChange={(checked) => setFormData({ ...formData, split_messages: checked })}
+                  />
+                  <Label htmlFor="split_messages" className="text-sm text-gray-900 dark:text-gray-100">
+                    Dividir mensagens longas
+                  </Label>
+                </div>
               </div>
             </CardContent>
           </Card>
