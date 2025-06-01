@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Bot, Loader2, AlertCircle, Edit, Trash2 } from "lucide-react"
-import { createClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
+import { getCurrentUser } from "@/lib/auth"
 import { useRouter } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AgentModal } from "@/components/agent-modal"
@@ -36,10 +37,8 @@ export default function AgentsPage() {
   const [error, setError] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
-  const [currentUser, setCurrentUser] = useState<any>(null)
   const [agentsLimit, setAgentsLimit] = useState(5)
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
     initializePage()
@@ -50,32 +49,24 @@ export default function AgentsPage() {
       setLoading(true)
       setError("")
 
-      // Verificar usuário autenticado
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
+      // Verificar usuário autenticado usando a função existente
+      const currentUser = getCurrentUser()
 
-      if (userError) {
-        console.error("Erro de autenticação:", userError)
+      if (!currentUser) {
+        console.log("Usuário não autenticado, redirecionando...")
         router.push("/")
         return
       }
 
-      if (!user) {
-        router.push("/")
-        return
-      }
-
-      setCurrentUser(user)
+      console.log("Usuário autenticado:", currentUser.id)
 
       // Buscar agentes do usuário
-      console.log("Buscando agentes para o usuário:", user.id)
+      console.log("Buscando agentes para o usuário:", currentUser.id)
 
       const { data: agentsData, error: agentsError } = await supabase
         .from("ai_agents")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", currentUser.id)
         .order("created_at", { ascending: false })
 
       if (agentsError) {
@@ -83,29 +74,55 @@ export default function AgentsPage() {
         throw new Error(`Erro ao buscar agentes: ${agentsError.message}`)
       }
 
-      console.log("Agentes encontrados:", agentsData)
+      console.log("Agentes encontrados:", agentsData?.length || 0)
       setAgents(agentsData || [])
 
       // Buscar limite de agentes (com fallback)
       try {
-        const { data: settingsData } = await supabase
+        const { data: settingsData, error: settingsError } = await supabase
           .from("user_settings")
           .select("agents_limit")
-          .eq("user_id", user.id)
+          .eq("user_id", currentUser.id)
           .single()
 
+        if (settingsError && settingsError.code !== "PGRST116") {
+          console.warn("Erro ao buscar configurações do usuário:", settingsError)
+        }
+
         if (settingsData?.agents_limit) {
+          console.log("Limite de agentes encontrado:", settingsData.agents_limit)
           setAgentsLimit(settingsData.agents_limit)
         } else {
           // Tentar buscar limite padrão do sistema
-          const { data: systemSettings } = await supabase
+          const { data: systemSettings, error: systemError } = await supabase
             .from("system_settings")
             .select("setting_value")
             .eq("setting_key", "default_agents_limit")
             .single()
 
+          if (systemError) {
+            console.warn("Erro ao buscar configurações do sistema:", systemError)
+          }
+
           const defaultLimit = systemSettings?.setting_value ? Number.parseInt(systemSettings.setting_value) : 5
+          console.log("Usando limite padrão:", defaultLimit)
           setAgentsLimit(defaultLimit)
+
+          // Criar configurações do usuário se não existir
+          if (!settingsData) {
+            try {
+              await supabase.from("user_settings").insert([
+                {
+                  user_id: currentUser.id,
+                  agents_limit: defaultLimit,
+                  whatsapp_connections_limit: 3,
+                },
+              ])
+              console.log("Configurações do usuário criadas")
+            } catch (insertError) {
+              console.warn("Erro ao criar configurações do usuário:", insertError)
+            }
+          }
         }
       } catch (settingsError) {
         console.warn("Erro ao buscar configurações, usando limite padrão:", settingsError)
@@ -144,6 +161,7 @@ export default function AgentsPage() {
 
       setAgents((prev) => prev.filter((agent) => agent.id !== agentId))
       setError("")
+      console.log("Agente excluído com sucesso")
     } catch (err: any) {
       console.error("Erro ao excluir agente:", err)
       setError(err.message || "Erro ao excluir agente")
@@ -153,8 +171,10 @@ export default function AgentsPage() {
   const handleAgentSaved = (agent: Agent, isNew: boolean) => {
     if (isNew) {
       setAgents((prev) => [agent, ...prev])
+      console.log("Novo agente adicionado")
     } else {
       setAgents((prev) => prev.map((a) => (a.id === agent.id ? agent : a)))
+      console.log("Agente atualizado")
     }
     setModalOpen(false)
     setSelectedAgent(null)
