@@ -274,6 +274,44 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
         result = data
       }
 
+      setLoadingStep("Sincronizando com a Evolution API...")
+
+      // Obter a conexão WhatsApp para pegar o instanceName
+      const { data: whatsappConnection, error: whatsappError } = await supabase
+        .from("whatsapp_connections")
+        .select("instance_name")
+        .eq("id", formData.whatsapp_connection_id)
+        .single()
+
+      if (whatsappError) {
+        console.error("Erro ao buscar conexão WhatsApp:", whatsappError)
+        throw new Error("Não foi possível encontrar a conexão WhatsApp")
+      }
+
+      const instanceName = whatsappConnection.instance_name
+
+      // Preparar dados para a Evolution API
+      const evolutionBotData = {
+        enabled: true,
+        description: formData.identity_description || formData.name,
+        apiUrl: "https://api.openai.com/v1/chat/completions", // URL padrão para OpenAI
+        apiKey: "", // A chave é gerenciada pelo sistema
+        triggerType: formData.trigger_type,
+        triggerOperator: formData.trigger_operator,
+        triggerValue: formData.trigger_value,
+        expire: 0, // Sem expiração
+        keywordFinish: formData.keyword_finish,
+        delayMessage: formData.delay_message,
+        unknownMessage: formData.unknown_message,
+        listeningFromMe: formData.listening_from_me,
+        stopBotFromMe: formData.stop_bot_from_me,
+        keepOpen: formData.keep_open,
+        debounceTime: formData.debounce_time,
+        ignoreJids: [],
+        splitMessages: formData.split_messages,
+        timePerChar: formData.time_per_char,
+      }
+
       setLoadingStep("Finalizando...")
       onSave(result, !agent)
       onOpenChange(false)
@@ -283,6 +321,71 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
     } finally {
       setLoading(false)
       setLoadingStep("")
+    }
+  }
+
+  // Importar as funções necessárias
+  import { createEvolutionBot, updateEvolutionBot, } from "@/lib/evolution-api"
+
+  const syncEvolutionBot = async (agent: any, formData: any, instanceName: string, supabase: any, result: any) => {
+    const evolutionBotData = {
+      enabled: true,
+      description: formData.identity_description || formData.name,
+      apiUrl: "https://api.openai.com/v1/chat/completions", // URL padrão para OpenAI
+      apiKey: "", // A chave é gerenciada pelo sistema
+      triggerType: formData.trigger_type,
+      triggerOperator: formData.trigger_operator,
+      triggerValue: formData.trigger_value,
+      expire: 0, // Sem expiração
+      keywordFinish: formData.keyword_finish,
+      delayMessage: formData.delay_message,
+      unknownMessage: formData.unknown_message,
+      listeningFromMe: formData.listening_from_me,
+      stopBotFromMe: formData.stop_bot_from_me,
+      keepOpen: formData.keep_open,
+      debounceTime: formData.debounce_time,
+      ignoreJids: [],
+      splitMessages: formData.split_messages,
+      timePerChar: formData.time_per_char,
+    }
+
+    // Se estiver atualizando um agente existente
+    if (agent) {
+      // Verificar se o agente já tem um botId
+      if (agent.evolution_bot_id) {
+        // Atualizar o bot na Evolution API
+        const updateResult = await updateEvolutionBot(instanceName, agent.evolution_bot_id, evolutionBotData)
+
+        if (!updateResult) {
+          console.warn("Falha ao atualizar bot na Evolution API")
+        }
+      } else {
+        // Criar um novo bot na Evolution API
+        const createResult = await createEvolutionBot(instanceName, evolutionBotData)
+
+        if (createResult.success) {
+          // Atualizar o agente com o ID do bot
+          await supabase.from("ai_agents").update({ evolution_bot_id: createResult.botId }).eq("id", result.id)
+
+          // Atualizar o resultado para incluir o botId
+          result.evolution_bot_id = createResult.botId
+        } else {
+          console.warn("Falha ao criar bot na Evolution API:", createResult.error)
+        }
+      }
+    } else {
+      // Criar um novo bot na Evolution API
+      const createResult = await createEvolutionBot(instanceName, evolutionBotData)
+
+      if (createResult.success) {
+        // Atualizar o agente com o ID do bot
+        await supabase.from("ai_agents").update({ evolution_bot_id: createResult.botId }).eq("id", result.id)
+
+        // Atualizar o resultado para incluir o botId
+        result.evolution_bot_id = createResult.botId
+      } else {
+        console.warn("Falha ao criar bot na Evolution API:", createResult.error)
+      }
     }
   }
 

@@ -107,6 +107,37 @@ export default function AdminAgentsPage() {
     if (!confirm("Tem certeza que deseja excluir este agente?")) return
 
     try {
+      // Buscar informações do agente antes de excluir
+      const { data: agentData, error: fetchError } = await supabase
+        .from("ai_agents")
+        .select("evolution_bot_id, whatsapp_connection_id")
+        .eq("id", agentId)
+        .single()
+
+      if (fetchError) {
+        console.error("Erro ao buscar dados do agente:", fetchError)
+      } else if (agentData?.evolution_bot_id) {
+        // Buscar o instance_name da conexão WhatsApp
+        const { data: whatsappConnection, error: whatsappError } = await supabase
+          .from("whatsapp_connections")
+          .select("instance_name")
+          .eq("id", agentData.whatsapp_connection_id)
+          .single()
+
+        if (!whatsappError && whatsappConnection) {
+          // Importar a função necessária
+          const { deleteEvolutionBot } = await import("@/lib/evolution-api")
+
+          // Excluir o bot na Evolution API
+          try {
+            await deleteEvolutionBot(whatsappConnection.instance_name, agentData.evolution_bot_id)
+          } catch (error) {
+            console.error("Erro ao excluir bot na Evolution API:", error)
+          }
+        }
+      }
+
+      // Excluir o agente do banco de dados
       const { error } = await supabase.from("ai_agents").delete().eq("id", agentId)
 
       if (error) throw error
