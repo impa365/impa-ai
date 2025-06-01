@@ -72,6 +72,8 @@ export default function AgentModal({
     debounce_time: 5,
     split_messages: true,
     time_per_char: 50,
+    voice_id: "",
+    calendar_meeting_id: "",
   })
 
   useEffect(() => {
@@ -105,6 +107,8 @@ export default function AgentModal({
         debounce_time: agent.debounce_time || 5,
         split_messages: agent.split_messages !== false,
         time_per_char: agent.time_per_char || 50,
+        voice_id: agent.voice_id || "",
+        calendar_meeting_id: agent.calendar_meeting_id || "",
       })
     } else {
       // Reset form for new agent
@@ -137,6 +141,8 @@ export default function AgentModal({
         debounce_time: 5,
         split_messages: true,
         time_per_char: 50,
+        voice_id: "",
+        calendar_meeting_id: "",
       })
     }
     setError("")
@@ -280,6 +286,8 @@ export default function AgentModal({
         debounce_time: formData.debounce_time,
         split_messages: formData.split_messages,
         time_per_char: formData.time_per_char,
+        voice_id: formData.voice_response_enabled ? formData.voice_id : null,
+        calendar_meeting_id: formData.calendar_integration ? formData.calendar_meeting_id : null,
       }
 
       if (agent) {
@@ -857,6 +865,18 @@ export default function AgentModal({
                         </Button>
                       </div>
                     </div>
+                    <div>
+                      <Label htmlFor="voice_id" className="text-gray-900 dark:text-gray-100">
+                        ID da Voz
+                      </Label>
+                      <Input
+                        id="voice_id"
+                        value={formData.voice_id}
+                        onChange={(e) => setFormData({ ...formData, voice_id: e.target.value })}
+                        placeholder="ID da voz no provedor selecionado"
+                        className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -902,6 +922,18 @@ export default function AgentModal({
                       >
                         {showApiKeys.calendar ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
+                    </div>
+                    <div>
+                      <Label htmlFor="calendar_meeting_id" className="text-gray-900 dark:text-gray-100">
+                        ID da Reunião
+                      </Label>
+                      <Input
+                        id="calendar_meeting_id"
+                        value={formData.calendar_meeting_id}
+                        onChange={(e) => setFormData({ ...formData, calendar_meeting_id: e.target.value })}
+                        placeholder="ID da reunião no Cal.com"
+                        className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                      />
                     </div>
                   </div>
                 )}
