@@ -293,12 +293,24 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
       // Importar as funções necessárias
       const { createEvolutionBot, updateEvolutionBot } = await import("@/lib/evolution-api")
 
+      // Buscar configuração do n8n para usar como URL da API
+      const { data: n8nConfig, error: n8nError } = await supabase
+        .from("integrations")
+        .select("config")
+        .eq("type", "n8n")
+        .eq("is_active", true)
+        .single()
+
+      if (n8nError || !n8nConfig?.config?.flowUrl) {
+        throw new Error("Integração n8n não configurada pelo administrador")
+      }
+
       // Preparar dados para a Evolution API
       const evolutionBotData = {
         enabled: true,
         description: formData.identity_description || formData.name,
-        apiUrl: "https://api.openai.com/v1/chat/completions", // URL padrão para OpenAI
-        apiKey: "", // A chave é gerenciada pelo sistema
+        apiUrl: n8nConfig.config.flowUrl, // URL do n8n configurada pelo admin
+        apiKey: `AGENT_${result.id}_TOKEN`, // Token único do agente
         triggerType: formData.trigger_type,
         triggerOperator: formData.trigger_operator,
         triggerValue: formData.trigger_value,
