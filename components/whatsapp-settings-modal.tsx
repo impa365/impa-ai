@@ -185,11 +185,11 @@ export default function WhatsAppSettingsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-foreground">
+          <DialogTitle className="flex items-center gap-2 text-popover-foreground">
             <Settings className="w-5 h-5" />
             Configurações de Privacidade - {connection?.connection_name}
           </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogDescription className="text-popover-foreground/80">
             Configure o comportamento da sua conexão WhatsApp
             <br />
             <span className="text-xs text-muted-foreground">Instância: {connection?.instance_name}</span>
@@ -214,7 +214,7 @@ export default function WhatsAppSettingsModal({
             <span className="text-muted-foreground">Carregando configurações atuais da API...</span>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-6 bg-background text-foreground py-4">
             <div className="flex justify-between items-center">
               <p className="text-sm text-muted-foreground">Configurações sincronizadas com a Evolution API</p>
               <Button
@@ -332,7 +332,7 @@ export default function WhatsAppSettingsModal({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} className="text-foreground">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
           <Button
