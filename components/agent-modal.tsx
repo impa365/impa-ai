@@ -13,10 +13,11 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, Bot, MessageSquare, Mic, ImageIcon, Calendar, Volume2, Settings } from "lucide-react"
+import { Eye, EyeOff, Bot, MessageSquare, Mic, ImageIcon, Calendar, Volume2, Settings, AlertCircle } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { createEvolutionBot, updateEvolutionBot } from "@/lib/evolution-api"
+import { checkAgentLimit } from "@/lib/agent-limits"
 
 interface AgentModalProps {
   open: boolean
@@ -25,6 +26,8 @@ interface AgentModalProps {
   whatsappConnections: any[]
   userSettings: any
   onSuccess: () => void
+  isAdmin?: boolean
+  users?: any[]
 }
 
 export default function AgentModal({
@@ -34,6 +37,8 @@ export default function AgentModal({
   whatsappConnections,
   userSettings,
   onSuccess,
+  isAdmin = false,
+  users = [],
 }: AgentModalProps) {
   const [loading, setSaving] = useState(false)
   const [loadingStep, setLoadingStep] = useState("")
@@ -42,6 +47,12 @@ export default function AgentModal({
     voice: false,
     calendar: false,
   })
+  const [agentLimit, setAgentLimit] = useState<{
+    canCreate: boolean
+    currentCount: number
+    maxAllowed: number
+    message?: string
+  } | null>(null)
 
   const [formData, setFormData] = useState({
     name: "",
@@ -56,8 +67,10 @@ export default function AgentModal({
     voice_response_enabled: false,
     voice_provider: "",
     voice_api_key: "",
+    voice_id: "",
     calendar_integration: false,
     calendar_api_key: "",
+    calendar_meeting_id: "",
     is_default: false,
     // Configurações do bot Evolution
     trigger_type: "keyword",
@@ -72,8 +85,8 @@ export default function AgentModal({
     debounce_time: 5,
     split_messages: true,
     time_per_char: 50,
-    voice_id: "",
-    calendar_meeting_id: "",
+    // Campo adicional para administradores
+    user_id: "",
   })
 
   useEffect(() => {
@@ -91,8 +104,10 @@ export default function AgentModal({
         voice_response_enabled: agent.voice_response_enabled || false,
         voice_provider: agent.voice_provider || "",
         voice_api_key: agent.voice_api_key || "",
+        voice_id: agent.voice_id || "",
         calendar_integration: agent.calendar_integration || false,
         calendar_api_key: agent.calendar_api_key || "",
+        calendar_meeting_id: agent.calendar_meeting_id || "",
         is_default: agent.is_default || false,
         // Configurações do bot Evolution
         trigger_type: agent.trigger_type || "keyword",
@@ -107,11 +122,11 @@ export default function AgentModal({
         debounce_time: agent.debounce_time || 5,
         split_messages: agent.split_messages !== false,
         time_per_char: agent.time_per_char || 50,
-        voice_id: agent.voice_id || "",
-        calendar_meeting_id: agent.calendar_meeting_id || "",
+        user_id: agent.user_id || "",
       })
     } else {
       // Reset form for new agent
+      const currentUser = getCurrentUser()
       setFormData({
         name: "",
         identity_description: "",
@@ -125,8 +140,10 @@ export default function AgentModal({
         voice_response_enabled: false,
         voice_provider: "",
         voice_api_key: "",
+        voice_id: "",
         calendar_integration: false,
         calendar_api_key: "",
+        calendar_meeting_id: "",
         is_default: false,
         // Configurações do bot Evolution
         trigger_type: "keyword",
@@ -141,12 +158,28 @@ export default function AgentModal({
         debounce_time: 5,
         split_messages: true,
         time_per_char: 50,
-        voice_id: "",
-        calendar_meeting_id: "",
+        user_id: isAdmin && users.length > 0 ? users[0]?.id : currentUser?.id,
       })
+
+      // Verificar limite de agentes se não for admin
+      if (!isAdmin && !agent) {
+        checkUserAgentLimit()
+      }
     }
     setError("")
-  }, [agent, whatsappConnections, open])
+  }, [agent, whatsappConnections, open, isAdmin, users])
+
+  const checkUserAgentLimit = async () => {
+    const currentUser = getCurrentUser()
+    if (!currentUser) return
+
+    const limitInfo = await checkAgentLimit(currentUser.id)
+    setAgentLimit(limitInfo)
+
+    if (!limitInfo.canCreate) {
+      setError(limitInfo.message || "Você atingiu o limite de agentes.")
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -179,11 +212,34 @@ export default function AgentModal({
         throw new Error("API Key de voz é obrigatória quando resposta por voz está habilitada")
       }
 
+      if (formData.voice_response_enabled && !formData.voice_id.trim()) {
+        throw new Error("ID da voz é obrigatório quando resposta por voz está habilitada")
+      }
+
       if (formData.calendar_integration && !formData.calendar_api_key.trim()) {
         throw new Error("API Key do calendário é obrigatória quando integração está habilitada")
       }
 
-      const currentUser = getCurrentUser()
+      if (formData.calendar_integration && !formData.calendar_meeting_id.trim()) {
+        throw new Error("ID da reunião é obrigatório quando integração com calendário está habilitada")
+      }
+
+      // Verificar limite de agentes se não for admin e estiver criando um novo agente
+      if (!isAdmin && !agent) {
+        const currentUser = getCurrentUser()
+        if (currentUser) {
+          const limitInfo = await checkAgentLimit(currentUser.id)
+          if (!limitInfo.canCreate) {
+            throw new Error(limitInfo.message || "Você atingiu o limite de agentes.")
+          }
+        }
+      }
+
+      const userId = isAdmin ? formData.user_id : getCurrentUser()?.id
+
+      if (!userId) {
+        throw new Error("Usuário não identificado")
+      }
 
       // Verificar se a conexão WhatsApp existe
       setLoadingStep("Verificando conexão WhatsApp...")
@@ -254,7 +310,7 @@ export default function AgentModal({
       setLoadingStep("Salvando agente no banco de dados...")
 
       const agentData = {
-        user_id: currentUser?.id,
+        user_id: userId,
         name: formData.name.trim(),
         identity_description: formData.identity_description.trim(),
         training_prompt: formData.training_prompt.trim(),
@@ -268,8 +324,10 @@ export default function AgentModal({
         voice_response_enabled: formData.voice_response_enabled && userSettings?.voice_response_enabled,
         voice_provider: formData.voice_response_enabled ? formData.voice_provider : null,
         voice_api_key: formData.voice_response_enabled ? formData.voice_api_key : null,
+        voice_id: formData.voice_response_enabled ? formData.voice_id : null,
         calendar_integration: formData.calendar_integration && userSettings?.calendar_integration_enabled,
         calendar_api_key: formData.calendar_integration ? formData.calendar_api_key : null,
+        calendar_meeting_id: formData.calendar_integration ? formData.calendar_meeting_id : null,
         is_default: formData.is_default,
         status: "active",
         type: "whatsapp",
@@ -286,8 +344,6 @@ export default function AgentModal({
         debounce_time: formData.debounce_time,
         split_messages: formData.split_messages,
         time_per_char: formData.time_per_char,
-        voice_id: formData.voice_response_enabled ? formData.voice_id : null,
-        calendar_meeting_id: formData.calendar_integration ? formData.calendar_meeting_id : null,
       }
 
       if (agent) {
@@ -429,6 +485,58 @@ export default function AgentModal({
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
+          )}
+
+          {agentLimit && !agentLimit.canCreate && !agent && (
+            <Alert variant="warning" className="bg-amber-50 border-amber-200 text-amber-800">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{agentLimit.message}</AlertDescription>
+            </Alert>
+          )}
+
+          {agentLimit && agentLimit.canCreate && !agent && (
+            <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-800">
+              <AlertDescription>
+                {agentLimit.message} (Usando {agentLimit.currentCount} de {agentLimit.maxAllowed})
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Seleção de Usuário (apenas para admin) */}
+          {isAdmin && (
+            <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2 text-gray-900 dark:text-gray-100">
+                  👤 Proprietário do Agente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div>
+                  <Label htmlFor="user_id" className="text-gray-900 dark:text-gray-100">
+                    Selecione o Usuário *
+                  </Label>
+                  <Select
+                    value={formData.user_id}
+                    onValueChange={(value) => setFormData({ ...formData, user_id: value })}
+                  >
+                    <SelectTrigger className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                      <SelectValue placeholder="Selecione um usuário" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                      {users.map((user) => (
+                        <SelectItem
+                          key={user.id}
+                          value={user.id}
+                          className="text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 cursor-pointer"
+                        >
+                          {user.full_name || user.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Informações Básicas */}
@@ -818,7 +926,7 @@ export default function AgentModal({
                   <div className="ml-8 space-y-3">
                     <div>
                       <Label htmlFor="voice_provider" className="text-gray-900 dark:text-gray-100">
-                        Provedor de Voz
+                        Provedor de Voz *
                       </Label>
                       <Select
                         value={formData.voice_provider}
@@ -843,7 +951,7 @@ export default function AgentModal({
 
                     <div>
                       <Label htmlFor="voice_api_key" className="text-gray-900 dark:text-gray-100">
-                        API Key de Voz
+                        API Key de Voz *
                       </Label>
                       <div className="relative">
                         <Input
@@ -867,7 +975,7 @@ export default function AgentModal({
                     </div>
                     <div>
                       <Label htmlFor="voice_id" className="text-gray-900 dark:text-gray-100">
-                        ID da Voz
+                        ID da Voz *
                       </Label>
                       <Input
                         id="voice_id"
@@ -900,32 +1008,34 @@ export default function AgentModal({
                 </div>
 
                 {formData.calendar_integration && (
-                  <div className="ml-8">
-                    <Label htmlFor="calendar_api_key" className="text-gray-900 dark:text-gray-100">
-                      API Key do Cal.com
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="calendar_api_key"
-                        type={showApiKeys.calendar ? "text" : "password"}
-                        value={formData.calendar_api_key}
-                        onChange={(e) => setFormData({ ...formData, calendar_api_key: e.target.value })}
-                        placeholder="Sua API Key do Cal.com"
-                        className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3"
-                        onClick={() => setShowApiKeys({ ...showApiKeys, calendar: !showApiKeys.calendar })}
-                      >
-                        {showApiKeys.calendar ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
+                  <div className="ml-8 space-y-3">
+                    <div>
+                      <Label htmlFor="calendar_api_key" className="text-gray-900 dark:text-gray-100">
+                        API Key do Cal.com *
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="calendar_api_key"
+                          type={showApiKeys.calendar ? "text" : "password"}
+                          value={formData.calendar_api_key}
+                          onChange={(e) => setFormData({ ...formData, calendar_api_key: e.target.value })}
+                          placeholder="Sua API Key do Cal.com"
+                          className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3"
+                          onClick={() => setShowApiKeys({ ...showApiKeys, calendar: !showApiKeys.calendar })}
+                        >
+                          {showApiKeys.calendar ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
                     </div>
                     <div>
                       <Label htmlFor="calendar_meeting_id" className="text-gray-900 dark:text-gray-100">
-                        ID da Reunião
+                        ID da Reunião *
                       </Label>
                       <Input
                         id="calendar_meeting_id"
@@ -966,7 +1076,11 @@ export default function AgentModal({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button
+              type="submit"
+              disabled={loading || (!agent && agentLimit && !agentLimit.canCreate)}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
               {loading ? "Salvando..." : agent ? "Atualizar Agente" : "Criar Agente"}
             </Button>
           </DialogFooter>
