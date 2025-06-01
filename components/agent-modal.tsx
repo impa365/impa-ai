@@ -589,3 +589,6 @@ interface FormProps {
 function FormDescription({ children }: FormProps) {
   return <p className="text-sm text-muted-foreground">{children}</p>
 }
+
+// Exportação nomeada para compatibilidade
+export { AgentModal }
