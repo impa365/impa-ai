@@ -76,7 +76,7 @@ interface AgentModalProps {
   selectedUserId?: string
 }
 
-export function AgentModal({ isOpen, setIsOpen, agent, userId, isAdmin, selectedUserId }: AgentModalProps) {
+export default function AgentModal({ isOpen, setIsOpen, agent, userId, isAdmin, selectedUserId }: AgentModalProps) {
   const { toast } = useToast()
   const [isScheduled, setIsScheduled] = useState(agent?.type === "scheduled")
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(!!agent?.voice_provider)
