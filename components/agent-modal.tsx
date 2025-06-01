@@ -37,7 +37,7 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    prompt: "",
+    training_prompt: "",
     voice_tone: "humanizado",
     main_function: "atendimento",
     temperature: [0.7],
@@ -50,11 +50,8 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
     calendar_integration: false,
     calendar_api_key: "",
     is_default: false,
-    type: "chat",
-    model: "gpt-4",
-    max_tokens: 1000,
-    voice_voice_id: "",
-    calendar_calendar_id: "",
+    type: "vendas",
+    status: "active",
   })
 
   useEffect(() => {
@@ -68,7 +65,7 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
       setFormData({
         name: agent.name || "",
         description: agent.description || "",
-        prompt: agent.prompt || "",
+        training_prompt: agent.training_prompt || "",
         voice_tone: agent.voice_tone || "humanizado",
         main_function: agent.main_function || "atendimento",
         temperature: [agent.temperature || 0.7],
@@ -81,18 +78,15 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
         calendar_integration: agent.calendar_integration || false,
         calendar_api_key: agent.calendar_api_key || "",
         is_default: agent.is_default || false,
-        type: agent.type || "chat",
-        model: agent.model || "gpt-4",
-        max_tokens: agent.max_tokens || 1000,
-        voice_voice_id: agent.voice_voice_id || "",
-        calendar_calendar_id: agent.calendar_calendar_id || "",
+        type: agent.type || "vendas",
+        status: agent.status || "active",
       })
     } else if (!agent && isOpen) {
       // Reset form for new agent
       setFormData({
         name: "",
         description: "",
-        prompt: "",
+        training_prompt: "",
         voice_tone: "humanizado",
         main_function: "atendimento",
         temperature: [0.7],
@@ -105,11 +99,8 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
         calendar_integration: false,
         calendar_api_key: "",
         is_default: false,
-        type: "chat",
-        model: "gpt-4",
-        max_tokens: 1000,
-        voice_voice_id: "",
-        calendar_calendar_id: "",
+        type: "vendas",
+        status: "active",
       })
     }
     setError("")
@@ -147,7 +138,7 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
         throw new Error("Nome do agente é obrigatório")
       }
 
-      if (!formData.prompt.trim()) {
+      if (!formData.training_prompt.trim()) {
         throw new Error("Prompt de treinamento é obrigatório")
       }
 
@@ -158,15 +149,30 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
 
       setLoadingStep("Salvando agente no banco de dados...")
 
+      // Preparar model_config como JSON
+      const modelConfig = {
+        voice_tone: formData.voice_tone,
+        main_function: formData.main_function,
+        prompt: formData.training_prompt,
+        transcribe_audio: formData.transcribe_audio,
+        understand_images: formData.understand_images,
+        voice_response_enabled: formData.voice_response_enabled,
+        voice_provider: formData.voice_provider,
+        voice_api_key: formData.voice_api_key,
+        calendar_integration: formData.calendar_integration,
+        calendar_api_key: formData.calendar_api_key,
+      }
+
       const agentData = {
         user_id: currentUser.id,
         name: formData.name.trim(),
+        type: formData.type,
         description: formData.description.trim(),
-        prompt: formData.prompt.trim(),
-        voice_tone: formData.voice_tone,
-        main_function: formData.main_function,
-        temperature: formData.temperature[0],
+        status: formData.status,
+        model_config: modelConfig,
+        prompt_template: formData.training_prompt.trim(),
         whatsapp_connection_id: formData.whatsapp_connection_id || null,
+        temperature: formData.temperature[0],
         transcribe_audio: formData.transcribe_audio,
         understand_images: formData.understand_images,
         voice_response_enabled: formData.voice_response_enabled,
@@ -175,11 +181,6 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
         calendar_integration: formData.calendar_integration,
         calendar_api_key: formData.calendar_integration ? formData.calendar_api_key : null,
         is_default: formData.is_default,
-        type: formData.type,
-        model: formData.model,
-        max_tokens: formData.max_tokens,
-        voice_voice_id: formData.voice_response_enabled ? formData.voice_voice_id : null,
-        calendar_calendar_id: formData.calendar_integration ? formData.calendar_calendar_id : null,
         updated_at: new Date().toISOString(),
       }
 
@@ -237,15 +238,10 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
   ]
 
   const agentTypes = [
-    { value: "chat", label: "Chat" },
-    { value: "voice", label: "Voz" },
-    { value: "calendar", label: "Calendário" },
-  ]
-
-  const models = [
-    { value: "gpt-4", label: "GPT-4" },
-    { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
-    { value: "claude-3", label: "Claude 3" },
+    { value: "vendas", label: "Vendas" },
+    { value: "suporte", label: "Suporte" },
+    { value: "marketing", label: "Marketing" },
+    { value: "geral", label: "Geral" },
   ]
 
   if (loading) {
@@ -328,60 +324,36 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="type" className="text-gray-900 dark:text-gray-100">
-                    Tipo do Agente
-                  </Label>
-                  <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
-                    <SelectTrigger className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                      {agentTypes.map((type) => (
-                        <SelectItem
-                          key={type.value}
-                          value={type.value}
-                          className="text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 cursor-pointer"
-                        >
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="model" className="text-gray-900 dark:text-gray-100">
-                    Modelo
-                  </Label>
-                  <Select value={formData.model} onValueChange={(value) => setFormData({ ...formData, model: value })}>
-                    <SelectTrigger className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                      {models.map((model) => (
-                        <SelectItem
-                          key={model.value}
-                          value={model.value}
-                          className="text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 cursor-pointer"
-                        >
-                          {model.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div>
+                <Label htmlFor="type" className="text-gray-900 dark:text-gray-100">
+                  Tipo do Agente
+                </Label>
+                <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                  <SelectTrigger className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                    {agentTypes.map((type) => (
+                      <SelectItem
+                        key={type.value}
+                        value={type.value}
+                        className="text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 cursor-pointer"
+                      >
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
-                <Label htmlFor="prompt" className="text-gray-900 dark:text-gray-100">
+                <Label htmlFor="training_prompt" className="text-gray-900 dark:text-gray-100">
                   Prompt de Treinamento *
                 </Label>
                 <Textarea
-                  id="prompt"
-                  value={formData.prompt}
-                  onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
+                  id="training_prompt"
+                  value={formData.training_prompt}
+                  onChange={(e) => setFormData({ ...formData, training_prompt: e.target.value })}
                   placeholder="Instruções detalhadas sobre como o agente deve se comportar, responder e interagir..."
                   rows={5}
                   required
@@ -605,19 +577,6 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
                         </Button>
                       </div>
                     </div>
-
-                    <div>
-                      <Label htmlFor="voice_voice_id" className="text-gray-900 dark:text-gray-100">
-                        ID da Voz
-                      </Label>
-                      <Input
-                        id="voice_voice_id"
-                        value={formData.voice_voice_id}
-                        onChange={(e) => setFormData({ ...formData, voice_voice_id: e.target.value })}
-                        placeholder="ID da voz no provedor selecionado"
-                        className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
-                      />
-                    </div>
                   </div>
                 )}
               </div>
@@ -640,43 +599,28 @@ export default function AgentModal({ isOpen, onOpenChange, agent, onSave }: Agen
                 </div>
 
                 {formData.calendar_integration && (
-                  <div className="ml-8 space-y-3">
-                    <div>
-                      <Label htmlFor="calendar_api_key" className="text-gray-900 dark:text-gray-100">
-                        API Key do Cal.com
-                      </Label>
-                      <div className="relative">
-                        <Input
-                          id="calendar_api_key"
-                          type={showApiKeys.calendar ? "text" : "password"}
-                          value={formData.calendar_api_key}
-                          onChange={(e) => setFormData({ ...formData, calendar_api_key: e.target.value })}
-                          placeholder="Sua API Key do Cal.com"
-                          className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full px-3"
-                          onClick={() => setShowApiKeys({ ...showApiKeys, calendar: !showApiKeys.calendar })}
-                        >
-                          {showApiKeys.calendar ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="calendar_calendar_id" className="text-gray-900 dark:text-gray-100">
-                        ID da Reunião
-                      </Label>
+                  <div className="ml-8">
+                    <Label htmlFor="calendar_api_key" className="text-gray-900 dark:text-gray-100">
+                      API Key do Cal.com
+                    </Label>
+                    <div className="relative">
                       <Input
-                        id="calendar_calendar_id"
-                        value={formData.calendar_calendar_id}
-                        onChange={(e) => setFormData({ ...formData, calendar_calendar_id: e.target.value })}
-                        placeholder="ID da reunião no Cal.com"
+                        id="calendar_api_key"
+                        type={showApiKeys.calendar ? "text" : "password"}
+                        value={formData.calendar_api_key}
+                        onChange={(e) => setFormData({ ...formData, calendar_api_key: e.target.value })}
+                        placeholder="Sua API Key do Cal.com"
                         className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
                       />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => setShowApiKeys({ ...showApiKeys, calendar: !showApiKeys.calendar })}
+                      >
+                        {showApiKeys.calendar ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
                     </div>
                   </div>
                 )}
