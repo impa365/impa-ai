@@ -2,83 +2,139 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Bot, Loader2, AlertCircle, Edit, Trash2 } from "lucide-react"
 import { createClient } from "@/lib/supabase"
+import { useRouter } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AgentModal } from "@/components/agent-modal"
 
 interface Agent {
   id: string
   name: string
-  identity_description: string | null
-  voice_tone: string
-  main_function: string
-  status: string
+  description?: string
+  prompt?: string
+  model?: string
+  temperature?: number
+  max_tokens?: number
+  type?: string
+  voice_provider?: string
+  voice_api_key?: string
+  voice_voice_id?: string
+  calendar_provider?: string
+  calendar_api_key?: string
+  calendar_calendar_id?: string
+  whatsapp_connection_id?: string
+  user_id: string
   created_at: string
+  updated_at: string
 }
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [userLimit, setUserLimit] = useState(5)
-
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [agentsLimit, setAgentsLimit] = useState(5)
+  const router = useRouter()
   const supabase = createClient()
 
   useEffect(() => {
-    loadAgents()
+    initializePage()
   }, [])
 
-  const loadAgents = async () => {
+  const initializePage = async () => {
     try {
       setLoading(true)
       setError("")
 
-      // Buscar usuário atual
+      // Verificar usuário autenticado
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser()
 
-      if (userError || !user) {
-        setError("Usuário não autenticado")
+      if (userError) {
+        console.error("Erro de autenticação:", userError)
+        router.push("/")
         return
       }
 
-      // Buscar agentes
+      if (!user) {
+        router.push("/")
+        return
+      }
+
+      setCurrentUser(user)
+
+      // Buscar agentes do usuário
+      console.log("Buscando agentes para o usuário:", user.id)
+
       const { data: agentsData, error: agentsError } = await supabase
         .from("ai_agents")
-        .select("id, name, identity_description, voice_tone, main_function, status, created_at")
+        .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
 
       if (agentsError) {
         console.error("Erro ao buscar agentes:", agentsError)
-        setError("Erro ao carregar agentes")
-        return
+        throw new Error(`Erro ao buscar agentes: ${agentsError.message}`)
       }
 
+      console.log("Agentes encontrados:", agentsData)
       setAgents(agentsData || [])
 
-      // Buscar limite do usuário
-      const { data: settingsData } = await supabase
-        .from("user_settings")
-        .select("agents_limit")
-        .eq("user_id", user.id)
-        .single()
+      // Buscar limite de agentes (com fallback)
+      try {
+        const { data: settingsData } = await supabase
+          .from("user_settings")
+          .select("agents_limit")
+          .eq("user_id", user.id)
+          .single()
 
-      if (settingsData?.agents_limit) {
-        setUserLimit(settingsData.agents_limit)
+        if (settingsData?.agents_limit) {
+          setAgentsLimit(settingsData.agents_limit)
+        } else {
+          // Tentar buscar limite padrão do sistema
+          const { data: systemSettings } = await supabase
+            .from("system_settings")
+            .select("setting_value")
+            .eq("setting_key", "default_agents_limit")
+            .single()
+
+          const defaultLimit = systemSettings?.setting_value ? Number.parseInt(systemSettings.setting_value) : 5
+          setAgentsLimit(defaultLimit)
+        }
+      } catch (settingsError) {
+        console.warn("Erro ao buscar configurações, usando limite padrão:", settingsError)
+        setAgentsLimit(5)
       }
-    } catch (err) {
-      console.error("Erro geral:", err)
-      setError("Erro ao carregar dados")
+    } catch (err: any) {
+      console.error("Erro ao inicializar página:", err)
+      setError(err.message || "Erro ao carregar dados")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDelete = async (agentId: string) => {
+  const handleCreateAgent = () => {
+    if (agents.length >= agentsLimit) {
+      setError(`Você atingiu o limite de ${agentsLimit} agentes.`)
+      return
+    }
+
+    setSelectedAgent(null)
+    setModalOpen(true)
+  }
+
+  const handleEditAgent = (agent: Agent) => {
+    setSelectedAgent(agent)
+    setModalOpen(true)
+  }
+
+  const handleDeleteAgent = async (agentId: string) => {
     if (!confirm("Tem certeza que deseja excluir este agente?")) return
 
     try {
@@ -87,57 +143,82 @@ export default function AgentsPage() {
       if (error) throw error
 
       setAgents((prev) => prev.filter((agent) => agent.id !== agentId))
-    } catch (err) {
-      console.error("Erro ao excluir:", err)
-      setError("Erro ao excluir agente")
+      setError("")
+    } catch (err: any) {
+      console.error("Erro ao excluir agente:", err)
+      setError(err.message || "Erro ao excluir agente")
     }
   }
 
-  const getFunctionLabel = (func: string) => {
-    const functions: Record<string, string> = {
-      atendimento: "Atendimento",
-      vendas: "Vendas",
-      suporte: "Suporte",
-      agendamento: "Agendamento",
-      qualificacao: "Qualificação",
+  const handleAgentSaved = (agent: Agent, isNew: boolean) => {
+    if (isNew) {
+      setAgents((prev) => [agent, ...prev])
+    } else {
+      setAgents((prev) => prev.map((a) => (a.id === agent.id ? agent : a)))
     }
-    return functions[func] || func
+    setModalOpen(false)
+    setSelectedAgent(null)
+    setError("")
   }
 
-  const getToneLabel = (tone: string) => {
-    const tones: Record<string, string> = {
-      humanizado: "Humanizado",
-      formal: "Formal",
-      tecnico: "Técnico",
-      casual: "Casual",
-      comercial: "Comercial",
+  const getAgentTypeLabel = (type?: string) => {
+    const types: Record<string, string> = {
+      chat: "Chat",
+      voice: "Voz",
+      calendar: "Calendário",
     }
-    return tones[tone] || tone
+    return type ? types[type] || type : "Chat"
   }
+
+  const canCreateAgent = agents.length < agentsLimit
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px]">
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
-        <p className="text-gray-600">Carregando agentes...</p>
+        <p className="text-muted-foreground">Carregando seus agentes...</p>
+      </div>
+    )
+  }
+
+  if (error && !agents.length) {
+    return (
+      <div className="container mx-auto p-6">
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {error}
+            <Button variant="outline" size="sm" className="ml-4" onClick={initializePage}>
+              Tentar novamente
+            </Button>
+          </AlertDescription>
+        </Alert>
       </div>
     )
   }
 
   return (
-    <div className="p-6">
+    <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Meus Agentes IA</h1>
-          <p className="text-gray-600">
-            Agentes: {agents.length} de {userLimit}
-          </p>
+          <h1 className="text-2xl font-bold">Meus Agentes IA</h1>
+          <p className="text-muted-foreground">Gerencie seus assistentes virtuais inteligentes</p>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={agents.length >= userLimit}>
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Agente
+        <Button onClick={handleCreateAgent} className="gap-2" disabled={!canCreateAgent}>
+          <Plus className="h-4 w-4" />
+          Criar Agente
         </Button>
       </div>
+
+      {!canCreateAgent && (
+        <Alert className="mb-6 bg-amber-50 border-amber-200">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-800">
+            Você atingiu o limite de {agentsLimit} agentes. Entre em contato com o administrador para aumentar seu
+            limite.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {error && (
         <Alert variant="destructive" className="mb-6">
@@ -146,84 +227,69 @@ export default function AgentsPage() {
         </Alert>
       )}
 
-      {agents.length >= userLimit && (
-        <Alert className="mb-6 bg-amber-50 border-amber-200">
-          <AlertCircle className="h-4 w-4 text-amber-600" />
-          <AlertDescription className="text-amber-800">Você atingiu o limite de {userLimit} agentes.</AlertDescription>
-        </Alert>
-      )}
+      <div className="mb-4 text-sm text-gray-600">
+        Agentes: {agents.length} de {agentsLimit} utilizados
+      </div>
 
       {agents.length === 0 ? (
-        <Card className="text-center py-12">
-          <CardContent>
-            <Bot className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhum agente criado</h3>
-            <p className="text-gray-600 mb-6">Crie seu primeiro agente IA para automatizar conversas</p>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={agents.length >= userLimit}>
-              <Plus className="h-4 w-4 mr-2" />
-              Criar Primeiro Agente
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="text-center py-12 border rounded-lg bg-gray-50">
+          <Bot className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+          <h3 className="text-lg font-medium mb-2">Nenhum agente criado</h3>
+          <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+            Crie seu primeiro agente IA para automatizar atendimentos, vendas ou suporte no WhatsApp.
+          </p>
+          <Button onClick={handleCreateAgent} disabled={!canCreateAgent}>
+            Criar meu primeiro agente
+          </Button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {agents.map((agent) => (
             <Card key={agent.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Bot className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">{agent.name}</CardTitle>
-                      <p className="text-sm text-gray-600">{getFunctionLabel(agent.main_function)}</p>
-                    </div>
-                  </div>
-                  <div
-                    className={`px-2 py-1 rounded text-xs font-medium ${
-                      agent.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
-                    }`}
-                  >
-                    {agent.status === "active" ? "Ativo" : "Inativo"}
-                  </div>
-                </div>
+                <CardTitle className="flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-blue-500" />
+                  {agent.name}
+                </CardTitle>
+                <CardDescription>
+                  {getAgentTypeLabel(agent.type)} • Modelo: {agent.model || "GPT-4"}
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  <p className="text-sm text-gray-600">{agent.identity_description || "Sem descrição"}</p>
-
-                  <div className="text-xs text-gray-500">Tom: {getToneLabel(agent.voice_tone)}</div>
-
-                  <div className="text-xs text-gray-500">
-                    Criado em {new Date(agent.created_at).toLocaleDateString()}
-                  </div>
-
-                  <div className="flex justify-between items-center pt-2 border-t">
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" title="Editar">
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600"
-                        onClick={() => handleDelete(agent.id)}
-                        title="Excluir"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      Configurar
-                    </Button>
-                  </div>
+                <p className="text-sm text-gray-600 line-clamp-3">
+                  {agent.description || agent.prompt?.substring(0, 150) || "Sem descrição"}
+                  {(agent.description || agent.prompt) && (agent.description || agent.prompt || "").length > 150
+                    ? "..."
+                    : ""}
+                </p>
+                <div className="mt-2 text-xs text-gray-500">
+                  Criado em {new Date(agent.created_at).toLocaleDateString()}
                 </div>
               </CardContent>
+              <CardFooter className="flex justify-between items-center">
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleEditAgent(agent)}>
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteAgent(agent.id)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/agents/${agent.id}`)}>
+                  Ver detalhes
+                </Button>
+              </CardFooter>
             </Card>
           ))}
         </div>
       )}
+
+      <AgentModal isOpen={modalOpen} onOpenChange={setModalOpen} agent={selectedAgent} onSave={handleAgentSaved} />
     </div>
   )
 }
