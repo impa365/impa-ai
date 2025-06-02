@@ -254,12 +254,18 @@ export function AgentModal({
     if (agent) {
       const agentModelConfig =
         typeof agent.model_config === "string" ? JSON.parse(agent.model_config) : agent.model_config
-      const mergedModelConfig = {
+
+      const mergedModelConfig: ModelConfig = {
         ...initialFormData.model_config,
-        ...agentModelConfig,
+        ...(agentModelConfig || {}), // Garante que agentModelConfig seja um objeto
+        greeting_message: (agentModelConfig?.greeting_message || initialFormData.model_config.greeting_message) ?? "",
+        rate_limit_message:
+          (agentModelConfig?.rate_limit_message || initialFormData.model_config.rate_limit_message) ?? "",
+        inactivity_message:
+          (agentModelConfig?.inactivity_message || initialFormData.model_config.inactivity_message) ?? "",
         voice_config: {
           ...initialFormData.model_config.voice_config,
-          ...agentModelConfig?.voice_config,
+          ...(agentModelConfig?.voice_config || {}),
         },
         tools_config: {
           ...initialFormData.model_config.tools_config,
@@ -274,10 +280,18 @@ export function AgentModal({
         },
         tone_and_style: {
           ...initialFormData.model_config.tone_and_style,
-          ...agentModelConfig?.tone_and_style,
+          ...(agentModelConfig?.tone_and_style || {}),
         },
       }
-      setFormData({ ...initialFormData, ...agent, model_config: mergedModelConfig })
+
+      setFormData({
+        ...initialFormData,
+        ...agent,
+        description: agent.description ?? "", // Garante que description seja string
+        prompt_template: agent.prompt_template ?? "", // Garante que prompt_template seja string
+        model_config: mergedModelConfig,
+      })
+
       if (agent.whatsapp_connection_id) {
         const selectedConn = whatsappConnections.find((c) => c.id === agent.whatsapp_connection_id)
         if (selectedConn) {
@@ -730,7 +744,7 @@ export function AgentModal({
                     <Textarea
                       id="prompt_template"
                       name="prompt_template"
-                      value={formData.prompt_template}
+                      value={formData.prompt_template || ""}
                       onChange={handleInputChange}
                       placeholder="Você é um assistente virtual especializado em..."
                       rows={8}
