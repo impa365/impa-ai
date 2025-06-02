@@ -450,9 +450,30 @@ export default function UserSettings() {
             </CardHeader>
             {showApiExample && (
               <CardContent>
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div>
-                    <h4 className="font-medium mb-2">Comando cURL:</h4>
+                    <h4 className="font-medium mb-2">1. Listar todos os seus bots:</h4>
+                    <div className="relative">
+                      <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-x-auto font-mono">
+                        <code>{`curl -X GET "${window.location.origin}/api/getbots" \\
+  -H "apikey: SUA_API_KEY_AQUI"`}</code>
+                      </pre>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={() =>
+                          copyToClipboard(`curl -X GET "${window.location.origin}/api/getbots" \\
+  -H "apikey: SUA_API_KEY_AQUI"`)
+                        }
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-medium mb-2">2. Obter detalhes de um bot específico:</h4>
                     <div className="relative">
                       <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-x-auto font-mono">
                         <code>{curlExample}</code>
@@ -472,11 +493,13 @@ export default function UserSettings() {
                     <AlertDescription>
                       <strong>Como usar:</strong>
                       <br />
-                      1. Substitua "SEU_BOT_ID" pelo ID real do seu agente
+                      1. <strong>Primeiro</strong>: Use o comando 1 para listar todos os seus bots e pegar os IDs
                       <br />
-                      2. Substitua "SUA_API_KEY_AQUI" pela sua API key
+                      2. <strong>Depois</strong>: Use o comando 2 substituindo "SEU_BOT_ID" pelo ID do bot desejado
                       <br />
-                      3. Execute o comando no terminal ou use no N8N
+                      3. Substitua "SUA_API_KEY_AQUI" pela sua API key em ambos os comandos
+                      <br />
+                      4. Execute no terminal ou use no N8N
                     </AlertDescription>
                   </Alert>
                 </div>
