@@ -5,33 +5,26 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/use-toast"
 import { AgentModal } from "@/components/agent-modal"
 import { AgentDuplicateDialog } from "@/components/agent-duplicate-dialog"
-import { AlertCircle, Bot, Copy, Edit, Loader2, MessageSquare, Mic, Plus, Trash2, Calendar } from "lucide-react"
+import { AlertCircle, Bot, Copy, Edit, Loader2, Plus, Trash2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { getCurrentUser } from "@/lib/auth"
+import { Badge } from "@/components/ui/badge"
+import type { Agent as ModalAgentType } from "@/components/agent-modal" // Import Agent type from modal
 
-type Agent = {
-  id: string
-  name: string
-  description: string
-  prompt: string
-  model: string
-  temperature: number
-  max_tokens: number
-  whatsapp_connection_id: string | null
-  user_id: string
-  created_at: string
-  type: string
-  voice_provider: string | null
-  voice_api_key: string | null
-  voice_voice_id: string | null
-  calendar_provider: string | null
-  calendar_api_key: string | null
-  calendar_calendar_id: string | null
+// ... other imports
+
+// Update the Agent type to include necessary fields for display and editing
+type Agent = Omit<ModalAgentType, "prompt" | "model"> & {
+  // Omit potentially conflicting old fields
+  // Fields from ModalAgentType are implicitly included
+  // Add any page-specific display fields if necessary
+  whatsapp_connection_name?: string
+  // Ensure all fields fetched from Supabase are here, especially those needed by the modal
+  // The ModalAgentType should be the source of truth for agent structure
 }
 
 export default function AgentsPage() {
@@ -55,32 +48,61 @@ export default function AgentsPage() {
   useEffect(() => {
     const fetchUserAndAgents = async () => {
       try {
-        // Buscar o usuário atual
         const currentUser = getCurrentUser()
-
         if (!currentUser) {
           router.push("/")
           return
         }
-
         setUserId(currentUser.id)
 
-        // Verificar limite de agentes
         const limitCheck = await checkAgentLimit(currentUser.id)
         setLimitInfo(limitCheck)
 
-        // Buscar agentes do usuário
-        const { data: agentsData, error } = await supabase
+        // Fetch agents with all necessary fields, especially model_config
+        const { data: agentsData, error: agentsError } = await supabase
           .from("ai_agents")
-          .select("*")
+          .select("*, model_config") // Ensure model_config is explicitly selected
           .eq("user_id", currentUser.id)
           .order("created_at", { ascending: false })
 
-        if (error) {
-          throw error
+        if (agentsError) {
+          throw agentsError
         }
 
-        setAgents(agentsData || [])
+        let enrichedAgents: Agent[] = []
+        if (agentsData) {
+          // Fetch WhatsApp connection names
+          const connectionIds = agentsData
+            .map((agent) => agent.whatsapp_connection_id)
+            .filter((id): id is string => id !== null)
+
+          const connectionsMap = new Map<string, string>()
+          if (connectionIds.length > 0) {
+            const { data: connectionsData, error: connectionsError } = await supabase
+              .from("whatsapp_connections")
+              .select("id, connection_name")
+              .in("id", connectionIds)
+
+            if (connectionsError) {
+              console.error("Erro ao buscar nomes das conexões WhatsApp:", connectionsError)
+            } else if (connectionsData) {
+              connectionsData.forEach((conn) => connectionsMap.set(conn.id, conn.connection_name))
+            }
+          }
+
+          enrichedAgents = agentsData.map((agent) => ({
+            ...agent,
+            // Ensure model_config is properly parsed if it's a string,
+            // though Supabase client should handle JSONB correctly.
+            // If agent.model_config is a string, parse it:
+            // model_config: typeof agent.model_config === 'string' ? JSON.parse(agent.model_config) : agent.model_config,
+            whatsapp_connection_name: agent.whatsapp_connection_id
+              ? connectionsMap.get(agent.whatsapp_connection_id)
+              : undefined,
+          }))
+        }
+        // @ts-ignore // Supabase data might not perfectly match Agent type initially
+        setAgents(enrichedAgents)
       } catch (error) {
         console.error("Erro ao buscar agentes:", error)
         toast({
@@ -265,65 +287,57 @@ export default function AgentsPage() {
     }
   }
 
-  const getAgentTypeIcon = (type: string) => {
-    switch (type) {
-      case "voice":
-        return <Mic className="h-4 w-4" />
-      case "calendar":
-        return <Calendar className="h-4 w-4" />
-      default:
-        return <MessageSquare className="h-4 w-4" />
-    }
-  }
-
-  const renderAgentCards = (agents: Agent[]) => {
-    if (agents.length === 0) {
+  const renderAgentCards = (agentsToRender: Agent[]) => {
+    if (agentsToRender.length === 0 && !loading) {
+      // Added !loading to prevent flash of "No agents"
       return (
-        <div className="flex flex-col items-center justify-center p-8 text-center">
+        <div className="flex flex-col items-center justify-center p-8 text-center col-span-full">
           <Bot className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium">Nenhum agente encontrado</h3>
           <p className="text-sm text-muted-foreground mt-2">
-            Crie seu primeiro agente para começar a usar a plataforma
+            Crie seu primeiro agente para começar a usar a plataforma.
           </p>
         </div>
       )
     }
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {agents.map((agent) => (
-          <Card key={agent.id} className="overflow-hidden">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
+      <>
+        {agentsToRender.map((agent) => (
+          <Card key={agent.id} className="overflow-hidden flex flex-col">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  {getAgentTypeIcon(agent.type)}
-                  <CardTitle className="text-lg">{agent.name}</CardTitle>
+                  <Bot className="h-5 w-5 text-primary flex-shrink-0" />
+                  <CardTitle className="text-lg leading-tight">{agent.name}</CardTitle>
                 </div>
+                {agent.is_default && <Badge variant="secondary">Padrão</Badge>}
               </div>
-              <CardDescription className="line-clamp-2">{agent.description}</CardDescription>
+              {agent.description && (
+                <CardDescription className="line-clamp-2 text-sm pt-1">{agent.description}</CardDescription>
+              )}
             </CardHeader>
-            <CardContent className="pb-2">
-              <div className="text-sm text-muted-foreground">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium">Modelo:</span> {agent.model}
-                </div>
-                {agent.type === "voice" && agent.voice_provider && (
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium">Provedor de voz:</span> {agent.voice_provider}
-                  </div>
-                )}
-                {agent.type === "calendar" && agent.calendar_provider && (
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium">Provedor de calendário:</span> {agent.calendar_provider}
-                  </div>
-                )}
+            <CardContent className="pb-3 space-y-1.5 text-sm flex-grow">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-muted-foreground">Modelo:</span>
+                <span>{agent.model_name}</span>
               </div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-muted-foreground">Status:</span>
+                <Badge variant={agent.is_active ? "default" : "outline"}>{agent.is_active ? "Ativo" : "Inativo"}</Badge>
+              </div>
+              {agent.whatsapp_connection_id && (
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-muted-foreground">Conexão:</span>
+                  <span>{agent.whatsapp_connection_name || agent.whatsapp_connection_id}</span>
+                </div>
+              )}
             </CardContent>
-            <CardFooter className="pt-2 flex justify-between">
+            <CardFooter className="pt-3 flex justify-between items-center">
               <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/agents/${agent.id}`)}>
                 Ver detalhes
               </Button>
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <Button variant="ghost" size="icon" onClick={() => handleEditAgent(agent)}>
                   <Edit className="h-4 w-4" />
                 </Button>
@@ -344,14 +358,14 @@ export default function AgentsPage() {
                   {isDeleting === agent.id ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4 text-destructive" />
                   )}
                 </Button>
               </div>
             </CardFooter>
           </Card>
         ))}
-      </div>
+      </>
     )
   }
 
@@ -380,10 +394,6 @@ export default function AgentsPage() {
       ))
   }
 
-  const chatAgents = agents.filter((agent) => agent.type === "chat")
-  const voiceAgents = agents.filter((agent) => agent.type === "voice")
-  const calendarAgents = agents.filter((agent) => agent.type === "calendar")
-
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -410,44 +420,17 @@ export default function AgentsPage() {
         </div>
       )}
 
-      <Tabs defaultValue="all">
-        <TabsList>
-          <TabsTrigger value="all">Todos ({agents.length})</TabsTrigger>
-          <TabsTrigger value="chat">Chat ({chatAgents.length})</TabsTrigger>
-          <TabsTrigger value="voice">Voz ({voiceAgents.length})</TabsTrigger>
-          <TabsTrigger value="calendar">Calendário ({calendarAgents.length})</TabsTrigger>
-        </TabsList>
-        <TabsContent value="all" className="mt-4">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-          ) : (
-            renderAgentCards(agents)
-          )}
-        </TabsContent>
-        <TabsContent value="chat" className="mt-4">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-          ) : (
-            renderAgentCards(chatAgents)
-          )}
-        </TabsContent>
-        <TabsContent value="voice" className="mt-4">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-          ) : (
-            renderAgentCards(voiceAgents)
-          )}
-        </TabsContent>
-        <TabsContent value="calendar" className="mt-4">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-          ) : (
-            renderAgentCards(calendarAgents)
-          )}
-        </TabsContent>
-      </Tabs>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+        {loading ? renderSkeletons() : renderAgentCards(agents)}
+      </div>
 
-      <AgentModal isOpen={isModalOpen} onOpenChange={setIsModalOpen} agent={selectedAgent} onSave={handleAgentSaved} />
+      <AgentModal
+        open={isModalOpen} // Changed from isOpen to open to match modal prop
+        onOpenChange={setIsModalOpen}
+        agent={selectedAgent}
+        onSave={handleAgentSaved}
+        isEditing={!!selectedAgent} // Explicitly pass isEditing
+      />
 
       <AgentDuplicateDialog
         isOpen={isDuplicateDialogOpen}
