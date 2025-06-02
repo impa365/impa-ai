@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react" // Mantido
+import type React from "react"
 
 import { useState, useEffect, useMemo } from "react"
 import {
@@ -34,9 +34,6 @@ import {
   ChevronUp,
   FileText,
   Brain,
-  Palette,
-  Clock,
-  UserCheck,
   Loader2,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
@@ -44,10 +41,9 @@ import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
 import { modelosOpenAI } from "@/lib/openai-models"
 import { vozOutputProviders } from "@/lib/tts-providers"
-import { fetchWhatsAppConnections, type WhatsAppConnection } from "@/lib/whatsapp-connections" // Importar WhatsAppConnection type
+import { fetchWhatsAppConnections, type WhatsAppConnection } from "@/lib/whatsapp-connections"
 import { createEvolutionBot, updateEvolutionBot, fetchEvolutionBotSettings } from "@/lib/evolution-api"
 
-// Interfaces Agent, ModelConfig, VoiceConfig, ToolsConfig (versão completa anterior)
 export interface Agent {
   id: string
   user_id: string
@@ -56,53 +52,29 @@ export interface Agent {
   prompt_template: string
   model_name: string
   temperature: number
-  top_p: number
   max_tokens: number
-  model_config: ModelConfig // Mantido como objeto
+  model_config: ModelConfig
   is_active: boolean
   created_at?: string
   updated_at?: string
   is_default: boolean
   whatsapp_connection_id?: string | null
-  // @ts-ignore - whatsapp_connections pode não existir diretamente no agente, mas ser juntado
+  // @ts-ignore
   whatsapp_connections?: { instance_name: string } | null
   evolution_bot_id?: string | null
   n8n_webhook_url?: string | null
 }
 
 export interface ModelConfig {
-  greeting_message_enabled: boolean
-  greeting_message?: string | null
-  max_messages_per_user: number
-  rate_limit_message?: string | null
-  inactivity_timeout: number // em segundos
-  inactivity_message?: string | null
+  activation_keyword?: string | null
   voice_output_enabled: boolean
   voice_provider?: string | null
   voice_config?: VoiceConfig | null
   tools_config?: ToolsConfig | null
-  conversation_memory: "short_term" | "long_term" | "none"
-  knowledge_base_enabled: boolean // Manter, mesmo que não usado ativamente, para não quebrar a estrutura
-  knowledge_base_ids?: string[] | null // Manter
-  tone_and_style: {
-    personality: string
-    language_style: string
-    response_length: "concise" | "medium" | "detailed"
-  }
-  activation_keyword?: string | null
-  allowed_numbers?: string[] | null
-  blocked_numbers?: string[] | null
-  collect_user_feedback: boolean
-  human_takeover_enabled: boolean
-  human_takeover_keyword?: string | null
-  human_takeover_email?: string | null
 }
 
 export interface VoiceConfig {
   voice_id?: string | null
-  speaking_rate?: number | null
-  pitch?: number | null
-  emotion?: string | null
 }
 
 export interface ToolsConfig {
@@ -111,11 +83,22 @@ export interface ToolsConfig {
     api_key?: string | null
     event_type_id?: string | null
   }
-  knowledge_retrieval: {
-    // Manter, mesmo que não usado ativamente
-    enabled: boolean
-    retrieval_sources?: string[] | null
-  }
+}
+
+const initialModelConfig: ModelConfig = {
+  activation_keyword: "/ia",
+  voice_output_enabled: false,
+  voice_provider: "elevenlabs",
+  voice_config: {
+    voice_id: "",
+  },
+  tools_config: {
+    cal_com: {
+      enabled: false,
+      api_key: "",
+      event_type_id: "",
+    },
+  },
 }
 
 const initialFormData: Agent = {
@@ -126,50 +109,8 @@ const initialFormData: Agent = {
   prompt_template: "Você é um assistente prestativo.",
   model_name: "gpt-4o",
   temperature: 0.7,
-  top_p: 1.0,
   max_tokens: 1500,
-  model_config: {
-    greeting_message_enabled: true,
-    greeting_message: "Olá! Como posso te ajudar hoje?",
-    max_messages_per_user: 0,
-    rate_limit_message: "Você atingiu o limite de mensagens. Por favor, tente novamente mais tarde.",
-    inactivity_timeout: 600,
-    inactivity_message: "Sua sessão foi encerrada por inatividade. Envie uma mensagem para recomeçar.",
-    voice_output_enabled: false,
-    voice_provider: "elevenlabs",
-    voice_config: {
-      voice_id: "",
-      speaking_rate: 1.0,
-      pitch: 0,
-      emotion: "neutral",
-    },
-    tools_config: {
-      cal_com: {
-        enabled: false,
-        api_key: "",
-        event_type_id: "",
-      },
-      knowledge_retrieval: {
-        enabled: false,
-        retrieval_sources: [],
-      },
-    },
-    conversation_memory: "long_term",
-    knowledge_base_enabled: false,
-    knowledge_base_ids: [],
-    tone_and_style: {
-      personality: "Amigável e profissional",
-      language_style: "Clara e objetiva",
-      response_length: "medium",
-    },
-    activation_keyword: "/ia",
-    allowed_numbers: [],
-    blocked_numbers: [],
-    collect_user_feedback: true,
-    human_takeover_enabled: false,
-    human_takeover_keyword: "/humano",
-    human_takeover_email: "",
-  },
+  model_config: initialModelConfig,
   is_active: true,
   is_default: false,
   whatsapp_connection_id: null,
@@ -205,10 +146,8 @@ export function AgentModal({
 
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
-    toneStyle: true,
-    behaviorLimits: false,
-    advancedFeatures: false,
-    // integrations: false, // Removido se não houver campos visíveis para o usuário
+    behavior: true, // Renomeado e simplificado
+    advanced: false, // Para Voz e Cal.com
   })
 
   const toggleSection = (section: keyof typeof expandedSections) => {
@@ -252,42 +191,22 @@ export function AgentModal({
 
   useEffect(() => {
     if (agent) {
-      const agentModelConfig =
+      const agentModelConfigData =
         typeof agent.model_config === "string" ? JSON.parse(agent.model_config) : agent.model_config
 
       const mergedModelConfig: ModelConfig = {
-        ...initialFormData.model_config,
-        ...(agentModelConfig || {}),
-        greeting_message: (agentModelConfig?.greeting_message || initialFormData.model_config.greeting_message) ?? "",
-        rate_limit_message:
-          (agentModelConfig?.rate_limit_message || initialFormData.model_config.rate_limit_message) ?? "",
-        inactivity_message:
-          (agentModelConfig?.inactivity_message || initialFormData.model_config.inactivity_message) ?? "",
+        ...initialModelConfig, // Começa com os padrões simplificados
+        ...(agentModelConfigData || {}),
         voice_config: {
-          ...initialFormData.model_config.voice_config,
-          ...(agentModelConfig?.voice_config || {}),
+          ...initialModelConfig.voice_config,
+          ...(agentModelConfigData?.voice_config || {}),
         },
         tools_config: {
-          ...initialFormData.model_config.tools_config,
+          ...initialModelConfig.tools_config,
           cal_com: {
-            ...(initialFormData.model_config.tools_config?.cal_com || {
-              enabled: false,
-              api_key: "",
-              event_type_id: "",
-            }),
-            ...(agentModelConfig?.tools_config?.cal_com || {}),
+            ...(initialModelConfig.tools_config?.cal_com || {}),
+            ...(agentModelConfigData?.tools_config?.cal_com || {}),
           },
-          knowledge_retrieval: {
-            ...(initialFormData.model_config.tools_config?.knowledge_retrieval || {
-              enabled: false,
-              retrieval_sources: [],
-            }),
-            ...(agentModelConfig?.tools_config?.knowledge_retrieval || {}),
-          },
-        },
-        tone_and_style: {
-          ...initialFormData.model_config.tone_and_style,
-          ...(agentModelConfig?.tone_and_style || {}),
         },
       }
 
@@ -306,7 +225,7 @@ export function AgentModal({
         }
       }
     } else {
-      setFormData({ ...initialFormData, user_id: currentUser?.id || "" })
+      setFormData({ ...initialFormData, user_id: currentUser?.id || "", model_config: initialModelConfig })
       setEvolutionInstanceName(null)
     }
   }, [agent, currentUser, whatsappConnections])
@@ -331,26 +250,12 @@ export function AgentModal({
     name: keyof Agent | keyof ModelConfig,
     value: string | number,
     isModelConfigField = false,
-    subKey?: keyof ModelConfig["tone_and_style"],
   ) => {
     if (isModelConfigField) {
-      if (name === "tone_and_style" && subKey) {
-        setFormData((prev) => ({
-          ...prev,
-          model_config: {
-            ...prev.model_config,
-            tone_and_style: {
-              ...prev.model_config.tone_and_style,
-              [subKey]: value,
-            },
-          },
-        }))
-      } else {
-        setFormData((prev) => ({
-          ...prev,
-          model_config: { ...prev.model_config, [name]: value } as ModelConfig,
-        }))
-      }
+      setFormData((prev) => ({
+        ...prev,
+        model_config: { ...prev.model_config, [name]: value } as ModelConfig,
+      }))
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }))
       if (name === "whatsapp_connection_id") {
@@ -367,28 +272,28 @@ export function AgentModal({
   const handleConfigChange = (
     key: keyof ModelConfig,
     value: any,
-    subKey?:
-      | keyof VoiceConfig
-      | keyof ToolsConfig["cal_com"]
-      | keyof ModelConfig["tone_and_style"]
-      | keyof ToolsConfig["knowledge_retrieval"],
-    subSubKey?: keyof ToolsConfig["cal_com"] | keyof ToolsConfig["knowledge_retrieval"],
+    subKey?: keyof VoiceConfig | keyof ToolsConfig["cal_com"],
+    subSubKey?: keyof ToolsConfig["cal_com"], // Apenas para cal_com agora
   ) => {
     setFormData((prev) => {
       const newModelConfig = { ...prev.model_config }
-      if (subKey && subSubKey && key === "tools_config") {
-        // @ts-ignore
-        newModelConfig[key] = {
-          ...newModelConfig[key],
-          [subKey]: {
-            // @ts-ignore
-            ...(newModelConfig[key]?.[subKey] || {}),
+
+      if (key === "tools_config" && subKey === "cal_com" && subSubKey) {
+        newModelConfig.tools_config = {
+          ...newModelConfig.tools_config,
+          cal_com: {
+            ...(newModelConfig.tools_config?.cal_com || { enabled: false }), // Garante que cal_com exista
             [subSubKey]: value,
           },
         }
-      } else if (subKey && (key === "voice_config" || key === "tools_config" || key === "tone_and_style")) {
+      } else if (key === "tools_config" && subKey === "cal_com") {
         // @ts-ignore
-        newModelConfig[key] = { ...(newModelConfig[key] || {}), [subKey]: value }
+        newModelConfig.tools_config.cal_com[subKey] = value // Ex: enabled
+      } else if (key === "voice_config" && subKey) {
+        newModelConfig.voice_config = {
+          ...(newModelConfig.voice_config || {}), // Garante que voice_config exista
+          [subKey]: value,
+        }
       } else {
         // @ts-ignore
         newModelConfig[key] = value
@@ -436,6 +341,18 @@ export function AgentModal({
       }
     }
 
+    if (!evolutionInstanceName && formData.whatsapp_connection_id) {
+      // Tentativa de buscar novamente se não estiver definido
+      const selectedConn = whatsappConnections.find((c) => c.id === formData.whatsapp_connection_id)
+      if (!selectedConn || !selectedConn.instance_name) {
+        setError("Não foi possível encontrar o nome da instância da Evolution API para a conexão selecionada.")
+        setLoading(false)
+        return
+      }
+      setEvolutionInstanceName(selectedConn.instance_name) // Atualiza o estado para uso subsequente
+    }
+
+    // Garante que evolutionInstanceName seja usado a partir daqui, após a verificação
     const currentEvolutionInstanceName =
       evolutionInstanceName ||
       (formData.whatsapp_connection_id
@@ -443,7 +360,7 @@ export function AgentModal({
         : null)
 
     if (!currentEvolutionInstanceName && formData.whatsapp_connection_id) {
-      setError("Não foi possível encontrar o nome da instância da Evolution API para a conexão selecionada.")
+      setError("Nome da instância da Evolution API ainda não definido após verificação.")
       setLoading(false)
       return
     }
@@ -456,8 +373,7 @@ export function AgentModal({
         const agentSpecificToken = `AGENT_${formData.id || Date.now()}_TOKEN`
         finalN8nWebhookUrl = `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`
 
-        const evolutionBotPayload: any = {
-          // Usar 'any' temporariamente para flexibilidade
+        const evolutionBotPayload = {
           name: formData.name,
           description: formData.description || "",
           prompt: formData.prompt_template,
@@ -465,20 +381,9 @@ export function AgentModal({
           temperature: formData.temperature,
           max_tokens: formData.max_tokens,
           webhook_url: finalN8nWebhookUrl,
-          api_key: n8nIntegrationConfig.apiKey || null, // Pode ser null
+          api_key: n8nIntegrationConfig.apiKey || null,
           active: formData.is_active,
           keyword: formData.model_config.activation_keyword || "",
-        }
-
-        // Adicionar campos de model_config que a Evolution API pode usar, se houver
-        // Exemplo: se a Evolution API suportar diretamente configurações de voz ou ferramentas
-        if (
-          formData.model_config.voice_output_enabled &&
-          formData.model_config.voice_provider &&
-          formData.model_config.voice_config?.voice_id
-        ) {
-          evolutionBotPayload.tts_provider = formData.model_config.voice_provider
-          evolutionBotPayload.tts_voice_id = formData.model_config.voice_config.voice_id
         }
 
         let currentEvolutionSettings = null
@@ -519,9 +424,8 @@ export function AgentModal({
         prompt_template: formData.prompt_template,
         model_name: formData.model_name,
         temperature: formData.temperature,
-        top_p: formData.top_p,
         max_tokens: formData.max_tokens,
-        model_config: formData.model_config, // Salva o objeto model_config completo
+        model_config: formData.model_config, // Salvar o objeto model_config simplificado
         is_active: formData.is_active,
         is_default: formData.is_default,
         whatsapp_connection_id: formData.whatsapp_connection_id,
@@ -545,7 +449,7 @@ export function AgentModal({
         if (newAgentData && !evolutionBotId && n8nIntegrationConfig?.flowUrl && currentEvolutionInstanceName) {
           const agentSpecificToken = `AGENT_${newAgentData.id}_TOKEN`
           const newN8nWebhookUrl = `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`
-          const evolutionBotPayloadRetry: any = {
+          const evolutionBotPayloadRetry = {
             name: newAgentData.name,
             description: newAgentData.description || "",
             prompt: newAgentData.prompt_template,
@@ -557,15 +461,6 @@ export function AgentModal({
             active: newAgentData.is_active,
             keyword: newAgentData.model_config.activation_keyword || "",
           }
-          if (
-            newAgentData.model_config.voice_output_enabled &&
-            newAgentData.model_config.voice_provider &&
-            newAgentData.model_config.voice_config?.voice_id
-          ) {
-            evolutionBotPayloadRetry.tts_provider = newAgentData.model_config.voice_provider
-            evolutionBotPayloadRetry.tts_voice_id = newAgentData.model_config.voice_config.voice_id
-          }
-
           const createResultRetry = await createEvolutionBot(currentEvolutionInstanceName, evolutionBotPayloadRetry)
           if (createResultRetry.success && createResultRetry.bot?.id) {
             await supabase
@@ -619,16 +514,14 @@ export function AgentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0">
         <form onSubmit={handleSubmit}>
           <DialogHeader className="p-6 pb-4 border-b sticky top-0 bg-white z-10">
             <DialogTitle className="text-2xl font-bold flex items-center">
               <Bot className="w-7 h-7 mr-3 text-primary" />
               {isEditing ? "Editar Agente de IA" : "Criar Novo Agente de IA"}
             </DialogTitle>
-            <DialogDescription>
-              Configure os detalhes, comportamento e integrações do seu assistente virtual.
-            </DialogDescription>
+            <DialogDescription>Configure os detalhes essenciais e funcionalidades do seu agente.</DialogDescription>
           </DialogHeader>
 
           <div className="px-2 py-4 md:px-6 md:py-6 space-y-0 bg-gray-50/30">
@@ -644,10 +537,7 @@ export function AgentModal({
               <div className="px-4 pb-4">
                 <Alert variant="warning">
                   <Info className="h-4 w-4" />
-                  <AlertDescription>
-                    Você atingiu o limite máximo de agentes. Para criar mais, considere atualizar seu plano ou remover
-                    agentes existentes.
-                  </AlertDescription>
+                  <AlertDescription>Você atingiu o limite máximo de agentes.</AlertDescription>
                 </Alert>
               </div>
             )}
@@ -663,14 +553,7 @@ export function AgentModal({
                 <CardContent className="p-4 md:p-6 space-y-4 border-t">
                   <div>
                     <Label htmlFor="name">Nome do Agente *</Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      placeholder="Ex: Assistente de Vendas Avançado"
-                      required
-                    />
+                    <Input id="name" name="name" value={formData.name} onChange={handleInputChange} required />
                   </div>
                   <div>
                     <Label htmlFor="description">Descrição (Opcional)</Label>
@@ -679,7 +562,6 @@ export function AgentModal({
                       name="description"
                       value={formData.description || ""}
                       onChange={handleInputChange}
-                      placeholder="Descreva a função e especialidade do agente"
                     />
                   </div>
                   <div>
@@ -690,7 +572,7 @@ export function AgentModal({
                       onValueChange={(value) => handleSelectChange("model_name", value)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione um modelo" />
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {modelosOpenAI.map((modelo) => (
@@ -703,7 +585,6 @@ export function AgentModal({
                     {selectedModelInfo && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Janela de contexto: {selectedModelInfo.context_window.toLocaleString()} tokens.
-                        {selectedModelInfo.description}
                       </p>
                     )}
                   </div>
@@ -719,52 +600,29 @@ export function AgentModal({
                         defaultValue={[formData.temperature]}
                         onValueChange={(value) => handleSliderChange("temperature", value)}
                       />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Controla a aleatoriedade. Mais alto = mais criativo.
-                      </p>
                     </div>
+                    <div></div>
                     <div>
-                      <Label htmlFor="top_p">Top P: {formData.top_p.toFixed(1)}</Label>
-                      <Slider
-                        id="top_p"
-                        name="top_p"
-                        min={0}
-                        max={1}
-                        step={0.1}
-                        defaultValue={[formData.top_p]}
-                        onValueChange={(value) => handleSliderChange("top_p", value)}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Controla a diversidade via amostragem nucleus.
-                      </p>
-                    </div>
-                    <div>
-                      <Label htmlFor="max_tokens">Max Tokens Resposta: {formData.max_tokens}</Label>
+                      <Label htmlFor="max_tokens">Max Tokens: {formData.max_tokens}</Label>
                       <Input
                         type="number"
                         id="max_tokens"
                         name="max_tokens"
                         value={formData.max_tokens}
                         onChange={handleInputChange}
-                        placeholder="1500"
                       />
-                      <p className="text-xs text-muted-foreground mt-1">Máximo de tokens na resposta do agente.</p>
                     </div>
                   </div>
                   <div>
-                    <Label htmlFor="prompt_template">Prompt de Treinamento (Instruções do Sistema) *</Label>
+                    <Label htmlFor="prompt_template">Prompt de Treinamento *</Label>
                     <Textarea
                       id="prompt_template"
                       name="prompt_template"
                       value={formData.prompt_template || ""}
                       onChange={handleInputChange}
-                      placeholder="Você é um assistente virtual especializado em..."
-                      rows={8}
+                      rows={6}
                       required
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Defina a persona, o papel, as instruções principais e o conhecimento base do seu agente.
-                    </p>
                   </div>
                 </CardContent>
               )}
@@ -772,59 +630,12 @@ export function AgentModal({
 
             <Card className="shadow-sm overflow-hidden mt-4">
               <SectionToggle
-                title="Tom, Estilo e Função"
-                sectionKey="toneStyle"
-                icon={Palette}
-                description="Personalidade, estilo de linguagem e comprimento das respostas."
-              />
-              {expandedSections.toneStyle && (
-                <CardContent className="p-4 md:p-6 space-y-4 border-t">
-                  <div>
-                    <Label htmlFor="personality">Personalidade</Label>
-                    <Input
-                      id="personality"
-                      value={formData.model_config.tone_and_style.personality}
-                      onChange={(e) => handleConfigChange("tone_and_style", e.target.value, "personality")}
-                      placeholder="Ex: Amigável e prestativo, Formal e direto"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="language_style">Estilo de Linguagem</Label>
-                    <Input
-                      id="language_style"
-                      value={formData.model_config.tone_and_style.language_style}
-                      onChange={(e) => handleConfigChange("tone_and_style", e.target.value, "language_style")}
-                      placeholder="Ex: Clara e concisa, Detalhada e explicativa"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="response_length">Comprimento da Resposta</Label>
-                    <Select
-                      value={formData.model_config.tone_and_style.response_length}
-                      onValueChange={(value) => handleConfigChange("tone_and_style", value, "response_length")}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="concise">Concisa</SelectItem>
-                        <SelectItem value="medium">Média</SelectItem>
-                        <SelectItem value="detailed">Detalhada</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-
-            <Card className="shadow-sm overflow-hidden mt-4">
-              <SectionToggle
-                title="Comportamento e Limites"
-                sectionKey="behaviorLimits"
+                title="Conexão e Ativação"
+                sectionKey="behavior"
                 icon={Settings}
-                description="Ativação, saudação, inatividade, limites de uso e status."
+                description="Conexão WhatsApp, palavra de ativação e status."
               />
-              {expandedSections.behaviorLimits && (
+              {expandedSections.behavior && (
                 <CardContent className="p-4 md:p-6 space-y-4 border-t">
                   <div>
                     <Label htmlFor="whatsapp_connection_id">Conexão WhatsApp *</Label>
@@ -834,7 +645,7 @@ export function AgentModal({
                       onValueChange={(value) => handleSelectChange("whatsapp_connection_id", value)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma conexão WhatsApp" />
+                        <SelectValue placeholder="Selecione uma conexão" />
                       </SelectTrigger>
                       <SelectContent>
                         {whatsappConnections.map((conn) => (
@@ -851,91 +662,14 @@ export function AgentModal({
                       id="activation_keyword"
                       value={formData.model_config.activation_keyword || ""}
                       onChange={(e) => handleConfigChange("activation_keyword", e.target.value)}
-                      placeholder="Ex: /bot, !assistente"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Palavra que o usuário deve enviar para iniciar a conversa com o bot.
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between py-2">
-                    <Label htmlFor="greeting_message_enabled" className="flex flex-col">
-                      <span>Mensagem de Saudação Automática</span>
-                      <span className="text-xs text-gray-500 font-normal">
-                        Envia uma mensagem quando o bot é ativado.
-                      </span>
-                    </Label>
-                    <Switch
-                      id="greeting_message_enabled"
-                      checked={formData.model_config.greeting_message_enabled}
-                      onCheckedChange={(checked) => handleConfigChange("greeting_message_enabled", checked)}
+                      required
                     />
                   </div>
-                  {formData.model_config.greeting_message_enabled && (
-                    <div className="pl-2">
-                      <Label htmlFor="greeting_message">Texto da Mensagem de Saudação</Label>
-                      <Textarea
-                        id="greeting_message"
-                        value={formData.model_config.greeting_message || ""}
-                        onChange={(e) => handleConfigChange("greeting_message", e.target.value)}
-                        placeholder="Olá! Sou seu assistente virtual. Como posso te ajudar hoje?"
-                      />
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="inactivity_timeout">Tempo de Inatividade (segundos)</Label>
-                      <Input
-                        type="number"
-                        id="inactivity_timeout"
-                        value={formData.model_config.inactivity_timeout}
-                        onChange={(e) => handleConfigChange("inactivity_timeout", Number.parseInt(e.target.value) || 0)}
-                        placeholder="Ex: 300 (5 minutos)"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Tempo para encerrar a sessão por inatividade.
-                      </p>
-                    </div>
-                    <div>
-                      <Label htmlFor="max_messages_per_user">Máx. Mensagens por Usuário (0 = ilimitado)</Label>
-                      <Input
-                        type="number"
-                        id="max_messages_per_user"
-                        value={formData.model_config.max_messages_per_user}
-                        onChange={(e) =>
-                          handleConfigChange("max_messages_per_user", Number.parseInt(e.target.value) || 0)
-                        }
-                        placeholder="Ex: 100"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">Define um limite de interações por usuário.</p>
-                    </div>
-                  </div>
-                  {formData.model_config.inactivity_timeout > 0 && (
-                    <div className="pl-2">
-                      <Label htmlFor="inactivity_message">Mensagem de Encerramento por Inatividade</Label>
-                      <Textarea
-                        id="inactivity_message"
-                        value={formData.model_config.inactivity_message || ""}
-                        onChange={(e) => handleConfigChange("inactivity_message", e.target.value)}
-                        placeholder="Sessão encerrada devido à inatividade. Envie uma mensagem para recomeçar."
-                      />
-                    </div>
-                  )}
-                  {formData.model_config.max_messages_per_user > 0 && (
-                    <div className="pl-2">
-                      <Label htmlFor="rate_limit_message">Mensagem de Limite de Mensagens Atingido</Label>
-                      <Textarea
-                        id="rate_limit_message"
-                        value={formData.model_config.rate_limit_message || ""}
-                        onChange={(e) => handleConfigChange("rate_limit_message", e.target.value)}
-                        placeholder="Você atingiu o limite de mensagens. Por favor, tente novamente mais tarde."
-                      />
-                    </div>
-                  )}
                   <div className="flex items-center justify-between py-2">
                     <Label htmlFor="is_active" className="flex flex-col">
                       <span>Agente Ativo</span>
                       <span className="text-xs text-gray-500 font-normal">
-                        Permite que o agente receba e processe mensagens.
+                        Permite que o agente processe mensagens.
                       </span>
                     </Label>
                     <Switch
@@ -949,7 +683,7 @@ export function AgentModal({
                     <Label htmlFor="is_default" className="flex flex-col">
                       <span>Agente Padrão para esta Conexão</span>
                       <span className="text-xs text-gray-500 font-normal">
-                        Se marcado, este agente responderá por padrão na conexão selecionada.
+                        Define se este agente responde por padrão.
                       </span>
                     </Label>
                     <Switch
@@ -965,22 +699,21 @@ export function AgentModal({
 
             <Card className="shadow-sm overflow-hidden mt-4">
               <SectionToggle
-                title="Funcionalidades Avançadas"
-                sectionKey="advancedFeatures"
+                title="Funcionalidades Adicionais"
+                sectionKey="advanced"
                 icon={Brain}
-                description="Saída de voz, agendamento, memória de conversação e mais."
+                description="Configurações de saída de voz e agendamento Cal.com."
               />
-              {expandedSections.advancedFeatures && (
+              {expandedSections.advanced && (
                 <CardContent className="p-4 md:p-6 space-y-6 border-t">
-                  {/* Voice Output */}
                   <div className="p-4 border rounded-md bg-white">
                     <div className="flex items-center justify-between mb-3">
                       <Label htmlFor="voice_output_enabled" className="flex items-center text-md font-medium">
-                        <Volume2 className="w-5 h-5 mr-2 text-blue-500" /> Saída de Voz (Text-to-Speech)
+                        <Volume2 className="w-5 h-5 mr-2 text-blue-500" /> Saída de Voz (TTS)
                       </Label>
                       <Switch
                         id="voice_output_enabled"
-                        checked={formData.model_config.voice_output_enabled}
+                        checked={!!formData.model_config.voice_output_enabled}
                         onCheckedChange={(checked) => handleConfigChange("voice_output_enabled", checked)}
                       />
                     </div>
@@ -1015,18 +748,12 @@ export function AgentModal({
                             id="voice_id"
                             value={formData.model_config.voice_config?.voice_id || ""}
                             onChange={(e) => handleConfigChange("voice_config", e.target.value, "voice_id")}
-                            placeholder="Ex: pMsXgVXv3BLzUgSXRplE (ElevenLabs)"
                           />
-                          <p className="text-xs text-muted-foreground mt-1">
-                            ID específico da voz a ser usada no provedor. Consulte a documentação do provedor.
-                          </p>
                         </div>
-                        {/* Campos de speaking_rate, pitch, emotion podem ser adicionados aqui se necessário */}
                       </div>
                     )}
                   </div>
 
-                  {/* Cal.com Integration */}
                   <div className="p-4 border rounded-md bg-white">
                     <div className="flex items-center justify-between mb-3">
                       <Label htmlFor="cal_com_enabled" className="flex items-center text-md font-medium">
@@ -1034,7 +761,7 @@ export function AgentModal({
                       </Label>
                       <Switch
                         id="cal_com_enabled"
-                        checked={formData.model_config.tools_config?.cal_com?.enabled || false}
+                        checked={!!formData.model_config.tools_config?.cal_com?.enabled}
                         onCheckedChange={(checked) => handleConfigChange("tools_config", checked, "cal_com", "enabled")}
                       />
                     </div>
@@ -1048,7 +775,6 @@ export function AgentModal({
                               type={showCalApiKey ? "text" : "password"}
                               value={formData.model_config.tools_config?.cal_com?.api_key || ""}
                               onChange={(e) => handleConfigChange("tools_config", e.target.value, "cal_com", "api_key")}
-                              placeholder="cal_live_..."
                             />
                             <Button
                               type="button"
@@ -1069,72 +795,6 @@ export function AgentModal({
                             onChange={(e) =>
                               handleConfigChange("tools_config", e.target.value, "cal_com", "event_type_id")
                             }
-                            placeholder="Ex: meu-usuario/meu-evento-30min"
-                          />
-                          <p className="text-xs text-muted-foreground mt-1">
-                            O slug do seu tipo de evento Cal.com (ex: `username/event-slug`).
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Conversation Memory */}
-                  <div className="p-4 border rounded-md bg-white">
-                    <Label htmlFor="conversation_memory" className="text-md font-medium flex items-center mb-2">
-                      <Clock className="w-5 h-5 mr-2 text-indigo-500" /> Memória da Conversa
-                    </Label>
-                    <Select
-                      value={formData.model_config.conversation_memory}
-                      onValueChange={(value: "short_term" | "long_term" | "none") =>
-                        handleConfigChange("conversation_memory", value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Nenhuma (Sem memória)</SelectItem>
-                        <SelectItem value="short_term">Curto Prazo (Últimas interações)</SelectItem>
-                        <SelectItem value="long_term">Longo Prazo (Resumo contínuo da conversa)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Define como o agente lembra de interações passadas na mesma conversa.
-                    </p>
-                  </div>
-
-                  {/* Human Takeover */}
-                  <div className="p-4 border rounded-md bg-white">
-                    <div className="flex items-center justify-between mb-3">
-                      <Label htmlFor="human_takeover_enabled" className="flex items-center text-md font-medium">
-                        <UserCheck className="w-5 h-5 mr-2 text-teal-500" /> Transferência para Humano
-                      </Label>
-                      <Switch
-                        id="human_takeover_enabled"
-                        checked={formData.model_config.human_takeover_enabled}
-                        onCheckedChange={(checked) => handleConfigChange("human_takeover_enabled", checked)}
-                      />
-                    </div>
-                    {formData.model_config.human_takeover_enabled && (
-                      <div className="space-y-3 pl-7 mt-2 border-t pt-3">
-                        <div>
-                          <Label htmlFor="human_takeover_keyword">Palavra-chave para Transferência</Label>
-                          <Input
-                            id="human_takeover_keyword"
-                            value={formData.model_config.human_takeover_keyword || ""}
-                            onChange={(e) => handleConfigChange("human_takeover_keyword", e.target.value)}
-                            placeholder="Ex: /humano, falar com atendente"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="human_takeover_email">Email para Notificação de Transferência</Label>
-                          <Input
-                            type="email"
-                            id="human_takeover_email"
-                            value={formData.model_config.human_takeover_email || ""}
-                            onChange={(e) => handleConfigChange("human_takeover_email", e.target.value)}
-                            placeholder="Ex: suporte@suaempresa.com"
                           />
                         </div>
                       </div>

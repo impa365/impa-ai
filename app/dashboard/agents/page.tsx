@@ -70,13 +70,13 @@ export default function AgentsPage() {
         const { data: agentsData, error } = await supabase
           .from("ai_agents")
           .select(`
-          *,
-          whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
-            connection_name,
-            status,
-            instance_name
-          )
-        `)
+            *,
+            whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
+              connection_name,
+              status,
+              instance_name
+            )
+          `)
           .eq("user_id", currentUser.id)
           .order("created_at", { ascending: false })
 
@@ -188,13 +188,13 @@ export default function AgentsPage() {
         const { data: agentsData, error } = await supabase
           .from("ai_agents")
           .select(`
-          *,
-          whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
-            connection_name,
-            status,
-            instance_name
-          )
-        `)
+            *,
+            whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
+              connection_name,
+              status,
+              instance_name
+            )
+          `)
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
         if (error) throw error
@@ -229,13 +229,13 @@ export default function AgentsPage() {
         const { data: agentsData, error } = await supabase
           .from("ai_agents")
           .select(`
-          *,
-          whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
-            connection_name,
-            status,
-            instance_name
-          )
-        `)
+            *,
+            whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
+              connection_name,
+              status,
+              instance_name
+            )
+          `)
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
         if (error) throw error
@@ -276,7 +276,7 @@ export default function AgentsPage() {
   }
 
   const renderAgentCards = (filteredAgents: Agent[]) => {
-    if (agents.length === 0) {
+    if (filteredAgents.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center p-12 text-center bg-white rounded-lg shadow-sm">
           <Bot className="h-16 w-16 text-gray-400 mb-6" />
@@ -432,6 +432,13 @@ export default function AgentsPage() {
       ))
   }
 
+  // Remover a função filterAgentsByType pois não será mais necessária.
+
+  const allAgents = agents //filterAgentsByType("all")
+  //const chatAgents = filterAgentsByType("chat")
+  //const voiceAgents = filterAgentsByType("voice")
+  //const calendarAgents = filterAgentsByType("calendar")
+
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 space-y-8">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -459,13 +466,13 @@ export default function AgentsPage() {
         </Alert>
       )}
 
-      <div className="px-1 py-2">
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{renderSkeletons()}</div>
-        ) : (
-          renderAgentCards(agents) // Renderiza todos os agentes diretamente
-        )}
-      </div>
+      {/* Removendo Tabs e TabsList */}
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{renderSkeletons()}</div>
+      ) : (
+        renderAgentCards(allAgents)
+      )}
 
       {isModalOpen && (
         <AgentModal
