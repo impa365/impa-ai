@@ -84,8 +84,8 @@ const initialFormData: Agent = {
   evolution_bot_id: null,
   identity_description: "",
   training_prompt: "",
-  voice_tone: "friendly",
-  main_function: "assistant",
+  voice_tone: "humanizado",
+  main_function: "atendimento",
   temperature: 0.7,
   transcribe_audio: false,
   understand_images: false,
@@ -436,10 +436,11 @@ export function AgentModal({
                         <SelectValue placeholder="Selecione o tom" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="friendly">Amigável</SelectItem>
-                        <SelectItem value="professional">Profissional</SelectItem>
-                        <SelectItem value="casual">Casual</SelectItem>
+                        <SelectItem value="humanizado">Humanizado</SelectItem>
                         <SelectItem value="formal">Formal</SelectItem>
+                        <SelectItem value="tecnico">Técnico</SelectItem>
+                        <SelectItem value="casual">Casual</SelectItem>
+                        <SelectItem value="comercial">Comercial</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -455,10 +456,11 @@ export function AgentModal({
                         <SelectValue placeholder="Selecione a função" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="assistant">Assistente</SelectItem>
-                        <SelectItem value="sales">Vendas</SelectItem>
-                        <SelectItem value="support">Suporte</SelectItem>
-                        <SelectItem value="scheduler">Agendamento</SelectItem>
+                        <SelectItem value="atendimento">Atendimento</SelectItem>
+                        <SelectItem value="vendas">Vendas</SelectItem>
+                        <SelectItem value="agendamento">Agendamento</SelectItem>
+                        <SelectItem value="suporte">Suporte</SelectItem>
+                        <SelectItem value="qualificacao">Qualificação</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -470,7 +472,7 @@ export function AgentModal({
                     id="temperature"
                     name="temperature"
                     min={0}
-                    max={1}
+                    max={2}
                     step={0.1}
                     value={[formData.temperature || 0.7]}
                     onValueChange={(value) => handleSliderChange("temperature", value)}
@@ -552,7 +554,7 @@ export function AgentModal({
                             <SelectValue placeholder="Selecione o provedor" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                            <SelectItem value="eleven_labs">ElevenLabs</SelectItem>
                             <SelectItem value="fish_audio">Fish Audio</SelectItem>
                           </SelectContent>
                         </Select>
