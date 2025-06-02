@@ -2,7 +2,7 @@ import { supabase } from "./supabase"
 
 export interface CreateBotRequest {
   enabled: boolean
-  description: string
+  description: string // Nome da IA
   apiUrl: string
   apiKey?: string
   triggerType: string
@@ -12,13 +12,13 @@ export interface CreateBotRequest {
   keywordFinish: string
   delayMessage: number
   unknownMessage: string
-  listeningFromMe: boolean
-  stopBotFromMe: boolean
-  keepOpen: boolean
-  debounceTime: number
+  listeningFromMe: boolean // Ouvindo de mim
+  stopBotFromMe: boolean // Parar bot por mim
+  keepOpen: boolean // Manter aberto
+  debounceTime: number // Tempo de Debounce
   ignoreJids: string[]
-  splitMessages: boolean
-  timePerChar: number
+  splitMessages: boolean // Dividir Mensagens
+  timePerChar: number // Tempo por caractere
 }
 
 export interface CreateBotResponse {

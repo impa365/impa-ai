@@ -17,11 +17,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Sparkles, Info, Eye, EyeOff } from "lucide-react"
+import { Bot, Sparkles, Eye, EyeOff, Settings, MessageSquare, Volume2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
@@ -77,6 +77,16 @@ const initialFormData: Agent = {
     model: "gpt-3.5-turbo",
     voice_id: "",
     calendar_event_id: "",
+    // Configurações Evolution API
+    keyword_finish: "#sair",
+    delay_message: 1000,
+    unknown_message: "Desculpe, não entendi. Digite a palavra-chave para começar.",
+    listening_from_me: false,
+    stop_bot_from_me: true,
+    keep_open: false,
+    debounce_time: 10,
+    split_messages: true,
+    time_per_char: 100,
   },
   prompt_template: "",
   user_id: "",
@@ -165,7 +175,6 @@ export function AgentModal({
 
         if (evolutionBot) {
           setEvolutionSyncStatus("Sincronizado com sucesso!")
-          // Atualizar dados locais com dados da Evolution API se necessário
           setTimeout(() => setEvolutionSyncStatus(""), 3000)
         } else {
           setEvolutionSyncStatus("Erro na sincronização")
@@ -221,7 +230,7 @@ export function AgentModal({
     setError(null)
 
     if (!formData.name.trim()) {
-      setError("O nome do agente é obrigatório.")
+      setError("O nome da IA é obrigatório.")
       setLoading(false)
       return
     }
@@ -261,23 +270,24 @@ export function AgentModal({
 
         const evolutionBotData = {
           enabled: formData.status === "active",
-          description: formData.description || formData.name,
+          description: formData.name, // Nome da IA vai para description na Evolution API
           apiUrl: `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`,
           apiKey: n8nIntegrationConfig.apiKey || "",
           triggerType: "keyword",
           triggerOperator: "equals",
           triggerValue: formData.model_config?.activation_keyword || "",
           expire: 0,
-          keywordFinish: "#sair",
-          delayMessage: 1000,
-          unknownMessage: "Desculpe, não entendi. Digite a palavra-chave para começar.",
-          listeningFromMe: false,
-          stopBotFromMe: true,
-          keepOpen: false,
-          debounceTime: 10,
+          keywordFinish: formData.model_config?.keyword_finish || "#sair",
+          delayMessage: formData.model_config?.delay_message || 1000,
+          unknownMessage:
+            formData.model_config?.unknown_message || "Desculpe, não entendi. Digite a palavra-chave para começar.",
+          listeningFromMe: formData.model_config?.listening_from_me || false,
+          stopBotFromMe: formData.model_config?.stop_bot_from_me || true,
+          keepOpen: formData.model_config?.keep_open || false,
+          debounceTime: formData.model_config?.debounce_time || 10,
           ignoreJids: [],
-          splitMessages: true,
-          timePerChar: 100,
+          splitMessages: formData.model_config?.split_messages || true,
+          timePerChar: formData.model_config?.time_per_char || 100,
         }
 
         if (formData.evolution_bot_id) {
@@ -346,15 +356,20 @@ export function AgentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto p-0">
         <form onSubmit={handleSubmit}>
           <DialogHeader className="p-6 pb-4 border-b">
             <DialogTitle className="text-2xl font-bold flex items-center">
               <Bot className="w-7 h-7 mr-2 text-primary" />
               {isEditing ? "Editar Agente de IA" : "Criar Novo Agente de IA"}
             </DialogTitle>
-            <DialogDescription>Configure os detalhes e o comportamento do seu agente de IA.</DialogDescription>
-            {evolutionSyncStatus && <div className="text-sm text-muted-foreground mt-2">{evolutionSyncStatus}</div>}
+            <DialogDescription>
+              Configure sua Inteligência Artificial para WhatsApp. Preencha os campos abaixo para definir como sua IA
+              irá se comportar e responder aos usuários.
+            </DialogDescription>
+            {evolutionSyncStatus && (
+              <div className="text-sm text-green-600 bg-green-50 p-2 rounded mt-2">{evolutionSyncStatus}</div>
+            )}
           </DialogHeader>
 
           <div className="p-6 space-y-6">
@@ -364,87 +379,47 @@ export function AgentModal({
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            {maxAgentsReached && !isEditing && (
-              <Alert variant="warning">
-                <Info className="h-4 w-4" />
-                <AlertDescription>
-                  Você atingiu o limite máximo de agentes. Para criar mais, considere atualizar seu plano ou remover
-                  agentes existentes.
-                </AlertDescription>
-              </Alert>
-            )}
 
+            {/* Informações Básicas da IA */}
             <Card>
-              <CardContent className="pt-4 space-y-4">
-                {/* Informações Básicas */}
+              <CardHeader>
+                <CardTitle className="flex items-center text-lg">
+                  <Bot className="w-5 h-5 mr-2" />
+                  Informações Básicas da IA
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="name">Nome do Agente *</Label>
+                  <Label htmlFor="name">Nome da IA *</Label>
                   <Input
                     id="name"
                     name="name"
                     value={formData.name}
                     onChange={handleInputChange}
-                    placeholder="Ex: Assistente de Vendas"
+                    placeholder="Ex: Luna, Assistente de Vendas, Bot Atendimento"
                     required
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Este será o nome que identifica sua IA no sistema
+                  </p>
                 </div>
 
                 <div>
-                  <Label htmlFor="description">Descrição</Label>
+                  <Label htmlFor="description">Descrição do Propósito da IA</Label>
                   <Textarea
                     id="description"
                     name="description"
                     value={formData.description || ""}
                     onChange={handleInputChange}
-                    placeholder="Descreva a função principal do agente"
+                    placeholder="Ex: IA especializada em vendas de produtos digitais, focada em qualificar leads e agendar reuniões"
+                    rows={3}
                   />
-                </div>
-
-                <div>
-                  <Label htmlFor="identity_description">Descrição da Identidade</Label>
-                  <Textarea
-                    id="identity_description"
-                    name="identity_description"
-                    value={formData.identity_description || ""}
-                    onChange={handleInputChange}
-                    placeholder="Como o agente se apresenta"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="training_prompt">Prompt de Treinamento *</Label>
-                  <Textarea
-                    id="training_prompt"
-                    name="training_prompt"
-                    value={formData.training_prompt || ""}
-                    onChange={handleInputChange}
-                    placeholder="Instruções detalhadas para o agente"
-                    rows={6}
-                    required
-                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Descreva qual é o objetivo principal desta IA (vendas, suporte, agendamento, etc.)
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="voice_tone">Tom de Voz</Label>
-                    <Select
-                      name="voice_tone"
-                      value={formData.voice_tone || ""}
-                      onValueChange={(value) => handleSelectChange("voice_tone", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o tom" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="humanizado">Humanizado</SelectItem>
-                        <SelectItem value="formal">Formal</SelectItem>
-                        <SelectItem value="tecnico">Técnico</SelectItem>
-                        <SelectItem value="casual">Casual</SelectItem>
-                        <SelectItem value="comercial">Comercial</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
                   <div>
                     <Label htmlFor="main_function">Função Principal</Label>
                     <Select
@@ -456,28 +431,34 @@ export function AgentModal({
                         <SelectValue placeholder="Selecione a função" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="atendimento">Atendimento</SelectItem>
-                        <SelectItem value="vendas">Vendas</SelectItem>
-                        <SelectItem value="agendamento">Agendamento</SelectItem>
-                        <SelectItem value="suporte">Suporte</SelectItem>
-                        <SelectItem value="qualificacao">Qualificação</SelectItem>
+                        <SelectItem value="atendimento">Atendimento ao Cliente</SelectItem>
+                        <SelectItem value="vendas">Vendas e Conversão</SelectItem>
+                        <SelectItem value="agendamento">Agendamento de Reuniões</SelectItem>
+                        <SelectItem value="suporte">Suporte Técnico</SelectItem>
+                        <SelectItem value="qualificacao">Qualificação de Leads</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
 
-                <div>
-                  <Label htmlFor="temperature">Temperatura: {(formData.temperature || 0.7).toFixed(1)}</Label>
-                  <Slider
-                    id="temperature"
-                    name="temperature"
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    value={[formData.temperature || 0.7]}
-                    onValueChange={(value) => handleSliderChange("temperature", value)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">Controla a criatividade das respostas</p>
+                  <div>
+                    <Label htmlFor="voice_tone">Tom de Voz</Label>
+                    <Select
+                      name="voice_tone"
+                      value={formData.voice_tone || ""}
+                      onValueChange={(value) => handleSelectChange("voice_tone", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o tom" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="humanizado">Humanizado e Empático</SelectItem>
+                        <SelectItem value="formal">Formal e Profissional</SelectItem>
+                        <SelectItem value="tecnico">Técnico e Direto</SelectItem>
+                        <SelectItem value="casual">Casual e Descontraído</SelectItem>
+                        <SelectItem value="comercial">Comercial e Persuasivo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div>
@@ -488,7 +469,7 @@ export function AgentModal({
                     onValueChange={(value) => handleSelectChange("whatsapp_connection_id", value)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione uma conexão WhatsApp" />
+                      <SelectValue placeholder="Selecione qual número WhatsApp esta IA irá usar" />
                     </SelectTrigger>
                     <SelectContent>
                       {whatsappConnections.map((conn) => (
@@ -498,22 +479,235 @@ export function AgentModal({
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Escolha qual número de WhatsApp esta IA irá utilizar para conversar
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Personalidade e Comportamento */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-lg">
+                  <MessageSquare className="w-5 h-5 mr-2" />
+                  Personalidade e Comportamento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="identity_description">Como a IA se Apresenta</Label>
+                  <Textarea
+                    id="identity_description"
+                    name="identity_description"
+                    value={formData.identity_description || ""}
+                    onChange={handleInputChange}
+                    placeholder="Ex: Olá! Eu sou a Luna, sua assistente virtual especializada em vendas. Estou aqui para te ajudar a encontrar a melhor solução para suas necessidades."
+                    rows={3}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Como a IA irá se apresentar quando alguém iniciar uma conversa
+                  </p>
                 </div>
 
                 <div>
-                  <Label htmlFor="activation_keyword">Palavra-chave de Ativação *</Label>
+                  <Label htmlFor="training_prompt">Instruções de Comportamento (Prompt de Treinamento) *</Label>
+                  <Textarea
+                    id="training_prompt"
+                    name="training_prompt"
+                    value={formData.training_prompt || ""}
+                    onChange={handleInputChange}
+                    placeholder="Ex: Você é uma assistente de vendas especializada em produtos digitais. Seja sempre educada, faça perguntas para entender as necessidades do cliente, e conduza a conversa para agendar uma reunião. Nunca invente informações que não possui."
+                    rows={6}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Instruções detalhadas sobre como a IA deve se comportar, responder e agir durante as conversas
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="temperature">
+                    Criatividade das Respostas: {(formData.temperature || 0.7).toFixed(1)}
+                  </Label>
+                  <Slider
+                    id="temperature"
+                    name="temperature"
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    value={[formData.temperature || 0.7]}
+                    onValueChange={(value) => handleSliderChange("temperature", value)}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    0 = Respostas mais previsíveis e consistentes | 2 = Respostas mais criativas e variadas
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Configurações de Ativação */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-lg">
+                  <Settings className="w-5 h-5 mr-2" />
+                  Configurações de Ativação e Controle
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="activation_keyword">Palavra-chave para Ativar a IA *</Label>
                   <Input
                     id="activation_keyword"
                     value={formData.model_config?.activation_keyword || ""}
                     onChange={(e) => handleConfigChange("activation_keyword", e.target.value)}
-                    placeholder="Ex: /bot, !assistente"
+                    placeholder="Ex: /bot, !assistente, oi"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Palavra que o usuário deve enviar para iniciar a conversa com a IA
+                  </p>
                 </div>
 
-                {/* Funcionalidades */}
-                <div className="space-y-4">
+                <div>
+                  <Label htmlFor="keyword_finish">Palavra para Encerrar Conversa</Label>
+                  <Input
+                    id="keyword_finish"
+                    value={formData.model_config?.keyword_finish || ""}
+                    onChange={(e) => handleConfigChange("keyword_finish", e.target.value)}
+                    placeholder="Ex: #sair, /parar, tchau"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Palavra que o usuário pode enviar para encerrar a conversa com a IA
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="unknown_message">Mensagem para Comandos Não Reconhecidos</Label>
+                  <Textarea
+                    id="unknown_message"
+                    value={formData.model_config?.unknown_message || ""}
+                    onChange={(e) => handleConfigChange("unknown_message", e.target.value)}
+                    placeholder="Ex: Desculpe, não entendi. Digite '/bot' para falar comigo."
+                    rows={2}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Mensagem enviada quando alguém escreve algo que não ativa a IA
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="delay_message">Delay entre Mensagens (ms)</Label>
+                    <Input
+                      type="number"
+                      id="delay_message"
+                      value={formData.model_config?.delay_message || 1000}
+                      onChange={(e) => handleConfigChange("delay_message", Number.parseInt(e.target.value))}
+                      placeholder="1000"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Tempo de espera entre mensagens (em milissegundos)
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="debounce_time">Tempo de Debounce (segundos)</Label>
+                    <Input
+                      type="number"
+                      id="debounce_time"
+                      value={formData.model_config?.debounce_time || 10}
+                      onChange={(e) => handleConfigChange("debounce_time", Number.parseInt(e.target.value))}
+                      placeholder="10"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Tempo para aguardar antes de processar mensagem
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="transcribe_audio">Transcrever Áudio</Label>
+                    <div>
+                      <Label htmlFor="listening_from_me">Ouvir Mensagens Minhas</Label>
+                      <p className="text-xs text-muted-foreground">A IA responde quando EU envio mensagens</p>
+                    </div>
+                    <Switch
+                      id="listening_from_me"
+                      checked={formData.model_config?.listening_from_me || false}
+                      onCheckedChange={(checked) => handleConfigChange("listening_from_me", checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="stop_bot_from_me">Parar Bot por Mim</Label>
+                      <p className="text-xs text-muted-foreground">Eu posso parar a IA enviando mensagens</p>
+                    </div>
+                    <Switch
+                      id="stop_bot_from_me"
+                      checked={formData.model_config?.stop_bot_from_me || false}
+                      onCheckedChange={(checked) => handleConfigChange("stop_bot_from_me", checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="keep_open">Manter Conversa Aberta</Label>
+                      <p className="text-xs text-muted-foreground">A IA continua respondendo sem precisar reativar</p>
+                    </div>
+                    <Switch
+                      id="keep_open"
+                      checked={formData.model_config?.keep_open || false}
+                      onCheckedChange={(checked) => handleConfigChange("keep_open", checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="split_messages">Dividir Mensagens Longas</Label>
+                      <p className="text-xs text-muted-foreground">Quebra respostas longas em várias mensagens</p>
+                    </div>
+                    <Switch
+                      id="split_messages"
+                      checked={formData.model_config?.split_messages || false}
+                      onCheckedChange={(checked) => handleConfigChange("split_messages", checked)}
+                    />
+                  </div>
+                </div>
+
+                {formData.model_config?.split_messages && (
+                  <div>
+                    <Label htmlFor="time_per_char">Tempo por Caractere (ms)</Label>
+                    <Input
+                      type="number"
+                      id="time_per_char"
+                      value={formData.model_config?.time_per_char || 100}
+                      onChange={(e) => handleConfigChange("time_per_char", Number.parseInt(e.target.value))}
+                      placeholder="100"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Tempo de espera por caractere ao dividir mensagens
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Funcionalidades Extras */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-lg">
+                  <Volume2 className="w-5 h-5 mr-2" />
+                  Funcionalidades Extras
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="transcribe_audio">Transcrever Áudios</Label>
+                      <p className="text-xs text-muted-foreground">Converte áudios recebidos em texto</p>
+                    </div>
                     <Switch
                       id="transcribe_audio"
                       checked={formData.transcribe_audio || false}
@@ -522,16 +716,25 @@ export function AgentModal({
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="understand_images">Entender Imagens</Label>
+                    <div>
+                      <Label htmlFor="understand_images">Analisar Imagens</Label>
+                      <p className="text-xs text-muted-foreground">Entende e descreve imagens enviadas</p>
+                    </div>
                     <Switch
                       id="understand_images"
                       checked={formData.understand_images || false}
                       onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, understand_images: checked }))}
                     />
                   </div>
+                </div>
 
+                {/* Resposta por Voz */}
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="voice_response_enabled">Resposta por Voz</Label>
+                    <div>
+                      <Label htmlFor="voice_response_enabled">Resposta por Voz</Label>
+                      <p className="text-xs text-muted-foreground">Envia respostas em áudio além do texto</p>
+                    </div>
                     <Switch
                       id="voice_response_enabled"
                       checked={formData.voice_response_enabled || false}
@@ -542,7 +745,7 @@ export function AgentModal({
                   </div>
 
                   {formData.voice_response_enabled && (
-                    <div className="space-y-3 pl-4 border-l-2 border-muted">
+                    <div className="space-y-3 pl-4 border-l-2 border-blue-200 bg-blue-50 p-4 rounded">
                       <div>
                         <Label htmlFor="voice_provider">Provedor de Voz</Label>
                         <Select
@@ -554,13 +757,13 @@ export function AgentModal({
                             <SelectValue placeholder="Selecione o provedor" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="eleven_labs">ElevenLabs</SelectItem>
+                            <SelectItem value="eleven_labs">ElevenLabs (Recomendado)</SelectItem>
                             <SelectItem value="fish_audio">Fish Audio</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="voice_api_key">API Key do Sistema de Voz</Label>
+                        <Label htmlFor="voice_api_key">Chave da API do Provedor de Voz</Label>
                         <div className="relative">
                           <Input
                             id="voice_api_key"
@@ -568,7 +771,7 @@ export function AgentModal({
                             type={showVoiceApiKey ? "text" : "password"}
                             value={formData.voice_api_key || ""}
                             onChange={handleInputChange}
-                            placeholder="Chave da API do sistema"
+                            placeholder="Sua chave da API do provedor de voz"
                           />
                           <Button
                             type="button"
@@ -587,14 +790,23 @@ export function AgentModal({
                           id="voice_id"
                           value={formData.model_config?.voice_id || ""}
                           onChange={(e) => handleConfigChange("voice_id", e.target.value)}
-                          placeholder="ID específico da voz no provedor"
+                          placeholder="ID específico da voz no provedor (ex: pMsXgVXv3BLzUgSXRplE)"
                         />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Encontre este ID na plataforma do seu provedor de voz
+                        </p>
                       </div>
                     </div>
                   )}
+                </div>
 
+                {/* Integração com Calendário */}
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="calendar_integration">Integração com Calendário</Label>
+                    <div>
+                      <Label htmlFor="calendar_integration">Agendamento de Reuniões</Label>
+                      <p className="text-xs text-muted-foreground">Permite agendar reuniões via calendário</p>
+                    </div>
                     <Switch
                       id="calendar_integration"
                       checked={formData.calendar_integration || false}
@@ -603,9 +815,9 @@ export function AgentModal({
                   </div>
 
                   {formData.calendar_integration && (
-                    <div className="space-y-3 pl-4 border-l-2 border-muted">
+                    <div className="space-y-3 pl-4 border-l-2 border-green-200 bg-green-50 p-4 rounded">
                       <div>
-                        <Label htmlFor="calendar_api_key">API Key do Calendário</Label>
+                        <Label htmlFor="calendar_api_key">Chave da API do Calendário</Label>
                         <div className="relative">
                           <Input
                             id="calendar_api_key"
@@ -613,7 +825,7 @@ export function AgentModal({
                             type={showCalendarApiKey ? "text" : "password"}
                             value={formData.calendar_api_key || ""}
                             onChange={handleInputChange}
-                            placeholder="Chave da API do calendário"
+                            placeholder="Sua chave da API do calendário (Cal.com, Calendly, etc.)"
                           />
                           <Button
                             type="button"
@@ -627,31 +839,37 @@ export function AgentModal({
                         </div>
                       </div>
                       <div>
-                        <Label htmlFor="calendar_event_id">ID da Agenda</Label>
+                        <Label htmlFor="calendar_event_id">ID da Agenda/Evento</Label>
                         <Input
                           id="calendar_event_id"
                           value={formData.model_config?.calendar_event_id || ""}
                           onChange={(e) => handleConfigChange("calendar_event_id", e.target.value)}
-                          placeholder="ID do evento/agenda no calendário"
+                          placeholder="ID do tipo de evento no seu calendário"
                         />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          ID específico do tipo de reunião que será agendada
+                        </p>
                       </div>
                     </div>
                   )}
+                </div>
 
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="is_default">Agente Padrão</Label>
-                    <Switch
-                      id="is_default"
-                      checked={formData.is_default || false}
-                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked }))}
-                    />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="is_default">IA Padrão desta Conexão</Label>
+                    <p className="text-xs text-muted-foreground">Esta será a IA principal deste número WhatsApp</p>
                   </div>
+                  <Switch
+                    id="is_default"
+                    checked={formData.is_default || false}
+                    onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked }))}
+                  />
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <DialogFooter className="p-6 pt-4 border-t">
+          <DialogFooter className="p-6 pt-4 border-t bg-gray-50">
             <DialogClose asChild>
               <Button variant="outline" type="button">
                 Cancelar
@@ -662,7 +880,7 @@ export function AgentModal({
               disabled={loading || (maxAgentsReached && !isEditing)}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {loading ? "Salvando..." : isEditing ? "Salvar Alterações" : "Criar Agente"}
+              {loading ? "Salvando..." : isEditing ? "Salvar Alterações" : "Criar Agente de IA"}
             </Button>
           </DialogFooter>
         </form>
