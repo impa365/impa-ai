@@ -4,15 +4,26 @@ import { supabase } from "@/lib/supabase"
 // Validar API key
 async function validateApiKey(apiKey: string) {
   try {
+    console.log("Validando API key:", apiKey?.substring(0, 10) + "...")
+
     const { data, error } = await supabase.from("user_api_keys").select("user_id").eq("api_key", apiKey).single()
 
-    if (error || !data) {
+    console.log("Resultado da validação:", { data, error })
+
+    if (error) {
+      console.error("Erro na validação da API key:", error)
+      return null
+    }
+
+    if (!data) {
+      console.log("API key não encontrada")
       return null
     }
 
     // Atualizar last_used_at
     await supabase.from("user_api_keys").update({ last_used_at: new Date().toISOString() }).eq("api_key", apiKey)
 
+    console.log("API key válida para usuário:", data.user_id)
     return data.user_id
   } catch (error) {
     console.error("Erro ao validar API key:", error)
@@ -23,10 +34,22 @@ async function validateApiKey(apiKey: string) {
 // GET - Obter informações do bot
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    console.log("=== Iniciando requisição /api/getbot/[id] ===")
+
     const botId = params.id
-    const apiKey = request.headers.get("apikey")
+    console.log("Bot ID:", botId)
+
+    // Tentar múltiplas formas de obter a API key
+    const apiKey =
+      request.headers.get("apikey") ||
+      request.headers.get("x-api-key") ||
+      request.headers.get("authorization")?.replace("Bearer ", "")
+
+    console.log("Headers recebidos:", Object.fromEntries(request.headers.entries()))
+    console.log("API key extraída:", apiKey?.substring(0, 10) + "...")
 
     if (!apiKey) {
+      console.log("API key não fornecida")
       return NextResponse.json(
         {
           success: false,
@@ -40,22 +63,30 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Validar API key
     const userId = await validateApiKey(apiKey)
     if (!userId) {
+      console.log("API key inválida ou não encontrada")
       return NextResponse.json(
         {
           success: false,
           error: "API key inválida",
           message: "A API key fornecida não é válida ou não existe",
+          debug: {
+            apiKeyProvided: !!apiKey,
+            apiKeyLength: apiKey?.length,
+            apiKeyPrefix: apiKey?.substring(0, 10),
+          },
         },
         { status: 401 },
       )
     }
+
+    console.log("Buscando agente para usuário:", userId, "bot:", botId)
 
     // Buscar o agente
     const { data: agent, error } = await supabase
       .from("ai_agents")
       .select(`
         *,
-        whatsapp_connections!inner(
+        whatsapp_connections(
           connection_name,
           instance_name,
           status
@@ -66,6 +97,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .single()
 
     if (error || !agent) {
+      console.log("Agente não encontrado:", error)
       return NextResponse.json(
         {
           success: false,
@@ -76,6 +108,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         { status: 404 },
       )
     }
+
+    console.log("Agente encontrado:", agent.name)
 
     // Formatar resposta com todas as informações necessárias
     const response = {
@@ -135,11 +169,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           : null,
 
         // Informações da conexão WhatsApp
-        whatsapp_connection: {
-          name: agent.whatsapp_connections?.connection_name,
-          instance: agent.whatsapp_connections?.instance_name,
-          status: agent.whatsapp_connections?.status,
-        },
+        whatsapp_connection: agent.whatsapp_connections
+          ? {
+              name: agent.whatsapp_connections.connection_name,
+              instance: agent.whatsapp_connections.instance_name,
+              status: agent.whatsapp_connections.status,
+            }
+          : null,
 
         created_at: agent.created_at,
         updated_at: agent.updated_at,
