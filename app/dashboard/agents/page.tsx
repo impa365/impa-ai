@@ -239,16 +239,22 @@ export default function AgentsPage() {
     }
   }
 
-  const handleAgentSaved = async (agent: Agent, isNew: boolean) => {
-    if (isNew) {
-      setAgents([agent, ...agents])
-    } else {
-      setAgents(agents.map((a) => (a.id === agent.id ? agent : a)))
-    }
+  const handleAgentSaved = async () => {
+    // Recarregar a lista de agentes
+    const currentUser = getCurrentUser()
+    if (currentUser) {
+      const { data: agentsData, error } = await supabase
+        .from("ai_agents")
+        .select("*")
+        .eq("user_id", currentUser.id)
+        .order("created_at", { ascending: false })
 
-    // Atualizar limite de agentes
-    if (userId) {
-      const limitCheck = await checkAgentLimit(userId)
+      if (!error) {
+        setAgents(agentsData || [])
+      }
+
+      // Atualizar limite de agentes
+      const limitCheck = await checkAgentLimit(currentUser.id)
       setLimitInfo(limitCheck)
     }
 
@@ -428,7 +434,14 @@ export default function AgentsPage() {
         )}
       </div>
 
-      <AgentModal isOpen={isModalOpen} onOpenChange={setIsModalOpen} agent={selectedAgent} onSave={handleAgentSaved} />
+      <AgentModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        agent={selectedAgent}
+        onSave={handleAgentSaved}
+        maxAgentsReached={limitInfo ? !limitInfo.canCreate : false}
+        isEditing={!!selectedAgent}
+      />
 
       <AgentDuplicateDialog
         isOpen={isDuplicateDialogOpen}
