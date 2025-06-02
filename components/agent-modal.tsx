@@ -252,31 +252,29 @@ export function AgentModal({
 
   useEffect(() => {
     if (agent) {
+      const agentModelConfig =
+        typeof agent.model_config === "string" ? JSON.parse(agent.model_config) : agent.model_config
       const mergedModelConfig = {
         ...initialFormData.model_config,
-        ...(typeof agent.model_config === "string" ? JSON.parse(agent.model_config) : agent.model_config), // Handle string or object
+        ...agentModelConfig,
         voice_config: {
           ...initialFormData.model_config.voice_config,
-          ...(typeof agent.model_config === "string" ? JSON.parse(agent.model_config) : agent.model_config)
-            ?.voice_config,
+          ...agentModelConfig?.voice_config,
         },
         tools_config: {
           ...initialFormData.model_config.tools_config,
           cal_com: {
             ...(initialFormData.model_config.tools_config?.cal_com || {}),
-            ...((typeof agent.model_config === "string" ? JSON.parse(agent.model_config) : agent.model_config)
-              ?.tools_config?.cal_com || {}),
+            ...(agentModelConfig?.tools_config?.cal_com || {}),
           },
           knowledge_retrieval: {
             ...(initialFormData.model_config.tools_config?.knowledge_retrieval || {}),
-            ...((typeof agent.model_config === "string" ? JSON.parse(agent.model_config) : agent.model_config)
-              ?.tools_config?.knowledge_retrieval || {}),
+            ...(agentModelConfig?.tools_config?.knowledge_retrieval || {}),
           },
         },
         tone_and_style: {
           ...initialFormData.model_config.tone_and_style,
-          ...(typeof agent.model_config === "string" ? JSON.parse(agent.model_config) : agent.model_config)
-            ?.tone_and_style,
+          ...agentModelConfig?.tone_and_style,
         },
       }
       setFormData({ ...initialFormData, ...agent, model_config: mergedModelConfig })
