@@ -71,12 +71,16 @@ export default function UserSettings() {
   }, [router])
 
   const loadApiKeys = async () => {
+    if (!user?.id) return
+
     setLoadingApiKeys(true)
     try {
-      const response = await fetch("/api/user/api-keys")
+      const response = await fetch(`/api/user/api-keys?user_id=${user.id}`)
       const data = await response.json()
       if (response.ok) {
         setApiKeys(data.apiKeys || [])
+      } else {
+        console.error("Erro ao carregar API keys:", data.error)
       }
     } catch (error) {
       console.error("Erro ao carregar API keys:", error)
@@ -86,12 +90,17 @@ export default function UserSettings() {
   }
 
   const createApiKey = async () => {
+    if (!user?.id) return
+
     setCreatingApiKey(true)
     try {
       const response = await fetch("/api/user/api-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: "API Key para integração N8N" }),
+        body: JSON.stringify({
+          description: "API Key para integração N8N",
+          user_id: user.id,
+        }),
       })
 
       const data = await response.json()
@@ -116,8 +125,10 @@ export default function UserSettings() {
   }
 
   const deleteApiKey = async (id: string) => {
+    if (!user?.id) return
+
     try {
-      const response = await fetch(`/api/user/api-keys?id=${id}`, {
+      const response = await fetch(`/api/user/api-keys?id=${id}&user_id=${user.id}`, {
         method: "DELETE",
       })
 
@@ -141,7 +152,7 @@ export default function UserSettings() {
     navigator.clipboard.writeText(text)
     toast({
       title: "Copiado!",
-      description: "Texto copiado para a área de transferência.",
+      description: "Comando copiado para a área de transferência.",
     })
   }
 
@@ -207,6 +218,13 @@ export default function UserSettings() {
     }
   }
 
+  // Recarregar API keys quando user estiver disponível
+  useEffect(() => {
+    if (user?.id) {
+      loadApiKeys()
+    }
+  }, [user?.id])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -215,38 +233,8 @@ export default function UserSettings() {
     )
   }
 
-  const apiExampleCode = `// Exemplo de requisição para obter dados do agente
-const response = await fetch('${window.location.origin}/api/getbot/SEU_BOT_ID', {
-  method: 'GET',
-  headers: {
-    'apikey': 'SUA_API_KEY_AQUI'
-  }
-});
-
-const botData = await response.json();
-console.log(botData);
-
-// Exemplo de resposta:
-{
-  "id": "bot-id",
-  "name": "Nome do Bot",
-  "description": "Descrição do bot",
-  "transcribe_audio": true,
-  "understand_images": false,
-  "voice_response_enabled": true,
-  "voice_config": {
-    "provider": "eleven_labs",
-    "api_key": "api-key",
-    "voice_id": "voice-id"
-  },
-  "calendar_integration": false,
-  "evolution_config": {
-    "listening_from_me": false,
-    "stop_bot_from_me": true,
-    "keep_open": false,
-    "debounce_time": 1000
-  }
-}`
+  const curlExample = `curl -X GET "${window.location.origin}/api/getbot/SEU_BOT_ID" \\
+  -H "apikey: SUA_API_KEY_AQUI"`
 
   return (
     <div className="p-6">
@@ -396,7 +384,6 @@ console.log(botData);
                 <Button
                   onClick={createApiKey}
                   className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-                  style={{ visibility: "visible", display: "flex" }}
                   disabled={creatingApiKey}
                 >
                   <Plus className="h-4 w-4" />
@@ -465,34 +452,16 @@ console.log(botData);
               <CardContent>
                 <div className="space-y-4">
                   <div>
-                    <h4 className="font-medium mb-2">URL da API:</h4>
-                    <div className="flex gap-2">
-                      <Input
-                        value={`${window.location.origin}/api/getbot/[ID_DO_BOT]`}
-                        readOnly
-                        className="font-mono text-sm"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyToClipboard(`${window.location.origin}/api/getbot/[ID_DO_BOT]`)}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium mb-2">Código de Exemplo:</h4>
+                    <h4 className="font-medium mb-2">Comando cURL:</h4>
                     <div className="relative">
-                      <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
-                        <code>{apiExampleCode}</code>
+                      <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-x-auto font-mono">
+                        <code>{curlExample}</code>
                       </pre>
                       <Button
                         variant="outline"
                         size="sm"
                         className="absolute top-2 right-2"
-                        onClick={() => copyToClipboard(apiExampleCode)}
+                        onClick={() => copyToClipboard(curlExample)}
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
@@ -501,17 +470,13 @@ console.log(botData);
 
                   <Alert>
                     <AlertDescription>
-                      <strong>Como usar no N8N:</strong>
+                      <strong>Como usar:</strong>
                       <br />
-                      1. Use o nó "HTTP Request"
+                      1. Substitua "SEU_BOT_ID" pelo ID real do seu agente
                       <br />
-                      2. Configure o método como GET
+                      2. Substitua "SUA_API_KEY_AQUI" pela sua API key
                       <br />
-                      3. Cole a URL substituindo [ID_DO_BOT] pelo ID real do seu agente
-                      <br />
-                      4. Adicione o header "apikey" com sua API key
-                      <br />
-                      5. Execute para obter todos os dados do agente
+                      3. Execute o comando no terminal ou use no N8N
                     </AlertDescription>
                   </Alert>
                 </div>
