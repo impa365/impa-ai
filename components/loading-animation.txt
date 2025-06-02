@@ -1,0 +1,227 @@
+Na evolution tem alguns endpoints de configuração de um bot . esses endpoints são:
+
+Endpoint para criar um bot:
+
+post {{baseUrl}}/evolutionBot/create/{{instance}}
+header apikey: apikey da instancia
+
+{
+    "enabled": true,
+    "description": "agente name",
+    "apiUrl": "url do fluxo do n8n", (junto a essa url deve ser adcionado o parametro ?id_bot=(id do bot recebido da evolution ou o id do bot no banco de dados, para que seja possivel consultar futuramente)
+    "apiKey": "apikey do fluxo do n8n se existir", // optional
+    // options
+    "triggerType": "keyword", /* all or keyword */
+    "triggerOperator": "contains", /* contains, equals, startsWith, endsWith, regex, none */
+    "triggerValue": "teste", (deve ser pedido no painel de configuração do bot)
+    "expire": 0,
+    "keywordFinish": "#SAIR",
+    "delayMessage": 1000,
+    "unknownMessage": "Mensagem não reconhecida",
+    "listeningFromMe": true,
+    "stopBotFromMe": true,
+    "keepOpen": true,
+    "debounceTime": 5, (padrão deve ser 5 mas deve ser pedido durante a configuração do bot, essa opção é o tempo que o sistema irá esperar a mensagem do cliente, pois as vezes os cliente manda mensagens dividaas e essa opção espera um tempo e depois junta tudo)
+    "ignoreJids": [
+      "@g.us"
+    ],
+    "splitMessages": true,
+    "timePerChar": 50 (padrão 50)
+}
+modelo de resposta:
+
+{
+    "id": "cmbbo9geg10hbo153rn543i4n", (esse id deve ser salvo junto com as configurações do bot)
+    "enabled": true,
+    "description": null,
+    "apiUrl": "url do fluxo do n8n",
+    "apiKey": "apikey do fluxo do n8n se existir",
+    "expire": 0,
+    "keywordFinish": "#SAIR",
+    "delayMessage": 1000,
+    "unknownMessage": "Mensagem não reconhecida",
+    "listeningFromMe": false,
+    "stopBotFromMe": false,
+    "keepOpen": false,
+    "debounceTime": 0,
+    "ignoreJids": [
+      "@g.us"
+    ],
+    "splitMessages": true,
+    "timePerChar": 50,
+    "triggerType": "keyword",
+    "triggerOperator": "contains",
+    "triggerValue": "teste",
+    "createdAt": "2025-05-31T03:28:15.687Z",
+    "updatedAt": "2025-05-31T03:28:15.687Z",
+    "instanceId": "1d9a9b4c-2c56-4a52-b630-26ea63b8cf75"
+  }
+
+
+
+-----------------------------------------------------
+
+
+
+
+
+endpoint pra puxar as informações do bot pelo id:
+
+get: {{baseUrl}}/evolutionBot/fetch/:evolutionBotId/{{instance}}
+
+modelo de resposta: 
+
+{
+    "id": "cmb9sbltl3bjjqt546j721322",
+    "enabled": true,
+    "description": "BotImpa",
+    "apiUrl": "https://apizap.impa365.com",
+    "apiKey": "impa59ca1501cdce13cafds78d2a0997ce62",
+    "expire": 0,
+    "keywordFinish": "/sair",
+    "delayMessage": 0,
+    "unknownMessage": ".",
+    "listeningFromMe": true,
+    "stopBotFromMe": true,
+    "keepOpen": true,
+    "debounceTime": 5,
+    "ignoreJids": [
+      "@g.us"
+    ],
+    "splitMessages": true,
+    "timePerChar": 50,
+    "triggerType": "keyword",
+    "triggerOperator": "contains",
+    "triggerValue": "teste28",
+    "createdAt": "2025-05-29T19:46:22.138Z",
+    "updatedAt": "2025-05-29T19:46:22.138Z",
+    "instanceId": "1d9a9b4c-2c56-4a52-b630-26ea63b8cf75"
+  }
+
+
+------------------------------------------------------
+
+Endpoint pra atualizar um bot:
+
+put {{baseUrl}}/evolutionBot/update/:evolutionBotId/{{instance}}
+header apikey: apikey da instancia
+
+
+{
+    "enabled": true,
+    "description": "agente name",
+    "apiUrl": "url do fluxo do n8n",
+    "apiKey": "apikey do fluxo do n8n se existir", // optional
+    // options
+    "triggerType": "keyword", /* all or keyword */
+    "triggerOperator": "contains", /* contains, equals, startsWith, endsWith, regex, none */
+    "triggerValue": "teste",
+    "expire": 0,
+    "keywordFinish": "#SAIR",
+    "delayMessage": 1000,
+    "unknownMessage": "Mensagem não reconhecida",
+    "listeningFromMe": false,
+    "stopBotFromMe": false,
+    "keepOpen": false,
+    "debounceTime": 0,
+    "ignoreJids": [
+      "@g.us"
+    ],
+    "splitMessages": true,
+    "timePerChar": 50
+}
+
+modelo de resposta:
+
+{
+    "id": "cmbbo9geg10hbo153rn543i4n",
+    "enabled": true,
+    "description": null,
+    "apiUrl": "url do fluxo do n8n",
+    "apiKey": "apikey do fluxo do n8n se existir",
+    "expire": 0,
+    "keywordFinish": "#SAIR",
+    "delayMessage": 1000,
+    "unknownMessage": "Mensagem não reconhecida",
+    "listeningFromMe": false,
+    "stopBotFromMe": false,
+    "keepOpen": false,
+    "debounceTime": 0,
+    "ignoreJids": [
+      "@g.us"
+    ],
+    "splitMessages": true,
+    "timePerChar": 50,
+    "triggerType": "keyword",
+    "triggerOperator": "contains",
+    "triggerValue": "teste",
+    "createdAt": "2025-05-31T03:28:15.687Z",
+    "updatedAt": "2025-05-31T03:36:20.973Z",
+    "instanceId": "1d9a9b4c-2c56-4a52-b630-26ea63b8cf75"
+  }
+
+----------------------------------------------------------
+
+
+endpoint pra deletar um bot:
+
+delete {{baseUrl}}/evolutionBot/delete/:evolutionBotId/{{instance}}
+header apikey: apikey da instancia
+
+
+
+
+endpoint pra puxar as configurações padrão dos bots
+
+get {{baseUrl}}/evolutionBot/fetchSettings/{{instance}}
+
+
+modelo de resposta:
+
+{
+    "id": "cmb9rib8p3a3wqt54mzc2p7fe",
+    "expire": 240,
+    "keywordFinish": "#SAIR",
+    "delayMessage": 1000,
+    "unknownMessage": "Mensagem não reconhecida",
+    "listeningFromMe": true,
+    "stopBotFromMe": true,
+    "keepOpen": true,
+    "debounceTime": 5,
+    "ignoreJids": [
+      "@g.us"
+    ],
+    "splitMessages": true,
+    "timePerChar": 50,
+    "createdAt": "2025-05-29T19:23:35.401Z",
+    "updatedAt": "2025-05-30T17:30:26.629Z",
+    "botIdFallback": null,
+    "instanceId": "1d9a9b4c-2c56-4a52-b630-26ea63b8cf75",
+    "Fallback": null,
+    "fallbackId": null,
+    "fallback": null
+  }
+
+
+
+----------------------------------------------------------
+endpoint para salvar um bot como padrão
+POST {{baseUrl}}/evolutionBot/settings/{{instance}}
+
+{
+    "expire": 240,
+    "keywordFinish": "#SAIR",
+    "delayMessage": 1000,
+    "unknownMessage": "Mensagem não reconhecida",
+    "listeningFromMe": true,
+    "stopBotFromMe": true,
+    "keepOpen": true,
+    "debounceTime": 5,
+    "ignoreJids": [
+      "@g.us"
+    ],
+    "splitMessages": true,
+    "timePerChar": 50,
+    "botIdFallback": "id do bot evolution"
+    
+}
