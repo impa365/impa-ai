@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
@@ -21,11 +21,10 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Sparkles, Info } from "lucide-react"
+import { Bot, Sparkles, Info, Eye, EyeOff } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
-import { modelosOpenAI } from "@/lib/openai-models"
 import { fetchWhatsAppConnections } from "@/lib/whatsapp-connections"
 import { createEvolutionBot, updateEvolutionBot } from "@/lib/evolution-api"
 
@@ -40,44 +39,60 @@ interface AgentModalProps {
 
 export interface Agent {
   id: string
-  user_id: string
+  organization_id?: string | null
   name: string
+  type: string
   description?: string | null
-  prompt_template: string
-  model_name: string
-  temperature: number
-  top_p: number
-  max_tokens: number
-  model_config: any // JSONB field
-  is_active: boolean
-  is_default: boolean
+  status?: string | null
+  model_config?: any // JSONB field
+  prompt_template?: string | null
+  user_id?: string | null
   whatsapp_connection_id?: string | null
   evolution_bot_id?: string | null
-  n8n_webhook_url?: string | null
+  identity_description?: string | null
+  training_prompt?: string | null
+  voice_tone?: string | null
+  main_function?: string | null
+  temperature?: number | null
+  transcribe_audio?: boolean | null
+  understand_images?: boolean | null
+  voice_response_enabled?: boolean | null
+  voice_provider?: string | null
+  voice_api_key?: string | null
+  calendar_integration?: boolean | null
+  calendar_api_key?: string | null
+  is_default?: boolean | null
   created_at?: string
   updated_at?: string
 }
 
 const initialFormData: Agent = {
   id: "",
-  user_id: "",
   name: "",
+  type: "chat",
   description: "",
-  prompt_template: "",
-  model_name: "gpt-3.5-turbo",
-  temperature: 0.7,
-  top_p: 1,
-  max_tokens: 1000,
+  status: "active",
   model_config: {
     activation_keyword: "",
-    greeting_message_enabled: false,
-    greeting_message: "",
+    model: "gpt-3.5-turbo",
   },
-  is_active: true,
-  is_default: false,
+  prompt_template: "",
+  user_id: "",
   whatsapp_connection_id: null,
   evolution_bot_id: null,
-  n8n_webhook_url: null,
+  identity_description: "",
+  training_prompt: "",
+  voice_tone: "friendly",
+  main_function: "assistant",
+  temperature: 0.7,
+  transcribe_audio: false,
+  understand_images: false,
+  voice_response_enabled: false,
+  voice_provider: null,
+  voice_api_key: null,
+  calendar_integration: false,
+  calendar_api_key: null,
+  is_default: false,
 }
 
 export function AgentModal({
@@ -94,6 +109,8 @@ export function AgentModal({
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [whatsappConnections, setWhatsappConnections] = useState<any[]>([])
   const [n8nIntegrationConfig, setN8nIntegrationConfig] = useState<any>(null)
+  const [showVoiceApiKey, setShowVoiceApiKey] = useState(false)
+  const [showCalendarApiKey, setShowCalendarApiKey] = useState(false)
 
   useEffect(() => {
     const user = getCurrentUser()
@@ -145,15 +162,12 @@ export function AgentModal({
     setFormData((prev) => ({ ...prev, [name]: value[0] }))
   }
 
-  const handleConfigChange = (key: keyof Agent, value: any) => {
-    setFormData((prev) => {
-      return { ...prev, model_config: { ...prev.model_config, [key]: value } }
-    })
+  const handleConfigChange = (key: string, value: any) => {
+    setFormData((prev) => ({
+      ...prev,
+      model_config: { ...prev.model_config, [key]: value },
+    }))
   }
-
-  const selectedModelInfo = useMemo(() => {
-    return modelosOpenAI.find((m) => m.id === formData.model_name)
-  }, [formData.model_name])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -169,17 +183,12 @@ export function AgentModal({
       setLoading(false)
       return
     }
-    if (!formData.prompt_template.trim()) {
-      setError("O prompt de treinamento é obrigatório.")
-      setLoading(false)
-      return
-    }
     if (!formData.whatsapp_connection_id) {
       setError("A conexão WhatsApp é obrigatória.")
       setLoading(false)
       return
     }
-    if (!formData.model_config.activation_keyword?.trim()) {
+    if (!formData.model_config?.activation_keyword?.trim()) {
       setError("A palavra-chave de ativação é obrigatória.")
       setLoading(false)
       return
@@ -187,69 +196,56 @@ export function AgentModal({
 
     try {
       let evolutionBotId = formData.evolution_bot_id
-      let n8nWebhookUrl = formData.n8n_webhook_url
 
       if (n8nIntegrationConfig?.flowUrl) {
-        const agentSpecificToken = `AGENT_${formData.id || Date.now()}_TOKEN` // Generate a unique token
-        n8nWebhookUrl = `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`
+        const agentSpecificToken = `AGENT_${formData.id || Date.now()}_TOKEN`
 
         const evolutionBotData = {
           name: formData.name,
           description: formData.description || "",
-          prompt: formData.prompt_template,
-          model: formData.model_name,
-          temperature: formData.temperature,
-          max_tokens: formData.max_tokens,
-          webhook_url: n8nWebhookUrl, // Use the constructed n8n URL
-          api_key: n8nIntegrationConfig.apiKey || null, // Use n8n API key if configured
-          active: formData.is_active,
-          keyword: formData.model_config.activation_keyword || "",
-          // Add other relevant fields for Evolution API
+          prompt: formData.training_prompt || formData.prompt_template || "",
+          model: formData.model_config?.model || "gpt-3.5-turbo",
+          temperature: formData.temperature || 0.7,
+          webhook_url: `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`,
+          api_key: n8nIntegrationConfig.apiKey || null,
+          active: formData.status === "active",
+          keyword: formData.model_config?.activation_keyword || "",
         }
 
         if (formData.evolution_bot_id) {
-          // Update existing bot
           const updateResult = await updateEvolutionBot(formData.evolution_bot_id, evolutionBotData)
           if (!updateResult.success) throw new Error(updateResult.error || "Failed to update Evolution Bot")
         } else {
-          // Create new bot
           const createResult = await createEvolutionBot(evolutionBotData)
           if (!createResult.success || !createResult.bot?.id)
             throw new Error(createResult.error || "Failed to create Evolution Bot")
           evolutionBotId = createResult.bot.id
         }
-      } else {
-        console.warn("n8n integration not configured. Skipping Evolution Bot creation/update.")
       }
-
-      const dataToSave = {
-        ...formData,
-        user_id: currentUser.id,
-        model_config: JSON.stringify(formData.model_config), // Serialize model_config
-        evolution_bot_id: evolutionBotId,
-        n8n_webhook_url: n8nWebhookUrl,
-      }
-
-      // Remove non-column fields before saving to Supabase
-      const { id, created_at, updated_at, ...dbData } = dataToSave
-      // @ts-ignore
-      delete dbData.model_config // Will be saved as JSON string
 
       const finalDbData = {
-        user_id: dbData.user_id,
-        name: dbData.name,
-        description: dbData.description,
-        prompt_template: dbData.prompt_template,
-        model_name: dbData.model_name,
-        temperature: dbData.temperature,
-        top_p: dbData.top_p,
-        max_tokens: dbData.max_tokens,
-        model_config: formData.model_config, // Keep as object for Supabase JSONB
-        is_active: dbData.is_active,
-        is_default: dbData.is_default,
-        whatsapp_connection_id: dbData.whatsapp_connection_id,
-        evolution_bot_id: dbData.evolution_bot_id,
-        n8n_webhook_url: dbData.n8n_webhook_url,
+        name: formData.name,
+        type: formData.type,
+        description: formData.description,
+        status: formData.status,
+        model_config: formData.model_config,
+        prompt_template: formData.prompt_template,
+        user_id: currentUser.id,
+        whatsapp_connection_id: formData.whatsapp_connection_id,
+        evolution_bot_id: evolutionBotId,
+        identity_description: formData.identity_description,
+        training_prompt: formData.training_prompt,
+        voice_tone: formData.voice_tone,
+        main_function: formData.main_function,
+        temperature: formData.temperature,
+        transcribe_audio: formData.transcribe_audio,
+        understand_images: formData.understand_images,
+        voice_response_enabled: formData.voice_response_enabled,
+        voice_provider: formData.voice_provider,
+        voice_api_key: formData.voice_api_key,
+        calendar_integration: formData.calendar_integration,
+        calendar_api_key: formData.calendar_api_key,
+        is_default: formData.is_default,
       }
 
       if (isEditing && agent?.id) {
@@ -263,32 +259,6 @@ export function AgentModal({
           .select()
           .single()
         if (insertError) throw insertError
-        if (newAgentData && !evolutionBotId && n8nIntegrationConfig?.flowUrl) {
-          // If bot creation was skipped due to missing ID, try again with newAgentData.id
-          const agentSpecificToken = `AGENT_${newAgentData.id}_TOKEN`
-          const newN8nWebhookUrl = `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`
-          const evolutionBotData = {
-            name: newAgentData.name,
-            description: newAgentData.description || "",
-            prompt: newAgentData.prompt_template,
-            model: newAgentData.model_name,
-            temperature: newAgentData.temperature,
-            max_tokens: newAgentData.max_tokens,
-            webhook_url: newN8nWebhookUrl,
-            api_key: n8nIntegrationConfig.apiKey || null,
-            active: newAgentData.is_active,
-            keyword: newAgentData.model_config.activation_keyword || "",
-          }
-          const createResult = await createEvolutionBot(evolutionBotData)
-          if (createResult.success && createResult.bot?.id) {
-            await supabase
-              .from("ai_agents")
-              .update({ evolution_bot_id: createResult.bot.id, n8n_webhook_url: newN8nWebhookUrl })
-              .eq("id", newAgentData.id)
-          } else {
-            console.warn("Failed to create Evolution Bot after agent creation:", createResult.error)
-          }
-        }
         toast({ title: "Sucesso", description: "Agente criado com sucesso!" })
       }
       onSave()
@@ -333,7 +303,7 @@ export function AgentModal({
 
             <Card>
               <CardContent className="pt-4 space-y-4">
-                {/* Fields: name, description, model_name, temperature, top_p, max_tokens, prompt_template */}
+                {/* Informações Básicas */}
                 <div>
                   <Label htmlFor="name">Nome do Agente *</Label>
                   <Input
@@ -345,8 +315,9 @@ export function AgentModal({
                     required
                   />
                 </div>
+
                 <div>
-                  <Label htmlFor="description">Descrição (Opcional)</Label>
+                  <Label htmlFor="description">Descrição</Label>
                   <Textarea
                     id="description"
                     name="description"
@@ -355,88 +326,85 @@ export function AgentModal({
                     placeholder="Descreva a função principal do agente"
                   />
                 </div>
+
                 <div>
-                  <Label htmlFor="model_name">Modelo OpenAI *</Label>
-                  <Select
-                    name="model_name"
-                    value={formData.model_name}
-                    onValueChange={(value) => handleSelectChange("model_name", value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um modelo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {modelosOpenAI.map((modelo) => (
-                        <SelectItem key={modelo.id} value={modelo.id}>
-                          {modelo.name} ({modelo.context_window} tokens)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedModelInfo && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Janela de contexto: {selectedModelInfo.context_window.toLocaleString()} tokens.{" "}
-                      {selectedModelInfo.description}
-                    </p>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="temperature">Temperatura: {formData.temperature.toFixed(1)}</Label>
-                    <Slider
-                      id="temperature"
-                      name="temperature"
-                      min={0}
-                      max={1}
-                      step={0.1}
-                      defaultValue={[formData.temperature]}
-                      onValueChange={(value) => handleSliderChange("temperature", value)}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Controla a aleatoriedade. Mais alto = mais criativo.
-                    </p>
-                  </div>
-                  <div>
-                    <Label htmlFor="top_p">Top P: {formData.top_p.toFixed(1)}</Label>
-                    <Slider
-                      id="top_p"
-                      name="top_p"
-                      min={0}
-                      max={1}
-                      step={0.1}
-                      defaultValue={[formData.top_p]}
-                      onValueChange={(value) => handleSliderChange("top_p", value)}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Controla a diversidade via amostragem nucleus.</p>
-                  </div>
-                  <div>
-                    <Label htmlFor="max_tokens">Max Tokens: {formData.max_tokens}</Label>
-                    <Input
-                      type="number"
-                      id="max_tokens"
-                      name="max_tokens"
-                      value={formData.max_tokens}
-                      onChange={handleInputChange}
-                      placeholder="1000"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Máximo de tokens na resposta.</p>
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="prompt_template">Prompt de Treinamento (Instruções do Sistema) *</Label>
+                  <Label htmlFor="identity_description">Descrição da Identidade</Label>
                   <Textarea
-                    id="prompt_template"
-                    name="prompt_template"
-                    value={formData.prompt_template || ""}
+                    id="identity_description"
+                    name="identity_description"
+                    value={formData.identity_description || ""}
                     onChange={handleInputChange}
-                    placeholder="Você é um assistente virtual especializado em..."
+                    placeholder="Como o agente se apresenta"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="training_prompt">Prompt de Treinamento *</Label>
+                  <Textarea
+                    id="training_prompt"
+                    name="training_prompt"
+                    value={formData.training_prompt || ""}
+                    onChange={handleInputChange}
+                    placeholder="Instruções detalhadas para o agente"
                     rows={6}
                     required
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Defina a persona, o papel e as instruções principais do seu agente.
-                  </p>
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="voice_tone">Tom de Voz</Label>
+                    <Select
+                      name="voice_tone"
+                      value={formData.voice_tone || ""}
+                      onValueChange={(value) => handleSelectChange("voice_tone", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o tom" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="friendly">Amigável</SelectItem>
+                        <SelectItem value="professional">Profissional</SelectItem>
+                        <SelectItem value="casual">Casual</SelectItem>
+                        <SelectItem value="formal">Formal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="main_function">Função Principal</Label>
+                    <Select
+                      name="main_function"
+                      value={formData.main_function || ""}
+                      onValueChange={(value) => handleSelectChange("main_function", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a função" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="assistant">Assistente</SelectItem>
+                        <SelectItem value="sales">Vendas</SelectItem>
+                        <SelectItem value="support">Suporte</SelectItem>
+                        <SelectItem value="scheduler">Agendamento</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="temperature">Temperatura: {(formData.temperature || 0.7).toFixed(1)}</Label>
+                  <Slider
+                    id="temperature"
+                    name="temperature"
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    value={[formData.temperature || 0.7]}
+                    onValueChange={(value) => handleSliderChange("temperature", value)}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Controla a criatividade das respostas</p>
+                </div>
+
                 <div>
                   <Label htmlFor="whatsapp_connection_id">Conexão WhatsApp *</Label>
                   <Select
@@ -456,54 +424,134 @@ export function AgentModal({
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div>
                   <Label htmlFor="activation_keyword">Palavra-chave de Ativação *</Label>
                   <Input
                     id="activation_keyword"
-                    value={formData.model_config.activation_keyword || ""}
+                    value={formData.model_config?.activation_keyword || ""}
                     onChange={(e) => handleConfigChange("activation_keyword", e.target.value)}
                     placeholder="Ex: /bot, !assistente"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Palavra que o usuário deve enviar para iniciar a conversa com o bot.
-                  </p>
                 </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="greeting_message_enabled">Mensagem de Saudação Automática</Label>
-                  <Switch
-                    id="greeting_message_enabled"
-                    checked={formData.model_config.greeting_message_enabled}
-                    onCheckedChange={(checked) => handleConfigChange("greeting_message_enabled", checked)}
-                  />
-                </div>
-                {formData.model_config.greeting_message_enabled && (
-                  <div>
-                    <Label htmlFor="greeting_message">Mensagem de Saudação</Label>
-                    <Textarea
-                      id="greeting_message"
-                      value={formData.model_config.greeting_message || ""}
-                      onChange={(e) => handleConfigChange("greeting_message", e.target.value)}
-                      placeholder="Olá! Como posso te ajudar hoje?"
+
+                {/* Funcionalidades */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="transcribe_audio">Transcrever Áudio</Label>
+                    <Switch
+                      id="transcribe_audio"
+                      checked={formData.transcribe_audio || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, transcribe_audio: checked }))}
                     />
                   </div>
-                )}
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="is_active">Agente Ativo</Label>
-                  <Switch
-                    id="is_active"
-                    name="is_active"
-                    checked={formData.is_active}
-                    onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_active: checked }))}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="is_default">Agente Padrão para esta Conexão</Label>
-                  <Switch
-                    id="is_default"
-                    name="is_default"
-                    checked={formData.is_default}
-                    onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked }))}
-                  />
+
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="understand_images">Entender Imagens</Label>
+                    <Switch
+                      id="understand_images"
+                      checked={formData.understand_images || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, understand_images: checked }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="voice_response_enabled">Resposta por Voz</Label>
+                    <Switch
+                      id="voice_response_enabled"
+                      checked={formData.voice_response_enabled || false}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => ({ ...prev, voice_response_enabled: checked }))
+                      }
+                    />
+                  </div>
+
+                  {formData.voice_response_enabled && (
+                    <div className="space-y-3 pl-4 border-l-2 border-muted">
+                      <div>
+                        <Label htmlFor="voice_provider">Provedor de Voz</Label>
+                        <Select
+                          name="voice_provider"
+                          value={formData.voice_provider || ""}
+                          onValueChange={(value) => handleSelectChange("voice_provider", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o provedor" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                            <SelectItem value="openai">OpenAI TTS</SelectItem>
+                            <SelectItem value="google">Google TTS</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="voice_api_key">API Key do Provedor de Voz</Label>
+                        <div className="relative">
+                          <Input
+                            id="voice_api_key"
+                            name="voice_api_key"
+                            type={showVoiceApiKey ? "text" : "password"}
+                            value={formData.voice_api_key || ""}
+                            onChange={handleInputChange}
+                            placeholder="Chave da API"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowVoiceApiKey(!showVoiceApiKey)}
+                          >
+                            {showVoiceApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="calendar_integration">Integração com Calendário</Label>
+                    <Switch
+                      id="calendar_integration"
+                      checked={formData.calendar_integration || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, calendar_integration: checked }))}
+                    />
+                  </div>
+
+                  {formData.calendar_integration && (
+                    <div className="pl-4 border-l-2 border-muted">
+                      <Label htmlFor="calendar_api_key">API Key do Calendário</Label>
+                      <div className="relative">
+                        <Input
+                          id="calendar_api_key"
+                          name="calendar_api_key"
+                          type={showCalendarApiKey ? "text" : "password"}
+                          value={formData.calendar_api_key || ""}
+                          onChange={handleInputChange}
+                          placeholder="Chave da API do calendário"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3"
+                          onClick={() => setShowCalendarApiKey(!showCalendarApiKey)}
+                        >
+                          {showCalendarApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="is_default">Agente Padrão</Label>
+                    <Switch
+                      id="is_default"
+                      checked={formData.is_default || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked }))}
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
