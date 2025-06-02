@@ -3,16 +3,39 @@
 import type React from "react"
 
 import { useState, useEffect, useMemo } from "react"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Sparkles, Info, ChevronDown, ChevronUp, FileText } from "lucide-react"
+import {
+  Bot,
+  Settings,
+  Volume2,
+  CalendarDays,
+  Sparkles,
+  Info,
+  Eye,
+  EyeOff,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Brain,
+  Palette,
+} from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
@@ -576,4 +599,297 @@ export function AgentModal({
                       </p>
                     </div>
                     <div>
-                      <Label htmlFor="max_tokens\">Máximo de Tokens: {formData.max_tokens.toLocaleString()}
+                      <Label htmlFor="max_tokens">Max Tokens: {formData.max_tokens}</Label>
+                      <Input
+                        type="number"
+                        id="max_tokens"
+                        name="max_tokens"
+                        value={formData.max_tokens}
+                        onChange={handleInputChange}
+                        placeholder="1000"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Máximo de tokens na resposta.</p>
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="prompt_template">Prompt de Treinamento (Instruções do Sistema) *</Label>
+                    <Textarea
+                      id="prompt_template"
+                      name="prompt_template"
+                      value={formData.prompt_template}
+                      onChange={handleInputChange}
+                      placeholder="Você é um assistente virtual especializado em..."
+                      rows={6}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Defina a persona, o papel e as instruções principais do seu agente.
+                    </p>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+
+            <Card>
+              <CardHeader className="p-0">
+                <SectionToggle title="Tom de Voz e Função" sectionKey="tone" icon={Palette} />
+              </CardHeader>
+              {expandedSections.tone && (
+                <CardContent className="pt-4 space-y-4">
+                  {/* Fields: tone_and_style (personality, language_style, response_length) */}
+                  <div>
+                    <Label htmlFor="personality">Personalidade</Label>
+                    <Input
+                      id="personality"
+                      value={formData.model_config.tone_and_style.personality}
+                      onChange={(e) => handleConfigChange("tone_and_style", e.target.value, "personality")}
+                      placeholder="Ex: Amigável e prestativo, Formal e direto"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="language_style">Estilo de Linguagem</Label>
+                    <Input
+                      id="language_style"
+                      value={formData.model_config.tone_and_style.language_style}
+                      onChange={(e) => handleConfigChange("tone_and_style", e.target.value, "language_style")}
+                      placeholder="Ex: Clara e concisa, Detalhada e explicativa"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="response_length">Comprimento da Resposta</Label>
+                    <Select
+                      value={formData.model_config.tone_and_style.response_length}
+                      onValueChange={(value) => handleConfigChange("tone_and_style", value, "response_length")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="concise">Concisa</SelectItem>
+                        <SelectItem value="medium">Média</SelectItem>
+                        <SelectItem value="detailed">Detalhada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+
+            <Card>
+              <CardHeader className="p-0">
+                <SectionToggle title="Comportamento e Limites" sectionKey="behavior" icon={Settings} />
+              </CardHeader>
+              {expandedSections.behavior && (
+                <CardContent className="pt-4 space-y-4">
+                  {/* Fields: activation_keyword, greeting_message, inactivity_timeout, etc. */}
+                  <div>
+                    <Label htmlFor="whatsapp_connection_id">Conexão WhatsApp *</Label>
+                    <Select
+                      name="whatsapp_connection_id"
+                      value={formData.whatsapp_connection_id || ""}
+                      onValueChange={(value) => handleSelectChange("whatsapp_connection_id", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma conexão WhatsApp" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {whatsappConnections.map((conn) => (
+                          <SelectItem key={conn.id} value={conn.id}>
+                            {conn.connection_name} ({conn.phone_number || "Número não disponível"})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="activation_keyword">Palavra-chave de Ativação *</Label>
+                    <Input
+                      id="activation_keyword"
+                      value={formData.model_config.activation_keyword || ""}
+                      onChange={(e) => handleConfigChange("activation_keyword", e.target.value)}
+                      placeholder="Ex: /bot, !assistente"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Palavra que o usuário deve enviar para iniciar a conversa com o bot.
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="greeting_message_enabled">Mensagem de Saudação Automática</Label>
+                    <Switch
+                      id="greeting_message_enabled"
+                      checked={formData.model_config.greeting_message_enabled}
+                      onCheckedChange={(checked) => handleConfigChange("greeting_message_enabled", checked)}
+                    />
+                  </div>
+                  {formData.model_config.greeting_message_enabled && (
+                    <div>
+                      <Label htmlFor="greeting_message">Mensagem de Saudação</Label>
+                      <Textarea
+                        id="greeting_message"
+                        value={formData.model_config.greeting_message || ""}
+                        onChange={(e) => handleConfigChange("greeting_message", e.target.value)}
+                        placeholder="Olá! Como posso te ajudar hoje?"
+                      />
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="is_active">Agente Ativo</Label>
+                    <Switch
+                      id="is_active"
+                      name="is_active"
+                      checked={formData.is_active}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_active: checked }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="is_default">Agente Padrão para esta Conexão</Label>
+                    <Switch
+                      id="is_default"
+                      name="is_default"
+                      checked={formData.is_default}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked }))}
+                    />
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+
+            <Card>
+              <CardHeader className="p-0">
+                <SectionToggle title="Funcionalidades Avançadas" sectionKey="advanced" icon={Brain} />
+              </CardHeader>
+              {expandedSections.advanced && (
+                <CardContent className="pt-4 space-y-4">
+                  {/* Voice Output */}
+                  <div className="p-4 border rounded-md">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label htmlFor="voice_output_enabled" className="flex items-center text-md font-medium">
+                        <Volume2 className="w-5 h-5 mr-2 text-blue-500" />
+                        Saída de Voz (Text-to-Speech)
+                      </Label>
+                      <Switch
+                        id="voice_output_enabled"
+                        checked={formData.model_config.voice_output_enabled}
+                        onCheckedChange={(checked) => handleConfigChange("voice_output_enabled", checked)}
+                      />
+                    </div>
+                    {formData.model_config.voice_output_enabled && (
+                      <div className="space-y-3 pl-7 mt-2">
+                        <div>
+                          <Label htmlFor="voice_provider">Provedor de Voz</Label>
+                          <Select
+                            value={formData.model_config.voice_provider || ""}
+                            onValueChange={(value) => handleConfigChange("voice_provider", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione um provedor" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {vozOutputProviders.map((provider) => (
+                                <SelectItem key={provider.id} value={provider.id}>
+                                  {provider.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedVoiceProviderInfo && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {selectedVoiceProviderInfo.description}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <Label htmlFor="voice_id">ID da Voz (Voice ID)</Label>
+                          <Input
+                            id="voice_id"
+                            value={formData.model_config.voice_config?.voice_id || ""}
+                            onChange={(e) => handleConfigChange("voice_config", e.target.value, "voice_id")}
+                            placeholder="Ex: pMsXgVXv3BLzUgSXRplE (ElevenLabs)"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            ID específico da voz a ser usada no provedor selecionado.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cal.com Integration */}
+                  <div className="p-4 border rounded-md">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label htmlFor="cal_com_enabled" className="flex items-center text-md font-medium">
+                        <CalendarDays className="w-5 h-5 mr-2 text-green-500" />
+                        Agendamento (Cal.com)
+                      </Label>
+                      <Switch
+                        id="cal_com_enabled"
+                        checked={formData.model_config.tools_config?.cal_com?.enabled || false}
+                        onCheckedChange={(checked) => handleConfigChange("tools_config", checked, "cal_com", "enabled")}
+                      />
+                    </div>
+                    {formData.model_config.tools_config?.cal_com?.enabled && (
+                      <div className="space-y-3 pl-7 mt-2">
+                        <div>
+                          <Label htmlFor="cal_com_api_key">Cal.com API Key</Label>
+                          <div className="relative">
+                            <Input
+                              id="cal_com_api_key"
+                              type={showCalApiKey ? "text" : "password"}
+                              value={formData.model_config.tools_config?.cal_com?.api_key || ""}
+                              onChange={(e) => handleConfigChange("tools_config", e.target.value, "cal_com", "api_key")}
+                              placeholder="cal_live_..."
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-full px-3"
+                              onClick={() => setShowCalApiKey(!showCalApiKey)}
+                            >
+                              {showCalApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                        </div>
+                        <div>
+                          <Label htmlFor="cal_com_event_type_id">Cal.com Event Type ID / Link ID</Label>
+                          <Input
+                            id="cal_com_event_type_id"
+                            value={formData.model_config.tools_config?.cal_com?.event_type_id || ""}
+                            onChange={(e) =>
+                              handleConfigChange("tools_config", e.target.value, "cal_com", "event_type_id")
+                            }
+                            placeholder="ID do tipo de evento ou link do Cal.com"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Encontrado na URL do seu tipo de evento Cal.com (ex: `meu-usuario/meu-evento-de-30min`).
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          </div>
+
+          <DialogFooter className="p-6 pt-4 border-t">
+            <DialogClose asChild>
+              <Button variant="outline" type="button">
+                Cancelar
+              </Button>
+            </DialogClose>
+            <Button
+              type="submit"
+              disabled={loading || (maxAgentsReached && !isEditing)}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {loading ? "Salvando..." : isEditing ? "Salvar Alterações" : "Criar Agente"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export default AgentModal
