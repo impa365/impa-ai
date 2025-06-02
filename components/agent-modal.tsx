@@ -26,7 +26,7 @@ import { supabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
 import { fetchWhatsAppConnections } from "@/lib/whatsapp-connections"
-import { createEvolutionBot, updateEvolutionBot } from "@/lib/evolution-api"
+import { createEvolutionBot, updateEvolutionBot, fetchEvolutionBot } from "@/lib/evolution-api"
 
 interface AgentModalProps {
   open: boolean
@@ -75,6 +75,8 @@ const initialFormData: Agent = {
   model_config: {
     activation_keyword: "",
     model: "gpt-3.5-turbo",
+    voice_id: "",
+    calendar_event_id: "",
   },
   prompt_template: "",
   user_id: "",
@@ -111,6 +113,7 @@ export function AgentModal({
   const [n8nIntegrationConfig, setN8nIntegrationConfig] = useState<any>(null)
   const [showVoiceApiKey, setShowVoiceApiKey] = useState(false)
   const [showCalendarApiKey, setShowCalendarApiKey] = useState(false)
+  const [evolutionSyncStatus, setEvolutionSyncStatus] = useState<string>("")
 
   useEffect(() => {
     const user = getCurrentUser()
@@ -135,6 +138,45 @@ export function AgentModal({
   const loadWhatsAppConnections = async (userId: string) => {
     const connections = await fetchWhatsAppConnections(userId)
     setWhatsappConnections(connections)
+  }
+
+  // Sincronizar com Evolution API quando abrir o modal para edição
+  useEffect(() => {
+    if (agent && agent.evolution_bot_id && agent.whatsapp_connection_id && open) {
+      syncWithEvolutionAPI()
+    }
+  }, [agent, open])
+
+  const syncWithEvolutionAPI = async () => {
+    if (!agent?.evolution_bot_id || !agent?.whatsapp_connection_id) return
+
+    try {
+      setEvolutionSyncStatus("Sincronizando com Evolution API...")
+
+      // Buscar conexão WhatsApp para obter instance_name
+      const { data: connection } = await supabase
+        .from("whatsapp_connections")
+        .select("instance_name")
+        .eq("id", agent.whatsapp_connection_id)
+        .single()
+
+      if (connection?.instance_name) {
+        const evolutionBot = await fetchEvolutionBot(connection.instance_name, agent.evolution_bot_id)
+
+        if (evolutionBot) {
+          setEvolutionSyncStatus("Sincronizado com sucesso!")
+          // Atualizar dados locais com dados da Evolution API se necessário
+          setTimeout(() => setEvolutionSyncStatus(""), 3000)
+        } else {
+          setEvolutionSyncStatus("Erro na sincronização")
+          setTimeout(() => setEvolutionSyncStatus(""), 3000)
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao sincronizar com Evolution API:", error)
+      setEvolutionSyncStatus("Erro na sincronização")
+      setTimeout(() => setEvolutionSyncStatus(""), 3000)
+    }
   }
 
   useEffect(() => {
@@ -193,33 +235,63 @@ export function AgentModal({
       setLoading(false)
       return
     }
+    if (!formData.training_prompt?.trim()) {
+      setError("O prompt de treinamento é obrigatório.")
+      setLoading(false)
+      return
+    }
 
     try {
       let evolutionBotId = formData.evolution_bot_id
 
+      // Buscar instance_name da conexão WhatsApp
+      const { data: connection } = await supabase
+        .from("whatsapp_connections")
+        .select("instance_name")
+        .eq("id", formData.whatsapp_connection_id)
+        .single()
+
+      if (!connection?.instance_name) {
+        throw new Error("Instância WhatsApp não encontrada")
+      }
+
+      // Sincronizar com Evolution API
       if (n8nIntegrationConfig?.flowUrl) {
         const agentSpecificToken = `AGENT_${formData.id || Date.now()}_TOKEN`
 
         const evolutionBotData = {
-          name: formData.name,
-          description: formData.description || "",
-          prompt: formData.training_prompt || formData.prompt_template || "",
-          model: formData.model_config?.model || "gpt-3.5-turbo",
-          temperature: formData.temperature || 0.7,
-          webhook_url: `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`,
-          api_key: n8nIntegrationConfig.apiKey || null,
-          active: formData.status === "active",
-          keyword: formData.model_config?.activation_keyword || "",
+          enabled: formData.status === "active",
+          description: formData.description || formData.name,
+          apiUrl: `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`,
+          apiKey: n8nIntegrationConfig.apiKey || "",
+          triggerType: "keyword",
+          triggerOperator: "equals",
+          triggerValue: formData.model_config?.activation_keyword || "",
+          expire: 0,
+          keywordFinish: "#sair",
+          delayMessage: 1000,
+          unknownMessage: "Desculpe, não entendi. Digite a palavra-chave para começar.",
+          listeningFromMe: false,
+          stopBotFromMe: true,
+          keepOpen: false,
+          debounceTime: 10,
+          ignoreJids: [],
+          splitMessages: true,
+          timePerChar: 100,
         }
 
         if (formData.evolution_bot_id) {
-          const updateResult = await updateEvolutionBot(formData.evolution_bot_id, evolutionBotData)
-          if (!updateResult.success) throw new Error(updateResult.error || "Failed to update Evolution Bot")
+          const updateResult = await updateEvolutionBot(
+            connection.instance_name,
+            formData.evolution_bot_id,
+            evolutionBotData,
+          )
+          if (!updateResult) throw new Error("Falha ao atualizar bot na Evolution API")
         } else {
-          const createResult = await createEvolutionBot(evolutionBotData)
-          if (!createResult.success || !createResult.bot?.id)
-            throw new Error(createResult.error || "Failed to create Evolution Bot")
-          evolutionBotId = createResult.bot.id
+          const createResult = await createEvolutionBot(connection.instance_name, evolutionBotData)
+          if (!createResult.success || !createResult.botId)
+            throw new Error(createResult.error || "Falha ao criar bot na Evolution API")
+          evolutionBotId = createResult.botId
         }
       }
 
@@ -282,6 +354,7 @@ export function AgentModal({
               {isEditing ? "Editar Agente de IA" : "Criar Novo Agente de IA"}
             </DialogTitle>
             <DialogDescription>Configure os detalhes e o comportamento do seu agente de IA.</DialogDescription>
+            {evolutionSyncStatus && <div className="text-sm text-muted-foreground mt-2">{evolutionSyncStatus}</div>}
           </DialogHeader>
 
           <div className="p-6 space-y-6">
@@ -480,13 +553,12 @@ export function AgentModal({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
-                            <SelectItem value="openai">OpenAI TTS</SelectItem>
-                            <SelectItem value="google">Google TTS</SelectItem>
+                            <SelectItem value="fish_audio">Fish Audio</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="voice_api_key">API Key do Provedor de Voz</Label>
+                        <Label htmlFor="voice_api_key">API Key do Sistema de Voz</Label>
                         <div className="relative">
                           <Input
                             id="voice_api_key"
@@ -494,7 +566,7 @@ export function AgentModal({
                             type={showVoiceApiKey ? "text" : "password"}
                             value={formData.voice_api_key || ""}
                             onChange={handleInputChange}
-                            placeholder="Chave da API"
+                            placeholder="Chave da API do sistema"
                           />
                           <Button
                             type="button"
@@ -506,6 +578,15 @@ export function AgentModal({
                             {showVoiceApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </Button>
                         </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="voice_id">ID da Voz</Label>
+                        <Input
+                          id="voice_id"
+                          value={formData.model_config?.voice_id || ""}
+                          onChange={(e) => handleConfigChange("voice_id", e.target.value)}
+                          placeholder="ID específico da voz no provedor"
+                        />
                       </div>
                     </div>
                   )}
@@ -520,26 +601,37 @@ export function AgentModal({
                   </div>
 
                   {formData.calendar_integration && (
-                    <div className="pl-4 border-l-2 border-muted">
-                      <Label htmlFor="calendar_api_key">API Key do Calendário</Label>
-                      <div className="relative">
+                    <div className="space-y-3 pl-4 border-l-2 border-muted">
+                      <div>
+                        <Label htmlFor="calendar_api_key">API Key do Calendário</Label>
+                        <div className="relative">
+                          <Input
+                            id="calendar_api_key"
+                            name="calendar_api_key"
+                            type={showCalendarApiKey ? "text" : "password"}
+                            value={formData.calendar_api_key || ""}
+                            onChange={handleInputChange}
+                            placeholder="Chave da API do calendário"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowCalendarApiKey(!showCalendarApiKey)}
+                          >
+                            {showCalendarApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="calendar_event_id">ID da Agenda</Label>
                         <Input
-                          id="calendar_api_key"
-                          name="calendar_api_key"
-                          type={showCalendarApiKey ? "text" : "password"}
-                          value={formData.calendar_api_key || ""}
-                          onChange={handleInputChange}
-                          placeholder="Chave da API do calendário"
+                          id="calendar_event_id"
+                          value={formData.model_config?.calendar_event_id || ""}
+                          onChange={(e) => handleConfigChange("calendar_event_id", e.target.value)}
+                          placeholder="ID do evento/agenda no calendário"
                         />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full px-3"
-                          onClick={() => setShowCalendarApiKey(!showCalendarApiKey)}
-                        >
-                          {showCalendarApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
                       </div>
                     </div>
                   )}
