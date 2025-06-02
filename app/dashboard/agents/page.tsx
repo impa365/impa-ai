@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/use-toast"
 import { AgentModal } from "@/components/agent-modal"
@@ -32,6 +31,8 @@ type Agent = {
   calendar_provider: string | null
   calendar_api_key: string | null
   calendar_calendar_id: string | null
+  is_default: boolean
+  is_active: boolean
 }
 
 export default function AgentsPage() {
@@ -292,31 +293,37 @@ export default function AgentsPage() {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {agents.map((agent) => (
-          <Card key={agent.id} className="overflow-hidden">
-            <CardHeader className="pb-2">
+          <Card key={agent.id} className="overflow-hidden hover:shadow-md transition-shadow">
+            <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {getAgentTypeIcon(agent.type)}
-                  <CardTitle className="text-lg">{agent.name}</CardTitle>
-                </div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-primary" />
+                  {agent.name}
+                </CardTitle>
+                {agent.is_default && (
+                  <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">Padrão</span>
+                )}
               </div>
-              <CardDescription className="line-clamp-2">{agent.description}</CardDescription>
+              {agent.description && (
+                <CardDescription className="line-clamp-2 text-sm">{agent.description}</CardDescription>
+              )}
             </CardHeader>
-            <CardContent className="pb-2">
-              <div className="text-sm text-muted-foreground">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium">Modelo:</span> {agent.model}
+            <CardContent className="pb-3">
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Modelo:</span>
+                  <span>{agent.model}</span>
                 </div>
-                {agent.type === "voice" && agent.voice_provider && (
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium">Provedor de voz:</span> {agent.voice_provider}
-                  </div>
-                )}
-                {agent.type === "calendar" && agent.calendar_provider && (
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium">Provedor de calendário:</span> {agent.calendar_provider}
-                  </div>
-                )}
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Status:</span>
+                  <span className={agent.is_active ? "text-green-600" : "text-red-600"}>
+                    {agent.is_active ? "Ativo" : "Inativo"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Criado:</span>
+                  <span>{new Date(agent.created_at).toLocaleDateString("pt-BR")}</span>
+                </div>
               </div>
             </CardContent>
             <CardFooter className="pt-2 flex justify-between">
@@ -324,7 +331,7 @@ export default function AgentsPage() {
                 Ver detalhes
               </Button>
               <div className="flex gap-2">
-                <Button variant="ghost" size="icon" onClick={() => handleEditAgent(agent)}>
+                <Button variant="ghost" size="icon" onClick={() => handleEditAgent(agent)} title="Editar agente">
                   <Edit className="h-4 w-4" />
                 </Button>
                 <Button
@@ -332,6 +339,7 @@ export default function AgentsPage() {
                   size="icon"
                   onClick={() => handleDuplicateAgent(agent)}
                   disabled={limitInfo && !limitInfo.canCreate}
+                  title="Duplicar agente"
                 >
                   <Copy className="h-4 w-4" />
                 </Button>
@@ -340,6 +348,7 @@ export default function AgentsPage() {
                   size="icon"
                   onClick={() => handleDeleteAgent(agent.id)}
                   disabled={isDeleting === agent.id}
+                  title="Excluir agente"
                 >
                   {isDeleting === agent.id ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -380,9 +389,10 @@ export default function AgentsPage() {
       ))
   }
 
-  const chatAgents = agents.filter((agent) => agent.type === "chat")
-  const voiceAgents = agents.filter((agent) => agent.type === "voice")
-  const calendarAgents = agents.filter((agent) => agent.type === "calendar")
+  // Remover estas linhas:
+  // const chatAgents = agents.filter((agent) => agent.type === "chat")
+  // const voiceAgents = agents.filter((agent) => agent.type === "voice")
+  // const calendarAgents = agents.filter((agent) => agent.type === "calendar")
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -410,42 +420,13 @@ export default function AgentsPage() {
         </div>
       )}
 
-      <Tabs defaultValue="all">
-        <TabsList>
-          <TabsTrigger value="all">Todos ({agents.length})</TabsTrigger>
-          <TabsTrigger value="chat">Chat ({chatAgents.length})</TabsTrigger>
-          <TabsTrigger value="voice">Voz ({voiceAgents.length})</TabsTrigger>
-          <TabsTrigger value="calendar">Calendário ({calendarAgents.length})</TabsTrigger>
-        </TabsList>
-        <TabsContent value="all" className="mt-4">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-          ) : (
-            renderAgentCards(agents)
-          )}
-        </TabsContent>
-        <TabsContent value="chat" className="mt-4">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-          ) : (
-            renderAgentCards(chatAgents)
-          )}
-        </TabsContent>
-        <TabsContent value="voice" className="mt-4">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-          ) : (
-            renderAgentCards(voiceAgents)
-          )}
-        </TabsContent>
-        <TabsContent value="calendar" className="mt-4">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-          ) : (
-            renderAgentCards(calendarAgents)
-          )}
-        </TabsContent>
-      </Tabs>
+      <div className="mt-4">
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
+        ) : (
+          renderAgentCards(agents)
+        )}
+      </div>
 
       <AgentModal isOpen={isModalOpen} onOpenChange={setIsModalOpen} agent={selectedAgent} onSave={handleAgentSaved} />
 
