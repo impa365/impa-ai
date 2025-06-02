@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/use-toast"
 import AgentModal, { type Agent } from "@/components/agent-modal" // Import Agent type
@@ -71,13 +70,13 @@ export default function AgentsPage() {
         const { data: agentsData, error } = await supabase
           .from("ai_agents")
           .select(`
-            *,
-            whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
-              connection_name,
-              status,
-              instance_name
-            )
-          `)
+          *,
+          whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
+            connection_name,
+            status,
+            instance_name
+          )
+        `)
           .eq("user_id", currentUser.id)
           .order("created_at", { ascending: false })
 
@@ -189,13 +188,13 @@ export default function AgentsPage() {
         const { data: agentsData, error } = await supabase
           .from("ai_agents")
           .select(`
-            *,
-            whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
-              connection_name,
-              status,
-              instance_name
-            )
-          `)
+          *,
+          whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
+            connection_name,
+            status,
+            instance_name
+          )
+        `)
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
         if (error) throw error
@@ -230,13 +229,13 @@ export default function AgentsPage() {
         const { data: agentsData, error } = await supabase
           .from("ai_agents")
           .select(`
-            *,
-            whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
-              connection_name,
-              status,
-              instance_name
-            )
-          `)
+          *,
+          whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
+            connection_name,
+            status,
+            instance_name
+          )
+        `)
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
         if (error) throw error
@@ -277,7 +276,7 @@ export default function AgentsPage() {
   }
 
   const renderAgentCards = (filteredAgents: Agent[]) => {
-    if (filteredAgents.length === 0) {
+    if (agents.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center p-12 text-center bg-white rounded-lg shadow-sm">
           <Bot className="h-16 w-16 text-gray-400 mb-6" />
@@ -433,22 +432,6 @@ export default function AgentsPage() {
       ))
   }
 
-  const filterAgentsByType = (typeKeyword: string) => {
-    if (typeKeyword === "all") return agents
-    return agents.filter((agent) => {
-      if (typeKeyword === "voice") return agent.model_config.voice_output_enabled
-      if (typeKeyword === "calendar") return agent.model_config.tools_config?.cal_com?.enabled
-      if (typeKeyword === "chat")
-        return !agent.model_config.voice_output_enabled && !agent.model_config.tools_config?.cal_com?.enabled
-      return false
-    })
-  }
-
-  const allAgents = filterAgentsByType("all")
-  const chatAgents = filterAgentsByType("chat")
-  const voiceAgents = filterAgentsByType("voice")
-  const calendarAgents = filterAgentsByType("calendar")
-
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 space-y-8">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -476,53 +459,13 @@ export default function AgentsPage() {
         </Alert>
       )}
 
-      <Tabs defaultValue="all" className="bg-white p-1 rounded-lg shadow-sm">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-6 border-b-0 p-1 bg-gray-100 rounded-md">
-          <TabsTrigger value="all" className="text-sm">
-            Todos ({allAgents.length})
-          </TabsTrigger>
-          <TabsTrigger value="chat" className="text-sm">
-            Chat ({chatAgents.length})
-          </TabsTrigger>
-          <TabsTrigger value="voice" className="text-sm">
-            Voz ({voiceAgents.length})
-          </TabsTrigger>
-          <TabsTrigger value="calendar" className="text-sm">
-            Calendário ({calendarAgents.length})
-          </TabsTrigger>
-        </TabsList>
-
-        <div className="px-1 py-2">
-          <TabsContent value="all" className="mt-0">
-            {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{renderSkeletons()}</div>
-            ) : (
-              renderAgentCards(allAgents)
-            )}
-          </TabsContent>
-          <TabsContent value="chat" className="mt-0">
-            {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{renderSkeletons()}</div>
-            ) : (
-              renderAgentCards(chatAgents)
-            )}
-          </TabsContent>
-          <TabsContent value="voice" className="mt-0">
-            {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{renderSkeletons()}</div>
-            ) : (
-              renderAgentCards(voiceAgents)
-            )}
-          </TabsContent>
-          <TabsContent value="calendar" className="mt-0">
-            {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{renderSkeletons()}</div>
-            ) : (
-              renderAgentCards(calendarAgents)
-            )}
-          </TabsContent>
-        </div>
-      </Tabs>
+      <div className="px-1 py-2">
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{renderSkeletons()}</div>
+        ) : (
+          renderAgentCards(agents) // Renderiza todos os agentes diretamente
+        )}
+      </div>
 
       {isModalOpen && (
         <AgentModal
