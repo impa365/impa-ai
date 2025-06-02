@@ -407,7 +407,7 @@ export default function AgentsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Meus Agentes</h1>
           <p className="text-muted-foreground">Gerencie seus agentes de IA e suas configurações</p>
         </div>
-        <Button onClick={handleCreateAgent} disabled={limitInfo && !limitInfo.canCreate}>
+        <Button onClick={handleCreateAgent}>
           <Plus className="mr-2 h-4 w-4" /> Criar Agente
         </Button>
       </div>
