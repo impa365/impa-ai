@@ -17,30 +17,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  Bot,
-  Settings,
-  Volume2,
-  CalendarDays,
-  Sparkles,
-  Info,
-  Eye,
-  EyeOff,
-  ChevronDown,
-  ChevronUp,
-  FileText,
-  Brain,
-  Palette,
-} from "lucide-react"
+import { Bot, Sparkles, Info } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
 import { modelosOpenAI } from "@/lib/openai-models"
-import { vozOutputProviders } from "@/lib/tts-providers"
 import { fetchWhatsAppConnections } from "@/lib/whatsapp-connections"
 import { createEvolutionBot, updateEvolutionBot } from "@/lib/evolution-api"
 
@@ -63,61 +48,14 @@ export interface Agent {
   temperature: number
   top_p: number
   max_tokens: number
-  model_config: ModelConfig
+  model_config: any // JSONB field
   is_active: boolean
-  created_at?: string
-  updated_at?: string
   is_default: boolean
   whatsapp_connection_id?: string | null
   evolution_bot_id?: string | null
   n8n_webhook_url?: string | null
-}
-
-export interface ModelConfig {
-  greeting_message_enabled: boolean
-  greeting_message?: string | null
-  max_messages_per_user: number
-  rate_limit_message?: string | null
-  inactivity_timeout: number
-  inactivity_message?: string | null
-  voice_output_enabled: boolean
-  voice_provider?: string | null
-  voice_config?: VoiceConfig | null
-  tools_config?: ToolsConfig | null
-  conversation_memory: "short_term" | "long_term" | "none"
-  knowledge_base_enabled: boolean
-  knowledge_base_ids?: string[] | null
-  tone_and_style: {
-    personality: string
-    language_style: string
-    response_length: "concise" | "medium" | "detailed"
-  }
-  activation_keyword?: string | null
-  allowed_numbers?: string[] | null
-  blocked_numbers?: string[] | null
-  collect_user_feedback: boolean
-  human_takeover_enabled: boolean
-  human_takeover_keyword?: string | null
-  human_takeover_email?: string | null
-}
-
-export interface VoiceConfig {
-  voice_id?: string | null
-  speaking_rate?: number | null
-  pitch?: number | null
-  emotion?: string | null
-}
-
-export interface ToolsConfig {
-  cal_com: {
-    enabled: boolean
-    api_key?: string | null
-    event_type_id?: string | null // Added for Cal.com meeting ID
-  }
-  knowledge_retrieval: {
-    enabled: boolean
-    retrieval_sources?: string[] | null
-  }
+  created_at?: string
+  updated_at?: string
 }
 
 const initialFormData: Agent = {
@@ -131,46 +69,9 @@ const initialFormData: Agent = {
   top_p: 1,
   max_tokens: 1000,
   model_config: {
+    activation_keyword: "",
     greeting_message_enabled: false,
     greeting_message: "",
-    max_messages_per_user: 100,
-    rate_limit_message: "Você atingiu o limite de mensagens.",
-    inactivity_timeout: 300,
-    inactivity_message: "Sessão encerrada por inatividade.",
-    voice_output_enabled: false,
-    voice_provider: "elevenlabs",
-    voice_config: {
-      voice_id: "",
-      speaking_rate: 1,
-      pitch: 0,
-      emotion: "neutral",
-    },
-    tools_config: {
-      cal_com: {
-        enabled: false,
-        api_key: "",
-        event_type_id: "", // Added for Cal.com meeting ID
-      },
-      knowledge_retrieval: {
-        enabled: false,
-        retrieval_sources: [],
-      },
-    },
-    conversation_memory: "short_term",
-    knowledge_base_enabled: false,
-    knowledge_base_ids: [],
-    tone_and_style: {
-      personality: "Amigável e prestativo",
-      language_style: "Clara e concisa",
-      response_length: "medium",
-    },
-    activation_keyword: "",
-    allowed_numbers: [],
-    blocked_numbers: [],
-    collect_user_feedback: false,
-    human_takeover_enabled: false,
-    human_takeover_keyword: "/humano",
-    human_takeover_email: "",
   },
   is_active: true,
   is_default: false,
@@ -191,22 +92,8 @@ export function AgentModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const [showCalApiKey, setShowCalApiKey] = useState(false)
   const [whatsappConnections, setWhatsappConnections] = useState<any[]>([])
   const [n8nIntegrationConfig, setN8nIntegrationConfig] = useState<any>(null)
-
-  const [expandedSections, setExpandedSections] = useState({
-    basic: true,
-    tone: false,
-    behavior: false,
-    advanced: false,
-    integrations: false,
-  })
-
-  const toggleSection = (section: keyof typeof expandedSections) => {
-    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }))
-  }
 
   useEffect(() => {
     const user = getCurrentUser()
@@ -235,31 +122,7 @@ export function AgentModal({
 
   useEffect(() => {
     if (agent) {
-      // Deep merge to ensure all nested properties from initialFormData are present
-      const mergedModelConfig = {
-        ...initialFormData.model_config,
-        ...agent.model_config,
-        voice_config: {
-          ...initialFormData.model_config.voice_config,
-          ...agent.model_config?.voice_config,
-        },
-        tools_config: {
-          ...initialFormData.model_config.tools_config,
-          cal_com: {
-            ...(initialFormData.model_config.tools_config?.cal_com || {}),
-            ...(agent.model_config?.tools_config?.cal_com || {}),
-          },
-          knowledge_retrieval: {
-            ...(initialFormData.model_config.tools_config?.knowledge_retrieval || {}),
-            ...(agent.model_config?.tools_config?.knowledge_retrieval || {}),
-          },
-        },
-        tone_and_style: {
-          ...initialFormData.model_config.tone_and_style,
-          ...agent.model_config?.tone_and_style,
-        },
-      }
-      setFormData({ ...initialFormData, ...agent, model_config: mergedModelConfig })
+      setFormData({ ...initialFormData, ...agent })
     } else {
       setFormData({ ...initialFormData, user_id: currentUser?.id || "" })
     }
@@ -282,43 +145,15 @@ export function AgentModal({
     setFormData((prev) => ({ ...prev, [name]: value[0] }))
   }
 
-  const handleConfigChange = (
-    key: keyof ModelConfig,
-    value: any,
-    subKey?: keyof VoiceConfig | keyof ToolsConfig["cal_com"] | keyof ModelConfig["tone_and_style"],
-    subSubKey?: keyof ToolsConfig["cal_com"],
-  ) => {
+  const handleConfigChange = (key: keyof Agent, value: any) => {
     setFormData((prev) => {
-      const newModelConfig = { ...prev.model_config }
-      if (subKey && subSubKey && key === "tools_config") {
-        // @ts-ignore
-        newModelConfig[key] = {
-          ...newModelConfig[key],
-          // @ts-ignore
-          [subKey]: {
-            // @ts-ignore
-            ...newModelConfig[key]?.[subKey],
-            [subSubKey]: value,
-          },
-        }
-      } else if (subKey && (key === "voice_config" || key === "tools_config" || key === "tone_and_style")) {
-        // @ts-ignore
-        newModelConfig[key] = { ...newModelConfig[key], [subKey]: value }
-      } else {
-        // @ts-ignore
-        newModelConfig[key] = value
-      }
-      return { ...prev, model_config: newModelConfig }
+      return { ...prev, model_config: { ...prev.model_config, [key]: value } }
     })
   }
 
   const selectedModelInfo = useMemo(() => {
     return modelosOpenAI.find((m) => m.id === formData.model_name)
   }, [formData.model_name])
-
-  const selectedVoiceProviderInfo = useMemo(() => {
-    return vozOutputProviders.find((p) => p.id === formData.model_config.voice_provider)
-  }, [formData.model_config.voice_provider])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -467,24 +302,6 @@ export function AgentModal({
     }
   }
 
-  const SectionToggle = ({
-    title,
-    sectionKey,
-    icon: Icon,
-  }: { title: string; sectionKey: keyof typeof expandedSections; icon: React.ElementType }) => (
-    <Button
-      variant="ghost"
-      onClick={() => toggleSection(sectionKey)}
-      className="w-full justify-between text-lg font-semibold py-3 px-2 hover:bg-muted/50"
-    >
-      <div className="flex items-center">
-        <Icon className="w-5 h-5 mr-3 text-primary" />
-        {title}
-      </div>
-      {expandedSections[sectionKey] ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-    </Button>
-  )
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto p-0">
@@ -515,360 +332,180 @@ export function AgentModal({
             )}
 
             <Card>
-              <CardHeader className="p-0">
-                <SectionToggle title="Informações Básicas e Modelo" sectionKey="basic" icon={FileText} />
-              </CardHeader>
-              {expandedSections.basic && (
-                <CardContent className="pt-4 space-y-4">
-                  {/* Fields: name, description, model_name, temperature, top_p, max_tokens, prompt_template */}
-                  <div>
-                    <Label htmlFor="name">Nome do Agente *</Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      placeholder="Ex: Assistente de Vendas"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="description">Descrição (Opcional)</Label>
-                    <Textarea
-                      id="description"
-                      name="description"
-                      value={formData.description || ""}
-                      onChange={handleInputChange}
-                      placeholder="Descreva a função principal do agente"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="model_name">Modelo OpenAI *</Label>
-                    <Select
-                      name="model_name"
-                      value={formData.model_name}
-                      onValueChange={(value) => handleSelectChange("model_name", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione um modelo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {modelosOpenAI.map((modelo) => (
-                          <SelectItem key={modelo.id} value={modelo.id}>
-                            {modelo.name} ({modelo.context_window} tokens)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedModelInfo && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Janela de contexto: {selectedModelInfo.context_window.toLocaleString()} tokens.{" "}
-                        {selectedModelInfo.description}
-                      </p>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="temperature">Temperatura: {formData.temperature.toFixed(1)}</Label>
-                      <Slider
-                        id="temperature"
-                        name="temperature"
-                        min={0}
-                        max={1}
-                        step={0.1}
-                        defaultValue={[formData.temperature]}
-                        onValueChange={(value) => handleSliderChange("temperature", value)}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Controla a aleatoriedade. Mais alto = mais criativo.
-                      </p>
-                    </div>
-                    <div>
-                      <Label htmlFor="top_p">Top P: {formData.top_p.toFixed(1)}</Label>
-                      <Slider
-                        id="top_p"
-                        name="top_p"
-                        min={0}
-                        max={1}
-                        step={0.1}
-                        defaultValue={[formData.top_p]}
-                        onValueChange={(value) => handleSliderChange("top_p", value)}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Controla a diversidade via amostragem nucleus.
-                      </p>
-                    </div>
-                    <div>
-                      <Label htmlFor="max_tokens">Max Tokens: {formData.max_tokens}</Label>
-                      <Input
-                        type="number"
-                        id="max_tokens"
-                        name="max_tokens"
-                        value={formData.max_tokens}
-                        onChange={handleInputChange}
-                        placeholder="1000"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">Máximo de tokens na resposta.</p>
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="prompt_template">Prompt de Treinamento (Instruções do Sistema) *</Label>
-                    <Textarea
-                      id="prompt_template"
-                      name="prompt_template"
-                      value={formData.prompt_template || ""}
-                      onChange={handleInputChange}
-                      placeholder="Você é um assistente virtual especializado em..."
-                      rows={6}
-                      required
-                    />
+              <CardContent className="pt-4 space-y-4">
+                {/* Fields: name, description, model_name, temperature, top_p, max_tokens, prompt_template */}
+                <div>
+                  <Label htmlFor="name">Nome do Agente *</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    placeholder="Ex: Assistente de Vendas"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="description">Descrição (Opcional)</Label>
+                  <Textarea
+                    id="description"
+                    name="description"
+                    value={formData.description || ""}
+                    onChange={handleInputChange}
+                    placeholder="Descreva a função principal do agente"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="model_name">Modelo OpenAI *</Label>
+                  <Select
+                    name="model_name"
+                    value={formData.model_name}
+                    onValueChange={(value) => handleSelectChange("model_name", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um modelo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {modelosOpenAI.map((modelo) => (
+                        <SelectItem key={modelo.id} value={modelo.id}>
+                          {modelo.name} ({modelo.context_window} tokens)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedModelInfo && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      Defina a persona, o papel e as instruções principais do seu agente.
+                      Janela de contexto: {selectedModelInfo.context_window.toLocaleString()} tokens.{" "}
+                      {selectedModelInfo.description}
                     </p>
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-
-            <Card>
-              <CardHeader className="p-0">
-                <SectionToggle title="Tom de Voz e Função" sectionKey="tone" icon={Palette} />
-              </CardHeader>
-              {expandedSections.tone && (
-                <CardContent className="pt-4 space-y-4">
-                  {/* Fields: tone_and_style (personality, language_style, response_length) */}
-                  <div>
-                    <Label htmlFor="personality">Personalidade</Label>
-                    <Input
-                      id="personality"
-                      value={formData.model_config.tone_and_style.personality}
-                      onChange={(e) => handleConfigChange("tone_and_style", e.target.value, "personality")}
-                      placeholder="Ex: Amigável e prestativo, Formal e direto"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="language_style">Estilo de Linguagem</Label>
-                    <Input
-                      id="language_style"
-                      value={formData.model_config.tone_and_style.language_style}
-                      onChange={(e) => handleConfigChange("tone_and_style", e.target.value, "language_style")}
-                      placeholder="Ex: Clara e concisa, Detalhada e explicativa"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="response_length">Comprimento da Resposta</Label>
-                    <Select
-                      value={formData.model_config.tone_and_style.response_length}
-                      onValueChange={(value) => handleConfigChange("tone_and_style", value, "response_length")}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="concise">Concisa</SelectItem>
-                        <SelectItem value="medium">Média</SelectItem>
-                        <SelectItem value="detailed">Detalhada</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-
-            <Card>
-              <CardHeader className="p-0">
-                <SectionToggle title="Comportamento e Limites" sectionKey="behavior" icon={Settings} />
-              </CardHeader>
-              {expandedSections.behavior && (
-                <CardContent className="pt-4 space-y-4">
-                  {/* Fields: activation_keyword, greeting_message, inactivity_timeout, etc. */}
-                  <div>
-                    <Label htmlFor="whatsapp_connection_id">Conexão WhatsApp *</Label>
-                    <Select
-                      name="whatsapp_connection_id"
-                      value={formData.whatsapp_connection_id || ""}
-                      onValueChange={(value) => handleSelectChange("whatsapp_connection_id", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma conexão WhatsApp" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {whatsappConnections.map((conn) => (
-                          <SelectItem key={conn.id} value={conn.id}>
-                            {conn.connection_name} ({conn.phone_number || "Número não disponível"})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="activation_keyword">Palavra-chave de Ativação *</Label>
-                    <Input
-                      id="activation_keyword"
-                      value={formData.model_config.activation_keyword || ""}
-                      onChange={(e) => handleConfigChange("activation_keyword", e.target.value)}
-                      placeholder="Ex: /bot, !assistente"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Palavra que o usuário deve enviar para iniciar a conversa com o bot.
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="greeting_message_enabled">Mensagem de Saudação Automática</Label>
-                    <Switch
-                      id="greeting_message_enabled"
-                      checked={formData.model_config.greeting_message_enabled}
-                      onCheckedChange={(checked) => handleConfigChange("greeting_message_enabled", checked)}
-                    />
-                  </div>
-                  {formData.model_config.greeting_message_enabled && (
-                    <div>
-                      <Label htmlFor="greeting_message">Mensagem de Saudação</Label>
-                      <Textarea
-                        id="greeting_message"
-                        value={formData.model_config.greeting_message || ""}
-                        onChange={(e) => handleConfigChange("greeting_message", e.target.value)}
-                        placeholder="Olá! Como posso te ajudar hoje?"
-                      />
-                    </div>
                   )}
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="is_active">Agente Ativo</Label>
-                    <Switch
-                      id="is_active"
-                      name="is_active"
-                      checked={formData.is_active}
-                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_active: checked }))}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="temperature">Temperatura: {formData.temperature.toFixed(1)}</Label>
+                    <Slider
+                      id="temperature"
+                      name="temperature"
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      defaultValue={[formData.temperature]}
+                      onValueChange={(value) => handleSliderChange("temperature", value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Controla a aleatoriedade. Mais alto = mais criativo.
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="top_p">Top P: {formData.top_p.toFixed(1)}</Label>
+                    <Slider
+                      id="top_p"
+                      name="top_p"
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      defaultValue={[formData.top_p]}
+                      onValueChange={(value) => handleSliderChange("top_p", value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Controla a diversidade via amostragem nucleus.</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="max_tokens">Max Tokens: {formData.max_tokens}</Label>
+                    <Input
+                      type="number"
+                      id="max_tokens"
+                      name="max_tokens"
+                      value={formData.max_tokens}
+                      onChange={handleInputChange}
+                      placeholder="1000"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Máximo de tokens na resposta.</p>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="prompt_template">Prompt de Treinamento (Instruções do Sistema) *</Label>
+                  <Textarea
+                    id="prompt_template"
+                    name="prompt_template"
+                    value={formData.prompt_template || ""}
+                    onChange={handleInputChange}
+                    placeholder="Você é um assistente virtual especializado em..."
+                    rows={6}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Defina a persona, o papel e as instruções principais do seu agente.
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="whatsapp_connection_id">Conexão WhatsApp *</Label>
+                  <Select
+                    name="whatsapp_connection_id"
+                    value={formData.whatsapp_connection_id || ""}
+                    onValueChange={(value) => handleSelectChange("whatsapp_connection_id", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione uma conexão WhatsApp" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {whatsappConnections.map((conn) => (
+                        <SelectItem key={conn.id} value={conn.id}>
+                          {conn.connection_name} ({conn.phone_number || "Número não disponível"})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="activation_keyword">Palavra-chave de Ativação *</Label>
+                  <Input
+                    id="activation_keyword"
+                    value={formData.model_config.activation_keyword || ""}
+                    onChange={(e) => handleConfigChange("activation_keyword", e.target.value)}
+                    placeholder="Ex: /bot, !assistente"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Palavra que o usuário deve enviar para iniciar a conversa com o bot.
+                  </p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="greeting_message_enabled">Mensagem de Saudação Automática</Label>
+                  <Switch
+                    id="greeting_message_enabled"
+                    checked={formData.model_config.greeting_message_enabled}
+                    onCheckedChange={(checked) => handleConfigChange("greeting_message_enabled", checked)}
+                  />
+                </div>
+                {formData.model_config.greeting_message_enabled && (
+                  <div>
+                    <Label htmlFor="greeting_message">Mensagem de Saudação</Label>
+                    <Textarea
+                      id="greeting_message"
+                      value={formData.model_config.greeting_message || ""}
+                      onChange={(e) => handleConfigChange("greeting_message", e.target.value)}
+                      placeholder="Olá! Como posso te ajudar hoje?"
                     />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="is_default">Agente Padrão para esta Conexão</Label>
-                    <Switch
-                      id="is_default"
-                      name="is_default"
-                      checked={formData.is_default}
-                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked }))}
-                    />
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-
-            <Card>
-              <CardHeader className="p-0">
-                <SectionToggle title="Funcionalidades Avançadas" sectionKey="advanced" icon={Brain} />
-              </CardHeader>
-              {expandedSections.advanced && (
-                <CardContent className="pt-4 space-y-4">
-                  {/* Voice Output */}
-                  <div className="p-4 border rounded-md">
-                    <div className="flex items-center justify-between mb-2">
-                      <Label htmlFor="voice_output_enabled" className="flex items-center text-md font-medium">
-                        <Volume2 className="w-5 h-5 mr-2 text-blue-500" />
-                        Saída de Voz (Text-to-Speech)
-                      </Label>
-                      <Switch
-                        id="voice_output_enabled"
-                        checked={formData.model_config.voice_output_enabled}
-                        onCheckedChange={(checked) => handleConfigChange("voice_output_enabled", checked)}
-                      />
-                    </div>
-                    {formData.model_config.voice_output_enabled && (
-                      <div className="space-y-3 pl-7 mt-2">
-                        <div>
-                          <Label htmlFor="voice_provider">Provedor de Voz</Label>
-                          <Select
-                            value={formData.model_config.voice_provider || ""}
-                            onValueChange={(value) => handleConfigChange("voice_provider", value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione um provedor" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {vozOutputProviders.map((provider) => (
-                                <SelectItem key={provider.id} value={provider.id}>
-                                  {provider.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {selectedVoiceProviderInfo && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {selectedVoiceProviderInfo.description}
-                            </p>
-                          )}
-                        </div>
-                        <div>
-                          <Label htmlFor="voice_id">ID da Voz (Voice ID)</Label>
-                          <Input
-                            id="voice_id"
-                            value={formData.model_config.voice_config?.voice_id || ""}
-                            onChange={(e) => handleConfigChange("voice_config", e.target.value, "voice_id")}
-                            placeholder="Ex: pMsXgVXv3BLzUgSXRplE (ElevenLabs)"
-                          />
-                          <p className="text-xs text-muted-foreground mt-1">
-                            ID específico da voz a ser usada no provedor selecionado.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Cal.com Integration */}
-                  <div className="p-4 border rounded-md">
-                    <div className="flex items-center justify-between mb-2">
-                      <Label htmlFor="cal_com_enabled" className="flex items-center text-md font-medium">
-                        <CalendarDays className="w-5 h-5 mr-2 text-green-500" />
-                        Agendamento (Cal.com)
-                      </Label>
-                      <Switch
-                        id="cal_com_enabled"
-                        checked={formData.model_config.tools_config?.cal_com?.enabled || false}
-                        onCheckedChange={(checked) => handleConfigChange("tools_config", checked, "cal_com", "enabled")}
-                      />
-                    </div>
-                    {formData.model_config.tools_config?.cal_com?.enabled && (
-                      <div className="space-y-3 pl-7 mt-2">
-                        <div>
-                          <Label htmlFor="cal_com_api_key">Cal.com API Key</Label>
-                          <div className="relative">
-                            <Input
-                              id="cal_com_api_key"
-                              type={showCalApiKey ? "text" : "password"}
-                              value={formData.model_config.tools_config?.cal_com?.api_key || ""}
-                              onChange={(e) => handleConfigChange("tools_config", e.target.value, "cal_com", "api_key")}
-                              placeholder="cal_live_..."
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="absolute right-0 top-0 h-full px-3"
-                              onClick={() => setShowCalApiKey(!showCalApiKey)}
-                            >
-                              {showCalApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </Button>
-                          </div>
-                        </div>
-                        <div>
-                          <Label htmlFor="cal_com_event_type_id">Cal.com Event Type ID / Link ID</Label>
-                          <Input
-                            id="cal_com_event_type_id"
-                            value={formData.model_config.tools_config?.cal_com?.event_type_id || ""}
-                            onChange={(e) =>
-                              handleConfigChange("tools_config", e.target.value, "cal_com", "event_type_id")
-                            }
-                            placeholder="ID do tipo de evento ou link do Cal.com"
-                          />
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Encontrado na URL do seu tipo de evento Cal.com (ex: `meu-usuario/meu-evento-de-30min`).
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              )}
+                )}
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="is_active">Agente Ativo</Label>
+                  <Switch
+                    id="is_active"
+                    name="is_active"
+                    checked={formData.is_active}
+                    onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_active: checked }))}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="is_default">Agente Padrão para esta Conexão</Label>
+                  <Switch
+                    id="is_default"
+                    name="is_default"
+                    checked={formData.is_default}
+                    onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked }))}
+                  />
+                </div>
+              </CardContent>
             </Card>
           </div>
 
