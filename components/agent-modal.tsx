@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -34,15 +34,24 @@ import {
   ChevronUp,
   FileText,
   Brain,
-  Loader2,
+  Palette,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
 import { modelosOpenAI } from "@/lib/openai-models"
 import { vozOutputProviders } from "@/lib/tts-providers"
-import { fetchWhatsAppConnections, type WhatsAppConnection } from "@/lib/whatsapp-connections"
-import { createEvolutionBot, updateEvolutionBot, fetchEvolutionBotSettings } from "@/lib/evolution-api"
+import { fetchWhatsAppConnections } from "@/lib/whatsapp-connections"
+import { createEvolutionBot, updateEvolutionBot } from "@/lib/evolution-api"
+
+interface AgentModalProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  agent?: Agent | null
+  onSave: () => void
+  maxAgentsReached?: boolean
+  isEditing?: boolean
+}
 
 export interface Agent {
   id: string
@@ -52,6 +61,7 @@ export interface Agent {
   prompt_template: string
   model_name: string
   temperature: number
+  top_p: number
   max_tokens: number
   model_config: ModelConfig
   is_active: boolean
@@ -59,46 +69,55 @@ export interface Agent {
   updated_at?: string
   is_default: boolean
   whatsapp_connection_id?: string | null
-  // @ts-ignore
-  whatsapp_connections?: { instance_name: string } | null
   evolution_bot_id?: string | null
   n8n_webhook_url?: string | null
 }
 
 export interface ModelConfig {
-  activation_keyword?: string | null
+  greeting_message_enabled: boolean
+  greeting_message?: string | null
+  max_messages_per_user: number
+  rate_limit_message?: string | null
+  inactivity_timeout: number
+  inactivity_message?: string | null
   voice_output_enabled: boolean
   voice_provider?: string | null
   voice_config?: VoiceConfig | null
   tools_config?: ToolsConfig | null
+  conversation_memory: "short_term" | "long_term" | "none"
+  knowledge_base_enabled: boolean
+  knowledge_base_ids?: string[] | null
+  tone_and_style: {
+    personality: string
+    language_style: string
+    response_length: "concise" | "medium" | "detailed"
+  }
+  activation_keyword?: string | null
+  allowed_numbers?: string[] | null
+  blocked_numbers?: string[] | null
+  collect_user_feedback: boolean
+  human_takeover_enabled: boolean
+  human_takeover_keyword?: string | null
+  human_takeover_email?: string | null
 }
 
 export interface VoiceConfig {
   voice_id?: string | null
+  speaking_rate?: number | null
+  pitch?: number | null
+  emotion?: string | null
 }
 
 export interface ToolsConfig {
   cal_com: {
     enabled: boolean
     api_key?: string | null
-    event_type_id?: string | null
+    event_type_id?: string | null // Added for Cal.com meeting ID
   }
-}
-
-const initialModelConfig: ModelConfig = {
-  activation_keyword: "/ia",
-  voice_output_enabled: false,
-  voice_provider: "elevenlabs",
-  voice_config: {
-    voice_id: "",
-  },
-  tools_config: {
-    cal_com: {
-      enabled: false,
-      api_key: "",
-      event_type_id: "",
-    },
-  },
+  knowledge_retrieval: {
+    enabled: boolean
+    retrieval_sources?: string[] | null
+  }
 }
 
 const initialFormData: Agent = {
@@ -106,25 +125,58 @@ const initialFormData: Agent = {
   user_id: "",
   name: "",
   description: "",
-  prompt_template: "Você é um assistente prestativo.",
-  model_name: "gpt-4o",
+  prompt_template: "",
+  model_name: "gpt-3.5-turbo",
   temperature: 0.7,
-  max_tokens: 1500,
-  model_config: initialModelConfig,
+  top_p: 1,
+  max_tokens: 1000,
+  model_config: {
+    greeting_message_enabled: false,
+    greeting_message: "",
+    max_messages_per_user: 100,
+    rate_limit_message: "Você atingiu o limite de mensagens.",
+    inactivity_timeout: 300,
+    inactivity_message: "Sessão encerrada por inatividade.",
+    voice_output_enabled: false,
+    voice_provider: "elevenlabs",
+    voice_config: {
+      voice_id: "",
+      speaking_rate: 1,
+      pitch: 0,
+      emotion: "neutral",
+    },
+    tools_config: {
+      cal_com: {
+        enabled: false,
+        api_key: "",
+        event_type_id: "", // Added for Cal.com meeting ID
+      },
+      knowledge_retrieval: {
+        enabled: false,
+        retrieval_sources: [],
+      },
+    },
+    conversation_memory: "short_term",
+    knowledge_base_enabled: false,
+    knowledge_base_ids: [],
+    tone_and_style: {
+      personality: "Amigável e prestativo",
+      language_style: "Clara e concisa",
+      response_length: "medium",
+    },
+    activation_keyword: "",
+    allowed_numbers: [],
+    blocked_numbers: [],
+    collect_user_feedback: false,
+    human_takeover_enabled: false,
+    human_takeover_keyword: "/humano",
+    human_takeover_email: "",
+  },
   is_active: true,
   is_default: false,
   whatsapp_connection_id: null,
   evolution_bot_id: null,
   n8n_webhook_url: null,
-}
-
-interface AgentModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  agent?: Agent | null
-  onSave: () => void
-  maxAgentsReached?: boolean
-  isEditing?: boolean
 }
 
 export function AgentModal({
@@ -139,15 +191,17 @@ export function AgentModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [showCalApiKey, setShowCalApiKey] = useState(false)
-  const [whatsappConnections, setWhatsappConnections] = useState<WhatsAppConnection[]>([])
+  const [whatsappConnections, setWhatsappConnections] = useState<any[]>([])
   const [n8nIntegrationConfig, setN8nIntegrationConfig] = useState<any>(null)
-  const [evolutionInstanceName, setEvolutionInstanceName] = useState<string | null>(null)
 
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
-    behavior: true, // Renomeado e simplificado
-    advanced: false, // Para Voz e Cal.com
+    tone: false,
+    behavior: false,
+    advanced: false,
+    integrations: false,
   })
 
   const toggleSection = (section: keyof typeof expandedSections) => {
@@ -158,142 +212,98 @@ export function AgentModal({
     const user = getCurrentUser()
     setCurrentUser(user)
     if (user) {
-      setFormData((prev) => ({ ...prev, user_id: user.id || "" }))
+      setFormData((prev) => ({ ...prev, user_id: user.id }))
       loadWhatsAppConnections(user.id)
       loadN8nConfig()
     }
   }, [])
 
   const loadN8nConfig = async () => {
-    try {
-      const { data, error: n8nError } = await supabase.from("integrations").select("config").eq("type", "n8n").single()
-      if (n8nError && n8nError.code !== "PGRST116") throw n8nError
-      if (data?.config) {
-        setN8nIntegrationConfig(data.config)
-      } else {
-        setN8nIntegrationConfig(null)
-      }
-    } catch (err) {
-      console.error("Erro ao carregar configuração n8n:", err)
+    const { data, error } = await supabase.from("integrations").select("config").eq("type", "n8n").single()
+
+    if (data && data.config) {
+      setN8nIntegrationConfig(data.config)
+    } else {
+      console.warn("Configuração da integração n8n não encontrada.")
     }
   }
 
   const loadWhatsAppConnections = async (userId: string) => {
     const connections = await fetchWhatsAppConnections(userId)
     setWhatsappConnections(connections)
-    if (agent?.whatsapp_connection_id) {
-      const selectedConn = connections.find((c) => c.id === agent.whatsapp_connection_id)
-      if (selectedConn) {
-        setEvolutionInstanceName(selectedConn.instance_name)
-      }
-    }
   }
 
   useEffect(() => {
     if (agent) {
-      const agentModelConfigData =
-        typeof agent.model_config === "string" ? JSON.parse(agent.model_config) : agent.model_config
-
-      const mergedModelConfig: ModelConfig = {
-        ...initialModelConfig, // Começa com os padrões simplificados
-        ...(agentModelConfigData || {}),
+      // Deep merge to ensure all nested properties from initialFormData are present
+      const mergedModelConfig = {
+        ...initialFormData.model_config,
+        ...agent.model_config,
         voice_config: {
-          ...initialModelConfig.voice_config,
-          ...(agentModelConfigData?.voice_config || {}),
+          ...initialFormData.model_config.voice_config,
+          ...agent.model_config?.voice_config,
         },
         tools_config: {
-          ...initialModelConfig.tools_config,
+          ...initialFormData.model_config.tools_config,
           cal_com: {
-            ...(initialModelConfig.tools_config?.cal_com || {}),
-            ...(agentModelConfigData?.tools_config?.cal_com || {}),
+            ...(initialFormData.model_config.tools_config?.cal_com || {}),
+            ...(agent.model_config?.tools_config?.cal_com || {}),
+          },
+          knowledge_retrieval: {
+            ...(initialFormData.model_config.tools_config?.knowledge_retrieval || {}),
+            ...(agent.model_config?.tools_config?.knowledge_retrieval || {}),
           },
         },
+        tone_and_style: {
+          ...initialFormData.model_config.tone_and_style,
+          ...agent.model_config?.tone_and_style,
+        },
       }
-
-      setFormData({
-        ...initialFormData,
-        ...agent,
-        description: agent.description ?? "",
-        prompt_template: agent.prompt_template ?? "",
-        model_config: mergedModelConfig,
-      })
-
-      if (agent.whatsapp_connection_id) {
-        const selectedConn = whatsappConnections.find((c) => c.id === agent.whatsapp_connection_id)
-        if (selectedConn) {
-          setEvolutionInstanceName(selectedConn.instance_name)
-        }
-      }
+      setFormData({ ...initialFormData, ...agent, model_config: mergedModelConfig })
     } else {
-      setFormData({ ...initialFormData, user_id: currentUser?.id || "", model_config: initialModelConfig })
-      setEvolutionInstanceName(null)
+      setFormData({ ...initialFormData, user_id: currentUser?.id || "" })
     }
-  }, [agent, currentUser, whatsappConnections])
+  }, [agent, currentUser])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
+    const { name, value, type } = e.target
+    const checked = (e.target as HTMLInputElement).checked
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }))
+  }
+
+  const handleSelectChange = (name: string, value: string | number) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSwitchChange = (name: keyof Agent | keyof ModelConfig, checked: boolean, isModelConfigField = false) => {
-    if (isModelConfigField) {
-      setFormData((prev) => ({
-        ...prev,
-        model_config: { ...prev.model_config, [name]: checked } as ModelConfig,
-      }))
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: checked }))
-    }
-  }
-
-  const handleSelectChange = (
-    name: keyof Agent | keyof ModelConfig,
-    value: string | number,
-    isModelConfigField = false,
-  ) => {
-    if (isModelConfigField) {
-      setFormData((prev) => ({
-        ...prev,
-        model_config: { ...prev.model_config, [name]: value } as ModelConfig,
-      }))
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }))
-      if (name === "whatsapp_connection_id") {
-        const selectedConn = whatsappConnections.find((c) => c.id === value)
-        setEvolutionInstanceName(selectedConn ? selectedConn.instance_name : null)
-      }
-    }
-  }
-
-  const handleSliderChange = (name: keyof Agent, value: number[]) => {
+  const handleSliderChange = (name: string, value: number[]) => {
     setFormData((prev) => ({ ...prev, [name]: value[0] }))
   }
 
   const handleConfigChange = (
     key: keyof ModelConfig,
     value: any,
-    subKey?: keyof VoiceConfig | keyof ToolsConfig["cal_com"],
-    subSubKey?: keyof ToolsConfig["cal_com"], // Apenas para cal_com agora
+    subKey?: keyof VoiceConfig | keyof ToolsConfig["cal_com"] | keyof ModelConfig["tone_and_style"],
+    subSubKey?: keyof ToolsConfig["cal_com"],
   ) => {
     setFormData((prev) => {
       const newModelConfig = { ...prev.model_config }
-
-      if (key === "tools_config" && subKey === "cal_com" && subSubKey) {
-        newModelConfig.tools_config = {
-          ...newModelConfig.tools_config,
-          cal_com: {
-            ...(newModelConfig.tools_config?.cal_com || { enabled: false }), // Garante que cal_com exista
+      if (subKey && subSubKey && key === "tools_config") {
+        // @ts-ignore
+        newModelConfig[key] = {
+          ...newModelConfig[key],
+          // @ts-ignore
+          [subKey]: {
+            // @ts-ignore
+            ...newModelConfig[key]?.[subKey],
             [subSubKey]: value,
           },
         }
-      } else if (key === "tools_config" && subKey === "cal_com") {
+      } else if (subKey && (key === "voice_config" || key === "tools_config" || key === "tone_and_style")) {
         // @ts-ignore
-        newModelConfig.tools_config.cal_com[subKey] = value // Ex: enabled
-      } else if (key === "voice_config" && subKey) {
-        newModelConfig.voice_config = {
-          ...(newModelConfig.voice_config || {}), // Garante que voice_config exista
-          [subKey]: value,
-        }
+        newModelConfig[key] = { ...newModelConfig[key], [subKey]: value }
       } else {
         // @ts-ignore
         newModelConfig[key] = value
@@ -314,142 +324,115 @@ export function AgentModal({
     e.preventDefault()
     if (maxAgentsReached && !isEditing) {
       setError("Você atingiu o limite máximo de agentes.")
-      toast({ title: "Limite Atingido", description: "Você não pode criar mais agentes.", variant: "destructive" })
       return
     }
     setLoading(true)
     setError(null)
 
-    const requiredFields: (keyof Agent)[] = ["name", "prompt_template", "whatsapp_connection_id"]
-    const requiredModelConfigFields: (keyof ModelConfig)[] = ["activation_keyword"]
-
-    for (const field of requiredFields) {
-      if (!formData[field] || (typeof formData[field] === "string" && !(formData[field] as string).trim())) {
-        setError(`O campo "${field}" é obrigatório.`)
-        setLoading(false)
-        return
-      }
+    if (!formData.name.trim()) {
+      setError("O nome do agente é obrigatório.")
+      setLoading(false)
+      return
     }
-    for (const field of requiredModelConfigFields) {
-      if (
-        !formData.model_config[field] ||
-        (typeof formData.model_config[field] === "string" && !(formData.model_config[field] as string).trim())
-      ) {
-        setError(`O campo de configuração "${field}" é obrigatório.`)
-        setLoading(false)
-        return
-      }
+    if (!formData.prompt_template.trim()) {
+      setError("O prompt de treinamento é obrigatório.")
+      setLoading(false)
+      return
     }
-
-    if (!evolutionInstanceName && formData.whatsapp_connection_id) {
-      // Tentativa de buscar novamente se não estiver definido
-      const selectedConn = whatsappConnections.find((c) => c.id === formData.whatsapp_connection_id)
-      if (!selectedConn || !selectedConn.instance_name) {
-        setError("Não foi possível encontrar o nome da instância da Evolution API para a conexão selecionada.")
-        setLoading(false)
-        return
-      }
-      setEvolutionInstanceName(selectedConn.instance_name) // Atualiza o estado para uso subsequente
+    if (!formData.whatsapp_connection_id) {
+      setError("A conexão WhatsApp é obrigatória.")
+      setLoading(false)
+      return
     }
-
-    // Garante que evolutionInstanceName seja usado a partir daqui, após a verificação
-    const currentEvolutionInstanceName =
-      evolutionInstanceName ||
-      (formData.whatsapp_connection_id
-        ? whatsappConnections.find((c) => c.id === formData.whatsapp_connection_id)?.instance_name
-        : null)
-
-    if (!currentEvolutionInstanceName && formData.whatsapp_connection_id) {
-      setError("Nome da instância da Evolution API ainda não definido após verificação.")
+    if (!formData.model_config.activation_keyword?.trim()) {
+      setError("A palavra-chave de ativação é obrigatória.")
       setLoading(false)
       return
     }
 
     try {
       let evolutionBotId = formData.evolution_bot_id
-      let finalN8nWebhookUrl = formData.n8n_webhook_url
+      let n8nWebhookUrl = formData.n8n_webhook_url
 
-      if (n8nIntegrationConfig?.flowUrl && currentEvolutionInstanceName) {
-        const agentSpecificToken = `AGENT_${formData.id || Date.now()}_TOKEN`
-        finalN8nWebhookUrl = `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`
+      if (n8nIntegrationConfig?.flowUrl) {
+        const agentSpecificToken = `AGENT_${formData.id || Date.now()}_TOKEN` // Generate a unique token
+        n8nWebhookUrl = `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`
 
-        const evolutionBotPayload = {
+        const evolutionBotData = {
           name: formData.name,
           description: formData.description || "",
           prompt: formData.prompt_template,
           model: formData.model_name,
           temperature: formData.temperature,
           max_tokens: formData.max_tokens,
-          webhook_url: finalN8nWebhookUrl,
-          api_key: n8nIntegrationConfig.apiKey || null,
+          webhook_url: n8nWebhookUrl, // Use the constructed n8n URL
+          api_key: n8nIntegrationConfig.apiKey || null, // Use n8n API key if configured
           active: formData.is_active,
           keyword: formData.model_config.activation_keyword || "",
-        }
-
-        let currentEvolutionSettings = null
-        if (formData.evolution_bot_id && currentEvolutionInstanceName) {
-          const settingsResult = await fetchEvolutionBotSettings(
-            currentEvolutionInstanceName,
-            formData.evolution_bot_id,
-          )
-          if (settingsResult.success && settingsResult.settings) {
-            currentEvolutionSettings = settingsResult.settings
-          }
-        }
-
-        const finalEvolutionPayload = {
-          ...(currentEvolutionSettings || {}),
-          ...evolutionBotPayload,
+          // Add other relevant fields for Evolution API
         }
 
         if (formData.evolution_bot_id) {
-          const updateResult = await updateEvolutionBot(
-            currentEvolutionInstanceName,
-            formData.evolution_bot_id,
-            finalEvolutionPayload,
-          )
-          if (!updateResult.success) throw new Error(updateResult.error || "Falha ao atualizar bot na Evolution API")
+          // Update existing bot
+          const updateResult = await updateEvolutionBot(formData.evolution_bot_id, evolutionBotData)
+          if (!updateResult.success) throw new Error(updateResult.error || "Failed to update Evolution Bot")
         } else {
-          const createResult = await createEvolutionBot(currentEvolutionInstanceName, finalEvolutionPayload)
+          // Create new bot
+          const createResult = await createEvolutionBot(evolutionBotData)
           if (!createResult.success || !createResult.bot?.id)
-            throw new Error(createResult.error || "Falha ao criar bot na Evolution API")
+            throw new Error(createResult.error || "Failed to create Evolution Bot")
           evolutionBotId = createResult.bot.id
         }
+      } else {
+        console.warn("n8n integration not configured. Skipping Evolution Bot creation/update.")
       }
 
-      const dbData = {
+      const dataToSave = {
+        ...formData,
         user_id: currentUser.id,
-        name: formData.name,
-        description: formData.description,
-        prompt_template: formData.prompt_template,
-        model_name: formData.model_name,
-        temperature: formData.temperature,
-        max_tokens: formData.max_tokens,
-        model_config: formData.model_config, // Salvar o objeto model_config simplificado
-        is_active: formData.is_active,
-        is_default: formData.is_default,
-        whatsapp_connection_id: formData.whatsapp_connection_id,
+        model_config: JSON.stringify(formData.model_config), // Serialize model_config
         evolution_bot_id: evolutionBotId,
-        n8n_webhook_url: finalN8nWebhookUrl,
+        n8n_webhook_url: n8nWebhookUrl,
+      }
+
+      // Remove non-column fields before saving to Supabase
+      const { id, created_at, updated_at, ...dbData } = dataToSave
+      // @ts-ignore
+      delete dbData.model_config // Will be saved as JSON string
+
+      const finalDbData = {
+        user_id: dbData.user_id,
+        name: dbData.name,
+        description: dbData.description,
+        prompt_template: dbData.prompt_template,
+        model_name: dbData.model_name,
+        temperature: dbData.temperature,
+        top_p: dbData.top_p,
+        max_tokens: dbData.max_tokens,
+        model_config: formData.model_config, // Keep as object for Supabase JSONB
+        is_active: dbData.is_active,
+        is_default: dbData.is_default,
+        whatsapp_connection_id: dbData.whatsapp_connection_id,
+        evolution_bot_id: dbData.evolution_bot_id,
+        n8n_webhook_url: dbData.n8n_webhook_url,
       }
 
       if (isEditing && agent?.id) {
-        const { error: updateError } = await supabase.from("ai_agents").update(dbData).eq("id", agent.id)
+        const { error: updateError } = await supabase.from("ai_agents").update(finalDbData).eq("id", agent.id)
         if (updateError) throw updateError
         toast({ title: "Sucesso", description: "Agente atualizado com sucesso!" })
       } else {
         const { data: newAgentData, error: insertError } = await supabase
           .from("ai_agents")
-          // @ts-ignore
-          .insert(dbData)
+          .insert(finalDbData)
           .select()
           .single()
         if (insertError) throw insertError
-
-        if (newAgentData && !evolutionBotId && n8nIntegrationConfig?.flowUrl && currentEvolutionInstanceName) {
+        if (newAgentData && !evolutionBotId && n8nIntegrationConfig?.flowUrl) {
+          // If bot creation was skipped due to missing ID, try again with newAgentData.id
           const agentSpecificToken = `AGENT_${newAgentData.id}_TOKEN`
           const newN8nWebhookUrl = `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`
-          const evolutionBotPayloadRetry = {
+          const evolutionBotData = {
             name: newAgentData.name,
             description: newAgentData.description || "",
             prompt: newAgentData.prompt_template,
@@ -461,12 +444,14 @@ export function AgentModal({
             active: newAgentData.is_active,
             keyword: newAgentData.model_config.activation_keyword || "",
           }
-          const createResultRetry = await createEvolutionBot(currentEvolutionInstanceName, evolutionBotPayloadRetry)
-          if (createResultRetry.success && createResultRetry.bot?.id) {
+          const createResult = await createEvolutionBot(evolutionBotData)
+          if (createResult.success && createResult.bot?.id) {
             await supabase
               .from("ai_agents")
-              .update({ evolution_bot_id: createResultRetry.bot.id, n8n_webhook_url: newN8nWebhookUrl })
+              .update({ evolution_bot_id: createResult.bot.id, n8n_webhook_url: newN8nWebhookUrl })
               .eq("id", newAgentData.id)
+          } else {
+            console.warn("Failed to create Evolution Bot after agent creation:", createResult.error)
           }
         }
         toast({ title: "Sucesso", description: "Agente criado com sucesso!" })
@@ -474,10 +459,9 @@ export function AgentModal({
       onSave()
       onOpenChange(false)
     } catch (err: any) {
-      console.error("Erro ao salvar agente:", err)
-      const errorMessage = err.message || "Ocorreu um erro desconhecido ao salvar o agente."
-      setError(errorMessage)
-      toast({ title: "Erro ao Salvar", description: errorMessage, variant: "destructive" })
+      console.error("Error saving agent:", err)
+      setError(err.message || "Ocorreu um erro ao salvar o agente.")
+      toast({ title: "Erro", description: err.message || "Falha ao salvar o agente.", variant: "destructive" })
     } finally {
       setLoading(false)
     }
@@ -487,73 +471,66 @@ export function AgentModal({
     title,
     sectionKey,
     icon: Icon,
-    description,
-  }: {
-    title: string
-    sectionKey: keyof typeof expandedSections
-    icon: React.ElementType
-    description?: string
-  }) => (
-    <div className="border-b">
-      <Button
-        variant="ghost"
-        onClick={() => toggleSection(sectionKey)}
-        className="w-full justify-between text-md font-semibold py-4 px-4 hover:bg-gray-50 rounded-none"
-      >
-        <div className="flex items-center">
-          <Icon className="w-5 h-5 mr-3 text-primary" />
-          <div>
-            {title}
-            {description && <p className="text-xs text-gray-500 font-normal text-left">{description}</p>}
-          </div>
-        </div>
-        {expandedSections[sectionKey] ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-      </Button>
-    </div>
+  }: { title: string; sectionKey: keyof typeof expandedSections; icon: React.ElementType }) => (
+    <Button
+      variant="ghost"
+      onClick={() => toggleSection(sectionKey)}
+      className="w-full justify-between text-lg font-semibold py-3 px-2 hover:bg-muted/50"
+    >
+      <div className="flex items-center">
+        <Icon className="w-5 h-5 mr-3 text-primary" />
+        {title}
+      </div>
+      {expandedSections[sectionKey] ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+    </Button>
   )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto p-0">
         <form onSubmit={handleSubmit}>
-          <DialogHeader className="p-6 pb-4 border-b sticky top-0 bg-white z-10">
+          <DialogHeader className="p-6 pb-4 border-b">
             <DialogTitle className="text-2xl font-bold flex items-center">
-              <Bot className="w-7 h-7 mr-3 text-primary" />
+              <Bot className="w-7 h-7 mr-2 text-primary" />
               {isEditing ? "Editar Agente de IA" : "Criar Novo Agente de IA"}
             </DialogTitle>
-            <DialogDescription>Configure os detalhes essenciais e funcionalidades do seu agente.</DialogDescription>
+            <DialogDescription>Configure os detalhes e o comportamento do seu agente de IA.</DialogDescription>
           </DialogHeader>
 
-          <div className="px-2 py-4 md:px-6 md:py-6 space-y-0 bg-gray-50/30">
+          <div className="p-6 space-y-6">
             {error && (
-              <div className="px-4 pb-4">
-                <Alert variant="destructive">
-                  <Sparkles className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              </div>
+              <Alert variant="destructive">
+                <Sparkles className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
             {maxAgentsReached && !isEditing && (
-              <div className="px-4 pb-4">
-                <Alert variant="warning">
-                  <Info className="h-4 w-4" />
-                  <AlertDescription>Você atingiu o limite máximo de agentes.</AlertDescription>
-                </Alert>
-              </div>
+              <Alert variant="warning">
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  Você atingiu o limite máximo de agentes. Para criar mais, considere atualizar seu plano ou remover
+                  agentes existentes.
+                </AlertDescription>
+              </Alert>
             )}
 
-            <Card className="shadow-sm overflow-hidden">
-              <SectionToggle
-                title="Informações Básicas e Modelo"
-                sectionKey="basic"
-                icon={FileText}
-                description="Nome, descrição, modelo de IA e parâmetros de geração."
-              />
+            <Card>
+              <CardHeader className="p-0">
+                <SectionToggle title="Informações Básicas e Modelo" sectionKey="basic" icon={FileText} />
+              </CardHeader>
               {expandedSections.basic && (
-                <CardContent className="p-4 md:p-6 space-y-4 border-t">
+                <CardContent className="pt-4 space-y-4">
+                  {/* Fields: name, description, model_name, temperature, top_p, max_tokens, prompt_template */}
                   <div>
                     <Label htmlFor="name">Nome do Agente *</Label>
-                    <Input id="name" name="name" value={formData.name} onChange={handleInputChange} required />
+                    <Input
+                      id="name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      placeholder="Ex: Assistente de Vendas"
+                      required
+                    />
                   </div>
                   <div>
                     <Label htmlFor="description">Descrição (Opcional)</Label>
@@ -562,6 +539,7 @@ export function AgentModal({
                       name="description"
                       value={formData.description || ""}
                       onChange={handleInputChange}
+                      placeholder="Descreva a função principal do agente"
                     />
                   </div>
                   <div>
@@ -572,7 +550,7 @@ export function AgentModal({
                       onValueChange={(value) => handleSelectChange("model_name", value)}
                     >
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Selecione um modelo" />
                       </SelectTrigger>
                       <SelectContent>
                         {modelosOpenAI.map((modelo) => (
@@ -584,7 +562,8 @@ export function AgentModal({
                     </Select>
                     {selectedModelInfo && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        Janela de contexto: {selectedModelInfo.context_window.toLocaleString()} tokens.
+                        Janela de contexto: {selectedModelInfo.context_window.toLocaleString()} tokens.{" "}
+                        {selectedModelInfo.description}
                       </p>
                     )}
                   </div>
@@ -600,8 +579,25 @@ export function AgentModal({
                         defaultValue={[formData.temperature]}
                         onValueChange={(value) => handleSliderChange("temperature", value)}
                       />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Controla a aleatoriedade. Mais alto = mais criativo.
+                      </p>
                     </div>
-                    <div></div>
+                    <div>
+                      <Label htmlFor="top_p">Top P: {formData.top_p.toFixed(1)}</Label>
+                      <Slider
+                        id="top_p"
+                        name="top_p"
+                        min={0}
+                        max={1}
+                        step={0.1}
+                        defaultValue={[formData.top_p]}
+                        onValueChange={(value) => handleSliderChange("top_p", value)}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Controla a diversidade via amostragem nucleus.
+                      </p>
+                    </div>
                     <div>
                       <Label htmlFor="max_tokens">Max Tokens: {formData.max_tokens}</Label>
                       <Input
@@ -610,33 +606,82 @@ export function AgentModal({
                         name="max_tokens"
                         value={formData.max_tokens}
                         onChange={handleInputChange}
+                        placeholder="1000"
                       />
+                      <p className="text-xs text-muted-foreground mt-1">Máximo de tokens na resposta.</p>
                     </div>
                   </div>
                   <div>
-                    <Label htmlFor="prompt_template">Prompt de Treinamento *</Label>
+                    <Label htmlFor="prompt_template">Prompt de Treinamento (Instruções do Sistema) *</Label>
                     <Textarea
                       id="prompt_template"
                       name="prompt_template"
-                      value={formData.prompt_template || ""}
+                      value={formData.prompt_template}
                       onChange={handleInputChange}
+                      placeholder="Você é um assistente virtual especializado em..."
                       rows={6}
                       required
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Defina a persona, o papel e as instruções principais do seu agente.
+                    </p>
                   </div>
                 </CardContent>
               )}
             </Card>
 
-            <Card className="shadow-sm overflow-hidden mt-4">
-              <SectionToggle
-                title="Conexão e Ativação"
-                sectionKey="behavior"
-                icon={Settings}
-                description="Conexão WhatsApp, palavra de ativação e status."
-              />
+            <Card>
+              <CardHeader className="p-0">
+                <SectionToggle title="Tom de Voz e Função" sectionKey="tone" icon={Palette} />
+              </CardHeader>
+              {expandedSections.tone && (
+                <CardContent className="pt-4 space-y-4">
+                  {/* Fields: tone_and_style (personality, language_style, response_length) */}
+                  <div>
+                    <Label htmlFor="personality">Personalidade</Label>
+                    <Input
+                      id="personality"
+                      value={formData.model_config.tone_and_style.personality}
+                      onChange={(e) => handleConfigChange("tone_and_style", e.target.value, "personality")}
+                      placeholder="Ex: Amigável e prestativo, Formal e direto"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="language_style">Estilo de Linguagem</Label>
+                    <Input
+                      id="language_style"
+                      value={formData.model_config.tone_and_style.language_style}
+                      onChange={(e) => handleConfigChange("tone_and_style", e.target.value, "language_style")}
+                      placeholder="Ex: Clara e concisa, Detalhada e explicativa"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="response_length">Comprimento da Resposta</Label>
+                    <Select
+                      value={formData.model_config.tone_and_style.response_length}
+                      onValueChange={(value) => handleConfigChange("tone_and_style", value, "response_length")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="concise">Concisa</SelectItem>
+                        <SelectItem value="medium">Média</SelectItem>
+                        <SelectItem value="detailed">Detalhada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+
+            <Card>
+              <CardHeader className="p-0">
+                <SectionToggle title="Comportamento e Limites" sectionKey="behavior" icon={Settings} />
+              </CardHeader>
               {expandedSections.behavior && (
-                <CardContent className="p-4 md:p-6 space-y-4 border-t">
+                <CardContent className="pt-4 space-y-4">
+                  {/* Fields: activation_keyword, greeting_message, inactivity_timeout, etc. */}
                   <div>
                     <Label htmlFor="whatsapp_connection_id">Conexão WhatsApp *</Label>
                     <Select
@@ -645,12 +690,12 @@ export function AgentModal({
                       onValueChange={(value) => handleSelectChange("whatsapp_connection_id", value)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma conexão" />
+                        <SelectValue placeholder="Selecione uma conexão WhatsApp" />
                       </SelectTrigger>
                       <SelectContent>
                         {whatsappConnections.map((conn) => (
                           <SelectItem key={conn.id} value={conn.id}>
-                            {conn.connection_name} ({conn.phone_number || conn.instance_name || "N/A"})
+                            {conn.connection_name} ({conn.phone_number || "Número não disponível"})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -662,63 +707,74 @@ export function AgentModal({
                       id="activation_keyword"
                       value={formData.model_config.activation_keyword || ""}
                       onChange={(e) => handleConfigChange("activation_keyword", e.target.value)}
-                      required
+                      placeholder="Ex: /bot, !assistente"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Palavra que o usuário deve enviar para iniciar a conversa com o bot.
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="greeting_message_enabled">Mensagem de Saudação Automática</Label>
+                    <Switch
+                      id="greeting_message_enabled"
+                      checked={formData.model_config.greeting_message_enabled}
+                      onCheckedChange={(checked) => handleConfigChange("greeting_message_enabled", checked)}
                     />
                   </div>
-                  <div className="flex items-center justify-between py-2">
-                    <Label htmlFor="is_active" className="flex flex-col">
-                      <span>Agente Ativo</span>
-                      <span className="text-xs text-gray-500 font-normal">
-                        Permite que o agente processe mensagens.
-                      </span>
-                    </Label>
+                  {formData.model_config.greeting_message_enabled && (
+                    <div>
+                      <Label htmlFor="greeting_message">Mensagem de Saudação</Label>
+                      <Textarea
+                        id="greeting_message"
+                        value={formData.model_config.greeting_message || ""}
+                        onChange={(e) => handleConfigChange("greeting_message", e.target.value)}
+                        placeholder="Olá! Como posso te ajudar hoje?"
+                      />
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="is_active">Agente Ativo</Label>
                     <Switch
                       id="is_active"
                       name="is_active"
                       checked={formData.is_active}
-                      onCheckedChange={(checked) => handleSwitchChange("is_active", checked)}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_active: checked }))}
                     />
                   </div>
-                  <div className="flex items-center justify-between py-2">
-                    <Label htmlFor="is_default" className="flex flex-col">
-                      <span>Agente Padrão para esta Conexão</span>
-                      <span className="text-xs text-gray-500 font-normal">
-                        Define se este agente responde por padrão.
-                      </span>
-                    </Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="is_default">Agente Padrão para esta Conexão</Label>
                     <Switch
                       id="is_default"
                       name="is_default"
                       checked={formData.is_default}
-                      onCheckedChange={(checked) => handleSwitchChange("is_default", checked)}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked }))}
                     />
                   </div>
                 </CardContent>
               )}
             </Card>
 
-            <Card className="shadow-sm overflow-hidden mt-4">
-              <SectionToggle
-                title="Funcionalidades Adicionais"
-                sectionKey="advanced"
-                icon={Brain}
-                description="Configurações de saída de voz e agendamento Cal.com."
-              />
+            <Card>
+              <CardHeader className="p-0">
+                <SectionToggle title="Funcionalidades Avançadas" sectionKey="advanced" icon={Brain} />
+              </CardHeader>
               {expandedSections.advanced && (
-                <CardContent className="p-4 md:p-6 space-y-6 border-t">
-                  <div className="p-4 border rounded-md bg-white">
-                    <div className="flex items-center justify-between mb-3">
+                <CardContent className="pt-4 space-y-4">
+                  {/* Voice Output */}
+                  <div className="p-4 border rounded-md">
+                    <div className="flex items-center justify-between mb-2">
                       <Label htmlFor="voice_output_enabled" className="flex items-center text-md font-medium">
-                        <Volume2 className="w-5 h-5 mr-2 text-blue-500" /> Saída de Voz (TTS)
+                        <Volume2 className="w-5 h-5 mr-2 text-blue-500" />
+                        Saída de Voz (Text-to-Speech)
                       </Label>
                       <Switch
                         id="voice_output_enabled"
-                        checked={!!formData.model_config.voice_output_enabled}
+                        checked={formData.model_config.voice_output_enabled}
                         onCheckedChange={(checked) => handleConfigChange("voice_output_enabled", checked)}
                       />
                     </div>
                     {formData.model_config.voice_output_enabled && (
-                      <div className="space-y-3 pl-7 mt-2 border-t pt-3">
+                      <div className="space-y-3 pl-7 mt-2">
                         <div>
                           <Label htmlFor="voice_provider">Provedor de Voz</Label>
                           <Select
@@ -748,25 +804,31 @@ export function AgentModal({
                             id="voice_id"
                             value={formData.model_config.voice_config?.voice_id || ""}
                             onChange={(e) => handleConfigChange("voice_config", e.target.value, "voice_id")}
+                            placeholder="Ex: pMsXgVXv3BLzUgSXRplE (ElevenLabs)"
                           />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            ID específico da voz a ser usada no provedor selecionado.
+                          </p>
                         </div>
                       </div>
                     )}
                   </div>
 
-                  <div className="p-4 border rounded-md bg-white">
-                    <div className="flex items-center justify-between mb-3">
+                  {/* Cal.com Integration */}
+                  <div className="p-4 border rounded-md">
+                    <div className="flex items-center justify-between mb-2">
                       <Label htmlFor="cal_com_enabled" className="flex items-center text-md font-medium">
-                        <CalendarDays className="w-5 h-5 mr-2 text-green-500" /> Agendamento (Cal.com)
+                        <CalendarDays className="w-5 h-5 mr-2 text-green-500" />
+                        Agendamento (Cal.com)
                       </Label>
                       <Switch
                         id="cal_com_enabled"
-                        checked={!!formData.model_config.tools_config?.cal_com?.enabled}
+                        checked={formData.model_config.tools_config?.cal_com?.enabled || false}
                         onCheckedChange={(checked) => handleConfigChange("tools_config", checked, "cal_com", "enabled")}
                       />
                     </div>
                     {formData.model_config.tools_config?.cal_com?.enabled && (
-                      <div className="space-y-3 pl-7 mt-2 border-t pt-3">
+                      <div className="space-y-3 pl-7 mt-2">
                         <div>
                           <Label htmlFor="cal_com_api_key">Cal.com API Key</Label>
                           <div className="relative">
@@ -775,6 +837,7 @@ export function AgentModal({
                               type={showCalApiKey ? "text" : "password"}
                               value={formData.model_config.tools_config?.cal_com?.api_key || ""}
                               onChange={(e) => handleConfigChange("tools_config", e.target.value, "cal_com", "api_key")}
+                              placeholder="cal_live_..."
                             />
                             <Button
                               type="button"
@@ -788,14 +851,18 @@ export function AgentModal({
                           </div>
                         </div>
                         <div>
-                          <Label htmlFor="cal_com_event_type_id">Cal.com Event Type ID / Link Slug</Label>
+                          <Label htmlFor="cal_com_event_type_id">Cal.com Event Type ID / Link ID</Label>
                           <Input
                             id="cal_com_event_type_id"
                             value={formData.model_config.tools_config?.cal_com?.event_type_id || ""}
                             onChange={(e) =>
                               handleConfigChange("tools_config", e.target.value, "cal_com", "event_type_id")
                             }
+                            placeholder="ID do tipo de evento ou link do Cal.com"
                           />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Encontrado na URL do seu tipo de evento Cal.com (ex: `meu-usuario/meu-evento-de-30min`).
+                          </p>
                         </div>
                       </div>
                     )}
@@ -805,20 +872,18 @@ export function AgentModal({
             </Card>
           </div>
 
-          <DialogFooter className="p-6 pt-4 border-t sticky bottom-0 bg-white z-10">
+          <DialogFooter className="p-6 pt-4 border-t">
             <DialogClose asChild>
-              <Button variant="outline" type="button" disabled={loading}>
+              <Button variant="outline" type="button">
                 Cancelar
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={loading || (maxAgentsReached && !isEditing)} className="min-w-[120px]">
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : isEditing ? (
-                "Salvar Alterações"
-              ) : (
-                "Criar Agente"
-              )}
+            <Button
+              type="submit"
+              disabled={loading || (maxAgentsReached && !isEditing)}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {loading ? "Salvando..." : isEditing ? "Salvar Alterações" : "Criar Agente"}
             </Button>
           </DialogFooter>
         </form>

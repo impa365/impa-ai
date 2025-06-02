@@ -3,106 +3,100 @@ export interface OpenAIModel {
   name: string
   context_window: number
   description: string
-  type: "text" | "chat" | "image" | "audio"
+  type: "text" | "chat" | "image" | "audio" // Added type for more context if needed
 }
 
 export const modelosOpenAI: OpenAIModel[] = [
   // GPT-4 Series
   {
     id: "gpt-4o",
-    name: "GPT-4o (Omni)",
+    name: "GPT-4o",
     context_window: 128000,
-    description: "Nosso modelo mais recente, mais inteligente e multimodal.",
+    description: "Nosso modelo mais avançado, multimodal e otimizado para inteligência.",
     type: "chat",
   },
   {
     id: "gpt-4-turbo",
     name: "GPT-4 Turbo",
     context_window: 128000,
-    description: "O mais recente modelo GPT-4 Turbo com janela de contexto de 128k e conhecimento até Abr 2023.",
+    description:
+      "O mais recente modelo GPT-4 Turbo com janela de contexto de 128k e conhecimento até Abr 2023. Suporta JSON mode.",
     type: "chat",
   },
   {
     id: "gpt-4-turbo-preview",
-    name: "GPT-4 Turbo Preview",
+    name: "GPT-4 Turbo (Preview)",
     context_window: 128000,
-    description: "Prévia do GPT-4 Turbo, otimizado para chat e tarefas de conclusão.",
+    description:
+      "Pré-visualização do GPT-4 Turbo, knowledge até Dez 2023. Pode ser substituído por uma versão estável.",
     type: "chat",
   },
   {
     id: "gpt-4",
     name: "GPT-4",
     context_window: 8192,
-    description: "Modelo GPT-4 padrão com janela de contexto de 8k.",
+    description: "Modelo GPT-4 base com janela de contexto de 8k. Substituído por gpt-4-turbo.",
     type: "chat",
   },
   {
     id: "gpt-4-32k",
-    name: "GPT-4 (32k context)",
+    name: "GPT-4 (32k Context)",
     context_window: 32768,
-    description: "Modelo GPT-4 com janela de contexto estendida de 32k.",
+    description: "Modelo GPT-4 com janela de contexto de 32k. Substituído por gpt-4-turbo.",
     type: "chat",
   },
 
   // GPT-3.5 Series
   {
+    id: "gpt-3.5-turbo-0125",
+    name: "GPT-3.5 Turbo (0125)",
+    context_window: 16385,
+    description: "O mais recente modelo GPT-3.5 Turbo. Suporta JSON mode.",
+    type: "chat",
+  },
+  {
     id: "gpt-3.5-turbo",
     name: "GPT-3.5 Turbo",
-    context_window: 16385, // Updated context window
-    description: "Modelo GPT-3.5 Turbo otimizado para chat com janela de contexto de 16k.",
+    context_window: 4096, // Can be 16k with gpt-3.5-turbo-1106 or 0125
+    description: "Modelo GPT-3.5 Turbo otimizado para chat, mas também bom para tarefas tradicionais de completude.",
     type: "chat",
   },
   {
     id: "gpt-3.5-turbo-16k",
-    name: "GPT-3.5 Turbo (16k context)",
+    name: "GPT-3.5 Turbo (16k Context)",
     context_window: 16385,
     description: "Versão do GPT-3.5 Turbo com janela de contexto de 16k.",
     type: "chat",
   },
+
+  // Older models (might be deprecated or less recommended)
   {
-    id: "gpt-3.5-turbo-instruct",
-    name: "GPT-3.5 Turbo Instruct",
+    id: "text-davinci-003",
+    name: "Davinci (GPT-3)",
     context_window: 4096,
-    description: "Modelo de instrução GPT-3.5 Turbo.",
+    description:
+      "Modelo legado, pode realizar qualquer tarefa de linguagem com melhor qualidade, maior saída e melhor instrução.",
     type: "text",
   },
-
-  // Image Generation
   {
-    id: "dall-e-3",
-    name: "DALL·E 3",
-    context_window: 0, // N/A for image models
-    description: "O modelo de geração de imagem mais capaz da OpenAI.",
-    type: "image",
+    id: "text-curie-001",
+    name: "Curie (GPT-3)",
+    context_window: 2048,
+    description: "Modelo legado, muito capaz, mais rápido e de menor custo que Davinci.",
+    type: "text",
   },
   {
-    id: "dall-e-2",
-    name: "DALL·E 2",
-    context_window: 0, // N/A for image models
-    description: "Modelo de geração de imagem anterior, ainda poderoso.",
-    type: "image",
-  },
-
-  // Audio Models
-  {
-    id: "tts-1",
-    name: "TTS-1 (Text-to-Speech)",
-    context_window: 4096, // Input text limit
-    description: "Modelo de Text-to-Speech otimizado para fala em tempo real.",
-    type: "audio",
+    id: "text-babbage-001",
+    name: "Babbage (GPT-3)",
+    context_window: 2048,
+    description: "Modelo legado, capaz de tarefas diretas, muito rápido e de baixo custo.",
+    type: "text",
   },
   {
-    id: "tts-1-hd",
-    name: "TTS-1 HD (Text-to-Speech)",
-    context_window: 4096, // Input text limit
-    description: "Modelo de Text-to-Speech com foco em alta qualidade de áudio.",
-    type: "audio",
-  },
-  {
-    id: "whisper-1",
-    name: "Whisper (Speech-to-Text)",
-    context_window: 0, // N/A, processes audio files
-    description: "Modelo de Speech-to-Text para transcrição de áudio.",
-    type: "audio",
+    id: "text-ada-001",
+    name: "Ada (GPT-3)",
+    context_window: 2048,
+    description: "Modelo legado, capaz de tarefas muito simples, geralmente o mais rápido e de menor custo.",
+    type: "text",
   },
 ]
