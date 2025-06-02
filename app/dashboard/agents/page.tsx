@@ -8,31 +8,29 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/use-toast"
-import { AgentModal } from "@/components/agent-modal"
+import AgentModal, { type Agent } from "@/components/agent-modal" // Import Agent type
 import { AgentDuplicateDialog } from "@/components/agent-duplicate-dialog"
-import { AlertCircle, Bot, Copy, Edit, Loader2, MessageSquare, Mic, Plus, Trash2, Calendar } from "lucide-react"
+import {
+  AlertCircle,
+  Bot,
+  Copy,
+  Edit,
+  Loader2,
+  MessageSquare,
+  Mic,
+  Plus,
+  Trash2,
+  Calendar,
+  Eye,
+  Zap,
+} from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
 import { getCurrentUser } from "@/lib/auth"
+import { checkUserCanCreateAgent } from "@/lib/agent-limits" // Importar a função correta
+import { deleteEvolutionBot } from "@/lib/evolution-api"
 
-type Agent = {
-  id: string
-  name: string
-  description: string
-  prompt: string
-  model: string
-  temperature: number
-  max_tokens: number
-  whatsapp_connection_id: string | null
-  user_id: string
-  created_at: string
-  type: string
-  voice_provider: string | null
-  voice_api_key: string | null
-  voice_voice_id: string | null
-  calendar_provider: string | null
-  calendar_api_key: string | null
-  calendar_calendar_id: string | null
-}
+// Remover a definição local de Agent, pois será importada do agent-modal
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([])
@@ -45,7 +43,7 @@ export default function AgentsPage() {
   const [limitInfo, setLimitInfo] = useState<{
     canCreate: boolean
     currentCount: number
-    maxAllowed: number
+    limit: number // Renomeado de maxAllowed para limit para consistência
     message?: string
   } | null>(null)
 
@@ -55,31 +53,35 @@ export default function AgentsPage() {
   useEffect(() => {
     const fetchUserAndAgents = async () => {
       try {
-        // Buscar o usuário atual
         const currentUser = getCurrentUser()
-
         if (!currentUser) {
           router.push("/")
           return
         }
-
         setUserId(currentUser.id)
 
-        // Verificar limite de agentes
-        const limitCheck = await checkAgentLimit(currentUser.id)
-        setLimitInfo(limitCheck)
+        const limitCheckResult = await checkUserCanCreateAgent(currentUser.id)
+        setLimitInfo({
+          ...limitCheckResult,
+          message: !limitCheckResult.canCreate
+            ? `Você atingiu o limite de ${limitCheckResult.limit} agentes.`
+            : undefined,
+        })
 
-        // Buscar agentes do usuário
         const { data: agentsData, error } = await supabase
           .from("ai_agents")
-          .select("*")
+          .select(`
+            *,
+            whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
+              connection_name,
+              status,
+              instance_name
+            )
+          `)
           .eq("user_id", currentUser.id)
           .order("created_at", { ascending: false })
 
-        if (error) {
-          throw error
-        }
-
+        if (error) throw error
         setAgents(agentsData || [])
       } catch (error) {
         console.error("Erro ao buscar agentes:", error)
@@ -96,64 +98,17 @@ export default function AgentsPage() {
     fetchUserAndAgents()
   }, [router, toast])
 
-  const checkAgentLimit = async (userId: string) => {
-    try {
-      // Buscar configurações do usuário
-      const { data: userSettings, error: userError } = await supabase
-        .from("user_settings")
-        .select("agents_limit")
-        .eq("user_id", userId)
-        .single()
-
-      let maxAllowed = 5 // padrão
-
-      if (userError && userError.code !== "PGRST116") {
-        console.warn("Erro ao buscar configurações do usuário:", userError)
-      } else if (userSettings?.agents_limit) {
-        maxAllowed = userSettings.agents_limit
-      } else {
-        // Buscar limite padrão do sistema
-        const { data: systemSettings } = await supabase
-          .from("system_settings")
-          .select("setting_value")
-          .eq("setting_key", "default_agents_limit")
-          .single()
-
-        if (systemSettings?.setting_value) {
-          maxAllowed = Number.parseInt(systemSettings.setting_value)
-        }
-      }
-
-      // Contar agentes atuais
-      const { count, error: countError } = await supabase
-        .from("ai_agents")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId)
-
-      if (countError) {
-        throw countError
-      }
-
-      const currentCount = count || 0
-      const canCreate = currentCount < maxAllowed
-
-      return {
-        canCreate,
-        currentCount,
-        maxAllowed,
-        message: canCreate ? undefined : `Você atingiu o limite de ${maxAllowed} agentes.`,
-      }
-    } catch (error) {
-      console.error("Erro ao verificar limite de agentes:", error)
-      return {
-        canCreate: true,
-        currentCount: 0,
-        maxAllowed: 5,
-      }
-    }
-  }
+  // Remover a função local checkAgentLimit, pois usaremos a de lib/agent-limits.ts
 
   const handleCreateAgent = () => {
+    if (limitInfo && !limitInfo.canCreate) {
+      toast({
+        title: "Limite Atingido",
+        description: limitInfo.message || "Você não pode criar mais agentes.",
+        variant: "destructive",
+      })
+      return
+    }
     setSelectedAgent(null)
     setIsModalOpen(true)
   }
@@ -164,67 +119,54 @@ export default function AgentsPage() {
   }
 
   const handleDuplicateAgent = (agent: Agent) => {
+    if (limitInfo && !limitInfo.canCreate) {
+      toast({
+        title: "Limite Atingido",
+        description: limitInfo.message || "Você não pode duplicar agentes se o limite for atingido.",
+        variant: "destructive",
+      })
+      return
+    }
     setSelectedAgent(agent)
     setIsDuplicateDialogOpen(true)
   }
 
   const handleDeleteAgent = async (agentId: string) => {
-    if (!confirm("Tem certeza que deseja excluir este agente?")) {
+    if (!confirm("Tem certeza que deseja excluir este agente? Esta ação não pode ser desfeita.")) {
       return
     }
-
     setIsDeleting(agentId)
-
     try {
-      // Buscar informações do agente antes de excluir
-      const { data: agentData, error: fetchError } = await supabase
-        .from("ai_agents")
-        .select("evolution_bot_id, whatsapp_connection_id")
-        .eq("id", agentId)
-        .single()
+      const agentToDelete = agents.find((agent) => agent.id === agentId)
 
-      if (fetchError) {
-        throw fetchError
-      }
-
-      // Se o agente tem um bot na Evolution API, excluí-lo
-      if (agentData.evolution_bot_id && agentData.whatsapp_connection_id) {
-        // Importar a função necessária
-        const { deleteEvolutionBot } = await import("@/lib/evolution-api")
-
-        // Buscar o instance_name da conexão WhatsApp
-        const { data: whatsappConnection, error: whatsappError } = await supabase
+      if (agentToDelete?.evolution_bot_id && agentToDelete.whatsapp_connection_id) {
+        const { data: conn } = await supabase
           .from("whatsapp_connections")
           .select("instance_name")
-          .eq("id", agentData.whatsapp_connection_id)
+          .eq("id", agentToDelete.whatsapp_connection_id)
           .single()
-
-        if (!whatsappError && whatsappConnection) {
-          // Excluir o bot na Evolution API
-          deleteEvolutionBot(whatsappConnection.instance_name, agentData.evolution_bot_id).catch((error) =>
-            console.error("Erro ao excluir bot na Evolution API:", error),
-          )
+        if (conn?.instance_name) {
+          await deleteEvolutionBot(conn.instance_name, agentToDelete.evolution_bot_id)
         }
       }
 
-      // Excluir o agente do banco de dados
       const { error } = await supabase.from("ai_agents").delete().eq("id", agentId)
-
-      if (error) {
-        throw error
-      }
+      if (error) throw error
 
       setAgents(agents.filter((agent) => agent.id !== agentId))
-
       toast({
         title: "Agente excluído",
         description: "O agente foi excluído com sucesso",
       })
 
-      // Atualizar limite de agentes
       if (userId) {
-        const limitCheck = await checkAgentLimit(userId)
-        setLimitInfo(limitCheck)
+        const limitCheckResult = await checkUserCanCreateAgent(userId)
+        setLimitInfo({
+          ...limitCheckResult,
+          message: !limitCheckResult.canCreate
+            ? `Você atingiu o limite de ${limitCheckResult.limit} agentes.`
+            : undefined,
+        })
       }
     } catch (error) {
       console.error("Erro ao excluir agente:", error)
@@ -238,115 +180,203 @@ export default function AgentsPage() {
     }
   }
 
-  const handleAgentSaved = async (agent: Agent, isNew: boolean) => {
-    if (isNew) {
-      setAgents([agent, ...agents])
-    } else {
-      setAgents(agents.map((a) => (a.id === agent.id ? agent : a)))
-    }
-
-    // Atualizar limite de agentes
-    if (userId) {
-      const limitCheck = await checkAgentLimit(userId)
-      setLimitInfo(limitCheck)
-    }
-
+  const handleAgentSaved = async () => {
+    // Modificado para não receber agent e isNew, pois o modal não os envia mais diretamente
     setIsModalOpen(false)
+    setLoading(true) // Recarregar agentes
+    try {
+      if (userId) {
+        const { data: agentsData, error } = await supabase
+          .from("ai_agents")
+          .select(`
+            *,
+            whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
+              connection_name,
+              status,
+              instance_name
+            )
+          `)
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+        if (error) throw error
+        setAgents(agentsData || [])
+
+        const limitCheckResult = await checkUserCanCreateAgent(userId)
+        setLimitInfo({
+          ...limitCheckResult,
+          message: !limitCheckResult.canCreate
+            ? `Você atingiu o limite de ${limitCheckResult.limit} agentes.`
+            : undefined,
+        })
+      }
+    } catch (error) {
+      console.error("Erro ao recarregar agentes:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível recarregar os agentes.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleAgentDuplicated = async (newAgent: Agent) => {
-    setAgents([newAgent, ...agents])
+  const handleAgentDuplicated = async () => {
+    // Modificado
     setIsDuplicateDialogOpen(false)
+    setLoading(true) // Recarregar agentes
+    try {
+      if (userId) {
+        const { data: agentsData, error } = await supabase
+          .from("ai_agents")
+          .select(`
+            *,
+            whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
+              connection_name,
+              status,
+              instance_name
+            )
+          `)
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+        if (error) throw error
+        setAgents(agentsData || [])
 
-    // Atualizar limite de agentes
-    if (userId) {
-      const limitCheck = await checkAgentLimit(userId)
-      setLimitInfo(limitCheck)
+        const limitCheckResult = await checkUserCanCreateAgent(userId)
+        setLimitInfo({
+          ...limitCheckResult,
+          message: !limitCheckResult.canCreate
+            ? `Você atingiu o limite de ${limitCheckResult.limit} agentes.`
+            : undefined,
+        })
+      }
+    } catch (error) {
+      console.error("Erro ao recarregar agentes após duplicar:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível recarregar os agentes.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
   }
 
-  const getAgentTypeIcon = (type: string) => {
-    switch (type) {
-      case "voice":
-        return <Mic className="h-4 w-4" />
-      case "calendar":
-        return <Calendar className="h-4 w-4" />
-      default:
-        return <MessageSquare className="h-4 w-4" />
-    }
+  const getAgentTypeIcon = (agent: Agent) => {
+    if (agent.model_config.voice_output_enabled) return <Mic className="h-5 w-5 text-blue-500" />
+    if (agent.model_config.tools_config?.cal_com?.enabled) return <Calendar className="h-5 w-5 text-green-500" />
+    return <MessageSquare className="h-5 w-5 text-gray-500" />
   }
 
-  const renderAgentCards = (agents: Agent[]) => {
-    if (agents.length === 0) {
+  const getStatusBadgeVariant = (isActive: boolean) => {
+    return isActive ? "default" : "secondary"
+  }
+
+  const getStatusBadgeClasses = (isActive: boolean) => {
+    return isActive ? "bg-green-100 text-green-700 border-green-300" : "bg-gray-100 text-gray-700 border-gray-300"
+  }
+
+  const renderAgentCards = (filteredAgents: Agent[]) => {
+    if (filteredAgents.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center p-8 text-center">
-          <Bot className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">Nenhum agente encontrado</h3>
-          <p className="text-sm text-muted-foreground mt-2">
-            Crie seu primeiro agente para começar a usar a plataforma
+        <div className="flex flex-col items-center justify-center p-12 text-center bg-white rounded-lg shadow-sm">
+          <Bot className="h-16 w-16 text-gray-400 mb-6" />
+          <h3 className="text-xl font-semibold text-gray-700">Nenhum agente encontrado</h3>
+          <p className="text-md text-gray-500 mt-2">
+            Crie seu primeiro agente para começar a automatizar suas conversas!
           </p>
+          <Button onClick={handleCreateAgent} className="mt-6" disabled={limitInfo && !limitInfo.canCreate}>
+            <Plus className="mr-2 h-4 w-4" /> Criar Primeiro Agente
+          </Button>
         </div>
       )
     }
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {agents.map((agent) => (
-          <Card key={agent.id} className="overflow-hidden">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {getAgentTypeIcon(agent.type)}
-                  <CardTitle className="text-lg">{agent.name}</CardTitle>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {filteredAgents.map((agent) => (
+          <Card
+            key={agent.id}
+            className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col justify-between"
+          >
+            <CardHeader className="pb-3 border-b bg-gray-50/50">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  {getAgentTypeIcon(agent)}
+                  <CardTitle className="text-xl font-semibold text-gray-800">{agent.name}</CardTitle>
                 </div>
+                <Badge
+                  variant={getStatusBadgeVariant(agent.is_active)}
+                  className={`px-2.5 py-0.5 text-xs font-medium ${getStatusBadgeClasses(agent.is_active)}`}
+                >
+                  {agent.is_active ? "Ativo" : "Inativo"}
+                </Badge>
               </div>
-              <CardDescription className="line-clamp-2">{agent.description}</CardDescription>
+              <CardDescription className="text-sm text-gray-600 line-clamp-2 h-10">
+                {agent.description || "Sem descrição fornecida."}
+              </CardDescription>
             </CardHeader>
-            <CardContent className="pb-2">
-              <div className="text-sm text-muted-foreground">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium">Modelo:</span> {agent.model}
-                </div>
-                {agent.type === "voice" && agent.voice_provider && (
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium">Provedor de voz:</span> {agent.voice_provider}
-                  </div>
-                )}
-                {agent.type === "calendar" && agent.calendar_provider && (
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium">Provedor de calendário:</span> {agent.calendar_provider}
-                  </div>
-                )}
+            <CardContent className="py-4 px-5 space-y-3 text-sm flex-grow">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-500">Modelo:</span>
+                <Badge variant="outline" className="font-mono text-xs">
+                  {agent.model_name}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-500">Conexão:</span>
+                <span className="text-gray-700 truncate max-w-[150px]">
+                  {agent.whatsapp_connections?.connection_name || "N/A"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-500">Palavra-chave:</span>
+                <Badge variant="secondary" className="text-xs">
+                  {agent.model_config.activation_keyword || "Nenhuma"}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-500">Criado em:</span>
+                <span className="text-gray-700">{new Date(agent.created_at!).toLocaleDateString()}</span>
               </div>
             </CardContent>
-            <CardFooter className="pt-2 flex justify-between">
-              <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/agents/${agent.id}`)}>
-                Ver detalhes
-              </Button>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="icon" onClick={() => handleEditAgent(agent)}>
-                  <Edit className="h-4 w-4" />
-                </Button>
+            <CardFooter className="pt-3 pb-4 px-5 bg-gray-50/50 border-t">
+              <div className="flex w-full justify-between items-center">
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDuplicateAgent(agent)}
-                  disabled={limitInfo && !limitInfo.canCreate}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/dashboard/agents/${agent.id}`)}
+                  className="flex items-center gap-2"
                 >
-                  <Copy className="h-4 w-4" />
+                  <Eye className="h-4 w-4" /> Ver Detalhes
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDeleteAgent(agent.id)}
-                  disabled={isDeleting === agent.id}
-                >
-                  {isDeleting === agent.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                </Button>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => handleEditAgent(agent)} title="Editar">
+                    <Edit className="h-4 w-4 text-blue-600" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDuplicateAgent(agent)}
+                    disabled={limitInfo && !limitInfo.canCreate}
+                    title="Duplicar"
+                  >
+                    <Copy className="h-4 w-4 text-purple-600" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteAgent(agent.id)}
+                    disabled={isDeleting === agent.id}
+                    title="Excluir"
+                  >
+                    {isDeleting === agent.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-red-600" />
+                    ) : (
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    )}
+                  </Button>
+                </div>
               </div>
             </CardFooter>
           </Card>
@@ -356,105 +386,164 @@ export default function AgentsPage() {
   }
 
   const renderSkeletons = () => {
-    return Array(6)
+    return Array(3)
       .fill(0)
       .map((_, i) => (
-        <Card key={i} className="overflow-hidden">
-          <CardHeader className="pb-2">
-            <Skeleton className="h-6 w-3/4 mb-2" />
+        <Card key={i} className="overflow-hidden shadow-lg">
+          <CardHeader className="pb-3 border-b bg-gray-50/50">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-6 w-6 rounded-full" />
+                <Skeleton className="h-6 w-32" />
+              </div>
+              <Skeleton className="h-5 w-16" />
+            </div>
             <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4 mt-1" />
           </CardHeader>
-          <CardContent className="pb-2">
-            <Skeleton className="h-4 w-1/2 mb-2" />
-            <Skeleton className="h-4 w-2/3" />
+          <CardContent className="py-4 px-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-28" />
+            </div>
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-20" />
+            </div>
           </CardContent>
-          <CardFooter className="pt-2 flex justify-between">
-            <Skeleton className="h-9 w-24" />
-            <div className="flex gap-2">
-              <Skeleton className="h-8 w-8 rounded-md" />
-              <Skeleton className="h-8 w-8 rounded-md" />
-              <Skeleton className="h-8 w-8 rounded-md" />
+          <CardFooter className="pt-3 pb-4 px-5 bg-gray-50/50 border-t">
+            <div className="flex w-full justify-between items-center">
+              <Skeleton className="h-9 w-32" />
+              <div className="flex gap-1">
+                <Skeleton className="h-8 w-8" />
+                <Skeleton className="h-8 w-8" />
+                <Skeleton className="h-8 w-8" />
+              </div>
             </div>
           </CardFooter>
         </Card>
       ))
   }
 
-  const chatAgents = agents.filter((agent) => agent.type === "chat")
-  const voiceAgents = agents.filter((agent) => agent.type === "voice")
-  const calendarAgents = agents.filter((agent) => agent.type === "calendar")
+  const filterAgentsByType = (typeKeyword: string) => {
+    if (typeKeyword === "all") return agents
+    return agents.filter((agent) => {
+      if (typeKeyword === "voice") return agent.model_config.voice_output_enabled
+      if (typeKeyword === "calendar") return agent.model_config.tools_config?.cal_com?.enabled
+      if (typeKeyword === "chat")
+        return !agent.model_config.voice_output_enabled && !agent.model_config.tools_config?.cal_com?.enabled
+      return false
+    })
+  }
+
+  const allAgents = filterAgentsByType("all")
+  const chatAgents = filterAgentsByType("chat")
+  const voiceAgents = filterAgentsByType("voice")
+  const calendarAgents = filterAgentsByType("calendar")
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="container mx-auto py-8 px-4 md:px-6 space-y-8">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Meus Agentes</h1>
-          <p className="text-muted-foreground">Gerencie seus agentes de IA e suas configurações</p>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-800">Meus Agentes de IA</h1>
+          <p className="text-md text-gray-600 mt-1">Gerencie, crie e configure seus assistentes virtuais.</p>
         </div>
-        <Button onClick={handleCreateAgent} disabled={limitInfo && !limitInfo.canCreate}>
-          <Plus className="mr-2 h-4 w-4" /> Criar Agente
+        <Button
+          onClick={handleCreateAgent}
+          disabled={limitInfo && !limitInfo.canCreate}
+          size="lg"
+          className="flex items-center gap-2"
+        >
+          <Plus className="h-5 w-5" /> Criar Novo Agente
         </Button>
-      </div>
+      </header>
 
-      {limitInfo && !limitInfo.canCreate && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Limite atingido</AlertTitle>
-          <AlertDescription>{limitInfo.message}</AlertDescription>
+      {limitInfo && (
+        <Alert variant={limitInfo.canCreate ? "default" : "destructive"} className="shadow-sm">
+          {limitInfo.canCreate ? <Zap className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+          <AlertTitle>{limitInfo.canCreate ? "Recursos Disponíveis" : "Limite de Agentes Atingido"}</AlertTitle>
+          <AlertDescription>
+            {limitInfo.message || `Você utilizou ${limitInfo.currentCount} de ${limitInfo.limit} agentes disponíveis.`}
+          </AlertDescription>
         </Alert>
       )}
 
-      {limitInfo && (
-        <div className="text-sm text-muted-foreground">
-          Agentes: {limitInfo.currentCount} de {limitInfo.maxAllowed} utilizados
-        </div>
-      )}
-
-      <Tabs defaultValue="all">
-        <TabsList>
-          <TabsTrigger value="all">Todos ({agents.length})</TabsTrigger>
-          <TabsTrigger value="chat">Chat ({chatAgents.length})</TabsTrigger>
-          <TabsTrigger value="voice">Voz ({voiceAgents.length})</TabsTrigger>
-          <TabsTrigger value="calendar">Calendário ({calendarAgents.length})</TabsTrigger>
+      <Tabs defaultValue="all" className="bg-white p-1 rounded-lg shadow-sm">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-6 border-b-0 p-1 bg-gray-100 rounded-md">
+          <TabsTrigger value="all" className="text-sm">
+            Todos ({allAgents.length})
+          </TabsTrigger>
+          <TabsTrigger value="chat" className="text-sm">
+            Chat ({chatAgents.length})
+          </TabsTrigger>
+          <TabsTrigger value="voice" className="text-sm">
+            Voz ({voiceAgents.length})
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="text-sm">
+            Calendário ({calendarAgents.length})
+          </TabsTrigger>
         </TabsList>
-        <TabsContent value="all" className="mt-4">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-          ) : (
-            renderAgentCards(agents)
-          )}
-        </TabsContent>
-        <TabsContent value="chat" className="mt-4">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-          ) : (
-            renderAgentCards(chatAgents)
-          )}
-        </TabsContent>
-        <TabsContent value="voice" className="mt-4">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-          ) : (
-            renderAgentCards(voiceAgents)
-          )}
-        </TabsContent>
-        <TabsContent value="calendar" className="mt-4">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-          ) : (
-            renderAgentCards(calendarAgents)
-          )}
-        </TabsContent>
+
+        <div className="px-1 py-2">
+          <TabsContent value="all" className="mt-0">
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{renderSkeletons()}</div>
+            ) : (
+              renderAgentCards(allAgents)
+            )}
+          </TabsContent>
+          <TabsContent value="chat" className="mt-0">
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{renderSkeletons()}</div>
+            ) : (
+              renderAgentCards(chatAgents)
+            )}
+          </TabsContent>
+          <TabsContent value="voice" className="mt-0">
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{renderSkeletons()}</div>
+            ) : (
+              renderAgentCards(voiceAgents)
+            )}
+          </TabsContent>
+          <TabsContent value="calendar" className="mt-0">
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{renderSkeletons()}</div>
+            ) : (
+              renderAgentCards(calendarAgents)
+            )}
+          </TabsContent>
+        </div>
       </Tabs>
 
-      <AgentModal isOpen={isModalOpen} onOpenChange={setIsModalOpen} agent={selectedAgent} onSave={handleAgentSaved} />
+      {isModalOpen && (
+        <AgentModal
+          open={isModalOpen} // Corrigido de isOpen para open
+          onOpenChange={setIsModalOpen}
+          agent={selectedAgent}
+          onSave={handleAgentSaved}
+          isEditing={!!selectedAgent}
+          maxAgentsReached={limitInfo ? !limitInfo.canCreate : false}
+        />
+      )}
 
-      <AgentDuplicateDialog
-        isOpen={isDuplicateDialogOpen}
-        onOpenChange={setIsDuplicateDialogOpen}
-        agent={selectedAgent}
-        onDuplicate={handleAgentDuplicated}
-      />
+      {isDuplicateDialogOpen &&
+        selectedAgent && ( // Garantir que selectedAgent não é null
+          <AgentDuplicateDialog
+            open={isDuplicateDialogOpen} // Corrigido de isOpen para open
+            onOpenChange={setIsDuplicateDialogOpen}
+            agent={selectedAgent}
+            onSuccess={handleAgentDuplicated} // Corrigido de onDuplicate para onSuccess
+          />
+        )}
     </div>
   )
 }
