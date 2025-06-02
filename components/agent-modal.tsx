@@ -252,6 +252,41 @@ export function AgentModal({
 
     try {
       let evolutionBotId = formData.evolution_bot_id
+      let botId = isEditing && agent?.id ? agent.id : null
+
+      // Se estamos criando um novo agente, precisamos primeiro criar o registro no banco para obter o ID
+      if (!isEditing) {
+        const { data: newAgent, error: insertError } = await supabase
+          .from("ai_agents")
+          .insert({
+            name: formData.name,
+            type: formData.type,
+            description: formData.description,
+            status: formData.status,
+            model_config: formData.model_config,
+            prompt_template: formData.prompt_template,
+            user_id: currentUser.id,
+            whatsapp_connection_id: formData.whatsapp_connection_id,
+            identity_description: formData.identity_description,
+            training_prompt: formData.training_prompt,
+            voice_tone: formData.voice_tone,
+            main_function: formData.main_function,
+            temperature: formData.temperature,
+            transcribe_audio: formData.transcribe_audio,
+            understand_images: formData.understand_images,
+            voice_response_enabled: formData.voice_response_enabled,
+            voice_provider: formData.voice_provider,
+            voice_api_key: formData.voice_api_key,
+            calendar_integration: formData.calendar_integration,
+            calendar_api_key: formData.calendar_api_key,
+            is_default: formData.is_default,
+          })
+          .select()
+          .single()
+
+        if (insertError) throw insertError
+        botId = newAgent.id
+      }
 
       // Buscar instance_name da conexão WhatsApp
       const { data: connection } = await supabase
@@ -265,8 +300,9 @@ export function AgentModal({
       }
 
       // Sincronizar com Evolution API
-      if (n8nIntegrationConfig?.flowUrl) {
-        const agentSpecificToken = `AGENT_${formData.id || Date.now()}_TOKEN`
+      if (n8nIntegrationConfig?.flowUrl && botId) {
+        // Usar o ID real do bot para o token
+        const agentSpecificToken = `AGENT_${botId}`
 
         const evolutionBotData = {
           enabled: formData.status === "active",
@@ -305,44 +341,41 @@ export function AgentModal({
         }
       }
 
-      const finalDbData = {
-        name: formData.name,
-        type: formData.type,
-        description: formData.description,
-        status: formData.status,
-        model_config: formData.model_config,
-        prompt_template: formData.prompt_template,
-        user_id: currentUser.id,
-        whatsapp_connection_id: formData.whatsapp_connection_id,
-        evolution_bot_id: evolutionBotId,
-        identity_description: formData.identity_description,
-        training_prompt: formData.training_prompt,
-        voice_tone: formData.voice_tone,
-        main_function: formData.main_function,
-        temperature: formData.temperature,
-        transcribe_audio: formData.transcribe_audio,
-        understand_images: formData.understand_images,
-        voice_response_enabled: formData.voice_response_enabled,
-        voice_provider: formData.voice_provider,
-        voice_api_key: formData.voice_api_key,
-        calendar_integration: formData.calendar_integration,
-        calendar_api_key: formData.calendar_api_key,
-        is_default: formData.is_default,
+      // Atualizar o registro com o ID do bot da Evolution API
+      if (botId) {
+        const finalDbData = {
+          name: formData.name,
+          type: formData.type,
+          description: formData.description,
+          status: formData.status,
+          model_config: formData.model_config,
+          prompt_template: formData.prompt_template,
+          user_id: currentUser.id,
+          whatsapp_connection_id: formData.whatsapp_connection_id,
+          evolution_bot_id: evolutionBotId,
+          identity_description: formData.identity_description,
+          training_prompt: formData.training_prompt,
+          voice_tone: formData.voice_tone,
+          main_function: formData.main_function,
+          temperature: formData.temperature,
+          transcribe_audio: formData.transcribe_audio,
+          understand_images: formData.understand_images,
+          voice_response_enabled: formData.voice_response_enabled,
+          voice_provider: formData.voice_provider,
+          voice_api_key: formData.voice_api_key,
+          calendar_integration: formData.calendar_integration,
+          calendar_api_key: formData.calendar_api_key,
+          is_default: formData.is_default,
+        }
+
+        const { error: updateError } = await supabase.from("ai_agents").update(finalDbData).eq("id", botId)
+        if (updateError) throw updateError
       }
 
-      if (isEditing && agent?.id) {
-        const { error: updateError } = await supabase.from("ai_agents").update(finalDbData).eq("id", agent.id)
-        if (updateError) throw updateError
-        toast({ title: "Sucesso", description: "Agente atualizado com sucesso!" })
-      } else {
-        const { data: newAgentData, error: insertError } = await supabase
-          .from("ai_agents")
-          .insert(finalDbData)
-          .select()
-          .single()
-        if (insertError) throw insertError
-        toast({ title: "Sucesso", description: "Agente criado com sucesso!" })
-      }
+      toast({
+        title: "Sucesso",
+        description: isEditing ? "Agente atualizado com sucesso!" : "Agente criado com sucesso!",
+      })
       onSave()
       onOpenChange(false)
     } catch (err: any) {
