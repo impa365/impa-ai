@@ -616,7 +616,7 @@ export function AgentModal({
                     <Textarea
                       id="prompt_template"
                       name="prompt_template"
-                      value={formData.prompt_template}
+                      value={formData.prompt_template || ""}
                       onChange={handleInputChange}
                       placeholder="Você é um assistente virtual especializado em..."
                       rows={6}
