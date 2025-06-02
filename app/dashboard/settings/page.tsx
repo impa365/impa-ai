@@ -393,9 +393,14 @@ console.log(botData);
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Suas API Keys</CardTitle>
-                <Button onClick={createApiKey} className="gap-2">
+                <Button
+                  onClick={createApiKey}
+                  className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                  style={{ visibility: "visible", display: "flex" }}
+                  disabled={creatingApiKey}
+                >
                   <Plus className="h-4 w-4" />
-                  Nova API Key
+                  {creatingApiKey ? "Criando..." : "Nova API Key"}
                 </Button>
               </div>
             </CardHeader>
