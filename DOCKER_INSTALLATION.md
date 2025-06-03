@@ -1,223 +1,384 @@
 # 🐳 Instalação com Docker - IMPA AI
 
-Este guia mostra como instalar o IMPA AI usando Docker e Portainer.
+Este guia mostra como instalar o IMPA AI usando Docker e Portainer com **passo a passo completo**.
 
 ## 📋 Pré-requisitos
 
 - Docker Engine 20.10+
-- Docker Compose 2.0+
-- Portainer (opcional, mas recomendado)
+- Docker Compose 2.0+ 
+- Portainer instalado e funcionando
+- Conta no Supabase (gratuita)
 - 4GB RAM mínimo
 - 20GB espaço em disco
 
-## 🚀 Instalação Rápida
+## 🚀 Instalação Completa - Passo a Passo
 
-### Método 1: Docker Compose Local
+### **PASSO 1: Configurar Supabase** 🔐
 
-\`\`\`bash
-# 1. Clone o repositório
-git clone https://github.com/seu-repo/impa-ai.git
-cd impa-ai
-
-# 2. Criar volumes
-docker volume create postgres_data
-docker volume create impa_uploads
-
-# 3. Criar rede
-docker network create ImpaServer
-
-# 4. Subir os serviços
-docker-compose up -d
-\`\`\`
-
-### Método 2: Portainer Stack
-
-## 🎛️ Configuração no Portainer
-
-### 1. Preparar Volumes e Rede
-
-No Portainer, vá para **Volumes** e crie:
-- `postgres_data`
-- `impa_uploads`
-
-Vá para **Networks** e crie:
-- `ImpaServer` (bridge)
-
-### 2. Criar Stack
-
-1. Vá para **Stacks** → **Add Stack**
-2. Nome: `impa-ai`
-3. Cole o conteúdo do arquivo `portainer-stack.yml`
-
-### 3. Configurar Variáveis de Ambiente
-
-No Portainer, configure estas variáveis:
-
-## 🔧 **VARIÁVEIS OBRIGATÓRIAS**
-
-#### 🐘 **Banco de Dados**
-| Variável | Valor Padrão | Descrição |
-|----------|--------------|-----------|
-| `POSTGRES_USER` | `impa_user` | Usuário do PostgreSQL |
-| `POSTGRES_PASSWORD` | *(sem padrão)* | **OBRIGATÓRIA** - Senha do PostgreSQL |
-| `POSTGRES_DATABASE` | `impa_ai` | Nome do banco de dados |
-| `POSTGRES_SCHEMA` | `public` | Schema do banco (pode alterar se quiser) |
-
-#### 🚀 **Aplicação**
-| Variável | Valor Padrão | Descrição |
-|----------|--------------|-----------|
-| `DOCKER_IMAGE` | `impa-ai:latest` | Imagem Docker da aplicação |
-| `APP_PORT` | `3000` | Porta da aplicação no host |
-
-#### 🔐 **Supabase (Obrigatórias)**
-| Variável | Valor Exemplo | Descrição |
-|----------|---------------|-----------|
-| `SUPABASE_URL` | `https://abcdefgh.supabase.co` | **OBRIGATÓRIA** - URL do projeto Supabase |
-| `SUPABASE_ANON_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | **OBRIGATÓRIA** - Chave pública do Supabase |
-
-#### 🔑 **Autenticação**
-| Variável | Valor Exemplo | Descrição |
-|----------|---------------|-----------|
-| `NEXTAUTH_URL` | `http://localhost:3000` | **OBRIGATÓRIA** - URL completa da aplicação |
-| `NEXTAUTH_SECRET` | *(gerar automaticamente)* | **OBRIGATÓRIA** - Segredo para criptografia de sessões |
-
-## ⚙️ **VARIÁVEIS OPCIONAIS**
-
-#### 🔐 **Supabase Avançado (Opcional)**
-| Variável | Quando Usar | Descrição |
-|----------|-------------|-----------|
-| `SUPABASE_SERVICE_ROLE_KEY` | Operações admin, uploads, bypass RLS | Chave de serviço (deixe vazio se não usar) |
-| `SUPABASE_JWT_SECRET` | Validação manual de JWT | Segredo JWT (deixe vazio se não usar) |
-
-### 📋 **Como obter as informações:**
-
-#### **Supabase (Obrigatórias):**
+#### 1.1 Criar Projeto no Supabase
 1. Acesse: https://app.supabase.com
-2. Vá para **Settings → API**
-3. Copie:
-   - **Project URL** → `SUPABASE_URL`
-   - **anon public** → `SUPABASE_ANON_KEY`
+2. Clique em **"New Project"**
+3. Escolha sua organização
+4. Configure:
+   - **Name**: `impa-ai` (ou nome de sua escolha)
+   - **Database Password**: Anote essa senha! 
+   - **Region**: Escolha mais próxima de você
+5. Clique em **"Create new project"**
+6. **Aguarde 2-3 minutos** para o projeto ser criado
 
-#### **Supabase (Opcionais):**
-4. Se precisar de funcionalidades avançadas:
-   - **service_role** → `SUPABASE_SERVICE_ROLE_KEY`
-5. Vá para **Settings → API → JWT Settings**
-   - **JWT Secret** → `SUPABASE_JWT_SECRET`
+#### 1.2 Obter Credenciais do Supabase
+1. No seu projeto, vá para **Settings → API**
+2. **COPIE E ANOTE** estas informações:
+   \`\`\`
+   Project URL: https://seuprojectid.supabase.co
+   anon public: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   service_role: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (opcional)
+   \`\`\`
+3. Vá para **Settings → API → JWT Settings**
+4. **COPIE** o JWT Secret (opcional):
+   \`\`\`
+   JWT Secret: super-secret-jwt-token-with-at-least-32-characters-long
+   \`\`\`
 
-#### **NEXTAUTH_SECRET:**
+#### 1.3 Executar SQL no Supabase
+1. No Supabase, vá para **SQL Editor**
+2. Clique em **"New Query"**
+3. **COPIE E COLE** o conteúdo do arquivo `database/template.sql`
+4. Clique em **"Run"** para executar
+5. **COPIE E COLE** o conteúdo do arquivo `database/agents-schema.sql`
+6. Clique em **"Run"** novamente
+7. **COPIE E COLE** o conteúdo do arquivo `database/agents-advanced-config.sql`
+8. Clique em **"Run"** mais uma vez
+
+✅ **Supabase configurado com sucesso!**
+
+### **PASSO 2: Preparar Portainer** 🐳
+
+#### 2.1 Criar Volumes
+1. No Portainer, vá para **Volumes**
+2. Clique em **"Add volume"**
+3. Crie estes volumes:
+   - **Nome**: `postgres_data` → **Create**
+   - **Nome**: `impa_uploads` → **Create**
+
+#### 2.2 Criar Rede
+1. Vá para **Networks**
+2. Clique em **"Add network"**
+3. Configure:
+   - **Name**: `ImpaServer`
+   - **Driver**: `bridge`
+4. Clique em **"Create the network"**
+
+✅ **Portainer preparado!**
+
+### **PASSO 3: Gerar NEXTAUTH_SECRET** 🔑
+
+Escolha um método para gerar o secret:
+
+#### Método 1: OpenSSL (Linux/Mac)
 \`\`\`bash
-# Gerar automaticamente (recomendado):
 openssl rand -base64 32
-
-# Ou use qualquer string de 32+ caracteres:
-# Exemplo: meu-nextauth-secret-super-seguro-12345678
 \`\`\`
 
-## 🎯 **Configuração Mínima (Recomendada)**
-
-Para começar rapidamente, configure apenas:
-
-\`\`\`yaml
-# OBRIGATÓRIAS
-POSTGRES_PASSWORD: "MinhaSenh@Segura123"
-SUPABASE_URL: "https://seuproject.supabase.co"
-SUPABASE_ANON_KEY: "sua-anon-key-aqui"
-NEXTAUTH_URL: "http://localhost:3000"
-NEXTAUTH_SECRET: "resultado-do-openssl-rand-base64-32"
-
-# OPCIONAIS (usar padrões)
-POSTGRES_USER: "impa_user"
-POSTGRES_DATABASE: "impa_ai"
-POSTGRES_SCHEMA: "public"
-DOCKER_IMAGE: "impa-ai:latest"
-APP_PORT: "3000"
-
-# DEIXAR VAZIO (adicionar depois se precisar)
-SUPABASE_SERVICE_ROLE_KEY: ""
-SUPABASE_JWT_SECRET: ""
-\`\`\`
-
-## ❓ **Sobre o NEXTAUTH_SECRET:**
-
-### **É REALMENTE NECESSÁRIO? SIM! ✅**
-
-O `NEXTAUTH_SECRET` é **obrigatório** porque:
-- 🔐 Criptografa cookies de sessão
-- 🛡️ Protege tokens de autenticação  
-- 🔑 Assina JWTs internos
-- ⚠️ **Sem ele, a autenticação não funciona!**
-
-### **Como gerar:**
+#### Método 2: Node.js
 \`\`\`bash
-# Método 1: OpenSSL (recomendado)
-openssl rand -base64 32
-
-# Método 2: Node.js
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-
-# Método 3: Online (use com cuidado)
-# https://generate-secret.vercel.app/32
 \`\`\`
 
-### **Exemplo de resultado:**
+#### Método 3: Online
+- Acesse: https://generate-secret.vercel.app/32
+- **COPIE** o resultado
+
+**ANOTE** o resultado, exemplo:
 \`\`\`
 K7+x9QmP8vF2nR5tY8uI3oA6sD9gH1jL4mN7pQ0wE2r=
 \`\`\`
 
-## 🔄 **Quando usar as opcionais:**
+### **PASSO 4: Criar Stack no Portainer** 📦
 
-### **SUPABASE_SERVICE_ROLE_KEY** - Use SE:
-- ✅ Deletar usuários pelo painel admin
-- ✅ Upload de arquivos (Storage)
-- ✅ Operações que precisam bypass RLS
-- ✅ Integrações avançadas
+#### 4.1 Criar Nova Stack
+1. No Portainer, vá para **Stacks**
+2. Clique em **"Add stack"**
+3. Configure:
+   - **Name**: `impa-ai`
+   - **Build method**: `Web editor`
 
-### **SUPABASE_JWT_SECRET** - Use SE:
-- ✅ Validação manual de tokens
-- ✅ Autenticação customizada
-- ✅ Integração com APIs externas
+#### 4.2 Colar Configuração
+1. **COPIE** todo o conteúdo do arquivo `portainer-stack.yml`
+2. **COLE** no editor do Portainer
 
-### **POSTGRES_SCHEMA** - Altere SE:
-- ✅ Quer organizar tabelas em schemas separados
-- ✅ Ambiente multi-tenant
-- ✅ Separação por módulos
-- 📝 **Padrão "public" funciona para 99% dos casos**
+#### 4.3 Configurar Variáveis de Ambiente
 
-## 🚀 **Deploy da Stack**
+Role para baixo até **"Environment variables"** e configure:
 
-1. Configure as **variáveis obrigatórias**
-2. Deixe as **opcionais vazias** (por enquanto)
-3. Clique em **Deploy the stack**
-4. Aguarde o download das imagens
-5. Verifique se todos os serviços estão rodando
+##### 🔴 **OBRIGATÓRIAS:**
+\`\`\`yaml
+# Banco de Dados
+POSTGRES_USER: impa_user
+POSTGRES_PASSWORD: SuaSenhaSegura123!
+POSTGRES_DATABASE: impa_ai
+POSTGRES_SCHEMA: public
 
-## ✅ **Primeiro Teste**
+# Aplicação  
+DOCKER_IMAGE: impa-ai:latest
+APP_PORT: 3000
 
-Após o deploy:
-\`\`\`bash
-# Verificar se está rodando
-curl http://localhost:3000/api/health
+# Supabase (do PASSO 1)
+SUPABASE_URL: https://seuprojectid.supabase.co
+SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-# Acessar a aplicação
-# URL: http://localhost:3000
-# Login: admin@impa.ai  
-# Senha: admin123
+# Autenticação
+NEXTAUTH_URL: http://localhost:3000
+NEXTAUTH_SECRET: K7+x9QmP8vF2nR5tY8uI3oA6sD9gH1jL4mN7pQ0wE2r=
 \`\`\`
 
-## 🔧 **Adicionar Opcionais Depois**
+##### 🟡 **OPCIONAIS (deixe vazio por enquanto):**
+\`\`\`yaml
+# Supabase Avançado (adicionar depois se precisar)
+SUPABASE_SERVICE_ROLE_KEY: 
+SUPABASE_JWT_SECRET: 
+\`\`\`
 
-Se precisar das funcionalidades avançadas:
+#### 4.4 Deploy da Stack
+1. **Revise** todas as variáveis
+2. Clique em **"Deploy the stack"**
+3. **Aguarde** o download das imagens (pode demorar alguns minutos)
 
-1. Vá para **Stacks** → Sua stack
-2. **Editor** → Adicione as variáveis opcionais
-3. **Update the stack**
-4. Reinicie os serviços
+### **PASSO 5: Build da Imagem Docker** 🏗️
 
-## 🎉 **Resumo**
+#### 5.1 Preparar Código
+\`\`\`bash
+# Clone o repositório
+git clone https://github.com/seu-repo/impa-ai.git
+cd impa-ai
+\`\`\`
 
-- ✅ **Mínimo**: 5 variáveis obrigatórias
-- ⚙️ **Flexível**: Schemas e configurações customizáveis  
-- 🔧 **Expansível**: Adicione recursos conforme precisar
-- 🛡️ **Seguro**: NEXTAUTH_SECRET protege suas sessões
+#### 5.2 Build Local
+\`\`\`bash
+# Build da imagem
+docker build -t impa-ai:latest .
 
-**Comece simples, evolua conforme a necessidade!** 🚀
+# Verificar se foi criada
+docker images | grep impa-ai
+\`\`\`
+
+#### 5.3 Alternativa: Build no Portainer
+1. Vá para **Images**
+2. Clique em **"Build a new image"**
+3. Configure:
+   - **Image name**: `impa-ai:latest`
+   - **Build method**: `Upload`
+4. Faça upload do código compactado
+5. Clique em **"Build the image"**
+
+### **PASSO 6: Verificar Instalação** ✅
+
+#### 6.1 Verificar Serviços
+1. No Portainer, vá para **Stacks → impa-ai**
+2. Verifique se ambos serviços estão **"running"**:
+   - ✅ `postgres` 
+   - ✅ `impa-ai`
+
+#### 6.2 Verificar Logs
+\`\`\`bash
+# Logs da aplicação
+docker logs impa-ai_impa-ai_1
+
+# Logs do banco
+docker logs impa-ai_postgres_1
+\`\`\`
+
+#### 6.3 Teste de Conectividade
+\`\`\`bash
+# Verificar se a aplicação responde
+curl http://localhost:3000/api/health
+
+# Deve retornar: {"status": "ok"}
+\`\`\`
+
+### **PASSO 7: Primeiro Acesso** 🎉
+
+#### 7.1 Acessar Sistema
+1. Abra o navegador
+2. Acesse: `http://localhost:3000`
+3. **Login padrão**:
+   - **Email**: `admin@impa.ai`
+   - **Senha**: `admin123`
+
+#### 7.2 Alterar Senha (IMPORTANTE!)
+1. Após login, vá para **Configurações**
+2. Clique em **"Alterar Senha"**
+3. **ALTERE** a senha padrão imediatamente!
+
+#### 7.3 Verificar Funcionalidades
+- ✅ Dashboard carrega
+- ✅ Menu lateral funciona
+- ✅ Páginas de usuários, agentes, WhatsApp abrem
+- ✅ Configurações acessíveis
+
+## 🔧 **Configurações Avançadas (Opcional)**
+
+### Adicionar Variáveis Opcionais
+
+Se precisar de funcionalidades avançadas:
+
+1. No Portainer, vá para **Stacks → impa-ai**
+2. Clique em **"Editor"**
+3. Role até **Environment variables**
+4. Adicione:
+   \`\`\`yaml
+   SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   SUPABASE_JWT_SECRET: super-secret-jwt-token-with-at-least-32-characters-long
+   \`\`\`
+5. Clique em **"Update the stack"**
+
+### Usar Schema Customizado
+
+Para organizar melhor o banco:
+
+1. No Supabase, crie um novo schema:
+   \`\`\`sql
+   CREATE SCHEMA impa_production;
+   \`\`\`
+2. No Portainer, altere:
+   \`\`\`yaml
+   POSTGRES_SCHEMA: impa_production
+   \`\`\`
+3. Execute novamente os SQLs no novo schema
+
+## 🚨 **Troubleshooting**
+
+### Problema: Aplicação não inicia
+\`\`\`bash
+# Verificar logs
+docker logs impa-ai_impa-ai_1
+
+# Problemas comuns:
+# - NEXTAUTH_SECRET inválido
+# - SUPABASE_URL incorreta  
+# - Banco não conecta
+\`\`\`
+
+### Problema: Erro de conexão com banco
+\`\`\`bash
+# Verificar se postgres está rodando
+docker logs impa-ai_postgres_1
+
+# Testar conexão
+docker exec -it impa-ai_postgres_1 psql -U impa_user -d impa_ai
+\`\`\`
+
+### Problema: Porta já em uso
+\`\`\`bash
+# Verificar porta
+netstat -tulpn | grep :3000
+
+# Alterar porta no Portainer:
+APP_PORT: 3001  # Usar porta diferente
+\`\`\`
+
+### Problema: Imagem não encontrada
+\`\`\`bash
+# Verificar se imagem existe
+docker images | grep impa-ai
+
+# Se não existir, fazer build novamente
+docker build -t impa-ai:latest .
+\`\`\`
+
+## 📊 **Monitoramento**
+
+### Verificar Status
+\`\`\`bash
+# Status dos containers
+docker ps | grep impa
+
+# Uso de recursos
+docker stats impa-ai_impa-ai_1 impa-ai_postgres_1
+
+# Logs em tempo real
+docker logs -f impa-ai_impa-ai_1
+\`\`\`
+
+### Health Checks
+\`\`\`bash
+# Aplicação
+curl http://localhost:3000/api/health
+
+# Banco de dados
+docker exec impa-ai_postgres_1 pg_isready -U impa_user -d impa_ai
+\`\`\`
+
+## 🔄 **Backup e Manutenção**
+
+### Backup do Banco
+\`\`\`bash
+# Backup completo
+docker exec impa-ai_postgres_1 pg_dump -U impa_user impa_ai > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Backup compactado
+docker exec impa-ai_postgres_1 pg_dump -U impa_user impa_ai | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
+\`\`\`
+
+### Restore do Banco
+\`\`\`bash
+# Restore
+docker exec -i impa-ai_postgres_1 psql -U impa_user impa_ai < backup.sql
+\`\`\`
+
+### Atualizar Sistema
+\`\`\`bash
+# 1. Backup
+docker exec impa-ai_postgres_1 pg_dump -U impa_user impa_ai > backup_before_update.sql
+
+# 2. Parar stack
+# No Portainer: Stacks → impa-ai → Stop
+
+# 3. Atualizar código e rebuild
+git pull origin main
+docker build -t impa-ai:latest .
+
+# 4. Restart stack  
+# No Portainer: Stacks → impa-ai → Start
+\`\`\`
+
+## 📞 **Suporte**
+
+### Informações para Suporte
+Ao reportar problemas, inclua:
+
+\`\`\`bash
+# Versão do Docker
+docker --version
+
+# Logs da aplicação
+docker logs impa-ai_impa-ai_1 --tail=50
+
+# Logs do banco
+docker logs impa-ai_postgres_1 --tail=50
+
+# Status dos containers
+docker ps | grep impa
+
+# Configuração da stack (sem senhas)
+\`\`\`
+
+## 🎉 **Conclusão**
+
+Seguindo este passo a passo, você terá:
+
+- ✅ **Supabase** configurado com todas as tabelas
+- ✅ **Portainer** com volumes e redes criados  
+- ✅ **Stack** rodando com PostgreSQL + IMPA AI
+- ✅ **Sistema** acessível em http://localhost:3000
+- ✅ **Backup** e monitoramento configurados
+
+**🚀 Sua instalação Docker do IMPA AI está completa e funcionando!**
+
+### Próximos Passos:
+1. **Altere a senha padrão** imediatamente
+2. **Configure integrações** (Evolution API, n8n)
+3. **Crie seus primeiros agentes** de IA
+4. **Configure WhatsApp** para seus usuários
+
+**Bem-vindo ao IMPA AI!** 🎊
