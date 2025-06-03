@@ -61,19 +61,48 @@ Vá para **Networks** e crie:
 
 ### 3. Configurar Variáveis de Ambiente
 
-No Portainer, configure estas variáveis:
+No Portainer, configure estas variáveis obrigatórias:
 
+#### 🐘 **Banco de Dados**
+| Variável | Valor Exemplo | Descrição |
+|----------|---------------|-----------|
+| `POSTGRES_PASSWORD` | `MinhaSenh@Segura123` | Senha do PostgreSQL |
+
+#### 🚀 **Aplicação**
 | Variável | Valor Exemplo | Descrição |
 |----------|---------------|-----------|
 | `DOCKER_IMAGE` | `impa-ai:latest` | Imagem Docker da aplicação |
-| `APP_PORT` | `3000` | Porta da aplicação |
-| `POSTGRES_PASSWORD` | `sua-senha-segura` | Senha do PostgreSQL |
-| `SUPABASE_URL` | `https://seu-projeto.supabase.co` | URL do Supabase |
-| `SUPABASE_ANON_KEY` | `eyJ...` | Chave anônima do Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | `eyJ...` | Chave de serviço do Supabase |
-| `SUPABASE_JWT_SECRET` | `sua-jwt-secret` | Segredo JWT do Supabase |
-| `NEXTAUTH_URL` | `http://localhost:3000` | URL da aplicação |
-| `NEXTAUTH_SECRET` | `sua-nextauth-secret` | Segredo do NextAuth |
+| `APP_PORT` | `3000` | Porta da aplicação no host |
+
+#### 🔐 **Supabase (Obrigatório)**
+| Variável | Valor Exemplo | Descrição |
+|----------|---------------|-----------|
+| `SUPABASE_URL` | `https://abcdefgh.supabase.co` | URL do seu projeto Supabase |
+| `SUPABASE_ANON_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | Chave pública/anônima do Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | Chave de serviço do Supabase (admin) |
+| `SUPABASE_JWT_SECRET` | `super-secret-jwt-token-with-at-least-32-characters-long` | Segredo JWT do Supabase |
+
+#### 🔑 **Autenticação**
+| Variável | Valor Exemplo | Descrição |
+|----------|---------------|-----------|
+| `NEXTAUTH_URL` | `http://localhost:3000` | URL completa da aplicação |
+| `NEXTAUTH_SECRET` | `meu-nextauth-secret-super-seguro-123` | Segredo do NextAuth (32+ caracteres) |
+
+### 📋 **Como obter as informações do Supabase:**
+
+1. **Acesse seu projeto no Supabase**: https://app.supabase.com
+2. **Vá para Settings → API**
+3. **Copie as informações:**
+   - **Project URL** → `SUPABASE_URL`
+   - **anon public** → `SUPABASE_ANON_KEY`
+   - **service_role** → `SUPABASE_SERVICE_ROLE_KEY`
+4. **Vá para Settings → API → JWT Settings**
+   - **JWT Secret** → `SUPABASE_JWT_SECRET`
+
+### ⚠️ **Importante:**
+- **NUNCA** compartilhe a `SUPABASE_SERVICE_ROLE_KEY` publicamente
+- **SEMPRE** use HTTPS em produção
+- **ALTERE** o `NEXTAUTH_SECRET` para um valor único e seguro
 
 ### 4. Deploy da Stack
 
