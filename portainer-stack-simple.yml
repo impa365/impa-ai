@@ -1,0 +1,84 @@
+version: "3.7"
+services:
+
+## --------------------------- PostgreSQL --------------------------- ##
+  postgres:
+    image: postgres:14
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ImpaServer
+    ports:
+      - "{{POSTGRES_PORT}}:5432"
+    environment:
+      - POSTGRES_DB={{POSTGRES_DB}}
+      - POSTGRES_USER={{POSTGRES_USER}}
+      - POSTGRES_PASSWORD={{POSTGRES_PASSWORD}}
+      - PG_MAX_CONNECTIONS=500
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{POSTGRES_USER}} -d {{POSTGRES_DB}}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+
+## --------------------------- IMPA AI --------------------------- ##
+  impa-ai:
+    image: "{{DOCKER_IMAGE}}"
+    ports:
+      - "{{APP_PORT}}:3000"
+    networks:
+      - ImpaServer
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://{{POSTGRES_USER}}:{{POSTGRES_PASSWORD}}@postgres:5432/{{POSTGRES_DB}}
+      
+      # Supabase (Apenas o essencial)
+      - NEXT_PUBLIC_SUPABASE_URL={{SUPABASE_URL}}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY={{SUPABASE_ANON_KEY}}
+      
+      # NextAuth
+      - NEXTAUTH_URL={{NEXTAUTH_URL}}
+      - NEXTAUTH_SECRET={{NEXTAUTH_SECRET}}
+      
+      # App
+      - NODE_ENV=production
+      
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2048M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+## --------------------------- Volumes --------------------------- ##
+volumes:
+  postgres_data:
+    external: true
+    name: postgres_data
+
+## --------------------------- Networks --------------------------- ##
+networks:
+  ImpaServer:
+    external: true
+    name: ImpaServer
