@@ -1,0 +1,132 @@
+version: "3.7"
+services:
+
+## --------------------------- IMPA AI --------------------------- ##
+
+  postgres:
+    image: postgres:15
+    
+    volumes:
+      - impa_postgres_data:/var/lib/postgresql/data
+      - ./database/complete-setup.sql:/docker-entrypoint-initdb.d/01-setup.sql:ro
+
+    networks:
+      - ImpaServer
+
+    ports:
+      - "5432:5432"
+
+    environment:
+      ## Configuração do PostgreSQL
+      - POSTGRES_DB=impa_ai
+      - POSTGRES_USER=impa_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sua_senha_postgres_aqui}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+## --------------------------- IMPA AI --------------------------- ##
+
+  impa-ai:
+    image: node:18-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run build && npm start"
+    
+    volumes:
+      - .:/app
+      - impa_node_modules:/app/node_modules
+
+    networks:
+      - ImpaServer
+
+    environment:
+      ## Configuração do Banco de Dados
+      - DATABASE_URL=postgresql://impa_user:${POSTGRES_PASSWORD:-sua_senha_postgres_aqui}@postgres:5432/impa_ai
+      - POSTGRES_URL=postgresql://impa_user:${POSTGRES_PASSWORD:-sua_senha_postgres_aqui}@postgres:5432/impa_ai
+      - POSTGRES_PRISMA_URL=postgresql://impa_user:${POSTGRES_PASSWORD:-sua_senha_postgres_aqui}@postgres:5432/impa_ai?pgbouncer=true&connect_timeout=15
+      - POSTGRES_URL_NON_POOLING=postgresql://impa_user:${POSTGRES_PASSWORD:-sua_senha_postgres_aqui}@postgres:5432/impa_ai
+      - POSTGRES_USER=impa_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sua_senha_postgres_aqui}
+      - POSTGRES_DATABASE=impa_ai
+      - POSTGRES_HOST=postgres
+
+      ## Configuração do Supabase (se usando)
+      - SUPABASE_URL=${SUPABASE_URL:-https://seu-projeto.supabase.co}
+      - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL:-https://seu-projeto.supabase.co}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-sua_chave_anonima_aqui}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-sua_chave_anonima_aqui}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-sua_chave_service_role_aqui}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:-seu_jwt_secret_aqui}
+
+      ## Configuração da Aplicação
+      - NODE_ENV=production
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-https://seu-dominio.com}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-seu_nextauth_secret_aqui}
+
+      ## Configuração das Integrações
+      - EVOLUTION_API_URL=${EVOLUTION_API_URL:-https://sua-evolution-api.com}
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY:-sua_chave_evolution_aqui}
+      - N8N_URL=${N8N_URL:-https://seu-n8n.com}
+      - N8N_API_KEY=${N8N_API_KEY:-sua_chave_n8n_aqui}
+
+      ## Configuração OpenAI (opcional)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sua_chave_openai_aqui}
+
+      ## Configuração de TTS (opcional)
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-sua_chave_elevenlabs_aqui}
+      - FISH_AUDIO_API_KEY=${FISH_AUDIO_API_KEY:-sua_chave_fish_audio_aqui}
+
+      ## Configuração Cal.com (opcional)
+      - CALCOM_API_KEY=${CALCOM_API_KEY:-sua_chave_calcom_aqui}
+
+    depends_on:
+      - postgres
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.impa-ai.rule=Host(`${DOMAIN:-impa.seu-dominio.com}`)
+        - traefik.http.services.impa-ai.loadbalancer.server.port=3000
+        - traefik.http.routers.impa-ai.service=impa-ai
+        - traefik.http.routers.impa-ai.entrypoints=websecure
+        - traefik.http.routers.impa-ai.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.impa-ai.tls=true
+
+## --------------------------- IMPA AI --------------------------- ##
+
+volumes:
+  impa_postgres_data:
+    external: true
+    name: impa_postgres_data
+  impa_node_modules:
+    external: true
+    name: impa_node_modules
+
+networks:
+  ImpaServer:
+    external: true
+    name: ImpaServer
