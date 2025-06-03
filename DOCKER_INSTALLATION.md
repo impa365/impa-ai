@@ -22,20 +22,11 @@ cd impa-ai
 # 2. Criar volumes
 docker volume create postgres_data
 docker volume create impa_uploads
-docker volume create nginx_logs
 
 # 3. Criar rede
 docker network create ImpaServer
 
-# 4. Executar SQL de setup (primeira vez)
-docker run --rm -v $(pwd)/database:/sql -v postgres_data:/var/lib/postgresql/data postgres:14 sh -c "
-  initdb -D /var/lib/postgresql/data &&
-  pg_ctl -D /var/lib/postgresql/data -l /var/lib/postgresql/data/logfile start &&
-  createdb -h localhost impa_ai &&
-  psql -h localhost -d impa_ai -f /sql/complete-setup.sql
-"
-
-# 5. Subir os serviços
+# 4. Subir os serviços
 docker-compose up -d
 \`\`\`
 
@@ -48,7 +39,6 @@ docker-compose up -d
 No Portainer, vá para **Volumes** e crie:
 - `postgres_data`
 - `impa_uploads`
-- `nginx_logs`
 
 Vá para **Networks** e crie:
 - `ImpaServer` (bridge)
@@ -61,269 +51,173 @@ Vá para **Networks** e crie:
 
 ### 3. Configurar Variáveis de Ambiente
 
-No Portainer, configure estas variáveis obrigatórias:
+No Portainer, configure estas variáveis:
+
+## 🔧 **VARIÁVEIS OBRIGATÓRIAS**
 
 #### 🐘 **Banco de Dados**
-| Variável | Valor Exemplo | Descrição |
-|----------|---------------|-----------|
-| `POSTGRES_PASSWORD` | `MinhaSenh@Segura123` | Senha do PostgreSQL |
+| Variável | Valor Padrão | Descrição |
+|----------|--------------|-----------|
+| `POSTGRES_USER` | `impa_user` | Usuário do PostgreSQL |
+| `POSTGRES_PASSWORD` | *(sem padrão)* | **OBRIGATÓRIA** - Senha do PostgreSQL |
+| `POSTGRES_DATABASE` | `impa_ai` | Nome do banco de dados |
+| `POSTGRES_SCHEMA` | `public` | Schema do banco (pode alterar se quiser) |
 
 #### 🚀 **Aplicação**
-| Variável | Valor Exemplo | Descrição |
-|----------|---------------|-----------|
+| Variável | Valor Padrão | Descrição |
+|----------|--------------|-----------|
 | `DOCKER_IMAGE` | `impa-ai:latest` | Imagem Docker da aplicação |
 | `APP_PORT` | `3000` | Porta da aplicação no host |
 
-#### 🔐 **Supabase (Obrigatório)**
+#### 🔐 **Supabase (Obrigatórias)**
 | Variável | Valor Exemplo | Descrição |
 |----------|---------------|-----------|
-| `SUPABASE_URL` | `https://abcdefgh.supabase.co` | URL do seu projeto Supabase |
-| `SUPABASE_ANON_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | Chave pública/anônima do Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | Chave de serviço do Supabase (admin) |
-| `SUPABASE_JWT_SECRET` | `super-secret-jwt-token-with-at-least-32-characters-long` | Segredo JWT do Supabase |
+| `SUPABASE_URL` | `https://abcdefgh.supabase.co` | **OBRIGATÓRIA** - URL do projeto Supabase |
+| `SUPABASE_ANON_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | **OBRIGATÓRIA** - Chave pública do Supabase |
 
 #### 🔑 **Autenticação**
 | Variável | Valor Exemplo | Descrição |
 |----------|---------------|-----------|
-| `NEXTAUTH_URL` | `http://localhost:3000` | URL completa da aplicação |
-| `NEXTAUTH_SECRET` | `meu-nextauth-secret-super-seguro-123` | Segredo do NextAuth (32+ caracteres) |
+| `NEXTAUTH_URL` | `http://localhost:3000` | **OBRIGATÓRIA** - URL completa da aplicação |
+| `NEXTAUTH_SECRET` | *(gerar automaticamente)* | **OBRIGATÓRIA** - Segredo para criptografia de sessões |
 
-### 📋 **Como obter as informações do Supabase:**
+## ⚙️ **VARIÁVEIS OPCIONAIS**
 
-1. **Acesse seu projeto no Supabase**: https://app.supabase.com
-2. **Vá para Settings → API**
-3. **Copie as informações:**
+#### 🔐 **Supabase Avançado (Opcional)**
+| Variável | Quando Usar | Descrição |
+|----------|-------------|-----------|
+| `SUPABASE_SERVICE_ROLE_KEY` | Operações admin, uploads, bypass RLS | Chave de serviço (deixe vazio se não usar) |
+| `SUPABASE_JWT_SECRET` | Validação manual de JWT | Segredo JWT (deixe vazio se não usar) |
+
+### 📋 **Como obter as informações:**
+
+#### **Supabase (Obrigatórias):**
+1. Acesse: https://app.supabase.com
+2. Vá para **Settings → API**
+3. Copie:
    - **Project URL** → `SUPABASE_URL`
    - **anon public** → `SUPABASE_ANON_KEY`
+
+#### **Supabase (Opcionais):**
+4. Se precisar de funcionalidades avançadas:
    - **service_role** → `SUPABASE_SERVICE_ROLE_KEY`
-4. **Vá para Settings → API → JWT Settings**
+5. Vá para **Settings → API → JWT Settings**
    - **JWT Secret** → `SUPABASE_JWT_SECRET`
 
-### ⚠️ **Importante:**
-- **NUNCA** compartilhe a `SUPABASE_SERVICE_ROLE_KEY` publicamente
-- **SEMPRE** use HTTPS em produção
-- **ALTERE** o `NEXTAUTH_SECRET` para um valor único e seguro
-
-### 4. Deploy da Stack
-
-1. Clique em **Deploy the stack**
-2. Aguarde o download das imagens
-3. Verifique se todos os serviços estão rodando
-
-## 🔧 Build da Imagem Docker
-
-### Build Local
-
+#### **NEXTAUTH_SECRET:**
 \`\`\`bash
-# Build da imagem
-docker build -t impa-ai:latest .
+# Gerar automaticamente (recomendado):
+openssl rand -base64 32
 
-# Ou com tag específica
-docker build -t impa-ai:v1.0.0 .
+# Ou use qualquer string de 32+ caracteres:
+# Exemplo: meu-nextauth-secret-super-seguro-12345678
 \`\`\`
 
-### Build e Push para Registry
+## 🎯 **Configuração Mínima (Recomendada)**
 
-\`\`\`bash
-# Build
-docker build -t seu-registry/impa-ai:latest .
-
-# Push
-docker push seu-registry/impa-ai:latest
-\`\`\`
-
-## 🏗️ Estrutura dos Serviços
-
-### PostgreSQL
-- **Porta**: 5432
-- **Volume**: `postgres_data`
-- **Banco**: `impa_ai`
-- **Usuário**: `impa_user`
-
-### IMPA AI App
-- **Porta**: 3000
-- **Volume**: `app_uploads`
-- **Healthcheck**: `/api/health`
-
-### Nginx (Opcional)
-- **Portas**: 80, 443
-- **Volume**: `nginx_logs`
-- **Proxy**: Para `impa-ai:3000`
-
-## 🔍 Monitoramento
-
-### Verificar Status dos Serviços
-
-\`\`\`bash
-# Status geral
-docker-compose ps
-
-# Logs da aplicação
-docker-compose logs -f impa-ai
-
-# Logs do banco
-docker-compose logs -f postgres
-
-# Logs do nginx
-docker-compose logs -f nginx
-\`\`\`
-
-### Health Checks
-
-\`\`\`bash
-# Verificar saúde da aplicação
-curl http://localhost:3000/api/health
-
-# Verificar banco
-docker exec impa-postgres pg_isready -U impa_user -d impa_ai
-\`\`\`
-
-## 🔄 Backup e Restore
-
-### Backup do Banco
-
-\`\`\`bash
-# Backup
-docker exec impa-postgres pg_dump -U impa_user impa_ai > backup_$(date +%Y%m%d_%H%M%S).sql
-
-# Backup compactado
-docker exec impa-postgres pg_dump -U impa_user impa_ai | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
-\`\`\`
-
-### Restore do Banco
-
-\`\`\`bash
-# Restore
-docker exec -i impa-postgres psql -U impa_user impa_ai < backup.sql
-
-# Restore de arquivo compactado
-gunzip -c backup.sql.gz | docker exec -i impa-postgres psql -U impa_user impa_ai
-\`\`\`
-
-## 🔧 Troubleshooting
-
-### Problemas Comuns
-
-#### 1. Aplicação não conecta no banco
-\`\`\`bash
-# Verificar se o banco está rodando
-docker exec impa-postgres pg_isready
-
-# Verificar logs do banco
-docker-compose logs postgres
-\`\`\`
-
-#### 2. Erro de permissão nos volumes
-\`\`\`bash
-# Ajustar permissões
-sudo chown -R 999:999 /var/lib/docker/volumes/postgres_data/_data
-\`\`\`
-
-#### 3. Porta já em uso
-\`\`\`bash
-# Verificar portas em uso
-netstat -tulpn | grep :3000
-
-# Alterar porta no docker-compose.yml
-ports:
-  - "3001:3000"  # Usar porta 3001 no host
-\`\`\`
-
-### Logs Detalhados
-
-\`\`\`bash
-# Logs com timestamp
-docker-compose logs -f -t
-
-# Logs de um serviço específico
-docker-compose logs -f impa-ai
-
-# Últimas 100 linhas
-docker-compose logs --tail=100 impa-ai
-\`\`\`
-
-## 🔄 Atualizações
-
-### Atualizar Aplicação
-
-\`\`\`bash
-# 1. Fazer backup
-docker exec impa-postgres pg_dump -U impa_user impa_ai > backup_before_update.sql
-
-# 2. Parar serviços
-docker-compose down
-
-# 3. Atualizar código
-git pull origin main
-
-# 4. Rebuild imagem
-docker-compose build impa-ai
-
-# 5. Subir serviços
-docker-compose up -d
-\`\`\`
-
-### Atualizar via Portainer
-
-1. Vá para **Images** → **Build a new image**
-2. Faça upload do novo código
-3. Build nova imagem
-4. Vá para **Stacks** → Sua stack
-5. **Editor** → Altere a tag da imagem
-6. **Update the stack**
-
-## 📊 Monitoramento Avançado
-
-### Prometheus + Grafana (Opcional)
+Para começar rapidamente, configure apenas:
 
 \`\`\`yaml
-# Adicionar ao docker-compose.yml
-  prometheus:
-    image: prom/prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+# OBRIGATÓRIAS
+POSTGRES_PASSWORD: "MinhaSenh@Segura123"
+SUPABASE_URL: "https://seuproject.supabase.co"
+SUPABASE_ANON_KEY: "sua-anon-key-aqui"
+NEXTAUTH_URL: "http://localhost:3000"
+NEXTAUTH_SECRET: "resultado-do-openssl-rand-base64-32"
 
-  grafana:
-    image: grafana/grafana
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+# OPCIONAIS (usar padrões)
+POSTGRES_USER: "impa_user"
+POSTGRES_DATABASE: "impa_ai"
+POSTGRES_SCHEMA: "public"
+DOCKER_IMAGE: "impa-ai:latest"
+APP_PORT: "3000"
+
+# DEIXAR VAZIO (adicionar depois se precisar)
+SUPABASE_SERVICE_ROLE_KEY: ""
+SUPABASE_JWT_SECRET: ""
 \`\`\`
 
-## 🔐 Segurança
+## ❓ **Sobre o NEXTAUTH_SECRET:**
 
-### Recomendações
+### **É REALMENTE NECESSÁRIO? SIM! ✅**
 
-1. **Alterar senhas padrão**
-2. **Usar HTTPS em produção**
-3. **Configurar firewall**
-4. **Backup regular**
-5. **Monitorar logs**
+O `NEXTAUTH_SECRET` é **obrigatório** porque:
+- 🔐 Criptografa cookies de sessão
+- 🛡️ Protege tokens de autenticação  
+- 🔑 Assina JWTs internos
+- ⚠️ **Sem ele, a autenticação não funciona!**
 
-### SSL com Let's Encrypt
-
+### **Como gerar:**
 \`\`\`bash
-# Instalar certbot
-docker run -it --rm --name certbot \
-  -v "/etc/letsencrypt:/etc/letsencrypt" \
-  -v "/var/lib/letsencrypt:/var/lib/letsencrypt" \
-  certbot/certbot certonly --standalone -d seu-dominio.com
+# Método 1: OpenSSL (recomendado)
+openssl rand -base64 32
+
+# Método 2: Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+
+# Método 3: Online (use com cuidado)
+# https://generate-secret.vercel.app/32
 \`\`\`
 
-## 📞 Suporte
+### **Exemplo de resultado:**
+\`\`\`
+K7+x9QmP8vF2nR5tY8uI3oA6sD9gH1jL4mN7pQ0wE2r=
+\`\`\`
 
-- **Logs**: Sempre inclua logs ao reportar problemas
-- **Versões**: Informe versões do Docker e sistema operacional
-- **Configuração**: Compartilhe docker-compose.yml (sem senhas)
+## 🔄 **Quando usar as opcionais:**
 
-**🎉 Sua instalação Docker do IMPA AI está pronta!**
+### **SUPABASE_SERVICE_ROLE_KEY** - Use SE:
+- ✅ Deletar usuários pelo painel admin
+- ✅ Upload de arquivos (Storage)
+- ✅ Operações que precisam bypass RLS
+- ✅ Integrações avançadas
 
-### Primeiro Acesso
-- **URL**: http://localhost:3000
-- **Login**: admin@impa.ai
-- **Senha**: admin123
+### **SUPABASE_JWT_SECRET** - Use SE:
+- ✅ Validação manual de tokens
+- ✅ Autenticação customizada
+- ✅ Integração com APIs externas
 
-**⚠️ Lembre-se de alterar a senha padrão!**
+### **POSTGRES_SCHEMA** - Altere SE:
+- ✅ Quer organizar tabelas em schemas separados
+- ✅ Ambiente multi-tenant
+- ✅ Separação por módulos
+- 📝 **Padrão "public" funciona para 99% dos casos**
+
+## 🚀 **Deploy da Stack**
+
+1. Configure as **variáveis obrigatórias**
+2. Deixe as **opcionais vazias** (por enquanto)
+3. Clique em **Deploy the stack**
+4. Aguarde o download das imagens
+5. Verifique se todos os serviços estão rodando
+
+## ✅ **Primeiro Teste**
+
+Após o deploy:
+\`\`\`bash
+# Verificar se está rodando
+curl http://localhost:3000/api/health
+
+# Acessar a aplicação
+# URL: http://localhost:3000
+# Login: admin@impa.ai  
+# Senha: admin123
+\`\`\`
+
+## 🔧 **Adicionar Opcionais Depois**
+
+Se precisar das funcionalidades avançadas:
+
+1. Vá para **Stacks** → Sua stack
+2. **Editor** → Adicione as variáveis opcionais
+3. **Update the stack**
+4. Reinicie os serviços
+
+## 🎉 **Resumo**
+
+- ✅ **Mínimo**: 5 variáveis obrigatórias
+- ⚙️ **Flexível**: Schemas e configurações customizáveis  
+- 🔧 **Expansível**: Adicione recursos conforme precisar
+- 🛡️ **Seguro**: NEXTAUTH_SECRET protege suas sessões
+
+**Comece simples, evolua conforme a necessidade!** 🚀

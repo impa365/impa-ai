@@ -16,13 +16,13 @@ services:
       - "5432:5432"
 
     environment:
-      - POSTGRES_DB=impa_ai
-      - POSTGRES_USER=impa_user
+      - POSTGRES_DB={{POSTGRES_DATABASE}}
+      - POSTGRES_USER={{POSTGRES_USER}}
       - POSTGRES_PASSWORD={{POSTGRES_PASSWORD}}
       - PG_MAX_CONNECTIONS=500
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U impa_user -d impa_ai"]
+      test: ["CMD-SHELL", "pg_isready -U {{POSTGRES_USER}} -d {{POSTGRES_DATABASE}}"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -53,25 +53,27 @@ services:
       - "{{APP_PORT}}:3000"
 
     environment:
-      # Database
-      - DATABASE_URL=postgresql://impa_user:{{POSTGRES_PASSWORD}}@postgres:5432/impa_ai
-      - POSTGRES_URL=postgresql://impa_user:{{POSTGRES_PASSWORD}}@postgres:5432/impa_ai
-      - POSTGRES_PRISMA_URL=postgresql://impa_user:{{POSTGRES_PASSWORD}}@postgres:5432/impa_ai?pgbouncer=true&connect_timeout=15
-      - POSTGRES_URL_NON_POOLING=postgresql://impa_user:{{POSTGRES_PASSWORD}}@postgres:5432/impa_ai
-      - POSTGRES_USER=impa_user
+      # Database Configuration
+      - DATABASE_URL=postgresql://{{POSTGRES_USER}}:{{POSTGRES_PASSWORD}}@postgres:5432/{{POSTGRES_DATABASE}}?schema={{POSTGRES_SCHEMA}}
+      - POSTGRES_URL=postgresql://{{POSTGRES_USER}}:{{POSTGRES_PASSWORD}}@postgres:5432/{{POSTGRES_DATABASE}}?schema={{POSTGRES_SCHEMA}}
+      - POSTGRES_PRISMA_URL=postgresql://{{POSTGRES_USER}}:{{POSTGRES_PASSWORD}}@postgres:5432/{{POSTGRES_DATABASE}}?schema={{POSTGRES_SCHEMA}}&pgbouncer=true&connect_timeout=15
+      - POSTGRES_URL_NON_POOLING=postgresql://{{POSTGRES_USER}}:{{POSTGRES_PASSWORD}}@postgres:5432/{{POSTGRES_DATABASE}}?schema={{POSTGRES_SCHEMA}}
+      - POSTGRES_USER={{POSTGRES_USER}}
       - POSTGRES_HOST=postgres
       - POSTGRES_PASSWORD={{POSTGRES_PASSWORD}}
-      - POSTGRES_DATABASE=impa_ai
+      - POSTGRES_DATABASE={{POSTGRES_DATABASE}}
       
-      # Supabase Configuration
+      # Supabase Configuration (Obrigatórias)
       - SUPABASE_URL={{SUPABASE_URL}}
       - NEXT_PUBLIC_SUPABASE_URL={{SUPABASE_URL}}
       - SUPABASE_ANON_KEY={{SUPABASE_ANON_KEY}}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY={{SUPABASE_ANON_KEY}}
+      
+      # Supabase Configuration (Opcionais - deixe vazio se não usar)
       - SUPABASE_SERVICE_ROLE_KEY={{SUPABASE_SERVICE_ROLE_KEY}}
       - SUPABASE_JWT_SECRET={{SUPABASE_JWT_SECRET}}
       
-      # Application Security
+      # Application Security (Obrigatório para sessões)
       - NEXTAUTH_URL={{NEXTAUTH_URL}}
       - NEXTAUTH_SECRET={{NEXTAUTH_SECRET}}
       
