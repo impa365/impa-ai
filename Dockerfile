@@ -8,7 +8,8 @@ WORKDIR /app
 # Instalar dependências
 FROM base AS deps
 COPY package.json package-lock.json* ./
-RUN npm ci
+# Usar npm install em vez de npm ci para evitar problemas com lock file
+RUN npm install --legacy-peer-deps
 
 # Build da aplicação
 FROM base AS builder
@@ -35,6 +36,8 @@ RUN adduser --system --uid 1001 nextjs
 
 # Copiar arquivos necessários
 COPY --from=builder /app/public ./public
+
+# Verificar se o build standalone foi gerado corretamente
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
