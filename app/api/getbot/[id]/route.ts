@@ -133,6 +133,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         voice_response_enabled: agent.voice_response_enabled || false,
         calendar_integration: agent.calendar_integration || false,
 
+        // Novas integrações de vector store
+        chatnode_integration: agent.chatnode_integration || false,
+        orimon_integration: agent.orimon_integration || false,
+
         // Dados das integrações (quando habilitadas)
         voice_config: agent.voice_response_enabled
           ? {
@@ -146,6 +150,21 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           ? {
               api_key: agent.calendar_api_key,
               event_type_id: agent.calendar_event_type_id,
+            }
+          : null,
+
+        // Configurações das integrações de vector store
+        chatnode_config: agent.chatnode_integration
+          ? {
+              api_key: agent.chatnode_api_key,
+              bot_id: agent.chatnode_bot_id,
+            }
+          : null,
+
+        orimon_config: agent.orimon_integration
+          ? {
+              api_key: agent.orimon_api_key,
+              bot_id: agent.orimon_bot_id,
             }
           : null,
 

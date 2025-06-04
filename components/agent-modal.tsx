@@ -21,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Sparkles, Eye, EyeOff, Settings, MessageSquare, Volume2 } from "lucide-react"
+import { Bot, Sparkles, Eye, EyeOff, Settings, MessageSquare, Volume2, Database, Brain } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
@@ -61,6 +61,13 @@ export interface Agent {
   voice_api_key?: string | null
   calendar_integration?: boolean | null
   calendar_api_key?: string | null
+  // Novas integrações de vector store
+  chatnode_integration?: boolean | null
+  chatnode_api_key?: string | null
+  chatnode_bot_id?: string | null
+  orimon_integration?: boolean | null
+  orimon_api_key?: string | null
+  orimon_bot_id?: string | null
   is_default?: boolean | null
   created_at?: string
   updated_at?: string
@@ -104,6 +111,13 @@ const initialFormData: Agent = {
   voice_api_key: null,
   calendar_integration: false,
   calendar_api_key: null,
+  // Novas integrações de vector store
+  chatnode_integration: false,
+  chatnode_api_key: null,
+  chatnode_bot_id: null,
+  orimon_integration: false,
+  orimon_api_key: null,
+  orimon_bot_id: null,
   is_default: false,
 }
 
@@ -123,6 +137,8 @@ export function AgentModal({
   const [n8nIntegrationConfig, setN8nIntegrationConfig] = useState<any>(null)
   const [showVoiceApiKey, setShowVoiceApiKey] = useState(false)
   const [showCalendarApiKey, setShowCalendarApiKey] = useState(false)
+  const [showChatnodeApiKey, setShowChatnodeApiKey] = useState(false)
+  const [showOrimonApiKey, setShowOrimonApiKey] = useState(false)
   const [evolutionSyncStatus, setEvolutionSyncStatus] = useState<string>("")
 
   useEffect(() => {
@@ -279,6 +295,13 @@ export function AgentModal({
             voice_api_key: formData.voice_api_key,
             calendar_integration: formData.calendar_integration,
             calendar_api_key: formData.calendar_api_key,
+            // Novas integrações de vector store
+            chatnode_integration: formData.chatnode_integration,
+            chatnode_api_key: formData.chatnode_api_key,
+            chatnode_bot_id: formData.chatnode_bot_id,
+            orimon_integration: formData.orimon_integration,
+            orimon_api_key: formData.orimon_api_key,
+            orimon_bot_id: formData.orimon_bot_id,
             is_default: formData.is_default,
           })
           .select()
@@ -365,6 +388,13 @@ export function AgentModal({
           voice_api_key: formData.voice_api_key,
           calendar_integration: formData.calendar_integration,
           calendar_api_key: formData.calendar_api_key,
+          // Novas integrações de vector store
+          chatnode_integration: formData.chatnode_integration,
+          chatnode_api_key: formData.chatnode_api_key,
+          chatnode_bot_id: formData.chatnode_bot_id,
+          orimon_integration: formData.orimon_integration,
+          orimon_api_key: formData.orimon_api_key,
+          orimon_bot_id: formData.orimon_bot_id,
           is_default: formData.is_default,
         }
 
@@ -898,6 +928,144 @@ export function AgentModal({
                     onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked }))}
                   />
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Integrações de Vector Store */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-lg">
+                  <Database className="w-5 h-5 mr-2" />
+                  Integrações de Vector Store (Base de Conhecimento)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="text-sm text-muted-foreground mb-4">
+                  <Brain className="w-4 h-4 inline mr-1" />
+                  Vector stores permitem que sua IA tenha acesso a uma base de conhecimento específica, melhorando a
+                  qualidade das respostas.
+                </div>
+
+                {/* ChatNode.ai Integration */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="chatnode_integration">ChatNode.ai</Label>
+                      <p className="text-xs text-muted-foreground">Integração com base de conhecimento ChatNode.ai</p>
+                    </div>
+                    <Switch
+                      id="chatnode_integration"
+                      checked={formData.chatnode_integration || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, chatnode_integration: checked }))}
+                    />
+                  </div>
+
+                  {formData.chatnode_integration && (
+                    <div className="space-y-3 pl-4 border-l-2 border-purple-200 bg-purple-50 p-4 rounded">
+                      <div>
+                        <Label htmlFor="chatnode_api_key">Chave da API ChatNode.ai</Label>
+                        <div className="relative">
+                          <Input
+                            id="chatnode_api_key"
+                            name="chatnode_api_key"
+                            type={showChatnodeApiKey ? "text" : "password"}
+                            value={formData.chatnode_api_key || ""}
+                            onChange={handleInputChange}
+                            placeholder="Sua chave da API do ChatNode.ai"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowChatnodeApiKey(!showChatnodeApiKey)}
+                          >
+                            {showChatnodeApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="chatnode_bot_id">ID do Bot ChatNode.ai</Label>
+                        <Input
+                          id="chatnode_bot_id"
+                          name="chatnode_bot_id"
+                          value={formData.chatnode_bot_id || ""}
+                          onChange={handleInputChange}
+                          placeholder="ID do seu bot no ChatNode.ai"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Encontre este ID no painel do ChatNode.ai</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Orimon.ai Integration */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="orimon_integration">Orimon.ai</Label>
+                      <p className="text-xs text-muted-foreground">Integração com base de conhecimento Orimon.ai</p>
+                    </div>
+                    <Switch
+                      id="orimon_integration"
+                      checked={formData.orimon_integration || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, orimon_integration: checked }))}
+                    />
+                  </div>
+
+                  {formData.orimon_integration && (
+                    <div className="space-y-3 pl-4 border-l-2 border-orange-200 bg-orange-50 p-4 rounded">
+                      <div>
+                        <Label htmlFor="orimon_api_key">Chave da API Orimon.ai</Label>
+                        <div className="relative">
+                          <Input
+                            id="orimon_api_key"
+                            name="orimon_api_key"
+                            type={showOrimonApiKey ? "text" : "password"}
+                            value={formData.orimon_api_key || ""}
+                            onChange={handleInputChange}
+                            placeholder="Sua chave da API do Orimon.ai"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowOrimonApiKey(!showOrimonApiKey)}
+                          >
+                            {showOrimonApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="orimon_bot_id">ID do Bot Orimon.ai</Label>
+                        <Input
+                          id="orimon_bot_id"
+                          name="orimon_bot_id"
+                          value={formData.orimon_bot_id || ""}
+                          onChange={handleInputChange}
+                          placeholder="ID do seu bot no Orimon.ai"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Encontre este ID no painel do Orimon.ai</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {(formData.chatnode_integration || formData.orimon_integration) && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start space-x-2">
+                      <Brain className="w-5 h-5 text-blue-600 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium text-blue-900">💡 Dica sobre Vector Stores:</p>
+                        <p className="text-blue-700 mt-1">
+                          Você pode ativar ambas as integrações simultaneamente. A IA irá consultar ambas as bases de
+                          conhecimento para fornecer respostas mais completas e precisas.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
