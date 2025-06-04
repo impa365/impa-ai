@@ -28,6 +28,10 @@ import { toast } from "@/components/ui/use-toast"
 import { fetchWhatsAppConnections } from "@/lib/whatsapp-connections"
 import { createEvolutionBot, updateEvolutionBot, fetchEvolutionBot } from "@/lib/evolution-api"
 
+// Estilos customizados para os switches
+const switchStyles =
+  "data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 border-2 border-gray-300 data-[state=checked]:border-blue-600"
+
 interface AgentModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -698,6 +702,7 @@ export function AgentModal({
                       id="listening_from_me"
                       checked={formData.model_config?.listening_from_me || false}
                       onCheckedChange={(checked) => handleConfigChange("listening_from_me", checked)}
+                      className={switchStyles}
                     />
                   </div>
 
@@ -710,6 +715,7 @@ export function AgentModal({
                       id="stop_bot_from_me"
                       checked={formData.model_config?.stop_bot_from_me || false}
                       onCheckedChange={(checked) => handleConfigChange("stop_bot_from_me", checked)}
+                      className={switchStyles}
                     />
                   </div>
 
@@ -722,6 +728,7 @@ export function AgentModal({
                       id="keep_open"
                       checked={formData.model_config?.keep_open || false}
                       onCheckedChange={(checked) => handleConfigChange("keep_open", checked)}
+                      className={switchStyles}
                     />
                   </div>
 
@@ -734,6 +741,7 @@ export function AgentModal({
                       id="split_messages"
                       checked={formData.model_config?.split_messages || false}
                       onCheckedChange={(checked) => handleConfigChange("split_messages", checked)}
+                      className={switchStyles}
                     />
                   </div>
                 </div>
@@ -775,6 +783,7 @@ export function AgentModal({
                       id="transcribe_audio"
                       checked={formData.transcribe_audio || false}
                       onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, transcribe_audio: checked }))}
+                      className={switchStyles}
                     />
                   </div>
 
@@ -787,6 +796,7 @@ export function AgentModal({
                       id="understand_images"
                       checked={formData.understand_images || false}
                       onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, understand_images: checked }))}
+                      className={switchStyles}
                     />
                   </div>
                 </div>
@@ -804,6 +814,7 @@ export function AgentModal({
                       onCheckedChange={(checked) =>
                         setFormData((prev) => ({ ...prev, voice_response_enabled: checked }))
                       }
+                      className={switchStyles}
                     />
                   </div>
 
@@ -874,6 +885,7 @@ export function AgentModal({
                       id="calendar_integration"
                       checked={formData.calendar_integration || false}
                       onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, calendar_integration: checked }))}
+                      className={switchStyles}
                     />
                   </div>
 
@@ -926,6 +938,7 @@ export function AgentModal({
                     id="is_default"
                     checked={formData.is_default || false}
                     onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked }))}
+                    className={switchStyles}
                   />
                 </div>
               </CardContent>
@@ -957,6 +970,7 @@ export function AgentModal({
                       id="chatnode_integration"
                       checked={formData.chatnode_integration || false}
                       onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, chatnode_integration: checked }))}
+                      className={switchStyles}
                     />
                   </div>
 
@@ -1010,6 +1024,7 @@ export function AgentModal({
                       id="orimon_integration"
                       checked={formData.orimon_integration || false}
                       onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, orimon_integration: checked }))}
+                      className={switchStyles}
                     />
                   </div>
 
