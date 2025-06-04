@@ -11,11 +11,11 @@ export default function Dashboard() {
         <p className="text-gray-600">Bem-vindo ao painel principal da Impa AI</p>
       </div>
 
-      {/* Tutorial de Onboarding */}
-      <OnboardingTutorial />
-
-      {/* Estatísticas do Dashboard */}
+      {/* Estatísticas do Dashboard - AGORA ACIMA do tutorial */}
       <DashboardStats />
+
+      {/* Tutorial de Onboarding - AGORA ABAIXO das estatísticas */}
+      <OnboardingTutorial />
     </div>
   )
 }
