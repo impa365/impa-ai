@@ -22,7 +22,8 @@ export async function signIn(email: string, password_input: string) {
 
     // Verificar a senha
     // ATENÇÃO: Comparando senha em texto plano. NÃO FAÇA ISSO EM PRODUÇÃO!
-    if (userProfile.password && userProfile.password === password_input) {
+    if (userProfile.password && userProfile.password.trim() === password_input.trim()) {
+      console.log("Senha verificada com sucesso")
       const user = {
         id: userProfile.id,
         email: userProfile.email,
@@ -51,7 +52,16 @@ export async function signIn(email: string, password_input: string) {
       return { user, error: null }
     }
 
+    // Adicionar logs para depuração
     console.warn(`Tentativa de login falhou para ${email}. Senha fornecida não corresponde.`)
+    console.log(
+      "Senha esperada (primeiros 3 caracteres):",
+      userProfile.password ? userProfile.password.substring(0, 3) + "..." : "não definida",
+    )
+    console.log(
+      "Senha fornecida (primeiros 3 caracteres):",
+      password_input ? password_input.substring(0, 3) + "..." : "vazia",
+    )
     return {
       user: null,
       error: { message: "Senha incorreta" },
