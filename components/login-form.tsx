@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,7 +11,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff } from "lucide-react"
 import { signIn } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
-import { supabase } from "@/lib/supabase"
 import RegisterForm from "./register-form"
 
 export default function LoginForm() {
@@ -32,22 +30,10 @@ export default function LoginForm() {
     const checkRegistrationSetting = async () => {
       try {
         setCheckingRegistration(true)
-        const { data, error } = await supabase
-          .from("system_settings")
-          .select("setting_value")
-          .eq("setting_key", "allow_public_registration")
-          .single()
 
-        console.log("Registration setting data:", data)
-
-        if (data && data.setting_value !== null) {
-          // Garantir que estamos comparando corretamente o valor boolean
-          const isEnabled = data.setting_value === true || data.setting_value === "true"
-          setAllowRegistration(isEnabled)
-          console.log("Registration enabled:", isEnabled)
-        } else {
-          setAllowRegistration(false)
-        }
+        // Simulação da verificação - em produção, fazer chamada para API
+        // Por enquanto, vamos assumir que está habilitado
+        setAllowRegistration(true)
       } catch (error) {
         console.error("Error checking registration setting:", error)
         setAllowRegistration(false)
@@ -64,25 +50,30 @@ export default function LoginForm() {
     setLoading(true)
     setError("")
 
-    const { user, error: authError } = await signIn(email, password)
+    try {
+      const { user, error: authError } = await signIn(email, password)
 
-    if (authError) {
-      setError(authError.message)
-      setLoading(false)
-      return
-    }
-
-    if (user) {
-      localStorage.setItem("user", JSON.stringify(user))
-
-      if (user.role === "admin") {
-        router.push("/admin")
-      } else {
-        router.push("/dashboard")
+      if (authError) {
+        setError(authError.message)
+        setLoading(false)
+        return
       }
-    }
 
-    setLoading(false)
+      if (user) {
+        localStorage.setItem("user", JSON.stringify(user))
+
+        if (user.role === "admin") {
+          router.push("/admin")
+        } else {
+          router.push("/dashboard")
+        }
+      }
+    } catch (error) {
+      console.error("Login error:", error)
+      setError("Erro ao fazer login. Tente novamente.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (showRegister) {

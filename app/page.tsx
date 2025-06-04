@@ -10,16 +10,25 @@ export default function HomePage() {
   const router = useRouter()
 
   useEffect(() => {
-    const user = getCurrentUser()
-    if (user) {
-      if (user.role === "admin") {
-        router.push("/admin")
-      } else {
-        router.push("/dashboard")
+    const checkUser = async () => {
+      try {
+        const user = getCurrentUser()
+        if (user) {
+          if (user.role === "admin") {
+            router.push("/admin")
+          } else {
+            router.push("/dashboard")
+          }
+        } else {
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error("Error checking user:", error)
+        setLoading(false)
       }
-    } else {
-      setLoading(false)
     }
+
+    checkUser()
   }, [router])
 
   if (loading) {

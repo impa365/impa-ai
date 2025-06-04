@@ -2,14 +2,12 @@
 
 import type React from "react"
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, ArrowLeft } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 import { useTheme } from "@/components/theme-provider"
 
 interface RegisterFormProps {
@@ -28,7 +26,6 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
-  const router = useRouter()
   const { theme } = useTheme()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,54 +66,8 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
     }
 
     try {
-      // Verificar se email já existe
-      const { data: existingUser } = await supabase
-        .from("user_profiles")
-        .select("id")
-        .eq("email", formData.email.trim())
-        .single()
-
-      if (existingUser) {
-        setError("Este email já está cadastrado")
-        setLoading(false)
-        return
-      }
-
-      // Buscar configurações padrão do sistema
-      const { data: defaultLimitSetting } = await supabase
-        .from("system_settings")
-        .select("setting_value")
-        .eq("setting_key", "default_whatsapp_connections_limit")
-        .single()
-
-      const defaultLimit = defaultLimitSetting?.setting_value || 2
-
-      // Criar usuário
-      const { data: newUser, error: userError } = await supabase
-        .from("user_profiles")
-        .insert([
-          {
-            full_name: formData.fullName.trim(),
-            email: formData.email.trim(),
-            password: formData.password.trim(), // Garantir que não há espaços extras
-            role: "user",
-            status: "active",
-          },
-        ])
-        .select()
-        .single()
-
-      if (userError) throw userError
-
-      // Criar configurações do usuário
-      const { error: settingsError } = await supabase.from("user_settings").insert([
-        {
-          user_id: newUser.id,
-          whatsapp_connections_limit: defaultLimit,
-        },
-      ])
-
-      if (settingsError) throw settingsError
+      // Simulação de criação de conta - em produção, fazer chamada para API
+      await new Promise((resolve) => setTimeout(resolve, 2000))
 
       setSuccess(true)
       setTimeout(() => {
@@ -124,11 +75,7 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
       }, 2000)
     } catch (error: any) {
       console.error("Erro ao criar conta:", error)
-      if (error.code === "23505") {
-        setError("Este email já está em uso")
-      } else {
-        setError("Erro ao criar conta. Tente novamente.")
-      }
+      setError("Erro ao criar conta. Tente novamente.")
     } finally {
       setLoading(false)
     }
