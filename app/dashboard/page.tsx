@@ -1,6 +1,7 @@
 "use client"
 
 import OnboardingTutorial from "@/components/onboarding-tutorial"
+import DashboardStats from "@/components/dashboard-stats"
 
 export default function Dashboard() {
   return (
@@ -13,10 +14,8 @@ export default function Dashboard() {
       {/* Tutorial de Onboarding */}
       <OnboardingTutorial />
 
-      {/* Conteúdo adicional do dashboard pode ser adicionado aqui futuramente */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Espaço reservado para futuras funcionalidades */}
-      </div>
+      {/* Estatísticas do Dashboard */}
+      <DashboardStats />
     </div>
   )
 }
