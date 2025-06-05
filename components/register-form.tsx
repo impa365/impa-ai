@@ -33,6 +33,8 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
     setLoading(true)
     setError("")
 
+    console.log("🚀 Iniciando submissão do formulário...")
+
     // Validações
     if (!formData.fullName.trim()) {
       setError("Nome completo é obrigatório")
@@ -66,16 +68,38 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
     }
 
     try {
-      // Simulação de criação de conta - em produção, fazer chamada para API
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      console.log("📡 Enviando dados para API...")
 
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim(),
+          password: formData.password,
+        }),
+      })
+
+      console.log("📨 Resposta da API:", response.status)
+
+      const data = await response.json()
+      console.log("📄 Dados da resposta:", data)
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erro ao criar conta")
+      }
+
+      console.log("✅ Conta criada com sucesso!")
       setSuccess(true)
+
       setTimeout(() => {
         onBackToLogin()
       }, 2000)
     } catch (error: any) {
-      console.error("Erro ao criar conta:", error)
-      setError("Erro ao criar conta. Tente novamente.")
+      console.error("❌ Erro ao criar conta:", error)
+      setError(error.message || "Erro ao criar conta. Tente novamente.")
     } finally {
       setLoading(false)
     }
@@ -225,6 +249,11 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
               <ArrowLeft className="w-4 h-4" />
               Voltar ao Login
             </Button>
+
+            {/* Debug info - remover em produção */}
+            <div className="mt-4 text-xs text-gray-400">
+              Debug: Verifique o console do navegador para logs detalhados
+            </div>
           </div>
         </CardContent>
       </Card>
