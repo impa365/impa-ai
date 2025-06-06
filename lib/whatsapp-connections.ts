@@ -1,75 +1,75 @@
-import { supabase } from "./supabase"
+import { db } from "@/lib/supabase"
 
-export interface WhatsAppConnection {
-  id: string
-  user_id: string
-  connection_name: string
-  phone_number?: string
-  instance_name: string
-  status: "disconnected" | "connecting" | "connected"
-  qr_code?: string
-  created_at: string
-  updated_at: string
-}
-
-export async function fetchWhatsAppConnections(userId: string): Promise<WhatsAppConnection[]> {
+export async function fetchWhatsAppConnections(userId: string) {
   try {
-    const { data, error } = await supabase
-      .from("whatsapp_connections")
+    const { data, error } = await db
+      .whatsappConnections()
       .select("*")
       .eq("user_id", userId)
+      .eq("status", "connected")
       .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("Error fetching WhatsApp connections:", error)
+      console.error("Erro ao buscar conexões WhatsApp:", error)
       return []
     }
 
     return data || []
   } catch (error) {
-    console.error("Error fetching WhatsApp connections:", error)
+    console.error("Erro ao buscar conexões WhatsApp:", error)
     return []
   }
 }
 
-export async function getWhatsAppConnectionById(connectionId: string): Promise<WhatsAppConnection | null> {
+export async function createWhatsAppConnection(connectionData: {
+  user_id: string
+  connection_name: string
+  instance_name: string
+  instance_token: string
+}) {
   try {
-    const { data, error } = await supabase.from("whatsapp_connections").select("*").eq("id", connectionId).single()
+    const { data, error } = await db.whatsappConnections().insert([connectionData]).select().single()
 
     if (error) {
-      console.error("Error fetching WhatsApp connection:", error)
-      return null
+      console.error("Erro ao criar conexão WhatsApp:", error)
+      return { success: false, error: error.message }
     }
 
-    return data
+    return { success: true, connection: data }
   } catch (error) {
-    console.error("Error fetching WhatsApp connection:", error)
-    return null
+    console.error("Erro ao criar conexão WhatsApp:", error)
+    return { success: false, error: "Erro interno do servidor" }
   }
 }
 
-export async function updateWhatsAppConnectionStatus(
-  connectionId: string,
-  status: WhatsAppConnection["status"],
-  additionalData?: Partial<WhatsAppConnection>,
-): Promise<boolean> {
+export async function updateWhatsAppConnection(connectionId: string, updates: any) {
   try {
-    const updateData = {
-      status,
-      updated_at: new Date().toISOString(),
-      ...additionalData,
-    }
-
-    const { error } = await supabase.from("whatsapp_connections").update(updateData).eq("id", connectionId)
+    const { data, error } = await db.whatsappConnections().update(updates).eq("id", connectionId).select().single()
 
     if (error) {
-      console.error("Error updating WhatsApp connection status:", error)
-      return false
+      console.error("Erro ao atualizar conexão WhatsApp:", error)
+      return { success: false, error: error.message }
     }
 
-    return true
+    return { success: true, connection: data }
   } catch (error) {
-    console.error("Error updating WhatsApp connection status:", error)
-    return false
+    console.error("Erro ao atualizar conexão WhatsApp:", error)
+    return { success: false, error: "Erro interno do servidor" }
+  }
+}
+
+export async function deleteWhatsAppConnection(connectionId: string) {
+  try {
+    const { error } = await db.whatsappConnections().delete().eq("id", connectionId)
+
+    if (error) {
+      console.error("Erro ao deletar conexão WhatsApp:", error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error("Erro ao deletar conexão WhatsApp:", error)
+    return { success: false, error: "Erro interno do servidor" }
   }
 }

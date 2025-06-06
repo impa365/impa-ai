@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { db } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/use-toast"
 import { AgentModal } from "@/components/agent-modal"
 import { AgentDuplicateDialog } from "@/components/agent-duplicate-dialog"
-import { AlertCircle, Bot, Copy, Edit, Loader2, MessageSquare, Mic, Plus, Trash2, Calendar } from "lucide-react"
+import { AlertCircle, Bot, Copy, Edit, Loader2, Plus, Trash2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { getCurrentUser } from "@/lib/auth"
 
@@ -71,8 +71,8 @@ export default function AgentsPage() {
         setLimitInfo(limitCheck)
 
         // Buscar agentes do usuário
-        const { data: agentsData, error } = await supabase
-          .from("ai_agents")
+        const { data: agentsData, error } = await db
+          .agents()
           .select("*")
           .eq("user_id", currentUser.id)
           .order("created_at", { ascending: false })
@@ -100,8 +100,8 @@ export default function AgentsPage() {
   const checkAgentLimit = async (userId: string) => {
     try {
       // Buscar configurações do usuário
-      const { data: userSettings, error: userError } = await supabase
-        .from("user_settings")
+      const { data: userSettings, error: userError } = await db
+        .userSettings()
         .select("agents_limit")
         .eq("user_id", userId)
         .single()
@@ -114,8 +114,8 @@ export default function AgentsPage() {
         maxAllowed = userSettings.agents_limit
       } else {
         // Buscar limite padrão do sistema
-        const { data: systemSettings } = await supabase
-          .from("system_settings")
+        const { data: systemSettings } = await db
+          .systemSettings()
           .select("setting_value")
           .eq("setting_key", "default_agents_limit")
           .single()
@@ -126,8 +126,8 @@ export default function AgentsPage() {
       }
 
       // Contar agentes atuais
-      const { count, error: countError } = await supabase
-        .from("ai_agents")
+      const { count, error: countError } = await db
+        .agents()
         .select("*", { count: "exact", head: true })
         .eq("user_id", userId)
 
@@ -178,8 +178,8 @@ export default function AgentsPage() {
 
     try {
       // Buscar informações do agente antes de excluir
-      const { data: agentData, error: fetchError } = await supabase
-        .from("ai_agents")
+      const { data: agentData, error: fetchError } = await db
+        .agents()
         .select("evolution_bot_id, whatsapp_connection_id")
         .eq("id", agentId)
         .single()
@@ -194,8 +194,8 @@ export default function AgentsPage() {
         const { deleteEvolutionBot } = await import("@/lib/evolution-api")
 
         // Buscar o instance_name da conexão WhatsApp
-        const { data: whatsappConnection, error: whatsappError } = await supabase
-          .from("whatsapp_connections")
+        const { data: whatsappConnection, error: whatsappError } = await db
+          .whatsappConnections()
           .select("instance_name")
           .eq("id", agentData.whatsapp_connection_id)
           .single()
@@ -209,7 +209,7 @@ export default function AgentsPage() {
       }
 
       // Excluir o agente do banco de dados
-      const { error } = await supabase.from("ai_agents").delete().eq("id", agentId)
+      const { error } = await db.agents().delete().eq("id", agentId)
 
       if (error) {
         throw error
@@ -243,8 +243,8 @@ export default function AgentsPage() {
     // Recarregar a lista de agentes
     const currentUser = getCurrentUser()
     if (currentUser) {
-      const { data: agentsData, error } = await supabase
-        .from("ai_agents")
+      const { data: agentsData, error } = await db
+        .agents()
         .select("*")
         .eq("user_id", currentUser.id)
         .order("created_at", { ascending: false })
@@ -269,17 +269,6 @@ export default function AgentsPage() {
     if (userId) {
       const limitCheck = await checkAgentLimit(userId)
       setLimitInfo(limitCheck)
-    }
-  }
-
-  const getAgentTypeIcon = (type: string) => {
-    switch (type) {
-      case "voice":
-        return <Mic className="h-4 w-4" />
-      case "calendar":
-        return <Calendar className="h-4 w-4" />
-      default:
-        return <MessageSquare className="h-4 w-4" />
     }
   }
 
@@ -395,11 +384,6 @@ export default function AgentsPage() {
       ))
   }
 
-  // Remover estas linhas:
-  // const chatAgents = agents.filter((agent) => agent.type === "chat")
-  // const voiceAgents = agents.filter((agent) => agent.type === "voice")
-  // const calendarAgents = agents.filter((agent) => agent.type === "calendar")
-
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -410,7 +394,7 @@ export default function AgentsPage() {
         <Button
           onClick={handleCreateAgent}
           className="bg-blue-600 hover:bg-blue-700 text-white"
-          style={{ visibility: "visible", display: "flex" }}
+          disabled={limitInfo && !limitInfo.canCreate}
         >
           <Plus className="mr-2 h-4 w-4" /> Criar Agente
         </Button>

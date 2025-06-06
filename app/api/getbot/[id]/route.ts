@@ -1,125 +1,90 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { db } from "@/lib/supabase"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const apiKey = request.headers.get("apikey")
     const botId = params.id
 
-    // Obter API key do cabeçalho
-    const apiKey =
-      request.headers.get("x-api-key") ||
-      request.headers.get("authorization")?.replace("Bearer ", "") ||
-      request.headers.get("x-auth-token")
-
     if (!apiKey) {
-      console.log("❌ API key não fornecida")
-      return NextResponse.json({ error: "API key não fornecida" }, { status: 401 })
+      return NextResponse.json({ error: "API key é obrigatória" }, { status: 401 })
     }
 
-    console.log("🔑 Verificando API key:", apiKey.substring(0, 10) + "...")
-    console.log("🤖 Buscando bot com ID:", botId)
-
-    // Verificar se a API key existe
-    const { data: userData, error: userError } = await supabase
-      .from("user_profiles")
-      .select("id, email, role, status")
-      .eq("api_key", apiKey)
-      .eq("status", "active")
-      .single()
-
-    if (userError || !userData) {
-      console.log("❌ API key inválida ou usuário inativo")
-      return NextResponse.json({ error: "API key inválida ou usuário inativo" }, { status: 401 })
+    if (!botId) {
+      return NextResponse.json({ error: "ID do bot é obrigatório" }, { status: 400 })
     }
 
-    console.log("✅ API key válida para usuário:", userData.email)
+    // Buscar usuário pela API key
+    const { data: user, error: userError } = await db.users().select("id").eq("api_key", apiKey).single()
 
-    // Buscar bot específico
-    const { data: bot, error: botError } = await supabase
-      .from("ai_agents")
+    if (userError || !user) {
+      return NextResponse.json({ error: "API key inválida" }, { status: 401 })
+    }
+
+    // Buscar o agente específico
+    const { data: agent, error: agentError } = await db
+      .agents()
       .select(`
         *,
-        whatsapp_connections:whatsapp_connection_id (
+        whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
+          id,
           connection_name,
-          instance_name,
           phone_number,
-          status
+          status,
+          instance_name
         )
       `)
       .eq("id", botId)
-      .eq("user_id", userData.id)
+      .eq("user_id", user.id)
       .single()
 
-    if (botError || !bot) {
-      console.error("❌ Bot não encontrado ou sem permissão:", botError?.message)
-      return NextResponse.json({ error: "Bot não encontrado ou sem permissão" }, { status: 404 })
+    if (agentError || !agent) {
+      return NextResponse.json({ error: "Bot não encontrado" }, { status: 404 })
     }
 
-    console.log("✅ Bot encontrado:", bot.name)
+    // Buscar logs recentes do agente
+    const { data: recentLogs, error: logsError } = await db
+      .activityLogs()
+      .select("id, activity_type, created_at, activity_data")
+      .eq("agent_id", botId)
+      .order("created_at", { ascending: false })
+      .limit(10)
 
-    // Formatar resposta
-    const botResponse = {
-      id: bot.id,
-      name: bot.name,
-      description: bot.description,
-      status: bot.status,
-      model: bot.model,
-      temperature: bot.temperature,
-
-      // Configurações de comportamento
-      training_prompt: bot.training_prompt,
-      voice_tone: bot.voice_tone,
-      main_function: bot.main_function,
-
-      // Funcionalidades
-      transcribe_audio: bot.transcribe_audio,
-      understand_images: bot.understand_images,
-
-      // Integrações
-      voice_response: {
-        enabled: bot.voice_response_enabled,
-        provider: bot.voice_provider,
-        voice_id: bot.voice_id,
-      },
-
-      calendar: {
-        enabled: bot.calendar_integration,
-        api_key: bot.calendar_api_key,
-        meeting_id: bot.calendar_meeting_id,
-      },
-
-      chatnode_config: {
-        enabled: bot.chatnode_integration,
-        api_key: bot.chatnode_api_key,
-        bot_id: bot.chatnode_bot_id,
-      },
-
-      orimon_config: {
-        enabled: bot.orimon_integration,
-        api_key: bot.orimon_api_key,
-        bot_id: bot.orimon_bot_id,
-      },
-
-      whatsapp: bot.whatsapp_connections,
-
-      // Configurações avançadas
-      is_default: bot.is_default,
-      listen_own_messages: bot.listen_own_messages,
-      stop_bot_by_me: bot.stop_bot_by_me,
-      keep_conversation_open: bot.keep_conversation_open,
-      split_long_messages: bot.split_long_messages,
-      character_wait_time: bot.character_wait_time,
-
-      created_at: bot.created_at,
-      updated_at: bot.updated_at,
+    if (logsError) {
+      console.warn("Erro ao buscar logs:", logsError)
     }
+
+    // Atualizar último uso da API key
+    await db.apiKeys().update({ last_used_at: new Date().toISOString() }).eq("api_key", apiKey)
 
     return NextResponse.json({
-      success: true,
-      bot: botResponse,
+      agent: {
+        id: agent.id,
+        name: agent.name,
+        description: agent.description,
+        type: agent.type,
+        status: agent.status,
+        main_function: agent.main_function,
+        voice_tone: agent.voice_tone,
+        identity_description: agent.identity_description,
+        training_prompt: agent.training_prompt,
+        model_config: agent.model_config,
+        temperature: agent.temperature,
+        transcribe_audio: agent.transcribe_audio,
+        understand_images: agent.understand_images,
+        voice_response_enabled: agent.voice_response_enabled,
+        calendar_integration: agent.calendar_integration,
+        chatnode_integration: agent.chatnode_integration,
+        orimon_integration: agent.orimon_integration,
+        is_default: agent.is_default,
+        created_at: agent.created_at,
+        updated_at: agent.updated_at,
+        whatsapp_connection: agent.whatsapp_connections,
+      },
+      recent_activity: recentLogs || [],
     })
-  } catch (error: any) {
-    console.error("💥 Erro geral:", error)
+  } catch (error) {
+    console.error("Erro na API getbot:", error)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }

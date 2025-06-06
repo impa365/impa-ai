@@ -1,120 +1,107 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { db } from "@/lib/supabase"
 import { randomBytes } from "crypto"
 
-// Função para obter usuário do header Authorization
-function getUserFromRequest(request: NextRequest) {
-  try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader) {
-      // Tentar obter do localStorage via cookie ou session
-      const userCookie = request.cookies.get("user")
-      if (userCookie) {
-        return JSON.parse(userCookie.value)
-      }
-      return null
-    }
-
-    // Se tiver Authorization header, processar
-    const token = authHeader.replace("Bearer ", "")
-    // Aqui você pode implementar validação de JWT se necessário
-    return null
-  } catch {
-    return null
-  }
-}
-
-// Função alternativa para obter usuário atual
-async function getCurrentUserFromDB(request: NextRequest) {
-  try {
-    // Tentar obter user_id dos headers customizados
-    const userId = request.headers.get("x-user-id")
-    if (!userId) return null
-
-    const { data: user, error } = await supabase.from("user_profiles").select("*").eq("id", userId).single()
-
-    if (error) return null
-    return user
-  } catch {
-    return null
-  }
-}
-
-// Gerar API key aleatória
-function generateApiKey(): string {
-  return `luna_${randomBytes(32).toString("hex")}`
-}
-
-// GET - Obter API keys do usuário
 export async function GET(request: NextRequest) {
   try {
-    // Tentar múltiplas formas de obter o usuário
-    const userIdFromUrl = new URL(request.url).searchParams.get("user_id")
+    const searchParams = request.nextUrl.searchParams
+    const userId = searchParams.get("user_id")
 
-    if (!userIdFromUrl) {
-      return NextResponse.json({ error: "User ID é obrigatório" }, { status: 400 })
+    if (!userId) {
+      return NextResponse.json({ error: "user_id é obrigatório" }, { status: 400 })
     }
 
-    const { data: apiKeys, error } = await supabase
-      .from("user_api_keys")
-      .select("*")
-      .eq("user_id", userIdFromUrl)
+    // Buscar API keys do usuário
+    const { data: apiKeys, error } = await db
+      .apiKeys()
+      .select("id, api_key, description, created_at, last_used_at")
+      .eq("user_id", userId)
       .order("created_at", { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      console.error("Erro ao buscar API keys:", error)
+      return NextResponse.json({ error: "Erro ao buscar API keys" }, { status: 500 })
+    }
 
-    return NextResponse.json({ apiKeys })
+    return NextResponse.json({ apiKeys: apiKeys || [] })
   } catch (error) {
-    console.error("Erro ao buscar API keys:", error)
+    console.error("Erro na API de API keys:", error)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }
 
-// POST - Criar nova API key
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { description, user_id } = body
+    const { user_id, description } = body
 
     if (!user_id) {
-      return NextResponse.json({ error: "User ID é obrigatório" }, { status: 400 })
+      return NextResponse.json({ error: "user_id é obrigatório" }, { status: 400 })
     }
 
-    const apiKey = generateApiKey()
+    // Verificar se o usuário existe
+    const { data: user, error: userError } = await db.users().select("id").eq("id", user_id).single()
 
-    const { data, error } = await supabase
-      .from("user_api_keys")
-      .insert({
-        user_id: user_id,
-        api_key: apiKey,
-        description: description || "API Key gerada automaticamente",
-      })
+    if (userError || !user) {
+      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 })
+    }
+
+    // Gerar nova API key
+    const apiKey = `impa_${randomBytes(32).toString("hex")}`
+
+    // Inserir nova API key
+    const { data: newApiKey, error: insertError } = await db
+      .apiKeys()
+      .insert([
+        {
+          user_id,
+          api_key: apiKey,
+          description: description || "API Key para integração N8N",
+        },
+      ])
       .select()
       .single()
 
-    if (error) throw error
+    if (insertError) {
+      console.error("Erro ao criar API key:", insertError)
+      return NextResponse.json({ error: "Erro ao criar API key" }, { status: 500 })
+    }
 
-    return NextResponse.json({ apiKey: data })
+    // Atualizar o usuário com a nova API key (para compatibilidade)
+    await db.users().update({ api_key: apiKey }).eq("id", user_id)
+
+    return NextResponse.json({
+      success: true,
+      apiKey: {
+        id: newApiKey.id,
+        api_key: newApiKey.api_key,
+        description: newApiKey.description,
+        created_at: newApiKey.created_at,
+      },
+    })
   } catch (error) {
     console.error("Erro ao criar API key:", error)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }
 
-// DELETE - Deletar API key
 export async function DELETE(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const apiKeyId = searchParams.get("id")
+    const searchParams = request.nextUrl.searchParams
+    const id = searchParams.get("id")
     const userId = searchParams.get("user_id")
 
-    if (!apiKeyId || !userId) {
-      return NextResponse.json({ error: "ID da API key e User ID são obrigatórios" }, { status: 400 })
+    if (!id || !userId) {
+      return NextResponse.json({ error: "id e user_id são obrigatórios" }, { status: 400 })
     }
 
-    const { error } = await supabase.from("user_api_keys").delete().eq("id", apiKeyId).eq("user_id", userId)
+    // Deletar API key
+    const { error } = await db.apiKeys().delete().eq("id", id).eq("user_id", userId)
 
-    if (error) throw error
+    if (error) {
+      console.error("Erro ao deletar API key:", error)
+      return NextResponse.json({ error: "Erro ao deletar API key" }, { status: 500 })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

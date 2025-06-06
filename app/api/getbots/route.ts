@@ -1,78 +1,66 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { db } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
-    // Obter API key do cabeçalho
-    const apiKey =
-      request.headers.get("x-api-key") ||
-      request.headers.get("authorization")?.replace("Bearer ", "") ||
-      request.headers.get("x-auth-token")
+    const apiKey = request.headers.get("apikey")
 
     if (!apiKey) {
-      console.log("❌ API key não fornecida")
-      return NextResponse.json({ error: "API key não fornecida" }, { status: 401 })
+      return NextResponse.json({ error: "API key é obrigatória" }, { status: 401 })
     }
 
-    console.log("🔑 Verificando API key:", apiKey.substring(0, 10) + "...")
-
-    // Verificar se a API key existe
-    const { data: userData, error: userError } = await supabase
-      .from("user_profiles")
-      .select("id, email, role, status")
+    // Buscar usuário pela API key
+    const { data: user, error: userError } = await db
+      .users()
+      .select("id, full_name, email")
       .eq("api_key", apiKey)
-      .eq("status", "active")
       .single()
 
-    if (userError || !userData) {
-      console.log("❌ API key inválida ou usuário inativo")
-      return NextResponse.json({ error: "API key inválida ou usuário inativo" }, { status: 401 })
+    if (userError || !user) {
+      return NextResponse.json({ error: "API key inválida" }, { status: 401 })
     }
 
-    console.log("✅ API key válida para usuário:", userData.email)
-
-    // Buscar bots do usuário
-    const { data: bots, error: botsError } = await supabase
-      .from("ai_agents")
+    // Buscar todos os agentes do usuário
+    const { data: agents, error: agentsError } = await db
+      .agents()
       .select(`
-        id, 
-        name, 
-        description, 
-        status, 
-        model, 
-        temperature,
-        transcribe_audio,
-        understand_images,
-        voice_response_enabled,
-        voice_provider,
-        voice_id,
-        calendar_integration,
-        chatnode_integration,
-        orimon_integration,
-        whatsapp_connection_id,
-        whatsapp_connections:whatsapp_connection_id (
+        id,
+        name,
+        description,
+        type,
+        status,
+        main_function,
+        voice_tone,
+        created_at,
+        updated_at,
+        whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
           connection_name,
-          instance_name,
           phone_number,
           status
         )
       `)
-      .eq("user_id", userData.id)
-      .eq("status", "active")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
 
-    if (botsError) {
-      console.error("❌ Erro ao buscar bots:", botsError)
-      return NextResponse.json({ error: "Erro ao buscar bots" }, { status: 500 })
+    if (agentsError) {
+      console.error("Erro ao buscar agentes:", agentsError)
+      return NextResponse.json({ error: "Erro ao buscar agentes" }, { status: 500 })
     }
 
-    console.log(`✅ ${bots?.length || 0} bots encontrados`)
+    // Atualizar último uso da API key
+    await db.apiKeys().update({ last_used_at: new Date().toISOString() }).eq("api_key", apiKey)
 
     return NextResponse.json({
-      success: true,
-      bots: bots || [],
+      user: {
+        id: user.id,
+        name: user.full_name,
+        email: user.email,
+      },
+      agents: agents || [],
+      total: agents?.length || 0,
     })
-  } catch (error: any) {
-    console.error("💥 Erro geral:", error)
+  } catch (error) {
+    console.error("Erro na API getbots:", error)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }
