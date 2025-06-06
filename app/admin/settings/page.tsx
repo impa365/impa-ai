@@ -126,8 +126,15 @@ export default function AdminSettingsPage() {
         .eq("setting_key", "allow_public_registration")
         .single()
 
-      if (limitError || agentsError || regError) {
-        throw new Error("Erro ao carregar configurações do sistema")
+      // Se alguma configuração não existir, usar valores padrão
+      if (limitError && limitError.code === "PGRST116") {
+        console.log("Configuração 'default_whatsapp_connections_limit' não encontrada")
+      }
+      if (agentsError && agentsError.code === "PGRST116") {
+        console.log("Configuração 'default_agents_limit' não encontrada")
+      }
+      if (regError && regError.code === "PGRST116") {
+        console.log("Configuração 'allow_public_registration' não encontrada")
       }
 
       setSystemSettings({
@@ -137,7 +144,7 @@ export default function AdminSettingsPage() {
       })
     } catch (error) {
       console.error("Erro ao buscar configurações do sistema:", error)
-      throw error
+      setSaveMessage("Erro ao carregar configurações. Verifique se as tabelas foram criadas.")
     }
   }
 
@@ -347,6 +354,13 @@ export default function AdminSettingsPage() {
       const { data, error } = await db.integrations().select("*").order("created_at", { ascending: false })
 
       if (error) {
+        // Se a tabela não existir, mostrar mensagem específica
+        if (error.code === "PGRST116" || error.message.includes("does not exist")) {
+          console.log("Tabela 'integrations' não encontrada no schema impaai")
+          setSaveMessage("Tabela 'integrations' não encontrada. Execute o script SQL para criar a estrutura.")
+          setIntegrations([])
+          return
+        }
         console.error("Erro ao buscar integrações:", error)
         throw error
       }
@@ -355,7 +369,8 @@ export default function AdminSettingsPage() {
       if (data) setIntegrations(data)
     } catch (err) {
       console.error("Erro ao buscar integrações:", err)
-      throw err
+      setSaveMessage("Erro ao conectar com o banco de dados. Verifique se as tabelas foram criadas.")
+      setIntegrations([])
     }
   }
 
@@ -987,6 +1002,22 @@ export default function AdminSettingsPage() {
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-2">Integrações Disponíveis</h3>
           <p className="text-gray-600">Configure as integrações para expandir as funcionalidades da plataforma</p>
+
+          {saveMessage.includes("Tabela") && (
+            <Alert className="mt-4" variant="destructive">
+              <AlertDescription>
+                {saveMessage}
+                <br />
+                <strong>Execute este script SQL no seu Supabase:</strong>
+                <code className="block mt-2 p-2 bg-gray-100 rounded text-xs">
+                  CREATE TABLE IF NOT EXISTS impaai.integrations ( id UUID DEFAULT gen_random_uuid() PRIMARY KEY, name
+                  VARCHAR(255) NOT NULL, type VARCHAR(100) NOT NULL, config JSONB DEFAULT '{}', is_active BOOLEAN
+                  DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE
+                  DEFAULT NOW() );
+                </code>
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1011,6 +1042,7 @@ export default function AdminSettingsPage() {
                     : "w-full"
                 }
                 variant={getIntegrationConfig("evolution_api").apiUrl ? undefined : "outline"}
+                disabled={saveMessage.includes("Tabela")}
               >
                 {getIntegrationConfig("evolution_api").apiUrl ? "Configurado" : "Configurar"}
               </Button>
@@ -1030,6 +1062,7 @@ export default function AdminSettingsPage() {
                   getIntegrationConfig("n8n").flowUrl ? "w-full bg-green-600 text-white hover:bg-green-700" : "w-full"
                 }
                 variant={getIntegrationConfig("n8n").flowUrl ? undefined : "outline"}
+                disabled={saveMessage.includes("Tabela")}
               >
                 {getIntegrationConfig("n8n").flowUrl ? "Configurado" : "Configurar"}
               </Button>
