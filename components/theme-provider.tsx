@@ -12,6 +12,9 @@ import {
   applyThemeColors,
 } from "@/lib/theme"
 
+// Re-export the useTheme hook from lib/theme
+export { useTheme } from "@/lib/theme"
+
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   const [theme, setTheme] = useState<ThemeConfig>(defaultTheme)
   const [isLoading, setIsLoading] = useState(true)
@@ -20,8 +23,8 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
     try {
       setIsLoading(true)
       const loadedTheme = await loadThemeFromDatabase()
-      setTheme(loadedTheme)
-      applyThemeColors(loadedTheme)
+      setTheme(loadedTheme || defaultTheme)
+      applyThemeColors(loadedTheme || defaultTheme)
     } catch (error) {
       console.error("Error loading theme:", error)
       setTheme(defaultTheme)
