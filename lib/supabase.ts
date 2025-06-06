@@ -1,23 +1,30 @@
 import { createClient } from "@supabase/supabase-js"
 
-// Obter variáveis de ambiente
+// Configuração para o novo Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supa.impa365.com"
 const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.cVmHXTXMMB09PuXEMevVuGxV5_ZR4yJly6pF0uab7fA"
 
-// Criar cliente Supabase
+// Criar cliente Supabase básico (sem schema específico por enquanto)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  db: {
-    schema: "impaai", // Definir schema padrão como impaai
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
   },
 })
 
-// Função para obter o cliente com schema específico
+// Função para obter o cliente com schema específico (para uso após login)
 export function getSupabaseClient(schema = "impaai") {
   return createClient(supabaseUrl, supabaseAnonKey, {
     db: {
       schema: schema,
+    },
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
     },
   })
 }

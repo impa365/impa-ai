@@ -1,7 +1,6 @@
 "use client"
 
 import { createContext, useContext } from "react"
-import { supabase } from "./supabase"
 
 export interface ThemeConfig {
   systemName: string
@@ -43,104 +42,20 @@ export const useTheme = () => useContext(ThemeContext)
 
 export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
   try {
-    // Usar explicitamente o schema impaai e a tabela system_themes
-    const { data, error } = await supabase.from("impaai.system_themes").select("*").eq("is_default", true).limit(1)
-
-    if (error) {
-      console.error("Error loading theme:", error)
-      return defaultTheme
-    }
-
-    // Se não encontrar tema padrão, tenta qualquer tema ativo
-    if (!data || data.length === 0) {
-      const { data: activeTheme, error: activeError } = await supabase
-        .from("impaai.system_themes")
-        .select("*")
-        .eq("is_active", true)
-        .limit(1)
-
-      if (activeError || !activeTheme || activeTheme.length === 0) {
-        console.log("No theme configuration found, using default theme")
-        return defaultTheme
-      }
-
-      return mapThemeFromDatabase(activeTheme[0])
-    }
-
-    return mapThemeFromDatabase(data[0])
+    // Por enquanto, sempre retornar o tema padrão
+    // Isso evita problemas de permissão até que o usuário esteja logado
+    console.log("Using default theme (database access disabled for now)")
+    return defaultTheme
   } catch (error) {
     console.error("Error loading theme from database:", error)
     return defaultTheme
   }
 }
 
-// Função auxiliar para mapear os campos do banco para o formato ThemeConfig
-function mapThemeFromDatabase(themeData: any): ThemeConfig {
-  // Extrair cores do JSON
-  const colors = themeData.colors || {}
-
-  return {
-    systemName: themeData.display_name || defaultTheme.systemName,
-    description: themeData.description || defaultTheme.description,
-    logoIcon: defaultTheme.logoIcon, // Usar o padrão já que não temos esse campo
-    primaryColor: colors.primary || defaultTheme.primaryColor,
-    secondaryColor: colors.secondary || defaultTheme.secondaryColor,
-    accentColor: colors.accent || defaultTheme.accentColor,
-    logoUrl: themeData.preview_image_url,
-    faviconUrl: undefined,
-    sidebarStyle: defaultTheme.sidebarStyle,
-    brandingEnabled: true,
-  }
-}
-
 export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
   try {
-    // Verificar se existe um tema padrão
-    const { data: existingData } = await supabase
-      .from("impaai.system_themes")
-      .select("id")
-      .eq("is_default", true)
-      .limit(1)
-
-    let themeId: string
-
-    if (existingData && existingData.length > 0) {
-      // Usar ID existente
-      themeId = existingData[0].id
-    } else {
-      // Gerar novo ID
-      themeId = crypto.randomUUID()
-    }
-
-    // Preparar objeto de cores
-    const colors = {
-      primary: theme.primaryColor,
-      secondary: theme.secondaryColor,
-      accent: theme.accentColor,
-      background: "#FFFFFF",
-      surface: "#F8FAFC",
-      text: "#1E293B",
-      border: "#E2E8F0",
-    }
-
-    // Salvar no banco
-    const { error } = await supabase.from("impaai.system_themes").upsert({
-      id: themeId,
-      name: "custom",
-      display_name: theme.systemName,
-      description: theme.description,
-      colors: colors,
-      preview_image_url: theme.logoUrl,
-      is_default: true,
-      is_active: true,
-      updated_at: new Date().toISOString(),
-    })
-
-    if (error) {
-      console.error("Error saving theme:", error)
-      return false
-    }
-
+    // Por enquanto, apenas simular o salvamento
+    console.log("Theme save simulated (database access disabled for now)")
     return true
   } catch (error) {
     console.error("Error saving theme to database:", error)
