@@ -1,111 +1,44 @@
 import { createClient } from "@supabase/supabase-js"
-import { supabaseConfig, defaultHeaders, restApiUrls } from "./supabase-config"
 
-// Cliente Supabase com configurações corretas
-export const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+// Configurações do Supabase
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supa.impa365.com"
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.cVmHXTXMMB09PuXEMevVuGxV5_ZR4yJly6pF0uab7fA"
+const schemaName = "impaai"
+
+// Criar cliente Supabase com headers para o schema correto
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   db: {
-    schema: supabaseConfig.schema,
+    schema: schemaName,
   },
   global: {
-    headers: supabaseConfig.headers,
+    headers: {
+      "Accept-Profile": schemaName,
+      "Content-Profile": schemaName,
+    },
   },
 })
 
-// Cliente para operações administrativas
-export const supabaseAdmin = createClient(supabaseConfig.url, supabaseConfig.serviceRoleKey, {
-  db: {
-    schema: supabaseConfig.schema,
-  },
-  global: {
-    headers: supabaseConfig.headers,
-  },
-})
-
-// Interface para filtros REST
-interface RestFilters {
-  [key: string]: any
+// Função para acessar qualquer tabela no schema correto
+export function getTable(tableName: string) {
+  return supabase.from(tableName)
 }
 
-interface RestOptions {
-  select?: string
-  filters?: RestFilters
-  limit?: number
-  offset?: number
-  order?: string
-}
-
-// Função genérica para fazer requisições REST
-async function fetchRest(endpoint: string, options: RestOptions = {}) {
-  const { select = "*", filters = {}, limit, offset, order } = options
-
-  let url = `${endpoint}?select=${select}`
-
-  // Adicionar filtros
-  Object.entries(filters).forEach(([key, value]) => {
-    url += `&${key}=eq.${value}`
-  })
-
-  // Adicionar limit
-  if (limit) {
-    url += `&limit=${limit}`
-  }
-
-  // Adicionar offset
-  if (offset) {
-    url += `&offset=${offset}`
-  }
-
-  // Adicionar order
-  if (order) {
-    url += `&order=${order}`
-  }
-
-  const response = await fetch(url, {
-    headers: defaultHeaders,
-  })
-
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
-  }
-
-  return response.json()
-}
-
-// Funções de acesso às tabelas com schema correto
+// Funções específicas para cada tabela
 export const db = {
-  // Usuários
-  users: () => supabase.from("user_profiles"),
-
-  // Agentes
-  agents: () => supabase.from("agents"),
-
-  // Conexões WhatsApp
-  whatsappConnections: () => supabase.from("whatsapp_connections"),
-
-  // Logs de atividade
-  activityLogs: () => supabase.from("activity_logs"),
-
-  // Configurações do usuário
-  userSettings: () => supabase.from("user_settings"),
-
-  // Configurações do sistema
-  systemSettings: () => supabase.from("system_settings"),
-
-  // Temas
-  themes: () => supabase.from("themes"),
-
-  // Integrações
-  integrations: () => supabase.from("integrations"),
-
-  // Chaves de API
-  apiKeys: () => supabase.from("user_api_keys"),
-
-  // Função REST genérica
-  fetchRest: (table: string, options?: RestOptions) => {
-    const endpoint = `${restApiUrls.base}/${table}`
-    return fetchRest(endpoint, options)
-  },
+  users: () => getTable("user_profiles"),
+  agents: () => getTable("ai_agents"),
+  whatsappConnections: () => getTable("whatsapp_connections"),
+  activityLogs: () => getTable("agent_activity_logs"),
+  userSettings: () => getTable("user_settings"),
+  systemSettings: () => getTable("system_settings"),
+  themes: () => getTable("system_themes"),
+  integrations: () => getTable("integrations"),
+  vectorStores: () => getTable("vector_stores"),
+  vectorDocuments: () => getTable("vector_documents"),
+  apiKeys: () => getTable("api_keys"),
+  organizations: () => getTable("organizations"),
 }
 
-// Exportar cliente padrão
 export default supabase
