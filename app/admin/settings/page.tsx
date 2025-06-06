@@ -262,11 +262,6 @@ export default function AdminSettingsPage() {
     }
   }
 
-  const fetchIntegrations = async () => {
-    const { data, error } = await supabase.from("integrations").select("*").order("created_at", { ascending: false })
-    if (data) setIntegrations(data)
-  }
-
   const handleUpdateAdminProfile = async () => {
     setSavingAdminProfile(true)
     setAdminProfileMessage("")
@@ -329,54 +324,112 @@ export default function AdminSettingsPage() {
   const handleIntegrationSave = async (type: string) => {
     setSaving(true)
     try {
-      let config = {}
+      // Validar campos obrigatórios
       if (type === "evolution_api") {
-        config = {
-          apiUrl: integrationForm.evolutionApiUrl,
-          apiKey: integrationForm.evolutionApiKey,
+        if (!integrationForm.evolutionApiUrl.trim()) {
+          throw new Error("URL da API Evolution é obrigatória")
+        }
+        if (!integrationForm.evolutionApiKey.trim()) {
+          throw new Error("API Key da Evolution é obrigatória")
         }
       } else if (type === "n8n") {
-        config = {
-          flowUrl: integrationForm.n8nFlowUrl,
-          apiKey: integrationForm.n8nApiKey || null,
+        if (!integrationForm.n8nFlowUrl.trim()) {
+          throw new Error("URL do Fluxo n8n é obrigatória")
         }
       }
 
-      const existing = integrations.find((int) => int.type === type)
+      // Preparar dados de configuração
+      let config = {}
+      if (type === "evolution_api") {
+        config = {
+          apiUrl: integrationForm.evolutionApiUrl.trim(),
+          apiKey: integrationForm.evolutionApiKey.trim(),
+        }
+      } else if (type === "n8n") {
+        config = {
+          flowUrl: integrationForm.n8nFlowUrl.trim(),
+          apiKey: integrationForm.n8nApiKey?.trim() || null,
+        }
+      }
+
+      // Verificar se já existe uma integração deste tipo
+      const existing = integrations.find((int: any) => int.type === type)
+
+      console.log("Dados da integração:", {
+        type,
+        config,
+        existing: existing ? existing.id : "nova integração",
+      })
 
       if (existing) {
-        const { error } = await supabase
+        // Atualizar integração existente
+        const { data, error } = await supabase
           .from("integrations")
           .update({
             config,
             is_active: true,
+            updated_at: new Date().toISOString(),
           })
           .eq("id", existing.id)
+          .select()
 
-        if (error) throw error
+        if (error) {
+          console.error("Erro ao atualizar integração:", error)
+          throw new Error(`Erro ao atualizar integração: ${error.message || error.code || "Erro desconhecido"}`)
+        }
+
+        console.log("Integração atualizada:", data)
       } else {
-        const { error } = await supabase.from("integrations").insert([
-          {
-            name: type === "evolution_api" ? "Evolution API" : "n8n",
-            type,
-            config,
-            is_active: true,
-          },
-        ])
+        // Criar nova integração
+        const { data, error } = await supabase
+          .from("integrations")
+          .insert([
+            {
+              name: type === "evolution_api" ? "Evolution API" : "n8n",
+              type,
+              config,
+              is_active: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ])
+          .select()
 
-        if (error) throw error
+        if (error) {
+          console.error("Erro ao criar integração:", error)
+          throw new Error(`Erro ao criar integração: ${error.message || error.code || "Erro desconhecido"}`)
+        }
+
+        console.log("Nova integração criada:", data)
       }
 
+      // Recarregar lista de integrações
       await fetchIntegrations()
       setIntegrationModalOpen(false)
       setSaveMessage("Integração salva com sucesso!")
       setTimeout(() => setSaveMessage(""), 3000)
-    } catch (error) {
-      console.error("Erro ao salvar integração:", error)
-      setSaveMessage("Erro ao salvar integração")
-      setTimeout(() => setSaveMessage(""), 3000)
+    } catch (error: any) {
+      console.error("Erro detalhado ao salvar integração:", error)
+      setSaveMessage(`Erro ao salvar integração: ${error.message || "Verifique o console para mais detalhes"}`)
+      setTimeout(() => setSaveMessage(""), 5000)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const fetchIntegrations = async () => {
+    try {
+      const { data, error } = await supabase.from("integrations").select("*").order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("Erro ao buscar integrações:", error)
+        return
+      }
+
+      console.log("Integrações carregadas:", data)
+      if (data) setIntegrations(data)
+    } catch (err) {
+      console.error("Erro ao buscar integrações:", err)
     }
   }
 
