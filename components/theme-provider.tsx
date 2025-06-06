@@ -1,62 +1,61 @@
 "use client"
 
-import * as React from "react"
+import { useEffect, useState } from "react"
 import { ThemeProvider as NextThemesProvider } from "next-themes"
 import type { ThemeProviderProps } from "next-themes"
 import {
-  ThemeContext,
   type ThemeConfig,
+  ThemeContext,
   defaultTheme,
   loadThemeFromDatabase,
   saveThemeToDatabase,
   applyThemeColors,
-  useTheme,
-} from "../lib/theme"
+} from "@/lib/theme"
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  const [theme, setTheme] = React.useState<ThemeConfig>(defaultTheme)
+  const [theme, setTheme] = useState<ThemeConfig>(defaultTheme)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const updateTheme = React.useCallback(
-    async (updates: Partial<ThemeConfig>) => {
-      const newTheme = { ...theme, ...updates }
-      setTheme(newTheme)
-      applyThemeColors(newTheme)
-      await saveThemeToDatabase(newTheme)
-    },
-    [theme],
-  )
-
-  const loadTheme = React.useCallback(async () => {
+  const loadTheme = async () => {
     try {
+      setIsLoading(true)
       const loadedTheme = await loadThemeFromDatabase()
       setTheme(loadedTheme)
       applyThemeColors(loadedTheme)
     } catch (error) {
-      console.error("Erro ao carregar tema:", error)
+      console.error("Error loading theme:", error)
       setTheme(defaultTheme)
       applyThemeColors(defaultTheme)
+    } finally {
+      setIsLoading(false)
     }
+  }
+
+  const updateTheme = async (updates: Partial<ThemeConfig>) => {
+    try {
+      const newTheme = { ...theme, ...updates }
+      setTheme(newTheme)
+      applyThemeColors(newTheme)
+      await saveThemeToDatabase(newTheme)
+    } catch (error) {
+      console.error("Error updating theme:", error)
+    }
+  }
+
+  useEffect(() => {
+    loadTheme()
   }, [])
 
-  React.useEffect(() => {
-    loadTheme()
-  }, [loadTheme])
-
-  const contextValue = React.useMemo(
-    () => ({
-      theme,
-      updateTheme,
-      loadTheme,
-    }),
-    [theme, updateTheme, loadTheme],
-  )
+  // Apply theme colors whenever theme changes
+  useEffect(() => {
+    if (!isLoading) {
+      applyThemeColors(theme)
+    }
+  }, [theme, isLoading])
 
   return (
-    <NextThemesProvider {...props}>
-      <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>
-    </NextThemesProvider>
+    <ThemeContext.Provider value={{ theme, updateTheme, loadTheme }}>
+      <NextThemesProvider {...props}>{children}</NextThemesProvider>
+    </ThemeContext.Provider>
   )
 }
-
-// Re-export the useTheme hook
-export { useTheme }
