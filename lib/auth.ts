@@ -25,21 +25,21 @@ export async function signIn(email: string, password_input: string) {
     console.log("👤 Usuário encontrado:", userProfile.email)
 
     // Verificar a senha
-    if (userProfile.password) {
+    if (userProfile.password_hash) {
       console.log("🔍 Verificando senha com hash...")
 
       // Verificar se a senha está hasheada (começa com $2a$, $2b$, etc.)
-      const isHashed = userProfile.password.startsWith("$2")
+      const isHashed = userProfile.password_hash.startsWith("$2")
 
       let passwordMatch = false
 
       if (isHashed) {
         // Senha hasheada - usar bcrypt.compare
-        passwordMatch = await bcrypt.compare(password_input, userProfile.password)
+        passwordMatch = await bcrypt.compare(password_input, userProfile.password_hash)
         console.log("🔐 Comparação com bcrypt:", passwordMatch ? "✅ Sucesso" : "❌ Falhou")
       } else {
         // Senha em texto plano (usuários antigos) - comparação direta
-        passwordMatch = userProfile.password === password_input
+        passwordMatch = userProfile.password_hash === password_input
         console.log("📝 Comparação texto plano:", passwordMatch ? "✅ Sucesso" : "❌ Falhou")
       }
 
@@ -54,14 +54,17 @@ export async function signIn(email: string, password_input: string) {
         }
 
         // Atualizar último login
-        await supabase.from("user_profiles").update({ last_login: new Date().toISOString() }).eq("id", userProfile.id)
+        await supabase
+          .from("user_profiles")
+          .update({ last_login_at: new Date().toISOString() })
+          .eq("id", userProfile.id)
 
         return {
           user,
           error: null,
         }
       }
-    } else if (!userProfile.password && password_input === "impa@senha2025") {
+    } else if (!userProfile.password_hash && password_input === "impa@senha2025") {
       // Fallback para usuários sem senha definida (senha padrão)
       console.warn(`⚠️ Usuário ${email} usando senha padrão`)
 
@@ -72,7 +75,7 @@ export async function signIn(email: string, password_input: string) {
         role: userProfile.role,
       }
 
-      await supabase.from("user_profiles").update({ last_login: new Date().toISOString() }).eq("id", userProfile.id)
+      await supabase.from("user_profiles").update({ last_login_at: new Date().toISOString() }).eq("id", userProfile.id)
 
       return { user, error: null }
     }

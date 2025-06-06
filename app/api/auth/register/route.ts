@@ -53,10 +53,10 @@ export async function POST(request: NextRequest) {
     const { data: defaultLimitSetting } = await supabase
       .from("system_settings")
       .select("setting_value")
-      .eq("setting_key", "default_whatsapp_connections_limit")
+      .eq("setting_key", "max_agents_per_user")
       .single()
 
-    const defaultLimit = defaultLimitSetting?.setting_value || 2
+    const defaultLimit = defaultLimitSetting?.setting_value || 3
 
     // Criar usuário
     console.log("👤 Criando usuário no banco...")
@@ -66,9 +66,10 @@ export async function POST(request: NextRequest) {
         {
           full_name: fullName.trim(),
           email: email.trim().toLowerCase(),
-          password: hashedPassword,
+          password_hash: hashedPassword,
           role: "user",
           status: "active",
+          agents_limit: defaultLimit,
         },
       ])
       .select()
@@ -83,10 +84,10 @@ export async function POST(request: NextRequest) {
 
     // Criar configurações do usuário
     console.log("⚙️ Criando configurações do usuário...")
-    const { error: settingsError } = await supabase.from("user_settings").insert([
+    const { error: settingsError } = await supabase.from("user_agent_settings").insert([
       {
         user_id: newUser.id,
-        whatsapp_connections_limit: defaultLimit,
+        agents_limit: defaultLimit,
       },
     ])
 
