@@ -1,23 +1,22 @@
 // Configurações centralizadas do Supabase
-export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supa.impa365.com"
-export const SUPABASE_ANON_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.cVmHXTXMMB09PuXEMevVuGxV5_ZR4yJly6pF0uab7fA"
-export const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-export const SCHEMA_NAME = "impaai"
+export const SUPABASE_CONFIG = {
+  url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  schema: "impaai", // Schema específico
 
-// Lista de tabelas disponíveis no schema impaai
-export const TABLES = {
-  USER_PROFILES: "user_profiles",
-  AI_AGENTS: "ai_agents",
-  WHATSAPP_CONNECTIONS: "whatsapp_connections",
-  AGENT_ACTIVITY_LOGS: "agent_activity_logs",
-  USER_SETTINGS: "user_settings",
-  SYSTEM_SETTINGS: "system_settings",
-  SYSTEM_THEMES: "system_themes",
-  INTEGRATIONS: "integrations",
-  VECTOR_STORES: "vector_stores",
-  VECTOR_DOCUMENTS: "vector_documents",
-  API_KEYS: "api_keys",
-  ORGANIZATIONS: "organizations",
+  // Headers padrão para todas as requisições
+  defaultHeaders: {
+    "Accept-Profile": "impaai",
+    "Content-Profile": "impaai",
+  },
+}
+
+// Validação das variáveis de ambiente
+if (!SUPABASE_CONFIG.url) {
+  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL environment variable")
+}
+
+if (!SUPABASE_CONFIG.anonKey) {
+  throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable")
 }

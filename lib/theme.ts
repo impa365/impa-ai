@@ -1,7 +1,22 @@
 "use client"
 
-import { db } from "@/lib/supabase"
 import { createContext, useContext } from "react"
+import { db } from "@/lib/supabase"
+
+// Definição do tipo ThemeConfig
+export interface ThemeConfig {
+  systemName: string
+  description?: string
+  logoIcon: string
+  primaryColor: string
+  secondaryColor: string
+  accentColor: string
+  textColor?: string
+  backgroundColor?: string
+  fontFamily?: string
+  borderRadius?: string
+  customCss?: string
+}
 
 // Context para o tema
 interface ThemeContextType {
@@ -19,21 +34,6 @@ export function useTheme() {
     throw new Error("useTheme must be used within a ThemeProvider")
   }
   return context
-}
-
-// Definição do tipo ThemeConfig
-export interface ThemeConfig {
-  systemName: string
-  description?: string
-  logoIcon: string
-  primaryColor: string
-  secondaryColor: string
-  accentColor: string
-  textColor?: string
-  backgroundColor?: string
-  fontFamily?: string
-  borderRadius?: string
-  customCss?: string
 }
 
 // Temas predefinidos
@@ -118,6 +118,45 @@ export function applyThemePreset(presetName: string): ThemeConfig {
   return themePresets[presetName] || defaultTheme
 }
 
+// Função para aplicar as cores do tema no CSS
+export function applyThemeColors(theme: ThemeConfig): void {
+  if (typeof document === "undefined") return
+
+  const root = document.documentElement
+
+  // Aplicar cores CSS customizadas
+  root.style.setProperty("--primary-color", theme.primaryColor)
+  root.style.setProperty("--secondary-color", theme.secondaryColor)
+  root.style.setProperty("--accent-color", theme.accentColor)
+
+  if (theme.textColor) {
+    root.style.setProperty("--text-color", theme.textColor)
+  }
+
+  if (theme.backgroundColor) {
+    root.style.setProperty("--background-color", theme.backgroundColor)
+  }
+
+  if (theme.fontFamily) {
+    root.style.setProperty("--font-family", theme.fontFamily)
+  }
+
+  if (theme.borderRadius) {
+    root.style.setProperty("--border-radius", theme.borderRadius)
+  }
+
+  // Aplicar CSS customizado se existir
+  if (theme.customCss) {
+    let customStyleElement = document.getElementById("custom-theme-css")
+    if (!customStyleElement) {
+      customStyleElement = document.createElement("style")
+      customStyleElement.id = "custom-theme-css"
+      document.head.appendChild(customStyleElement)
+    }
+    customStyleElement.textContent = theme.customCss
+  }
+}
+
 // Função para carregar o tema do banco de dados
 export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
   try {
@@ -160,7 +199,7 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
 export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
   try {
     // Verificar se já existe um tema ativo
-    const { data: existingTheme, error: fetchError } = await db.themes().select("id").eq("is_active", true).single()
+    const { data: existingTheme } = await db.themes().select("id").eq("is_active", true).single()
 
     // Preparar os dados para salvar
     const themeData = {
@@ -235,44 +274,5 @@ export function saveThemeToLocalStorage(theme: ThemeConfig): void {
     localStorage.setItem("theme", JSON.stringify(theme))
   } catch (error) {
     console.error("Erro ao salvar tema no localStorage:", error)
-  }
-}
-
-// Função para aplicar as cores do tema no CSS
-export function applyThemeColors(theme: ThemeConfig): void {
-  if (typeof document === "undefined") return
-
-  const root = document.documentElement
-
-  // Aplicar cores CSS customizadas
-  root.style.setProperty("--primary-color", theme.primaryColor)
-  root.style.setProperty("--secondary-color", theme.secondaryColor)
-  root.style.setProperty("--accent-color", theme.accentColor)
-
-  if (theme.textColor) {
-    root.style.setProperty("--text-color", theme.textColor)
-  }
-
-  if (theme.backgroundColor) {
-    root.style.setProperty("--background-color", theme.backgroundColor)
-  }
-
-  if (theme.fontFamily) {
-    root.style.setProperty("--font-family", theme.fontFamily)
-  }
-
-  if (theme.borderRadius) {
-    root.style.setProperty("--border-radius", theme.borderRadius)
-  }
-
-  // Aplicar CSS customizado se existir
-  if (theme.customCss) {
-    let customStyleElement = document.getElementById("custom-theme-css")
-    if (!customStyleElement) {
-      customStyleElement = document.createElement("style")
-      customStyleElement.id = "custom-theme-css"
-      document.head.appendChild(customStyleElement)
-    }
-    customStyleElement.textContent = theme.customCss
   }
 }
