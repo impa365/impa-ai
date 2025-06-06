@@ -14,7 +14,7 @@ import { useTheme, themePresets, type ThemeConfig } from "@/components/theme-pro
 import Image from "next/image"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getCurrentUser } from "@/lib/auth"
-import { supabase } from "@/lib/supabase"
+import { db } from "@/lib/supabase"
 import { useEffect } from "react"
 import {
   Dialog,
@@ -70,7 +70,7 @@ export default function AdminSettingsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingFavicon, setUploadingFavicon] = useState(false)
 
-  // Adicionar após os outros estados
+  // Estados para branding
   const [brandingForm, setBrandingForm] = useState<ThemeConfig>({
     systemName: "",
     description: "",
@@ -107,23 +107,28 @@ export default function AdminSettingsPage() {
 
   const fetchSystemSettings = async () => {
     try {
-      const { data: limitData } = await supabase
-        .from("system_settings")
+      // Buscar configurações específicas usando a nova estrutura
+      const { data: limitData, error: limitError } = await db
+        .systemSettings()
         .select("setting_value")
         .eq("setting_key", "default_whatsapp_connections_limit")
         .single()
 
-      const { data: agentsLimitData } = await supabase
-        .from("system_settings")
+      const { data: agentsLimitData, error: agentsError } = await db
+        .systemSettings()
         .select("setting_value")
         .eq("setting_key", "default_agents_limit")
         .single()
 
-      const { data: registrationData } = await supabase
-        .from("system_settings")
+      const { data: registrationData, error: regError } = await db
+        .systemSettings()
         .select("setting_value")
         .eq("setting_key", "allow_public_registration")
         .single()
+
+      if (limitError || agentsError || regError) {
+        throw new Error("Erro ao carregar configurações do sistema")
+      }
 
       setSystemSettings({
         defaultWhatsAppLimit: limitData?.setting_value || 2,
@@ -131,38 +136,44 @@ export default function AdminSettingsPage() {
         allowPublicRegistration: registrationData?.setting_value === true,
       })
     } catch (error) {
-      console.log("Configurações do sistema não encontradas, usando valores padrão")
-      // Manter valores padrão se a tabela não existir
+      console.error("Erro ao buscar configurações do sistema:", error)
+      throw error
     }
   }
 
   const saveSystemSettings = async () => {
     setSaving(true)
     try {
-      // Tentar criar as configurações se não existirem
+      // Salvar configurações usando upsert na nova estrutura
       const settingsToUpsert = [
         {
           setting_key: "default_whatsapp_connections_limit",
           setting_value: systemSettings.defaultWhatsAppLimit,
           category: "limits",
           description: "Limite padrão de conexões WhatsApp para novos usuários",
+          is_public: false,
+          requires_restart: false,
         },
         {
           setting_key: "default_agents_limit",
           setting_value: systemSettings.defaultAgentsLimit,
           category: "limits",
           description: "Limite padrão de agentes IA para novos usuários",
+          is_public: false,
+          requires_restart: false,
         },
         {
           setting_key: "allow_public_registration",
           setting_value: systemSettings.allowPublicRegistration,
           category: "auth",
           description: "Permitir cadastro público de usuários",
+          is_public: true,
+          requires_restart: false,
         },
       ]
 
       for (const setting of settingsToUpsert) {
-        const { error } = await supabase.from("system_settings").upsert(setting, { onConflict: "setting_key" })
+        const { error } = await db.systemSettings().upsert(setting, { onConflict: "setting_key" })
 
         if (error) {
           console.error(`Erro ao salvar ${setting.setting_key}:`, error)
@@ -178,100 +189,6 @@ export default function AdminSettingsPage() {
       setTimeout(() => setSaveMessage(""), 3000)
     } finally {
       setSaving(false)
-    }
-  }
-
-  const validateImageFile = (file: File, type: "logo" | "favicon") => {
-    const validTypes = ["image/png", "image/jpeg", "image/jpg"]
-    if (type === "favicon") {
-      validTypes.push("image/x-icon", "image/vnd.microsoft.icon")
-    }
-
-    if (!validTypes.includes(file.type)) {
-      throw new Error(`Formato inválido. Use ${type === "favicon" ? "ICO, PNG" : "PNG, JPG"}`)
-    }
-
-    const maxSize = type === "favicon" ? 1 * 1024 * 1024 : 2 * 1024 * 1024 // 1MB para favicon, 2MB para logo
-    if (file.size > maxSize) {
-      throw new Error(`Arquivo muito grande. Máximo ${type === "favicon" ? "1MB" : "2MB"}`)
-    }
-
-    return new Promise<{ width: number; height: number }>((resolve, reject) => {
-      const img = new Image()
-      img.onload = () => {
-        if (type === "favicon") {
-          if (img.width !== 32 || img.height !== 32) {
-            reject(new Error("Favicon deve ter exatamente 32x32 pixels"))
-            return
-          }
-        } else {
-          if (img.width < 100 || img.height < 100) {
-            reject(new Error("Logo deve ter pelo menos 100x100 pixels"))
-            return
-          }
-          if (img.width > 500 || img.height > 500) {
-            reject(new Error("Logo deve ter no máximo 500x500 pixels"))
-            return
-          }
-        }
-        resolve({ width: img.width, height: img.height })
-      }
-      img.onerror = () => reject(new Error("Erro ao carregar imagem"))
-      img.src = URL.createObjectURL(file)
-    })
-  }
-
-  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    setUploadingLogo(true)
-    setSaveMessage("")
-
-    try {
-      await validateImageFile(file, "logo")
-
-      // Aqui você implementaria o upload real para o Supabase Storage
-      // Por enquanto, vamos simular o upload
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      setSaveMessage("Logo enviado com sucesso!")
-      setTimeout(() => setSaveMessage(""), 3000)
-    } catch (error: any) {
-      setSaveMessage(error.message)
-      setTimeout(() => setSaveMessage(""), 3000)
-    } finally {
-      setUploadingLogo(false)
-      if (logoInputRef.current) {
-        logoInputRef.current.value = ""
-      }
-    }
-  }
-
-  const handleFaviconUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    setUploadingFavicon(true)
-    setSaveMessage("")
-
-    try {
-      await validateImageFile(file, "favicon")
-
-      // Aqui você implementaria o upload real para o Supabase Storage
-      // Por enquanto, vamos simular o upload
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      setSaveMessage("Favicon enviado com sucesso!")
-      setTimeout(() => setSaveMessage(""), 3000)
-    } catch (error: any) {
-      setSaveMessage(error.message)
-      setTimeout(() => setSaveMessage(""), 3000)
-    } finally {
-      setUploadingFavicon(false)
-      if (faviconInputRef.current) {
-        faviconInputRef.current.value = ""
-      }
     }
   }
 
@@ -300,11 +217,12 @@ export default function AdminSettingsPage() {
         return
       }
 
-      const { error } = await supabase
-        .from("user_profiles")
+      const { error } = await db
+        .users()
         .update({
           full_name: adminProfileForm.full_name.trim(),
           email: adminProfileForm.email.trim(),
+          updated_at: new Date().toISOString(),
         })
         .eq("id", user.id)
 
@@ -368,16 +286,10 @@ export default function AdminSettingsPage() {
       // Verificar se já existe uma integração deste tipo
       const existing = integrations.find((int: any) => int.type === type)
 
-      console.log("Dados da integração:", {
-        type,
-        config,
-        existing: existing ? existing.id : "nova integração",
-      })
-
       if (existing) {
         // Atualizar integração existente
-        const { data, error } = await supabase
-          .from("integrations")
+        const { data, error } = await db
+          .integrations()
           .update({
             config,
             is_active: true,
@@ -388,14 +300,14 @@ export default function AdminSettingsPage() {
 
         if (error) {
           console.error("Erro ao atualizar integração:", error)
-          throw new Error(`Erro ao atualizar integração: ${error.message || error.code || "Erro desconhecido"}`)
+          throw error
         }
 
         console.log("Integração atualizada:", data)
       } else {
         // Criar nova integração
-        const { data, error } = await supabase
-          .from("integrations")
+        const { data, error } = await db
+          .integrations()
           .insert([
             {
               name: type === "evolution_api" ? "Evolution API" : "n8n",
@@ -410,7 +322,7 @@ export default function AdminSettingsPage() {
 
         if (error) {
           console.error("Erro ao criar integração:", error)
-          throw new Error(`Erro ao criar integração: ${error.message || error.code || "Erro desconhecido"}`)
+          throw error
         }
 
         console.log("Nova integração criada:", data)
@@ -423,7 +335,7 @@ export default function AdminSettingsPage() {
       setTimeout(() => setSaveMessage(""), 3000)
     } catch (error: any) {
       console.error("Erro detalhado ao salvar integração:", error)
-      setSaveMessage(`Erro ao salvar integração: ${error.message || "Verifique o console para mais detalhes"}`)
+      setSaveMessage(`Erro ao salvar integração: ${error.message}`)
       setTimeout(() => setSaveMessage(""), 5000)
     } finally {
       setSaving(false)
@@ -432,20 +344,110 @@ export default function AdminSettingsPage() {
 
   const fetchIntegrations = async () => {
     try {
-      const { data, error } = await supabase.from("integrations").select("*").order("created_at", { ascending: false })
+      const { data, error } = await db.integrations().select("*").order("created_at", { ascending: false })
 
       if (error) {
-        console.log("Tabela de integrações não encontrada, usando configurações padrão")
-        // Se a tabela não existir, usar configurações padrão
-        setIntegrations([])
-        return
+        console.error("Erro ao buscar integrações:", error)
+        throw error
       }
 
       console.log("Integrações carregadas:", data)
       if (data) setIntegrations(data)
     } catch (err) {
-      console.log("Erro ao buscar integrações, usando configurações padrão:", err)
-      setIntegrations([])
+      console.error("Erro ao buscar integrações:", err)
+      throw err
+    }
+  }
+
+  const validateImageFile = (file: File, type: "logo" | "favicon") => {
+    const validTypes = ["image/png", "image/jpeg", "image/jpg"]
+    if (type === "favicon") {
+      validTypes.push("image/x-icon", "image/vnd.microsoft.icon")
+    }
+
+    if (!validTypes.includes(file.type)) {
+      throw new Error(`Formato inválido. Use ${type === "favicon" ? "ICO, PNG" : "PNG, JPG"}`)
+    }
+
+    const maxSize = type === "favicon" ? 1 * 1024 * 1024 : 2 * 1024 * 1024
+    if (file.size > maxSize) {
+      throw new Error(`Arquivo muito grande. Máximo ${type === "favicon" ? "1MB" : "2MB"}`)
+    }
+
+    return new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        if (type === "favicon") {
+          if (img.width !== 32 || img.height !== 32) {
+            reject(new Error("Favicon deve ter exatamente 32x32 pixels"))
+            return
+          }
+        } else {
+          if (img.width < 100 || img.height < 100) {
+            reject(new Error("Logo deve ter pelo menos 100x100 pixels"))
+            return
+          }
+          if (img.width > 500 || img.height > 500) {
+            reject(new Error("Logo deve ter no máximo 500x500 pixels"))
+            return
+          }
+        }
+        resolve({ width: img.width, height: img.height })
+      }
+      img.onerror = () => reject(new Error("Erro ao carregar imagem"))
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploadingLogo(true)
+    setSaveMessage("")
+
+    try {
+      await validateImageFile(file, "logo")
+
+      // TODO: Implementar upload real para Supabase Storage
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      setSaveMessage("Logo enviado com sucesso!")
+      setTimeout(() => setSaveMessage(""), 3000)
+    } catch (error: any) {
+      setSaveMessage(error.message)
+      setTimeout(() => setSaveMessage(""), 3000)
+    } finally {
+      setUploadingLogo(false)
+      if (logoInputRef.current) {
+        logoInputRef.current.value = ""
+      }
+    }
+  }
+
+  const handleFaviconUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploadingFavicon(true)
+    setSaveMessage("")
+
+    try {
+      await validateImageFile(file, "favicon")
+
+      // TODO: Implementar upload real para Supabase Storage
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      setSaveMessage("Favicon enviado com sucesso!")
+      setTimeout(() => setSaveMessage(""), 3000)
+    } catch (error: any) {
+      setSaveMessage(error.message)
+      setTimeout(() => setSaveMessage(""), 3000)
+    } finally {
+      setUploadingFavicon(false)
+      if (faviconInputRef.current) {
+        faviconInputRef.current.value = ""
+      }
     }
   }
 
@@ -923,7 +925,6 @@ export default function AdminSettingsPage() {
           </Card>
         </div>
 
-        {/* Botões de ação */}
         <div className="flex justify-between items-center pt-6 border-t">
           <div className="flex items-center gap-2">
             {brandingChanged && (
@@ -986,13 +987,6 @@ export default function AdminSettingsPage() {
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-2">Integrações Disponíveis</h3>
           <p className="text-gray-600">Configure as integrações para expandir as funcionalidades da plataforma</p>
-          {integrations.length === 0 && (
-            <Alert className="mt-4">
-              <AlertDescription>
-                A tabela de integrações não foi encontrada. Execute o script SQL para criar a estrutura necessária.
-              </AlertDescription>
-            </Alert>
-          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1059,8 +1053,8 @@ export default function AdminSettingsPage() {
         <Dialog open={integrationModalOpen} onOpenChange={setIntegrationModalOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle className="text-foreground">Configurar {selectedIntegration?.name}</DialogTitle>
-              <DialogDescription className="text-muted-foreground">
+              <DialogTitle>Configurar {selectedIntegration?.name}</DialogTitle>
+              <DialogDescription>
                 Configure as credenciais para integração com {selectedIntegration?.name}
               </DialogDescription>
             </DialogHeader>
@@ -1069,22 +1063,17 @@ export default function AdminSettingsPage() {
               {selectedIntegration?.type === "evolution_api" && (
                 <>
                   <div>
-                    <Label htmlFor="evolutionApiUrl" className="text-foreground">
-                      URL da API Evolution *
-                    </Label>
+                    <Label htmlFor="evolutionApiUrl">URL da API Evolution *</Label>
                     <Input
                       id="evolutionApiUrl"
                       value={integrationForm.evolutionApiUrl}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, evolutionApiUrl: e.target.value })}
                       placeholder="https://api.evolution.com"
                       required
-                      className="text-foreground"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="evolutionApiKey" className="text-foreground">
-                      API Key Global *
-                    </Label>
+                    <Label htmlFor="evolutionApiKey">API Key Global *</Label>
                     <Input
                       id="evolutionApiKey"
                       type="password"
@@ -1092,7 +1081,6 @@ export default function AdminSettingsPage() {
                       onChange={(e) => setIntegrationForm({ ...integrationForm, evolutionApiKey: e.target.value })}
                       placeholder="Sua API Key"
                       required
-                      className="text-foreground"
                     />
                   </div>
                 </>
@@ -1101,29 +1089,23 @@ export default function AdminSettingsPage() {
               {selectedIntegration?.type === "n8n" && (
                 <>
                   <div>
-                    <Label htmlFor="n8nFlowUrl" className="text-foreground">
-                      URL do Fluxo *
-                    </Label>
+                    <Label htmlFor="n8nFlowUrl">URL do Fluxo *</Label>
                     <Input
                       id="n8nFlowUrl"
                       value={integrationForm.n8nFlowUrl}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, n8nFlowUrl: e.target.value })}
                       placeholder="https://n8n.exemplo.com/webhook/..."
                       required
-                      className="text-foreground"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="n8nApiKey" className="text-foreground">
-                      API Key do Fluxo (Opcional)
-                    </Label>
+                    <Label htmlFor="n8nApiKey">API Key do Fluxo (Opcional)</Label>
                     <Input
                       id="n8nApiKey"
                       type="password"
                       value={integrationForm.n8nApiKey}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, n8nApiKey: e.target.value })}
                       placeholder="API Key (se necessário)"
-                      className="text-foreground"
                     />
                   </div>
                 </>
@@ -1131,7 +1113,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIntegrationModalOpen(false)} className="text-foreground">
+              <Button variant="outline" onClick={() => setIntegrationModalOpen(false)}>
                 Cancelar
               </Button>
               <Button

@@ -20,7 +20,7 @@ export function getTable(tableName: string) {
   return supabase.from(tableName)
 }
 
-// Funções específicas para cada tabela - EXPORTAÇÃO PRINCIPAL
+// Funções específicas para cada tabela - USANDO A NOVA ESTRUTURA
 export const db = {
   users: () => getTable("user_profiles"),
   agents: () => getTable("ai_agents"),
@@ -32,56 +32,15 @@ export const db = {
   integrations: () => getTable("integrations"),
   vectorStores: () => getTable("vector_stores"),
   vectorDocuments: () => getTable("vector_documents"),
-  apiKeys: () => getTable("api_keys"),
+  apiKeys: () => getTable("user_api_keys"),
   organizations: () => getTable("organizations"),
+  dailyMetrics: () => getTable("daily_metrics"),
 
   // Função para executar queries SQL diretas
   rpc: (functionName: string, params?: any) => supabase.rpc(functionName, params),
-
-  // Função para fazer fetch via REST API
-  fetchRest: async (
-    tableName: string,
-    options: {
-      select?: string
-      filters?: Record<string, any>
-      limit?: number
-      order?: { column: string; ascending?: boolean }
-    } = {},
-  ) => {
-    const { select = "*", filters = {}, limit, order } = options
-
-    let url = `${supabaseUrl}/rest/v1/${tableName}?select=${select}`
-
-    // Adicionar filtros
-    Object.entries(filters).forEach(([key, value]) => {
-      url += `&${key}=eq.${value}`
-    })
-
-    // Adicionar limite
-    if (limit) {
-      url += `&limit=${limit}`
-    }
-
-    // Adicionar ordenação
-    if (order) {
-      const direction = order.ascending === false ? "desc" : "asc"
-      url += `&order=${order.column}.${direction}`
-    }
-
-    const response = await fetch(url, {
-      headers: {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`,
-        "Accept-Profile": "impaai",
-        "Content-Type": "application/json",
-      },
-    })
-
-    return response.json()
-  },
 }
 
-// Tipos para o banco de dados
+// Tipos para o banco de dados - NOVA ESTRUTURA
 export interface UserProfile {
   id: string
   full_name: string | null
@@ -205,6 +164,16 @@ export interface SystemTheme {
   is_active?: boolean
   preview_image_url?: string
   created_by?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Integration {
+  id: string
+  name: string
+  type: string
+  config: any
+  is_active: boolean
   created_at: string
   updated_at: string
 }
