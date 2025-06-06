@@ -8,15 +8,15 @@ const supabaseAnonKey =
 
 // Opções para usar o schema impaai
 const options = {
-  schema: "impaai",
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
+  // Não definimos schema aqui, vamos usar a abordagem de prefixo nas queries
 }
 
-// Criar cliente Supabase com schema impaai
+// Criar cliente Supabase
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, options)
 
 // Exportar createClient como named export
