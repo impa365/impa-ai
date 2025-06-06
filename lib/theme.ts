@@ -43,8 +43,8 @@ export const useTheme = () => useContext(ThemeContext)
 
 export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
   try {
-    // Buscar o tema ativo do schema impaai
-    const { data, error } = await supabase.from("impaai.system_themes").select("*").eq("is_active", true).limit(1)
+    // Buscar o tema ativo (usando apenas o nome da tabela, schema já configurado no cliente)
+    const { data, error } = await supabase.from("system_themes").select("*").eq("is_active", true).limit(1)
 
     if (error) {
       console.error("Error loading theme:", error)
@@ -54,7 +54,7 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
     // Se não encontrar tema ativo, tenta buscar o tema padrão
     if (!data || data.length === 0) {
       const { data: defaultData, error: defaultError } = await supabase
-        .from("impaai.system_themes")
+        .from("system_themes")
         .select("*")
         .eq("is_default", true)
         .limit(1)
@@ -99,11 +99,7 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
     // Verificar se já existe um tema com o mesmo nome
     const themeName = theme.systemName.toLowerCase().replace(/\s+/g, "_")
 
-    const { data: existingData } = await supabase
-      .from("impaai.system_themes")
-      .select("id")
-      .eq("name", themeName)
-      .limit(1)
+    const { data: existingData } = await supabase.from("system_themes").select("id").eq("name", themeName).limit(1)
 
     const colors = {
       primary: theme.primaryColor,
@@ -118,7 +114,7 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
     if (existingData && existingData.length > 0) {
       // Atualizar tema existente
       const { error } = await supabase
-        .from("impaai.system_themes")
+        .from("system_themes")
         .update({
           display_name: theme.systemName,
           description: theme.description,
@@ -134,7 +130,7 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
       }
     } else {
       // Criar novo tema
-      const { error } = await supabase.from("impaai.system_themes").insert({
+      const { error } = await supabase.from("system_themes").insert({
         name: themeName,
         display_name: theme.systemName,
         description: theme.description,
