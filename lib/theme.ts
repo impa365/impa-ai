@@ -1,203 +1,218 @@
-"use client"
+import { db } from "@/lib/supabase"
 
-import { createContext, useContext } from "react"
-
+// Definição do tipo ThemeConfig
 export interface ThemeConfig {
   systemName: string
-  description: string
+  description?: string
   logoIcon: string
   primaryColor: string
   secondaryColor: string
   accentColor: string
-  logoUrl?: string
-  faviconUrl?: string
-  sidebarStyle?: string
-  brandingEnabled?: boolean
+  textColor?: string
+  backgroundColor?: string
+  fontFamily?: string
+  borderRadius?: string
+  customCss?: string
 }
 
-export const defaultTheme: ThemeConfig = {
-  systemName: "Impa AI",
-  description: "Plataforma de construção de agentes de IA",
-  logoIcon: "🤖",
-  primaryColor: "#0f172a",
-  secondaryColor: "#f1f5f9",
-  accentColor: "#3b82f6",
-  sidebarStyle: "default",
-  brandingEnabled: true,
+// Temas predefinidos
+export const themePresets: Record<string, ThemeConfig> = {
+  blue: {
+    systemName: "Impa AI",
+    description: "Plataforma de construção de agentes de IA",
+    logoIcon: "🤖",
+    primaryColor: "#3b82f6",
+    secondaryColor: "#10b981",
+    accentColor: "#8b5cf6",
+  },
+  purple: {
+    systemName: "Impa AI",
+    description: "Plataforma de construção de agentes de IA",
+    logoIcon: "🔮",
+    primaryColor: "#8b5cf6",
+    secondaryColor: "#ec4899",
+    accentColor: "#3b82f6",
+  },
+  green: {
+    systemName: "Impa AI",
+    description: "Plataforma de construção de agentes de IA",
+    logoIcon: "🌱",
+    primaryColor: "#10b981",
+    secondaryColor: "#3b82f6",
+    accentColor: "#f59e0b",
+  },
+  orange: {
+    systemName: "Impa AI",
+    description: "Plataforma de construção de agentes de IA",
+    logoIcon: "🔥",
+    primaryColor: "#f97316",
+    secondaryColor: "#8b5cf6",
+    accentColor: "#10b981",
+  },
+  dark: {
+    systemName: "Impa AI",
+    description: "Plataforma de construção de agentes de IA",
+    logoIcon: "⚡",
+    primaryColor: "#6366f1",
+    secondaryColor: "#ec4899",
+    accentColor: "#f97316",
+    backgroundColor: "#1e293b",
+    textColor: "#f8fafc",
+  },
 }
 
-// Create the theme context
-export const ThemeContext = createContext<{
-  theme: ThemeConfig
-  updateTheme: (updates: Partial<ThemeConfig>) => Promise<void>
-  loadTheme: () => Promise<void>
-}>({
-  theme: defaultTheme,
-  updateTheme: async () => {},
-  loadTheme: async () => {},
-})
+// Tema padrão
+export const defaultTheme: ThemeConfig = themePresets.blue
 
-// Create the useTheme hook
-export const useTheme = () => useContext(ThemeContext)
+// Função para validar se uma cor é um código hexadecimal válido
+export function isValidHexColor(color: string): boolean {
+  return /^#([A-Fa-f0-9]{3}){1,2}$/.test(color)
+}
 
-export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
+// Função para ajustar o brilho de uma cor
+export function adjustColorBrightness(color: string, percent: number): string {
+  if (!isValidHexColor(color)) return color
+
+  const num = Number.parseInt(color.replace("#", ""), 16)
+  const amt = Math.round(2.55 * percent)
+  const R = (num >> 16) + amt
+  const G = ((num >> 8) & 0x00ff) + amt
+  const B = (num & 0x0000ff) + amt
+
+  return (
+    "#" +
+    (
+      0x1000000 +
+      (R < 255 ? (R < 0 ? 0 : R) : 255) * 0x10000 +
+      (G < 255 ? (G < 0 ? 0 : G) : 255) * 0x100 +
+      (B < 255 ? (B < 0 ? 0 : B) : 255)
+    )
+      .toString(16)
+      .slice(1)
+  )
+}
+
+// Função para aplicar um preset de tema
+export function applyThemePreset(presetName: string): ThemeConfig {
+  return themePresets[presetName] || defaultTheme
+}
+
+// Função para carregar o tema do banco de dados
+export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
   try {
-    // Por enquanto, vamos usar apenas localStorage para persistir o tema
-    // Isso evita problemas com o banco de dados até que esteja configurado corretamente
+    // Tenta carregar o tema ativo usando nossa nova função db
+    const { data, error } = await db.themes().select("*").eq("is_active", true).single()
 
-    if (typeof window !== "undefined") {
-      const savedTheme = localStorage.getItem("impaai_theme")
-      if (savedTheme) {
-        try {
-          const parsedTheme = JSON.parse(savedTheme)
-          return {
-            ...defaultTheme,
-            ...parsedTheme,
-          }
-        } catch (e) {
-          console.log("Error parsing saved theme, using default")
-        }
+    if (error) {
+      console.error("Erro ao carregar tema:", error)
+      return null
+    }
+
+    if (!data) {
+      console.log("Nenhum tema ativo encontrado, usando tema padrão")
+      return null
+    }
+
+    // Mapear os dados do banco para o formato ThemeConfig
+    const theme: ThemeConfig = {
+      systemName: data.display_name || defaultTheme.systemName,
+      description: data.description || defaultTheme.description,
+      logoIcon: data.logo_icon || defaultTheme.logoIcon,
+      primaryColor: data.colors?.primary || defaultTheme.primaryColor,
+      secondaryColor: data.colors?.secondary || defaultTheme.secondaryColor,
+      accentColor: data.colors?.accent || defaultTheme.accentColor,
+      textColor: data.colors?.text,
+      backgroundColor: data.colors?.background,
+      fontFamily: data.fonts?.primary,
+      borderRadius: data.borders?.radius,
+      customCss: data.custom_css,
+    }
+
+    return theme
+  } catch (error) {
+    console.error("Erro ao carregar tema do banco:", error)
+    return null
+  }
+}
+
+// Função para salvar o tema no banco de dados
+export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
+  try {
+    // Verificar se já existe um tema ativo
+    const { data: existingTheme, error: fetchError } = await db.themes().select("id").eq("is_active", true).single()
+
+    // Preparar os dados para salvar
+    const themeData = {
+      name: theme.systemName.toLowerCase().replace(/\s+/g, "_"),
+      display_name: theme.systemName,
+      description: theme.description || "Tema personalizado",
+      colors: {
+        primary: theme.primaryColor,
+        secondary: theme.secondaryColor,
+        accent: theme.accentColor,
+        text: theme.textColor,
+        background: theme.backgroundColor,
+      },
+      fonts: {
+        primary: theme.fontFamily,
+      },
+      borders: {
+        radius: theme.borderRadius,
+      },
+      custom_css: theme.customCss,
+      is_default: false,
+      is_active: true,
+      logo_icon: theme.logoIcon,
+    }
+
+    if (existingTheme) {
+      // Atualizar tema existente
+      const { error } = await db.themes().update(themeData).eq("id", existingTheme.id)
+
+      if (error) {
+        console.error("Erro ao atualizar tema:", error)
+        return false
+      }
+    } else {
+      // Criar novo tema
+      const { error } = await db.themes().insert(themeData)
+
+      if (error) {
+        console.error("Erro ao criar tema:", error)
+        return false
       }
     }
 
-    console.log("Using default theme configuration")
-    return defaultTheme
+    return true
   } catch (error) {
-    console.error("Error loading theme:", error)
-    return defaultTheme
+    console.error("Erro ao salvar tema no banco:", error)
+    return false
   }
 }
 
-export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
+// Função para carregar o tema do localStorage
+export function loadThemeFromLocalStorage(): ThemeConfig | null {
+  if (typeof window === "undefined") return null
+
   try {
-    // Salvar no localStorage por enquanto
-    if (typeof window !== "undefined") {
-      localStorage.setItem("impaai_theme", JSON.stringify(theme))
-      console.log("Theme saved to localStorage:", theme.systemName)
-      return true
-    }
-    return false
+    const savedTheme = localStorage.getItem("theme")
+    if (!savedTheme) return null
+
+    const parsedTheme = JSON.parse(savedTheme)
+    return parsedTheme
   } catch (error) {
-    console.error("Error saving theme:", error)
-    return false
+    console.error("Erro ao carregar tema do localStorage:", error)
+    return null
   }
 }
 
-export function applyThemeColors(theme: ThemeConfig) {
-  if (typeof document === "undefined") return
+// Função para salvar o tema no localStorage
+export function saveThemeToLocalStorage(theme: ThemeConfig): void {
+  if (typeof window === "undefined") return
 
-  const root = document.documentElement
-
-  // Apply CSS custom properties using the available colors
-  root.style.setProperty("--primary", theme.primaryColor)
-  root.style.setProperty("--secondary", theme.secondaryColor)
-  root.style.setProperty("--accent", theme.accentColor)
-
-  // Apply colors to Tailwind CSS variables
-  root.style.setProperty("--color-primary", theme.primaryColor)
-  root.style.setProperty("--color-secondary", theme.secondaryColor)
-  root.style.setProperty("--color-accent", theme.accentColor)
-
-  // Set document title if system name is available
-  if (theme.systemName && typeof document !== "undefined") {
-    document.title = theme.systemName
+  try {
+    localStorage.setItem("theme", JSON.stringify(theme))
+  } catch (error) {
+    console.error("Erro ao salvar tema no localStorage:", error)
   }
-
-  // Apply favicon if available
-  if (theme.faviconUrl && typeof document !== "undefined") {
-    const favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement
-    if (favicon) {
-      favicon.href = theme.faviconUrl
-    }
-  }
-}
-
-// Theme presets for quick selection
-export const themePresets = {
-  default: {
-    systemName: "Impa AI",
-    description: "Plataforma de construção de agentes de IA",
-    primaryColor: "#0f172a",
-    secondaryColor: "#f1f5f9",
-    accentColor: "#3b82f6",
-    logoIcon: "🤖",
-    sidebarStyle: "default",
-    brandingEnabled: true,
-  },
-  blue: {
-    systemName: "Impa AI - Blue",
-    description: "Tema azul para a plataforma",
-    primaryColor: "#1e40af",
-    secondaryColor: "#dbeafe",
-    accentColor: "#3b82f6",
-    logoIcon: "💙",
-    sidebarStyle: "default",
-    brandingEnabled: true,
-  },
-  green: {
-    systemName: "Impa AI - Green",
-    description: "Tema verde para a plataforma",
-    primaryColor: "#166534",
-    secondaryColor: "#dcfce7",
-    accentColor: "#22c55e",
-    logoIcon: "💚",
-    sidebarStyle: "default",
-    brandingEnabled: true,
-  },
-  purple: {
-    systemName: "Impa AI - Purple",
-    description: "Tema roxo para a plataforma",
-    primaryColor: "#7c3aed",
-    secondaryColor: "#ede9fe",
-    accentColor: "#8b5cf6",
-    logoIcon: "💜",
-    sidebarStyle: "default",
-    brandingEnabled: true,
-  },
-  dark: {
-    systemName: "Impa AI - Dark",
-    description: "Tema escuro para a plataforma",
-    primaryColor: "#000000",
-    secondaryColor: "#1f2937",
-    accentColor: "#60a5fa",
-    logoIcon: "🌙",
-    sidebarStyle: "default",
-    brandingEnabled: true,
-  },
-}
-
-// Função para aplicar um preset
-export function applyThemePreset(presetName: keyof typeof themePresets): ThemeConfig {
-  const preset = themePresets[presetName]
-  if (!preset) {
-    console.warn(`Theme preset '${presetName}' not found, using default`)
-    return defaultTheme
-  }
-
-  return {
-    ...defaultTheme,
-    ...preset,
-  }
-}
-
-// Função para validar cores hexadecimais
-export function isValidHexColor(color: string): boolean {
-  return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(color)
-}
-
-// Função para gerar uma cor mais clara ou mais escura
-export function adjustColorBrightness(color: string, amount: number): string {
-  const usePound = color[0] === "#"
-  const col = usePound ? color.slice(1) : color
-
-  const num = Number.parseInt(col, 16)
-  let r = (num >> 16) + amount
-  let g = ((num >> 8) & 0x00ff) + amount
-  let b = (num & 0x0000ff) + amount
-
-  r = r > 255 ? 255 : r < 0 ? 0 : r
-  g = g > 255 ? 255 : g < 0 ? 0 : g
-  b = b > 255 ? 255 : b < 0 ? 0 : b
-
-  return (usePound ? "#" : "") + ((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")
 }

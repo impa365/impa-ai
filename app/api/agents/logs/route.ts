@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { db } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,14 +11,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar se o agente existe
-    const { data: agent, error: agentError } = await supabase.from("ai_agents").select("id").eq("id", agent_id).single()
+    const { data: agent, error: agentError } = await db.agents().select("id").eq("id", agent_id).single()
 
     if (agentError || !agent) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
     // Registrar log
-    const { data, error } = await supabase.from("agent_activity_logs").insert([
+    const { data, error } = await db.activityLogs().insert([
       {
         agent_id,
         activity_type,
@@ -49,8 +49,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Buscar logs do agente
-    const { data, error, count } = await supabase
-      .from("agent_activity_logs")
+    const { data, error, count } = await db
+      .activityLogs()
       .select("*", { count: "exact" })
       .eq("agent_id", agent_id)
       .order("created_at", { ascending: false })
