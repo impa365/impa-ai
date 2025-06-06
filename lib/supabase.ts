@@ -1,44 +1,53 @@
 import { createClient } from "@supabase/supabase-js"
 
-// Configurações do Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supa.impa365.com"
-const supabaseAnonKey =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.cVmHXTXMMB09PuXEMevVuGxV5_ZR4yJly6pF0uab7fA"
-const schemaName = "impaai"
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// Criar cliente Supabase com headers para o schema correto
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   db: {
-    schema: schemaName,
+    schema: "impaai",
   },
   global: {
     headers: {
-      "Accept-Profile": schemaName,
-      "Content-Profile": schemaName,
+      "Accept-Profile": "impaai",
+      "Content-Profile": "impaai",
     },
   },
 })
 
-// Função para acessar qualquer tabela no schema correto
-export function getTable(tableName: string) {
-  return supabase.from(tableName)
+export interface UserProfile {
+  id: string
+  email: string
+  full_name: string
+  role: "admin" | "user"
+  status: "active" | "inactive"
+  created_at: string
+  updated_at: string
+  last_login_at?: string
+  password_hash?: string
 }
 
-// Funções específicas para cada tabela
-export const db = {
-  users: () => getTable("user_profiles"),
-  agents: () => getTable("ai_agents"),
-  whatsappConnections: () => getTable("whatsapp_connections"),
-  activityLogs: () => getTable("agent_activity_logs"),
-  userSettings: () => getTable("user_settings"),
-  systemSettings: () => getTable("system_settings"),
-  themes: () => getTable("system_themes"),
-  integrations: () => getTable("integrations"),
-  vectorStores: () => getTable("vector_stores"),
-  vectorDocuments: () => getTable("vector_documents"),
-  apiKeys: () => getTable("api_keys"),
-  organizations: () => getTable("organizations"),
+export interface Agent {
+  id: string
+  user_id: string
+  name: string
+  description?: string
+  instructions?: string
+  model: string
+  temperature: number
+  max_tokens: number
+  status: "active" | "inactive"
+  created_at: string
+  updated_at: string
 }
 
-export default supabase
+export interface WhatsAppConnection {
+  id: string
+  user_id: string
+  instance_name: string
+  phone_number?: string
+  status: "connected" | "disconnected" | "connecting"
+  qr_code?: string
+  created_at: string
+  updated_at: string
+}

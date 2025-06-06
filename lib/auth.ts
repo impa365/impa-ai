@@ -1,5 +1,16 @@
-import { db } from "@/lib/supabase"
-import type { UserProfile } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
+import bcrypt from "bcryptjs"
+
+export interface UserProfile {
+  id: string
+  email: string
+  full_name: string
+  role: "admin" | "user"
+  status: "active" | "inactive"
+  created_at: string
+  updated_at: string
+  last_login_at?: string
+}
 
 export interface LoginCredentials {
   email: string
@@ -12,45 +23,110 @@ export interface RegisterData {
   full_name: string
 }
 
+// Main signIn function (for compatibility with existing code)
+export async function signIn(email: string, password: string) {
+  try {
+    console.log("🔐 Iniciando processo de login para:", email)
+
+    // Verificar se o usuário existe no banco de dados
+    const { data: users, error: fetchError } = await supabase
+      .from("user_profiles")
+      .select("*")
+      .eq("email", email.trim().toLowerCase())
+      .eq("status", "active")
+
+    if (fetchError || !users || users.length === 0) {
+      console.error("❌ Usuário não encontrado ou inativo:", fetchError?.message)
+      return {
+        user: null,
+        error: { message: "Usuário não encontrado ou inativo" },
+      }
+    }
+
+    const userProfile = users[0]
+    console.log("👤 Usuário encontrado:", userProfile.email)
+
+    // Verificar a senha
+    if (userProfile.password_hash) {
+      console.log("🔍 Verificando senha com hash...")
+
+      // Verificar se a senha está hasheada (começa com $2a$, $2b$, etc.)
+      const isHashed = userProfile.password_hash.startsWith("$2")
+
+      let passwordMatch = false
+
+      if (isHashed) {
+        // Senha hasheada - usar bcrypt.compare
+        passwordMatch = await bcrypt.compare(password, userProfile.password_hash)
+        console.log("🔐 Comparação com bcrypt:", passwordMatch ? "✅ Sucesso" : "❌ Falhou")
+      } else {
+        // Senha em texto plano (usuários antigos) - comparação direta
+        passwordMatch = userProfile.password_hash === password
+        console.log("📝 Comparação texto plano:", passwordMatch ? "✅ Sucesso" : "❌ Falhou")
+      }
+
+      if (passwordMatch) {
+        console.log("✅ Login bem-sucedido!")
+
+        const user = {
+          id: userProfile.id,
+          email: userProfile.email,
+          full_name: userProfile.full_name,
+          role: userProfile.role,
+        }
+
+        // Atualizar último login
+        await supabase
+          .from("user_profiles")
+          .update({ last_login_at: new Date().toISOString() })
+          .eq("id", userProfile.id)
+
+        return {
+          user,
+          error: null,
+        }
+      }
+    } else if (!userProfile.password_hash && password === "impa@senha2025") {
+      // Fallback para usuários sem senha definida (senha padrão)
+      console.warn(`⚠️ Usuário ${email} usando senha padrão`)
+
+      const user = {
+        id: userProfile.id,
+        email: userProfile.email,
+        full_name: userProfile.full_name,
+        role: userProfile.role,
+      }
+
+      await supabase.from("user_profiles").update({ last_login_at: new Date().toISOString() }).eq("id", userProfile.id)
+
+      return { user, error: null }
+    }
+
+    console.warn(`❌ Senha incorreta para ${email}`)
+    return {
+      user: null,
+      error: { message: "Senha incorreta" },
+    }
+  } catch (error: any) {
+    console.error("💥 Erro no login:", error.message)
+    return {
+      user: null,
+      error: { message: "Erro interno do servidor" },
+    }
+  }
+}
+
+// Alternative login function
 export async function loginUser(
   credentials: LoginCredentials,
 ): Promise<{ success: boolean; user?: any; error?: string }> {
-  try {
-    const { email, password } = credentials
+  const result = await signIn(credentials.email, credentials.password)
 
-    // Buscar usuário por email
-    const { data: users, error } = await db.users().select("*").eq("email", email.toLowerCase()).eq("status", "active")
-
-    if (error) {
-      console.error("Erro ao buscar usuário:", error)
-      return { success: false, error: "Erro interno do servidor" }
-    }
-
-    if (!users || users.length === 0) {
-      return { success: false, error: "Email ou senha incorretos" }
-    }
-
-    const user = users[0]
-
-    // Verificar senha (implementação simplificada)
-    const bcrypt = require("bcryptjs")
-    const isValidPassword = await bcrypt.compare(password, user.password_hash)
-
-    if (!isValidPassword) {
-      return { success: false, error: "Email ou senha incorretos" }
-    }
-
-    // Atualizar último login
-    await db.users().update({ last_login_at: new Date().toISOString() }).eq("id", user.id)
-
-    // Remover senha do objeto retornado
-    const { password_hash, ...userWithoutPassword } = user
-
-    return { success: true, user: userWithoutPassword }
-  } catch (error) {
-    console.error("Erro no login:", error)
-    return { success: false, error: "Erro interno do servidor" }
+  if (result.error) {
+    return { success: false, error: result.error.message }
   }
+
+  return { success: true, user: result.user }
 }
 
 export async function registerUser(userData: RegisterData): Promise<{ success: boolean; user?: any; error?: string }> {
@@ -58,7 +134,10 @@ export async function registerUser(userData: RegisterData): Promise<{ success: b
     const { email, password, full_name } = userData
 
     // Verificar se o email já existe
-    const { data: existingUsers, error: checkError } = await db.users().select("id").eq("email", email.toLowerCase())
+    const { data: existingUsers, error: checkError } = await supabase
+      .from("user_profiles")
+      .select("id")
+      .eq("email", email.toLowerCase())
 
     if (checkError) {
       console.error("Erro ao verificar email:", checkError)
@@ -70,13 +149,12 @@ export async function registerUser(userData: RegisterData): Promise<{ success: b
     }
 
     // Hash da senha
-    const bcrypt = require("bcryptjs")
     const saltRounds = 10
     const password_hash = await bcrypt.hash(password, saltRounds)
 
     // Criar usuário
-    const { data: newUser, error: insertError } = await db
-      .users()
+    const { data: newUser, error: insertError } = await supabase
+      .from("user_profiles")
       .insert([
         {
           email: email.toLowerCase(),
@@ -95,7 +173,7 @@ export async function registerUser(userData: RegisterData): Promise<{ success: b
     }
 
     // Criar configurações padrão do usuário
-    await db.userSettings().insert([
+    await supabase.from("user_settings").insert([
       {
         user_id: newUser.id,
         agents_limit: 5,
@@ -151,12 +229,17 @@ export function clearCurrentUser(): void {
   }
 }
 
+// For compatibility with existing code
+export async function signOut() {
+  clearCurrentUser()
+}
+
 export async function updateUserProfile(
   userId: string,
   updates: Partial<UserProfile>,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await db.users().update(updates).eq("id", userId)
+    const { error } = await supabase.from("user_profiles").update(updates).eq("id", userId)
 
     if (error) {
       console.error("Erro ao atualizar perfil:", error)
