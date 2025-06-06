@@ -162,11 +162,40 @@ export function applyThemeColors(theme: ThemeConfig): void {
 // Função para carregar o tema do banco de dados
 export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
   try {
-    // Tenta carregar o tema ativo
-    const { data, error } = await supabase.from("themes").select("*").eq("is_active", true).single()
+    // Primeiro, tentar carregar da tabela system_themes
+    let { data, error } = await supabase.from("system_themes").select("*").eq("is_active", true).single()
+
+    // Se não encontrar na system_themes, tentar na tabela themes
+    if (error && error.code === "PGRST116") {
+      const { data: themeData, error: themeError } = await supabase
+        .from("themes")
+        .select("*")
+        .eq("is_active", true)
+        .single()
+      data = themeData
+      error = themeError
+    }
+
+    // Se ainda não encontrar, tentar carregar das configurações do sistema
+    if (error && error.code === "PGRST116") {
+      const { data: settingsData, error: settingsError } = await supabase
+        .from("system_settings")
+        .select("*")
+        .eq("setting_key", "active_theme")
+        .single()
+
+      if (!settingsError && settingsData?.setting_value) {
+        // Se encontrar configuração de tema, usar o preset correspondente
+        const presetName = settingsData.setting_value
+        if (themePresets[presetName]) {
+          console.log(`Usando preset de tema: ${presetName}`)
+          return themePresets[presetName]
+        }
+      }
+    }
 
     if (error) {
-      console.error("Erro ao carregar tema:", error)
+      console.log("Nenhum tema encontrado no banco, usando tema padrão")
       return null
     }
 
@@ -177,7 +206,7 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
 
     // Mapear os dados do banco para o formato ThemeConfig
     const theme: ThemeConfig = {
-      systemName: data.display_name || defaultTheme.systemName,
+      systemName: data.display_name || data.name || defaultTheme.systemName,
       description: data.description || defaultTheme.description,
       logoIcon: data.logo_icon || defaultTheme.logoIcon,
       primaryColor: data.colors?.primary || defaultTheme.primaryColor,
@@ -190,9 +219,10 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
       customCss: data.custom_css,
     }
 
+    console.log("Tema carregado do banco:", theme)
     return theme
   } catch (error) {
-    console.error("Erro ao carregar tema do banco:", error)
+    console.log("Erro ao carregar tema do banco, usando tema padrão:", error)
     return null
   }
 }
@@ -200,8 +230,8 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
 // Função para salvar o tema no banco de dados
 export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
   try {
-    // Verificar se já existe um tema ativo
-    const { data: existingTheme } = await supabase.from("themes").select("id").eq("is_active", true).single()
+    // Verificar se já existe um tema ativo na tabela system_themes
+    const { data: existingTheme } = await supabase.from("system_themes").select("id").eq("is_active", true).single()
 
     // Preparar os dados para salvar
     const themeData = {
@@ -229,25 +259,58 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
 
     if (existingTheme) {
       // Atualizar tema existente
-      const { error } = await supabase.from("themes").update(themeData).eq("id", existingTheme.id)
+      const { error } = await supabase.from("system_themes").update(themeData).eq("id", existingTheme.id)
 
       if (error) {
         console.error("Erro ao atualizar tema:", error)
-        return false
+        // Fallback: salvar nas configurações do sistema
+        return await saveThemeAsSystemSetting(theme)
       }
     } else {
       // Criar novo tema
-      const { error } = await supabase.from("themes").insert(themeData)
+      const { error } = await supabase.from("system_themes").insert(themeData)
 
       if (error) {
         console.error("Erro ao criar tema:", error)
-        return false
+        // Fallback: salvar nas configurações do sistema
+        return await saveThemeAsSystemSetting(theme)
       }
     }
 
+    console.log("Tema salvo no banco com sucesso")
     return true
   } catch (error) {
     console.error("Erro ao salvar tema no banco:", error)
+    // Fallback: salvar nas configurações do sistema
+    return await saveThemeAsSystemSetting(theme)
+  }
+}
+
+// Função fallback para salvar tema nas configurações do sistema
+async function saveThemeAsSystemSetting(theme: ThemeConfig): Promise<boolean> {
+  try {
+    // Salvar tema completo como JSON nas configurações do sistema
+    const { error } = await supabase.from("system_settings").upsert({
+      setting_key: "current_theme",
+      setting_value: theme,
+      category: "appearance",
+      description: "Configurações do tema atual",
+      is_public: true,
+    })
+
+    if (error) {
+      console.error("Erro ao salvar tema nas configurações:", error)
+      // Último fallback: localStorage
+      saveThemeToLocalStorage(theme)
+      return false
+    }
+
+    console.log("Tema salvo nas configurações do sistema")
+    return true
+  } catch (error) {
+    console.error("Erro ao salvar tema nas configurações:", error)
+    // Último fallback: localStorage
+    saveThemeToLocalStorage(theme)
     return false
   }
 }
@@ -274,6 +337,7 @@ export function saveThemeToLocalStorage(theme: ThemeConfig): void {
 
   try {
     localStorage.setItem("theme", JSON.stringify(theme))
+    console.log("Tema salvo no localStorage")
   } catch (error) {
     console.error("Erro ao salvar tema no localStorage:", error)
   }
@@ -286,9 +350,22 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   const loadTheme = async () => {
     try {
       setIsLoading(true)
-      const loadedTheme = await loadThemeFromDatabase()
-      setTheme(loadedTheme || defaultTheme)
-      applyThemeColors(loadedTheme || defaultTheme)
+
+      // Tentar carregar do banco primeiro
+      let loadedTheme = await loadThemeFromDatabase()
+
+      // Se não conseguir do banco, tentar localStorage
+      if (!loadedTheme) {
+        loadedTheme = loadThemeFromLocalStorage()
+      }
+
+      // Se ainda não tiver tema, usar o padrão
+      const finalTheme = loadedTheme || defaultTheme
+
+      setTheme(finalTheme)
+      applyThemeColors(finalTheme)
+
+      console.log("Tema carregado:", finalTheme)
     } catch (error) {
       console.error("Error loading theme:", error)
       setTheme(defaultTheme)
@@ -303,9 +380,18 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
       const newTheme = { ...theme, ...updates }
       setTheme(newTheme)
       applyThemeColors(newTheme)
-      await saveThemeToDatabase(newTheme)
+
+      // Tentar salvar no banco, se falhar salva no localStorage
+      const saved = await saveThemeToDatabase(newTheme)
+      if (!saved) {
+        saveThemeToLocalStorage(newTheme)
+      }
+
+      console.log("Tema atualizado:", newTheme)
     } catch (error) {
       console.error("Error updating theme:", error)
+      // Fallback para localStorage
+      saveThemeToLocalStorage({ ...theme, ...updates })
     }
   }
 
