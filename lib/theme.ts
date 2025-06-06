@@ -43,68 +43,96 @@ export const useTheme = () => useContext(ThemeContext)
 
 export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
   try {
-    // First, try to get the first available theme configuration
-    const { data, error } = await supabase.from("global_theme_config").select("*").limit(1)
+    // Usar explicitamente o schema impaai e a tabela system_themes
+    const { data, error } = await supabase.from("impaai.system_themes").select("*").eq("is_default", true).limit(1)
 
     if (error) {
       console.error("Error loading theme:", error)
       return defaultTheme
     }
 
-    // If no data found, return default theme
+    // Se não encontrar tema padrão, tenta qualquer tema ativo
     if (!data || data.length === 0) {
-      console.log("No theme configuration found, using default theme")
-      return defaultTheme
+      const { data: activeTheme, error: activeError } = await supabase
+        .from("impaai.system_themes")
+        .select("*")
+        .eq("is_active", true)
+        .limit(1)
+
+      if (activeError || !activeTheme || activeTheme.length === 0) {
+        console.log("No theme configuration found, using default theme")
+        return defaultTheme
+      }
+
+      return mapThemeFromDatabase(activeTheme[0])
     }
 
-    // Use the first row found
-    const themeData = data[0]
-
-    return {
-      systemName: themeData.system_name || defaultTheme.systemName,
-      description: themeData.description || defaultTheme.description,
-      logoIcon: themeData.logo_icon || defaultTheme.logoIcon,
-      primaryColor: themeData.primary_color || defaultTheme.primaryColor,
-      secondaryColor: themeData.secondary_color || defaultTheme.secondaryColor,
-      accentColor: themeData.accent_color || defaultTheme.accentColor,
-      logoUrl: themeData.logo_url,
-      faviconUrl: themeData.favicon_url,
-      sidebarStyle: themeData.sidebar_style || defaultTheme.sidebarStyle,
-      brandingEnabled: themeData.branding_enabled ?? defaultTheme.brandingEnabled,
-    }
+    return mapThemeFromDatabase(data[0])
   } catch (error) {
     console.error("Error loading theme from database:", error)
     return defaultTheme
   }
 }
 
+// Função auxiliar para mapear os campos do banco para o formato ThemeConfig
+function mapThemeFromDatabase(themeData: any): ThemeConfig {
+  // Extrair cores do JSON
+  const colors = themeData.colors || {}
+
+  return {
+    systemName: themeData.display_name || defaultTheme.systemName,
+    description: themeData.description || defaultTheme.description,
+    logoIcon: defaultTheme.logoIcon, // Usar o padrão já que não temos esse campo
+    primaryColor: colors.primary || defaultTheme.primaryColor,
+    secondaryColor: colors.secondary || defaultTheme.secondaryColor,
+    accentColor: colors.accent || defaultTheme.accentColor,
+    logoUrl: themeData.preview_image_url,
+    faviconUrl: undefined,
+    sidebarStyle: defaultTheme.sidebarStyle,
+    brandingEnabled: true,
+  }
+}
+
 export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
   try {
-    // First, check if any theme configuration exists
-    const { data: existingData } = await supabase.from("global_theme_config").select("id").limit(1)
+    // Verificar se existe um tema padrão
+    const { data: existingData } = await supabase
+      .from("impaai.system_themes")
+      .select("id")
+      .eq("is_default", true)
+      .limit(1)
 
     let themeId: string
 
     if (existingData && existingData.length > 0) {
-      // Use existing ID
+      // Usar ID existente
       themeId = existingData[0].id
     } else {
-      // Generate new ID
-      themeId = "550e8400-e29b-41d4-a716-446655440000"
+      // Gerar novo ID
+      themeId = crypto.randomUUID()
     }
 
-    const { error } = await supabase.from("global_theme_config").upsert({
+    // Preparar objeto de cores
+    const colors = {
+      primary: theme.primaryColor,
+      secondary: theme.secondaryColor,
+      accent: theme.accentColor,
+      background: "#FFFFFF",
+      surface: "#F8FAFC",
+      text: "#1E293B",
+      border: "#E2E8F0",
+    }
+
+    // Salvar no banco
+    const { error } = await supabase.from("impaai.system_themes").upsert({
       id: themeId,
-      system_name: theme.systemName,
+      name: "custom",
+      display_name: theme.systemName,
       description: theme.description,
-      logo_icon: theme.logoIcon,
-      primary_color: theme.primaryColor,
-      secondary_color: theme.secondaryColor,
-      accent_color: theme.accentColor,
-      logo_url: theme.logoUrl,
-      favicon_url: theme.faviconUrl,
-      sidebar_style: theme.sidebarStyle,
-      branding_enabled: theme.brandingEnabled,
+      colors: colors,
+      preview_image_url: theme.logoUrl,
+      is_default: true,
+      is_active: true,
       updated_at: new Date().toISOString(),
     })
 
