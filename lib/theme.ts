@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext } from "react"
+import { supabase } from "./supabase"
 
 export interface ThemeConfig {
   systemName: string
@@ -42,20 +43,115 @@ export const useTheme = () => useContext(ThemeContext)
 
 export async function loadThemeFromDatabase(): Promise<ThemeConfig> {
   try {
-    // Por enquanto, sempre retornar o tema padrão
-    // Isso evita problemas de permissão até que o usuário esteja logado
-    console.log("Using default theme (database access disabled for now)")
-    return defaultTheme
+    // Buscar o tema ativo do schema impaai
+    const { data, error } = await supabase.from("impaai.system_themes").select("*").eq("is_active", true).limit(1)
+
+    if (error) {
+      console.error("Error loading theme:", error)
+      return defaultTheme
+    }
+
+    // Se não encontrar tema ativo, tenta buscar o tema padrão
+    if (!data || data.length === 0) {
+      const { data: defaultData, error: defaultError } = await supabase
+        .from("impaai.system_themes")
+        .select("*")
+        .eq("is_default", true)
+        .limit(1)
+
+      if (defaultError || !defaultData || defaultData.length === 0) {
+        console.log("No theme configuration found, using default theme")
+        return defaultTheme
+      }
+
+      return mapThemeDataToConfig(defaultData[0])
+    }
+
+    // Usar o tema ativo encontrado
+    return mapThemeDataToConfig(data[0])
   } catch (error) {
     console.error("Error loading theme from database:", error)
     return defaultTheme
   }
 }
 
+// Função auxiliar para mapear dados do banco para o formato ThemeConfig
+function mapThemeDataToConfig(themeData: any): ThemeConfig {
+  // Extrair cores do objeto JSON
+  const colors = themeData.colors || {}
+
+  return {
+    systemName: themeData.display_name || defaultTheme.systemName,
+    description: themeData.description || defaultTheme.description,
+    logoIcon: defaultTheme.logoIcon, // Usar o padrão já que não temos esse campo
+    primaryColor: colors.primary || defaultTheme.primaryColor,
+    secondaryColor: colors.secondary || defaultTheme.secondaryColor,
+    accentColor: colors.accent || defaultTheme.accentColor,
+    logoUrl: themeData.preview_image_url,
+    faviconUrl: undefined, // Não temos esse campo no novo schema
+    sidebarStyle: defaultTheme.sidebarStyle, // Usar o padrão
+    brandingEnabled: true, // Sempre habilitado no novo schema
+  }
+}
+
 export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
   try {
-    // Por enquanto, apenas simular o salvamento
-    console.log("Theme save simulated (database access disabled for now)")
+    // Verificar se já existe um tema com o mesmo nome
+    const themeName = theme.systemName.toLowerCase().replace(/\s+/g, "_")
+
+    const { data: existingData } = await supabase
+      .from("impaai.system_themes")
+      .select("id")
+      .eq("name", themeName)
+      .limit(1)
+
+    const colors = {
+      primary: theme.primaryColor,
+      secondary: theme.secondaryColor,
+      accent: theme.accentColor,
+      background: "#FFFFFF",
+      surface: "#F8FAFC",
+      text: "#1E293B",
+      border: "#E2E8F0",
+    }
+
+    if (existingData && existingData.length > 0) {
+      // Atualizar tema existente
+      const { error } = await supabase
+        .from("impaai.system_themes")
+        .update({
+          display_name: theme.systemName,
+          description: theme.description,
+          colors: colors,
+          preview_image_url: theme.logoUrl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingData[0].id)
+
+      if (error) {
+        console.error("Error updating theme:", error)
+        return false
+      }
+    } else {
+      // Criar novo tema
+      const { error } = await supabase.from("impaai.system_themes").insert({
+        name: themeName,
+        display_name: theme.systemName,
+        description: theme.description,
+        colors: colors,
+        preview_image_url: theme.logoUrl,
+        is_default: false,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+
+      if (error) {
+        console.error("Error creating theme:", error)
+        return false
+      }
+    }
+
     return true
   } catch (error) {
     console.error("Error saving theme to database:", error)

@@ -6,28 +6,18 @@ const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.cVmHXTXMMB09PuXEMevVuGxV5_ZR4yJly6pF0uab7fA"
 
-// Criar cliente Supabase básico (sem schema específico por enquanto)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+// Opções para usar o schema impaai
+const options = {
+  schema: "impaai",
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
-})
-
-// Função para obter o cliente com schema específico (para uso após login)
-export function getSupabaseClient(schema = "impaai") {
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    db: {
-      schema: schema,
-    },
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  })
 }
+
+// Criar cliente Supabase com schema impaai
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, options)
 
 // Exportar createClient como named export
 export { createClient }
