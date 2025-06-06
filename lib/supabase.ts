@@ -1,32 +1,44 @@
 import { createClient } from "@supabase/supabase-js"
-import { SUPABASE_CONFIG } from "./supabase-config"
+import { supabaseConfig, defaultHeaders, restApiUrls } from "./supabase-config"
 
-// Cliente Supabase com configuração centralizada
-export const supabase = createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
+// Cliente Supabase com configurações corretas
+export const supabase = createClient(supabaseConfig.url, supabaseConfig.anonKey, {
   db: {
-    schema: SUPABASE_CONFIG.schema,
+    schema: supabaseConfig.schema,
   },
   global: {
-    headers: {
-      "Accept-Profile": SUPABASE_CONFIG.schema,
-    },
+    headers: supabaseConfig.headers,
   },
 })
 
-// Função para fazer requisições REST diretas
-export async function fetchRest(
-  table: string,
-  options: {
-    select?: string
-    filters?: Record<string, any>
-    limit?: number
-    offset?: number
-    order?: { column: string; ascending?: boolean }
-  } = {},
-) {
+// Cliente para operações administrativas
+export const supabaseAdmin = createClient(supabaseConfig.url, supabaseConfig.serviceRoleKey, {
+  db: {
+    schema: supabaseConfig.schema,
+  },
+  global: {
+    headers: supabaseConfig.headers,
+  },
+})
+
+// Interface para filtros REST
+interface RestFilters {
+  [key: string]: any
+}
+
+interface RestOptions {
+  select?: string
+  filters?: RestFilters
+  limit?: number
+  offset?: number
+  order?: string
+}
+
+// Função genérica para fazer requisições REST
+async function fetchRest(endpoint: string, options: RestOptions = {}) {
   const { select = "*", filters = {}, limit, offset, order } = options
 
-  let url = `${SUPABASE_CONFIG.url}/rest/v1/${table}?select=${select}`
+  let url = `${endpoint}?select=${select}`
 
   // Adicionar filtros
   Object.entries(filters).forEach(([key, value]) => {
@@ -43,19 +55,13 @@ export async function fetchRest(
     url += `&offset=${offset}`
   }
 
-  // Adicionar ordenação
+  // Adicionar order
   if (order) {
-    url += `&order=${order.column}.${order.ascending !== false ? "asc" : "desc"}`
+    url += `&order=${order}`
   }
 
   const response = await fetch(url, {
-    headers: {
-      "Accept-Profile": SUPABASE_CONFIG.schema,
-      "Content-Profile": SUPABASE_CONFIG.schema,
-      apikey: SUPABASE_CONFIG.anonKey,
-      Authorization: `Bearer ${SUPABASE_CONFIG.anonKey}`,
-      "Content-Type": "application/json",
-    },
+    headers: defaultHeaders,
   })
 
   if (!response.ok) {
@@ -92,11 +98,14 @@ export const db = {
   integrations: () => supabase.from("integrations"),
 
   // Chaves de API
-  apiKeys: () => supabase.from("api_keys"),
-
-  // Vector Stores
-  vectorStores: () => supabase.from("vector_stores"),
+  apiKeys: () => supabase.from("user_api_keys"),
 
   // Função REST genérica
-  fetchRest,
+  fetchRest: (table: string, options?: RestOptions) => {
+    const endpoint = `${restApiUrls.base}/${table}`
+    return fetchRest(endpoint, options)
+  },
 }
+
+// Exportar cliente padrão
+export default supabase
