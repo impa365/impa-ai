@@ -106,55 +106,68 @@ export default function AdminSettingsPage() {
   }, [theme])
 
   const fetchSystemSettings = async () => {
-    const { data: limitData } = await supabase
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "default_whatsapp_connections_limit")
-      .single()
+    try {
+      const { data: limitData } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", "default_whatsapp_connections_limit")
+        .single()
 
-    const { data: agentsLimitData } = await supabase
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "default_agents_limit")
-      .single()
+      const { data: agentsLimitData } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", "default_agents_limit")
+        .single()
 
-    const { data: registrationData } = await supabase
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "allow_public_registration")
-      .single()
+      const { data: registrationData } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", "allow_public_registration")
+        .single()
 
-    setSystemSettings({
-      defaultWhatsAppLimit: limitData?.setting_value || 2,
-      defaultAgentsLimit: agentsLimitData?.setting_value || 5,
-      allowPublicRegistration: registrationData?.setting_value === true,
-    })
+      setSystemSettings({
+        defaultWhatsAppLimit: limitData?.setting_value || 2,
+        defaultAgentsLimit: agentsLimitData?.setting_value || 5,
+        allowPublicRegistration: registrationData?.setting_value === true,
+      })
+    } catch (error) {
+      console.log("Configurações do sistema não encontradas, usando valores padrão")
+      // Manter valores padrão se a tabela não existir
+    }
   }
 
   const saveSystemSettings = async () => {
     setSaving(true)
     try {
-      // Atualizar cada configuração individualmente
-      const { error: limitError } = await supabase
-        .from("system_settings")
-        .update({ setting_value: systemSettings.defaultWhatsAppLimit })
-        .eq("setting_key", "default_whatsapp_connections_limit")
+      // Tentar criar as configurações se não existirem
+      const settingsToUpsert = [
+        {
+          setting_key: "default_whatsapp_connections_limit",
+          setting_value: systemSettings.defaultWhatsAppLimit,
+          category: "limits",
+          description: "Limite padrão de conexões WhatsApp para novos usuários",
+        },
+        {
+          setting_key: "default_agents_limit",
+          setting_value: systemSettings.defaultAgentsLimit,
+          category: "limits",
+          description: "Limite padrão de agentes IA para novos usuários",
+        },
+        {
+          setting_key: "allow_public_registration",
+          setting_value: systemSettings.allowPublicRegistration,
+          category: "auth",
+          description: "Permitir cadastro público de usuários",
+        },
+      ]
 
-      const { error: agentsLimitError } = await supabase
-        .from("system_settings")
-        .update({ setting_value: systemSettings.defaultAgentsLimit })
-        .eq("setting_key", "default_agents_limit")
+      for (const setting of settingsToUpsert) {
+        const { error } = await supabase.from("system_settings").upsert(setting, { onConflict: "setting_key" })
 
-      const { error: registrationError } = await supabase
-        .from("system_settings")
-        .update({ setting_value: systemSettings.allowPublicRegistration })
-        .eq("setting_key", "allow_public_registration")
-
-      if (limitError || agentsLimitError || registrationError) {
-        console.error("Limit error:", limitError)
-        console.error("Agents limit error:", agentsLimitError)
-        console.error("Registration error:", registrationError)
-        throw new Error("Erro ao salvar configurações")
+        if (error) {
+          console.error(`Erro ao salvar ${setting.setting_key}:`, error)
+          throw error
+        }
       }
 
       setSaveMessage("Configurações do sistema salvas com sucesso!")
@@ -422,14 +435,17 @@ export default function AdminSettingsPage() {
       const { data, error } = await supabase.from("integrations").select("*").order("created_at", { ascending: false })
 
       if (error) {
-        console.error("Erro ao buscar integrações:", error)
+        console.log("Tabela de integrações não encontrada, usando configurações padrão")
+        // Se a tabela não existir, usar configurações padrão
+        setIntegrations([])
         return
       }
 
       console.log("Integrações carregadas:", data)
       if (data) setIntegrations(data)
     } catch (err) {
-      console.error("Erro ao buscar integrações:", err)
+      console.log("Erro ao buscar integrações, usando configurações padrão:", err)
+      setIntegrations([])
     }
   }
 
@@ -970,6 +986,13 @@ export default function AdminSettingsPage() {
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-2">Integrações Disponíveis</h3>
           <p className="text-gray-600">Configure as integrações para expandir as funcionalidades da plataforma</p>
+          {integrations.length === 0 && (
+            <Alert className="mt-4">
+              <AlertDescription>
+                A tabela de integrações não foi encontrada. Execute o script SQL para criar a estrutura necessária.
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
