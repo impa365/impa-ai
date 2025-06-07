@@ -726,38 +726,49 @@ export default function AdminSettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="systemName">Nome do Sistema</Label>
+                <Label htmlFor="systemName" className="text-gray-900 dark:text-gray-100">
+                  Nome do Sistema
+                </Label>
                 <Input
                   id="systemName"
                   value={brandingForm.systemName}
                   onChange={(e) => handleBrandingChange({ systemName: e.target.value })}
                   placeholder="Nome da sua plataforma"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
               </div>
 
               <div>
-                <Label htmlFor="description">Descrição</Label>
+                <Label htmlFor="description" className="text-gray-900 dark:text-gray-100">
+                  Descrição
+                </Label>
                 <Textarea
                   id="description"
                   value={brandingForm.description || ""}
                   onChange={(e) => handleBrandingChange({ description: e.target.value })}
                   placeholder="Descrição da sua plataforma"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
               </div>
 
               <div>
-                <Label htmlFor="logoIcon">Ícone/Emoji do Logo</Label>
+                <Label htmlFor="logoIcon" className="text-gray-900 dark:text-gray-100">
+                  Ícone/Emoji do Logo
+                </Label>
                 <Input
                   id="logoIcon"
                   value={brandingForm.logoIcon}
                   onChange={(e) => handleBrandingChange({ logoIcon: e.target.value })}
                   placeholder="🤖"
                   maxLength={2}
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
               </div>
 
               <div>
-                <Label htmlFor="logoUpload">Upload de Logo</Label>
+                <Label htmlFor="logoUpload" className="text-gray-900 dark:text-gray-100">
+                  Upload de Logo
+                </Label>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Button
@@ -786,7 +797,9 @@ export default function AdminSettingsPage() {
               </div>
 
               <div>
-                <Label htmlFor="faviconUpload">Upload de Favicon</Label>
+                <Label htmlFor="faviconUpload" className="text-gray-900 dark:text-gray-100">
+                  Upload de Favicon
+                </Label>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Button
@@ -822,58 +835,64 @@ export default function AdminSettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="primaryColor">Cor Primária</Label>
+                <Label htmlFor="primaryColor" className="text-gray-900 dark:text-gray-100">
+                  Cor Primária
+                </Label>
                 <div className="flex gap-2">
                   <Input
                     id="primaryColor"
                     type="color"
                     value={brandingForm.primaryColor}
                     onChange={(e) => handleBrandingChange({ primaryColor: e.target.value })}
-                    className="w-16 h-10"
+                    className="w-16 h-10 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <Input
                     value={brandingForm.primaryColor}
                     onChange={(e) => handleBrandingChange({ primaryColor: e.target.value })}
                     placeholder="#2563eb"
-                    className="flex-1"
+                    className="flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="secondaryColor">Cor Secundária</Label>
+                <Label htmlFor="secondaryColor" className="text-gray-900 dark:text-gray-100">
+                  Cor Secundária
+                </Label>
                 <div className="flex gap-2">
                   <Input
                     id="secondaryColor"
                     type="color"
                     value={brandingForm.secondaryColor}
                     onChange={(e) => handleBrandingChange({ secondaryColor: e.target.value })}
-                    className="w-16 h-10"
+                    className="w-16 h-10 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <Input
                     value={brandingForm.secondaryColor}
                     onChange={(e) => handleBrandingChange({ secondaryColor: e.target.value })}
                     placeholder="#10b981"
-                    className="flex-1"
+                    className="flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="accentColor">Cor de Destaque</Label>
+                <Label htmlFor="accentColor" className="text-gray-900 dark:text-gray-100">
+                  Cor de Destaque
+                </Label>
                 <div className="flex gap-2">
                   <Input
                     id="accentColor"
                     type="color"
                     value={brandingForm.accentColor}
                     onChange={(e) => handleBrandingChange({ accentColor: e.target.value })}
-                    className="w-16 h-10"
+                    className="w-16 h-10 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <Input
                     value={brandingForm.accentColor}
                     onChange={(e) => handleBrandingChange({ accentColor: e.target.value })}
                     placeholder="#8b5cf6"
-                    className="flex-1"
+                    className="flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                 </div>
               </div>
@@ -1086,8 +1105,10 @@ export default function AdminSettingsPage() {
         <Dialog open={integrationModalOpen} onOpenChange={setIntegrationModalOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Configurar {selectedIntegration?.name}</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-gray-900 dark:text-gray-100">
+                Configurar {selectedIntegration?.name}
+              </DialogTitle>
+              <DialogDescription className="text-gray-600 dark:text-gray-400">
                 Configure as credenciais para integração com {selectedIntegration?.name}
               </DialogDescription>
             </DialogHeader>
@@ -1096,17 +1117,22 @@ export default function AdminSettingsPage() {
               {selectedIntegration?.type === "evolution_api" && (
                 <>
                   <div>
-                    <Label htmlFor="evolutionApiUrl">URL da API Evolution *</Label>
+                    <Label htmlFor="evolutionApiUrl" className="text-gray-900 dark:text-gray-100">
+                      URL da API Evolution *
+                    </Label>
                     <Input
                       id="evolutionApiUrl"
                       value={integrationForm.evolutionApiUrl}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, evolutionApiUrl: e.target.value })}
                       placeholder="https://api.evolution.com"
                       required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="evolutionApiKey">API Key Global *</Label>
+                    <Label htmlFor="evolutionApiKey" className="text-gray-900 dark:text-gray-100">
+                      API Key Global *
+                    </Label>
                     <Input
                       id="evolutionApiKey"
                       type="password"
@@ -1114,6 +1140,7 @@ export default function AdminSettingsPage() {
                       onChange={(e) => setIntegrationForm({ ...integrationForm, evolutionApiKey: e.target.value })}
                       placeholder="Sua API Key"
                       required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
                   </div>
                 </>
@@ -1122,23 +1149,29 @@ export default function AdminSettingsPage() {
               {selectedIntegration?.type === "n8n" && (
                 <>
                   <div>
-                    <Label htmlFor="n8nFlowUrl">URL do Fluxo *</Label>
+                    <Label htmlFor="n8nFlowUrl" className="text-gray-900 dark:text-gray-100">
+                      URL do Fluxo *
+                    </Label>
                     <Input
                       id="n8nFlowUrl"
                       value={integrationForm.n8nFlowUrl}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, n8nFlowUrl: e.target.value })}
                       placeholder="https://n8n.exemplo.com/webhook/..."
                       required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="n8nApiKey">API Key do Fluxo (Opcional)</Label>
+                    <Label htmlFor="n8nApiKey" className="text-gray-900 dark:text-gray-100">
+                      API Key do Fluxo (Opcional)
+                    </Label>
                     <Input
                       id="n8nApiKey"
                       type="password"
                       value={integrationForm.n8nApiKey}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, n8nApiKey: e.target.value })}
                       placeholder="API Key (se necessário)"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
                   </div>
                 </>
@@ -1146,13 +1179,17 @@ export default function AdminSettingsPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIntegrationModalOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setIntegrationModalOpen(false)}
+                className="text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+              >
                 Cancelar
               </Button>
               <Button
                 onClick={() => handleIntegrationSave(selectedIntegration?.type)}
                 disabled={saving}
-                className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+                className="gap-2 bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
               >
                 {saving ? "Salvando..." : "Salvar"}
               </Button>
