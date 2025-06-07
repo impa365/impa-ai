@@ -102,13 +102,12 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <Key className="w-5 h-5" />
             Alterar Senha do Usuário
           </DialogTitle>
-          <DialogDescription className="text-gray-600 dark:text-gray-400">
-            Alterando senha para: <strong className="text-gray-900 dark:text-gray-100">{user?.full_name}</strong> (
-            {user?.email})
+          <DialogDescription className="text-muted-foreground">
+            Alterando senha para: <strong className="text-foreground">{user?.full_name}</strong> ({user?.email})
           </DialogDescription>
         </DialogHeader>
 
@@ -126,7 +125,7 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
 
         <div className="space-y-4">
           <div>
-            <Label htmlFor="newPassword" className="text-gray-900 dark:text-gray-100">
+            <Label htmlFor="newPassword" className="text-foreground">
               Nova Senha *
             </Label>
             <div className="relative">
@@ -137,7 +136,7 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
                 onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
                 placeholder="Digite a nova senha"
                 disabled={loading}
-                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                className="text-foreground"
               />
               <Button
                 type="button"
@@ -195,18 +194,13 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            disabled={loading}
-            className="text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-          >
+          <Button variant="outline" onClick={handleClose} disabled={loading} className="text-foreground">
             Cancelar
           </Button>
           <Button
             onClick={handleSave}
             disabled={loading || success !== ""}
-            className="bg-orange-600 text-white hover:bg-orange-700 dark:bg-orange-700 dark:hover:bg-orange-800"
+            className="bg-orange-600 text-white hover:bg-orange-700"
           >
             {loading ? (
               <>

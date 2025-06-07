@@ -469,8 +469,8 @@ export default function AdminSettingsPage() {
   const renderAdminProfileSettings = () => (
     <div>
       <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2">Perfil do Administrador</h3>
-        <p className="text-gray-600">Gerencie suas informações pessoais e senha</p>
+        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Perfil do Administrador</h3>
+        <p className="text-gray-600 dark:text-gray-400">Gerencie suas informações pessoais e senha</p>
       </div>
 
       {adminProfileMessage && (
@@ -482,26 +482,32 @@ export default function AdminSettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Informações Pessoais</CardTitle>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Informações Pessoais</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="adminFullName">Nome Completo</Label>
+              <Label htmlFor="adminFullName" className="text-gray-900 dark:text-gray-100">
+                Nome Completo
+              </Label>
               <Input
                 id="adminFullName"
                 value={adminProfileForm.full_name}
                 onChange={(e) => setAdminProfileForm({ ...adminProfileForm, full_name: e.target.value })}
                 placeholder="Seu nome completo"
+                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
               />
             </div>
             <div>
-              <Label htmlFor="adminEmail">Email</Label>
+              <Label htmlFor="adminEmail" className="text-gray-900 dark:text-gray-100">
+                Email
+              </Label>
               <Input
                 id="adminEmail"
                 type="email"
                 value={adminProfileForm.email}
                 onChange={(e) => setAdminProfileForm({ ...adminProfileForm, email: e.target.value })}
                 placeholder="seu@email.com"
+                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
               />
             </div>
           </CardContent>
@@ -509,11 +515,13 @@ export default function AdminSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Alterar Senha</CardTitle>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Alterar Senha</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="adminCurrentPassword">Senha Atual</Label>
+              <Label htmlFor="adminCurrentPassword" className="text-gray-900 dark:text-gray-100">
+                Senha Atual
+              </Label>
               <div className="relative">
                 <Input
                   id="adminCurrentPassword"
@@ -521,6 +529,7 @@ export default function AdminSettingsPage() {
                   value={adminProfileForm.currentPassword}
                   onChange={(e) => setAdminProfileForm({ ...adminProfileForm, currentPassword: e.target.value })}
                   placeholder="Senha atual"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
                 <Button
                   type="button"
@@ -534,7 +543,9 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div>
-              <Label htmlFor="adminNewPassword">Nova Senha</Label>
+              <Label htmlFor="adminNewPassword" className="text-gray-900 dark:text-gray-100">
+                Nova Senha
+              </Label>
               <div className="relative">
                 <Input
                   id="adminNewPassword"
@@ -542,6 +553,7 @@ export default function AdminSettingsPage() {
                   value={adminProfileForm.newPassword}
                   onChange={(e) => setAdminProfileForm({ ...adminProfileForm, newPassword: e.target.value })}
                   placeholder="Nova senha"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
                 <Button
                   type="button"
@@ -555,7 +567,9 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div>
-              <Label htmlFor="adminConfirmPassword">Confirmar Nova Senha</Label>
+              <Label htmlFor="adminConfirmPassword" className="text-gray-900 dark:text-gray-100">
+                Confirmar Nova Senha
+              </Label>
               <div className="relative">
                 <Input
                   id="adminConfirmPassword"
@@ -563,6 +577,7 @@ export default function AdminSettingsPage() {
                   value={adminProfileForm.confirmPassword}
                   onChange={(e) => setAdminProfileForm({ ...adminProfileForm, confirmPassword: e.target.value })}
                   placeholder="Confirme a nova senha"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
                 <Button
                   type="button"
@@ -594,18 +609,20 @@ export default function AdminSettingsPage() {
   const renderSystemSettings = () => (
     <div>
       <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2">Configurações do Sistema</h3>
-        <p className="text-gray-600">Configure parâmetros globais da plataforma</p>
+        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Configurações do Sistema</h3>
+        <p className="text-gray-600 dark:text-gray-400">Configure parâmetros globais da plataforma</p>
       </div>
 
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Limites e Restrições</CardTitle>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Limites e Restrições</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="defaultWhatsAppLimit">Limite Padrão de Conexões WhatsApp</Label>
+              <Label htmlFor="defaultWhatsAppLimit" className="text-gray-900 dark:text-gray-100">
+                Limite Padrão de Conexões WhatsApp
+              </Label>
               <Input
                 id="defaultWhatsAppLimit"
                 type="number"
@@ -618,14 +635,16 @@ export default function AdminSettingsPage() {
                 }
                 min="1"
                 max="50"
-                className="w-32"
+                className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Número máximo de conexões WhatsApp que novos usuários podem criar
               </p>
             </div>
             <div>
-              <Label htmlFor="defaultAgentsLimit">Limite Padrão de Agentes IA</Label>
+              <Label htmlFor="defaultAgentsLimit" className="text-gray-900 dark:text-gray-100">
+                Limite Padrão de Agentes IA
+              </Label>
               <Input
                 id="defaultAgentsLimit"
                 type="number"
@@ -638,22 +657,28 @@ export default function AdminSettingsPage() {
                 }
                 min="1"
                 max="100"
-                className="w-32"
+                className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
               />
-              <p className="text-xs text-gray-500 mt-1">Número máximo de agentes IA que novos usuários podem criar</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Número máximo de agentes IA que novos usuários podem criar
+              </p>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Cadastro de Usuários</CardTitle>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Cadastro de Usuários</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <Label htmlFor="allowRegistration">Permitir Cadastro Público</Label>
-                <p className="text-xs text-gray-500 mt-1">Permite que novos usuários se cadastrem na tela de login</p>
+                <Label htmlFor="allowRegistration" className="text-gray-900 dark:text-gray-100">
+                  Permitir Cadastro Público
+                </Label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Permite que novos usuários se cadastrem na tela de login
+                </p>
               </div>
               <div className="flex items-center space-x-2">
                 <input
@@ -668,7 +693,7 @@ export default function AdminSettingsPage() {
                   }
                   className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                 />
-                <span className="text-sm font-medium">
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   {systemSettings.allowPublicRegistration ? "Habilitado" : "Desabilitado"}
                 </span>
               </div>
@@ -722,7 +747,7 @@ export default function AdminSettingsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Branding e Identidade</CardTitle>
+              <CardTitle className="text-gray-900 dark:text-gray-100">Branding e Identidade</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -831,7 +856,7 @@ export default function AdminSettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Esquema de Cores</CardTitle>
+              <CardTitle className="text-gray-900 dark:text-gray-100">Esquema de Cores</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -901,7 +926,7 @@ export default function AdminSettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Temas Predefinidos</CardTitle>
+              <CardTitle className="text-gray-900 dark:text-gray-100">Temas Predefinidos</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3">
@@ -927,7 +952,7 @@ export default function AdminSettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Preview</CardTitle>
+              <CardTitle className="text-gray-900 dark:text-gray-100">Preview</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="border rounded-lg p-4 bg-gray-50">
@@ -962,7 +987,7 @@ export default function AdminSettingsPage() {
         <div className="flex justify-between items-center pt-6 border-t">
           <div className="flex items-center gap-2">
             {brandingChanged && (
-              <div className="text-sm text-amber-600 bg-amber-50 px-3 py-1 rounded-md">
+              <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/50 px-3 py-1 rounded-md">
                 Você tem alterações não salvas
               </div>
             )}
@@ -1019,8 +1044,10 @@ export default function AdminSettingsPage() {
     return (
       <div>
         <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-2">Integrações Disponíveis</h3>
-          <p className="text-gray-600">Configure as integrações para expandir as funcionalidades da plataforma</p>
+          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Integrações Disponíveis</h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Configure as integrações para expandir as funcionalidades da plataforma
+          </p>
 
           {saveMessage.includes("Tabela") && (
             <Alert className="mt-4" variant="destructive">
@@ -1051,8 +1078,8 @@ export default function AdminSettingsPage() {
                   className="rounded"
                 />
               </div>
-              <h4 className="font-semibold mb-2">Evolution API</h4>
-              <p className="text-sm text-gray-600 mb-4">Integração com WhatsApp Business</p>
+              <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Evolution API</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Integração com WhatsApp Business</p>
               <Button
                 onClick={() => openIntegrationModal("evolution_api", "Evolution API")}
                 className={
@@ -1073,8 +1100,8 @@ export default function AdminSettingsPage() {
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Image src="/images/n8n-logo.png" alt="n8n" width={40} height={40} className="rounded" />
               </div>
-              <h4 className="font-semibold mb-2">n8n</h4>
-              <p className="text-sm text-gray-600 mb-4">Automação de fluxos de trabalho</p>
+              <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">n8n</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Automação de fluxos de trabalho</p>
               <Button
                 onClick={() => openIntegrationModal("n8n", "n8n")}
                 className={
@@ -1204,8 +1231,8 @@ export default function AdminSettingsPage() {
     <div className="p-6">
       <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Configurações do Sistema</h1>
-          <p className="text-gray-600">Personalize a plataforma e configure integrações</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Configurações do Sistema</h1>
+          <p className="text-gray-600 dark:text-gray-400">Personalize a plataforma e configure integrações</p>
         </div>
         <div className="flex items-center gap-4">
           {saveMessage && (
@@ -1219,7 +1246,10 @@ export default function AdminSettingsPage() {
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2 text-gray-700 border-gray-300 hover:bg-gray-50">
+              <Button
+                variant="outline"
+                className="gap-2 text-gray-700 dark:text-gray-300 border-gray-300 hover:bg-gray-50"
+              >
                 {settingsSubTab === "profile" ? (
                   <>
                     <User className="w-4 h-4" />
@@ -1247,28 +1277,28 @@ export default function AdminSettingsPage() {
             <DropdownMenuContent align="end" className="bg-white border border-gray-200">
               <DropdownMenuItem
                 onClick={() => setSettingsSubTab("profile")}
-                className="text-gray-700 hover:bg-gray-100 focus:bg-gray-100"
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
               >
                 <User className="w-4 h-4 mr-2" />
                 Perfil
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setSettingsSubTab("system")}
-                className="text-gray-700 hover:bg-gray-100 focus:bg-gray-100"
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
               >
                 <SettingsIcon className="w-4 h-4 mr-2" />
                 Sistema
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setSettingsSubTab("branding")}
-                className="text-gray-700 hover:bg-gray-100 focus:bg-gray-100"
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
               >
                 <Palette className="w-4 h-4 mr-2" />
                 Branding
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setSettingsSubTab("integrations")}
-                className="text-gray-700 hover:bg-gray-100 focus:bg-gray-100"
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
               >
                 <Plug className="w-4 h-4 mr-2" />
                 Integrações

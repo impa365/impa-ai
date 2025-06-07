@@ -1,9 +1,14 @@
 "use client"
 
-import { DialogFooter } from "@/components/ui/dialog"
-
 import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -207,11 +212,11 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <User className="w-5 h-5" />
             {user ? "Editar Usuário" : "Novo Usuário"}
           </DialogTitle>
-          <DialogDescription className="text-gray-600 dark:text-gray-400">
+          <DialogDescription className="text-muted-foreground">
             {user
               ? `Editando: ${formData.full_name || formData.email || user.full_name || user.email}`
               : "Preencha os dados do novo usuário"}
@@ -232,7 +237,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         ) : (
           <div className="space-y-4">
             <div>
-              <Label htmlFor="fullName" className="text-gray-900 dark:text-gray-100">
+              <Label htmlFor="fullName" className="text-foreground">
                 Nome Completo *
               </Label>
               <Input
@@ -241,12 +246,12 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                 onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                 placeholder="Nome completo do usuário"
                 disabled={loading}
-                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                className="text-foreground"
               />
             </div>
 
             <div>
-              <Label htmlFor="email" className="text-gray-900 dark:text-gray-100">
+              <Label htmlFor="email" className="text-foreground">
                 Email *
               </Label>
               <Input
@@ -256,13 +261,13 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="email@exemplo.com"
                 disabled={loading}
-                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                className="text-foreground"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="role" className="text-gray-900 dark:text-gray-100">
+                <Label htmlFor="role" className="text-foreground">
                   Função
                 </Label>
                 <Select
@@ -270,10 +275,10 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                   onValueChange={(value) => setFormData({ ...formData, role: value })}
                   disabled={loading}
                 >
-                  <SelectTrigger className="text-gray-900 dark:text-gray-100">
+                  <SelectTrigger className="text-foreground">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                  <SelectContent>
                     <SelectItem value="user">Usuário</SelectItem>
                     <SelectItem value="admin">Administrador</SelectItem>
                   </SelectContent>
@@ -281,7 +286,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
               </div>
 
               <div>
-                <Label htmlFor="status" className="text-gray-900 dark:text-gray-100">
+                <Label htmlFor="status" className="text-foreground">
                   Status
                 </Label>
                 <Select
@@ -289,10 +294,10 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                   onValueChange={(value) => setFormData({ ...formData, status: value })}
                   disabled={loading}
                 >
-                  <SelectTrigger className="text-gray-900 dark:text-gray-100">
+                  <SelectTrigger className="text-foreground">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                  <SelectContent>
                     <SelectItem value="active">Ativo</SelectItem>
                     <SelectItem value="inactive">Inativo</SelectItem>
                     <SelectItem value="suspended">Suspenso</SelectItem>
@@ -303,7 +308,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             </div>
 
             <div>
-              <Label htmlFor="whatsappLimit" className="text-gray-900 dark:text-gray-100">
+              <Label htmlFor="whatsappLimit" className="text-foreground">
                 Limite de Conexões WhatsApp
               </Label>
               <Input
@@ -319,12 +324,12 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                 min="0"
                 max="100"
                 disabled={loading}
-                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                className="text-foreground"
               />
             </div>
 
             <div>
-              <Label htmlFor="agentsLimit" className="text-gray-900 dark:text-gray-100">
+              <Label htmlFor="agentsLimit" className="text-foreground">
                 Limite de Agentes IA
               </Label>
               <Input
@@ -340,7 +345,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                 min="0"
                 max="100"
                 disabled={loading}
-                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                className="text-foreground"
               />
             </div>
 
@@ -357,18 +362,13 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         )}
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            disabled={loading || loadingData}
-            className="text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-          >
+          <Button variant="outline" onClick={handleClose} disabled={loading || loadingData} className="text-foreground">
             Cancelar
           </Button>
           <Button
             onClick={handleSave}
             disabled={loading || loadingData}
-            className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+            className="bg-blue-600 text-white hover:bg-blue-700"
           >
             {loading ? (
               <>
