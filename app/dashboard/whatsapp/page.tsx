@@ -261,15 +261,15 @@ export default function WhatsAppPage() {
     <div className="p-6">
       <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Conexões WhatsApp</h1>
-          <p className="text-gray-600">Gerencie suas conexões do WhatsApp Business</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Conexões WhatsApp</h1>
+          <p className="text-gray-600 dark:text-gray-400">Gerencie suas conexões do WhatsApp Business</p>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
             onClick={handleManualSync}
             disabled={syncing}
-            className="gap-2"
+            className="gap-2 text-gray-700 dark:text-gray-300"
             title="Sincronizar status das conexões"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
@@ -290,7 +290,7 @@ export default function WhatsAppPage() {
       <Card className="mb-6">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Filtros</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Filtros</h3>
             <Button
               variant="outline"
               size="sm"
@@ -356,8 +356,8 @@ export default function WhatsAppPage() {
             <Smartphone className="w-16 h-16 text-gray-300 mb-4" />
             {whatsappConnections.length === 0 ? (
               <>
-                <h4 className="text-lg font-medium mb-2">Nenhuma conexão WhatsApp</h4>
-                <p className="text-gray-600 text-center mb-6">
+                <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Nenhuma conexão WhatsApp</h4>
+                <p className="text-gray-600 dark:text-gray-400 text-center mb-6">
                   Conecte seu WhatsApp para começar a usar os agentes de IA
                 </p>
                 <Button
@@ -371,8 +371,12 @@ export default function WhatsAppPage() {
               </>
             ) : (
               <>
-                <h4 className="text-lg font-medium mb-2">Nenhuma conexão encontrada</h4>
-                <p className="text-gray-600 text-center mb-6">Nenhuma conexão corresponde aos filtros aplicados</p>
+                <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                  Nenhuma conexão encontrada
+                </h4>
+                <p className="text-gray-600 dark:text-gray-400 text-center mb-6">
+                  Nenhuma conexão corresponde aos filtros aplicados
+                </p>
                 <Button variant="outline" onClick={clearFilters}>
                   Limpar Filtros
                 </Button>
@@ -391,8 +395,8 @@ export default function WhatsAppPage() {
                       <Smartphone className="w-5 h-5 text-green-600" />
                     </div>
                     <div>
-                      <div className="font-medium">{connection.connection_name}</div>
-                      <div className="text-sm text-gray-600">
+                      <div className="font-medium text-gray-900 dark:text-gray-100">{connection.connection_name}</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
                         {connection.status === "connected"
                           ? connection.phone_number || "Conectado"
                           : connection.status === "connecting"

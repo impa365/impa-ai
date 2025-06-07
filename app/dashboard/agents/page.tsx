@@ -291,7 +291,7 @@ export default function AgentsPage() {
           <Card key={agent.id} className="overflow-hidden hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="text-lg flex items-center gap-2 text-foreground">
                   <Bot className="h-5 w-5 text-primary" />
                   {agent.name}
                 </CardTitle>
@@ -300,7 +300,9 @@ export default function AgentsPage() {
                 )}
               </div>
               {agent.description && (
-                <CardDescription className="line-clamp-2 text-sm">{agent.description}</CardDescription>
+                <CardDescription className="line-clamp-2 text-sm text-muted-foreground">
+                  {agent.description}
+                </CardDescription>
               )}
             </CardHeader>
             <CardContent className="pb-3">
@@ -388,7 +390,7 @@ export default function AgentsPage() {
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Meus Agentes</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Meus Agentes</h1>
           <p className="text-muted-foreground">Gerencie seus agentes de IA e suas configurações</p>
         </div>
         <Button

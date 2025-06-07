@@ -266,15 +266,15 @@ export default function AdminWhatsAppPage() {
     <div className="p-6">
       <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Conexões WhatsApp</h1>
-          <p className="text-gray-600">Todas as conexões WhatsApp dos usuários</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Conexões WhatsApp</h1>
+          <p className="text-gray-600 dark:text-gray-400">Todas as conexões WhatsApp dos usuários</p>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
             onClick={handleManualSync}
             disabled={syncing}
-            className="gap-2"
+            className="gap-2 text-gray-700 dark:text-gray-300"
             title="Sincronizar status das conexões"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
@@ -402,7 +402,7 @@ export default function AdminWhatsAppPage() {
                     </div>
                     <div>
                       <div className="font-medium">{connection.connection_name}</div>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
                         Usuário:{" "}
                         {connection.user_profiles?.full_name || connection.user_profiles?.email || "Desconhecido"}
                       </div>

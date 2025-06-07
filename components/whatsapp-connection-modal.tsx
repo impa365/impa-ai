@@ -136,7 +136,7 @@ export default function WhatsAppConnectionModal({
                 maxLength={20}
                 className="text-foreground"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground mt-1">
                 Use apenas letras, números e underscores. Mínimo 3 caracteres.
               </p>
             </div>
