@@ -274,11 +274,11 @@ export default function AdminWhatsAppPage() {
             variant="outline"
             onClick={handleManualSync}
             disabled={syncing}
-            className="gap-2"
+            className="gap-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-gray-900"
             title="Sincronizar status das conexões"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Sincronizando..." : "Sincronizar"}
+            <span className="text-gray-700">{syncing ? "Sincronizando..." : "Sincronizar"}</span>
           </Button>
           <Button onClick={() => setCreateModalOpen(true)} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
             <Plus className="w-4 h-4" />
