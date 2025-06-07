@@ -35,22 +35,39 @@ export default function AdminUsersPage() {
 
   const fetchUsers = async () => {
     try {
-      // Buscar usuários com suas configurações
+      // Buscar usuários com suas configurações diretamente de user_profiles
       const { data: usersData, error } = await supabase
         .from("user_profiles")
         .select(`
-          *,
-          user_settings(whatsapp_connections_limit)
-        `)
+        id,
+        full_name,
+        email,
+        role,
+        status,
+        last_login_at,
+        created_at,
+        agents_limit,
+        connections_limit 
+      `)
         .order("created_at", { ascending: false })
 
+      if (error) {
+        console.error("Erro ao buscar usuários:", error)
+        setSaveMessage("Erro ao buscar usuários: " + error.message)
+        setUsers([])
+        setLoading(false)
+        return
+      }
+
       if (usersData) {
-        // Mapear os dados para incluir o limite de conexões
-        const usersWithSettings = usersData.map((user) => ({
+        // Mapear os dados para usar os nomes corretos das colunas
+        const mappedUsers = usersData.map((user) => ({
           ...user,
-          whatsapp_connections_limit: user.user_settings?.[0]?.whatsapp_connections_limit || 2,
+          // Os limites agora vêm diretamente da tabela user_profiles
+          // Se connections_limit for null, usar um valor padrão (ex: 2)
+          whatsapp_connections_limit: user.connections_limit || 2,
         }))
-        setUsers(usersWithSettings)
+        setUsers(mappedUsers)
       }
     } catch (error) {
       console.error("Erro ao buscar usuários:", error)
@@ -65,7 +82,7 @@ export default function AdminUsersPage() {
     setSaving(true)
     try {
       await supabase.from("whatsapp_connections").delete().eq("user_id", userToDelete.id)
-      await supabase.from("user_settings").delete().eq("user_id", userToDelete.id)
+      await supabase.from("user_agent_settings").delete().eq("user_id", userToDelete.id)
       const { error } = await supabase.from("user_profiles").delete().eq("id", userToDelete.id)
 
       if (error) throw error
@@ -145,7 +162,7 @@ export default function AdminUsersPage() {
                     <div className="font-medium">{user.full_name || "Sem nome"}</div>
                     <div className="text-sm text-gray-600">{user.email}</div>
                     <div className="text-xs text-gray-500">
-                      Último login: {user.last_login ? new Date(user.last_login).toLocaleDateString() : "Nunca"}
+                      Último login: {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : "Nunca"}
                       {" • "}
                       Limite WhatsApp: {user.whatsapp_connections_limit} conexões
                     </div>
