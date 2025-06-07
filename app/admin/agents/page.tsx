@@ -184,8 +184,8 @@ export default function AdminAgentsPage() {
     <div className="p-6">
       <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Gerenciar Agentes IA</h1>
-          <p className="text-gray-600 dark:text-gray-400">Administre todos os agentes do sistema</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Gerenciar Agentes IA</h1>
+          <p className="text-gray-600">Administre todos os agentes do sistema</p>
         </div>
         <Button onClick={handleCreateAgent} className="bg-blue-600 hover:bg-blue-700 text-white">
           <Plus className="w-4 h-4 mr-2" />
@@ -196,7 +196,7 @@ export default function AdminAgentsPage() {
       {/* Filtros */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
+          <CardTitle className="flex items-center gap-2">
             <Filter className="w-5 h-5" />
             Filtros
           </CardTitle>

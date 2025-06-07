@@ -426,11 +426,11 @@ export function AgentModal({
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto p-0">
         <form onSubmit={handleSubmit}>
           <DialogHeader className="p-6 pb-4 border-b">
-            <DialogTitle className="text-2xl font-bold flex items-center text-foreground">
+            <DialogTitle className="text-2xl font-bold flex items-center text-gray-900 dark:text-gray-100">
               <Bot className="w-7 h-7 mr-2 text-primary" />
               {isEditing ? "Editar Agente de IA" : "Criar Novo Agente de IA"}
             </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
               Configure sua Inteligência Artificial para WhatsApp. Preencha os campos abaixo para definir como sua IA
               irá se comportar e responder aos usuários.
             </DialogDescription>
@@ -450,14 +450,14 @@ export function AgentModal({
             {/* Informações Básicas da IA */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center text-lg text-foreground">
+                <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
                   <Bot className="w-5 h-5 mr-2" />
                   Informações Básicas da IA
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="name" className="text-foreground">
+                  <Label htmlFor="name" className="text-gray-900 dark:text-gray-100">
                     Nome da IA *
                   </Label>
                   <Input
@@ -467,14 +467,15 @@ export function AgentModal({
                     onChange={handleInputChange}
                     placeholder="Ex: Luna, Assistente de Vendas, Bot Atendimento"
                     required
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     Este será o nome que identifica sua IA no sistema
                   </p>
                 </div>
 
                 <div>
-                  <Label htmlFor="description" className="text-foreground">
+                  <Label htmlFor="description" className="text-gray-900 dark:text-gray-100">
                     Descrição do Propósito da IA
                   </Label>
                   <Textarea
@@ -484,15 +485,16 @@ export function AgentModal({
                     onChange={handleInputChange}
                     placeholder="Ex: IA especializada em vendas de produtos digitais, focada em qualificar leads e agendar reuniões"
                     rows={3}
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     Descreva qual é o objetivo principal desta IA (vendas, suporte, agendamento, etc.)
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="main_function" className="text-foreground">
+                    <Label htmlFor="main_function" className="text-gray-900 dark:text-gray-100">
                       Função Principal
                     </Label>
                     <Select
@@ -500,10 +502,10 @@ export function AgentModal({
                       value={formData.main_function || ""}
                       onValueChange={(value) => handleSelectChange("main_function", value)}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione a função" className="text-foreground" />
+                      <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                        <SelectValue placeholder="Selecione a função" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
                         <SelectItem value="atendimento">Atendimento ao Cliente</SelectItem>
                         <SelectItem value="vendas">Vendas e Conversão</SelectItem>
                         <SelectItem value="agendamento">Agendamento de Reuniões</SelectItem>
@@ -514,7 +516,7 @@ export function AgentModal({
                   </div>
 
                   <div>
-                    <Label htmlFor="voice_tone" className="text-foreground">
+                    <Label htmlFor="voice_tone" className="text-gray-900 dark:text-gray-100">
                       Tom de Voz
                     </Label>
                     <Select
@@ -522,10 +524,10 @@ export function AgentModal({
                       value={formData.voice_tone || ""}
                       onValueChange={(value) => handleSelectChange("voice_tone", value)}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o tom" className="text-foreground" />
+                      <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                        <SelectValue placeholder="Selecione o tom" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
                         <SelectItem value="humanizado">Humanizado e Empático</SelectItem>
                         <SelectItem value="formal">Formal e Profissional</SelectItem>
                         <SelectItem value="tecnico">Técnico e Direto</SelectItem>
@@ -537,7 +539,7 @@ export function AgentModal({
                 </div>
 
                 <div>
-                  <Label htmlFor="whatsapp_connection_id" className="text-foreground">
+                  <Label htmlFor="whatsapp_connection_id" className="text-gray-900 dark:text-gray-100">
                     Conexão WhatsApp *
                   </Label>
                   <Select
@@ -545,13 +547,10 @@ export function AgentModal({
                     value={formData.whatsapp_connection_id || ""}
                     onValueChange={(value) => handleSelectChange("whatsapp_connection_id", value)}
                   >
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder="Selecione qual número WhatsApp esta IA irá usar"
-                        className="text-foreground"
-                      />
+                    <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                      <SelectValue placeholder="Selecione qual número WhatsApp esta IA irá usar" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
                       {whatsappConnections.map((conn) => (
                         <SelectItem key={conn.id} value={conn.id}>
                           {conn.connection_name} ({conn.phone_number || "Número não disponível"})
@@ -559,7 +558,7 @@ export function AgentModal({
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     Escolha qual número de WhatsApp esta IA irá utilizar para conversar
                   </p>
                 </div>
@@ -569,14 +568,14 @@ export function AgentModal({
             {/* Personalidade e Comportamento */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center text-lg text-foreground">
+                <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
                   <MessageSquare className="w-5 h-5 mr-2" />
                   Personalidade e Comportamento
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="identity_description" className="text-foreground">
+                  <Label htmlFor="identity_description" className="text-gray-900 dark:text-gray-100">
                     Como a IA se Apresenta
                   </Label>
                   <Textarea
@@ -586,14 +585,15 @@ export function AgentModal({
                     onChange={handleInputChange}
                     placeholder="Ex: Olá! Eu sou a Luna, sua assistente virtual especializada em vendas. Estou aqui para te ajudar a encontrar a melhor solução para suas necessidades."
                     rows={3}
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     Como a IA irá se apresentar quando alguém iniciar uma conversa
                   </p>
                 </div>
 
                 <div>
-                  <Label htmlFor="training_prompt" className="text-foreground">
+                  <Label htmlFor="training_prompt" className="text-gray-900 dark:text-gray-100">
                     Instruções de Comportamento (Prompt de Treinamento) *
                   </Label>
                   <Textarea
@@ -604,14 +604,15 @@ export function AgentModal({
                     placeholder="Ex: Você é uma assistente de vendas especializada em produtos digitais. Seja sempre educada, faça perguntas para entender as necessidades do cliente, e conduza a conversa para agendar uma reunião. Nunca invente informações que não possui."
                     rows={6}
                     required
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     Instruções detalhadas sobre como a IA deve se comportar, responder e agir durante as conversas
                   </p>
                 </div>
 
                 <div>
-                  <Label htmlFor="temperature" className="text-foreground">
+                  <Label htmlFor="temperature" className="text-gray-900 dark:text-gray-100">
                     Criatividade das Respostas: {(formData.temperature || 0.7).toFixed(1)}
                   </Label>
                   <Slider
@@ -623,7 +624,7 @@ export function AgentModal({
                     value={[formData.temperature || 0.7]}
                     onValueChange={(value) => handleSliderChange("temperature", value)}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     0 = Respostas mais previsíveis e consistentes | 2 = Respostas mais criativas e variadas
                   </p>
                 </div>
@@ -633,14 +634,14 @@ export function AgentModal({
             {/* Configurações de Ativação */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center text-lg text-foreground">
+                <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
                   <Settings className="w-5 h-5 mr-2" />
                   Configurações de Ativação e Controle
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="activation_keyword" className="text-foreground">
+                  <Label htmlFor="activation_keyword" className="text-gray-900 dark:text-gray-100">
                     Palavra-chave para Ativar a IA *
                   </Label>
                   <Input
@@ -648,14 +649,15 @@ export function AgentModal({
                     value={formData.model_config?.activation_keyword || ""}
                     onChange={(e) => handleConfigChange("activation_keyword", e.target.value)}
                     placeholder="Ex: /bot, !assistente, oi"
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     Palavra que o usuário deve enviar para iniciar a conversa com a IA
                   </p>
                 </div>
 
                 <div>
-                  <Label htmlFor="keyword_finish" className="text-foreground">
+                  <Label htmlFor="keyword_finish" className="text-gray-900 dark:text-gray-100">
                     Palavra para Encerrar Conversa
                   </Label>
                   <Input
@@ -663,14 +665,15 @@ export function AgentModal({
                     value={formData.model_config?.keyword_finish || ""}
                     onChange={(e) => handleConfigChange("keyword_finish", e.target.value)}
                     placeholder="Ex: #sair, /parar, tchau"
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     Palavra que o usuário pode enviar para encerrar a conversa com a IA
                   </p>
                 </div>
 
                 <div>
-                  <Label htmlFor="unknown_message" className="text-foreground">
+                  <Label htmlFor="unknown_message" className="text-gray-900 dark:text-gray-100">
                     Mensagem para Comandos Não Reconhecidos
                   </Label>
                   <Textarea
@@ -679,15 +682,16 @@ export function AgentModal({
                     onChange={(e) => handleConfigChange("unknown_message", e.target.value)}
                     placeholder="Ex: Desculpe, não entendi. Digite '/bot' para falar comigo."
                     rows={2}
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     Mensagem enviada quando alguém escreve algo que não ativa a IA
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="delay_message" className="text-foreground">
+                    <Label htmlFor="delay_message" className="text-gray-900 dark:text-gray-100">
                       Delay entre Mensagens (ms)
                     </Label>
                     <Input
@@ -696,14 +700,15 @@ export function AgentModal({
                       value={formData.model_config?.delay_message || 1000}
                       onChange={(e) => handleConfigChange("delay_message", Number.parseInt(e.target.value))}
                       placeholder="1000"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                       Tempo de espera entre mensagens (em milissegundos)
                     </p>
                   </div>
 
                   <div>
-                    <Label htmlFor="debounce_time" className="text-foreground">
+                    <Label htmlFor="debounce_time" className="text-gray-900 dark:text-gray-100">
                       Tempo de Debounce (segundos)
                     </Label>
                     <Input
@@ -712,8 +717,9 @@ export function AgentModal({
                       value={formData.model_config?.debounce_time || 10}
                       onChange={(e) => handleConfigChange("debounce_time", Number.parseInt(e.target.value))}
                       placeholder="10"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                       Tempo para aguardar antes de processar mensagem
                     </p>
                   </div>
@@ -722,10 +728,12 @@ export function AgentModal({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="listening_from_me" className="text-foreground">
+                      <Label htmlFor="listening_from_me" className="text-gray-900 dark:text-gray-100">
                         Ouvir Mensagens Minhas
                       </Label>
-                      <p className="text-xs text-muted-foreground">A IA responde quando EU envio mensagens</p>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        A IA responde quando EU envio mensagens
+                      </p>
                     </div>
                     <Switch
                       id="listening_from_me"
@@ -737,10 +745,12 @@ export function AgentModal({
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="stop_bot_from_me" className="text-foreground">
+                      <Label htmlFor="stop_bot_from_me" className="text-gray-900 dark:text-gray-100">
                         Parar Bot por Mim
                       </Label>
-                      <p className="text-xs text-muted-foreground">Eu posso parar a IA enviando mensagens</p>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Eu posso parar a IA enviando mensagens
+                      </p>
                     </div>
                     <Switch
                       id="stop_bot_from_me"
@@ -752,10 +762,12 @@ export function AgentModal({
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="keep_open" className="text-foreground">
+                      <Label htmlFor="keep_open" className="text-gray-900 dark:text-gray-100">
                         Manter Conversa Aberta
                       </Label>
-                      <p className="text-xs text-muted-foreground">A IA continua respondendo sem precisar reativar</p>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        A IA continua respondendo sem precisar reativar
+                      </p>
                     </div>
                     <Switch
                       id="keep_open"
@@ -767,10 +779,12 @@ export function AgentModal({
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="split_messages" className="text-foreground">
+                      <Label htmlFor="split_messages" className="text-gray-900 dark:text-gray-100">
                         Dividir Mensagens Longas
                       </Label>
-                      <p className="text-xs text-muted-foreground">Quebra respostas longas em várias mensagens</p>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Quebra respostas longas em várias mensagens
+                      </p>
                     </div>
                     <Switch
                       id="split_messages"
@@ -783,7 +797,7 @@ export function AgentModal({
 
                 {formData.model_config?.split_messages && (
                   <div>
-                    <Label htmlFor="time_per_char" className="text-foreground">
+                    <Label htmlFor="time_per_char" className="text-gray-900 dark:text-gray-100">
                       Tempo por Caractere (ms)
                     </Label>
                     <Input
@@ -792,8 +806,9 @@ export function AgentModal({
                       value={formData.model_config?.time_per_char || 100}
                       onChange={(e) => handleConfigChange("time_per_char", Number.parseInt(e.target.value))}
                       placeholder="100"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                       Tempo de espera por caractere ao dividir mensagens
                     </p>
                   </div>
@@ -804,7 +819,7 @@ export function AgentModal({
             {/* Funcionalidades Extras */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center text-lg text-foreground">
+                <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
                   <Volume2 className="w-5 h-5 mr-2" />
                   Funcionalidades Extras
                 </CardTitle>
@@ -813,10 +828,12 @@ export function AgentModal({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="transcribe_audio" className="text-foreground">
+                      <Label htmlFor="transcribe_audio" className="text-gray-900 dark:text-gray-100">
                         Transcrever Áudios
                       </Label>
-                      <p className="text-xs text-muted-foreground">Converte áudios recebidos em texto</p>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Converte áudios recebidos em texto
+                      </p>
                     </div>
                     <Switch
                       id="transcribe_audio"
@@ -828,10 +845,12 @@ export function AgentModal({
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="understand_images" className="text-foreground">
+                      <Label htmlFor="understand_images" className="text-gray-900 dark:text-gray-100">
                         Analisar Imagens
                       </Label>
-                      <p className="text-xs text-muted-foreground">Entende e descreve imagens enviadas</p>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Entende e descreve imagens enviadas
+                      </p>
                     </div>
                     <Switch
                       id="understand_images"
@@ -846,10 +865,12 @@ export function AgentModal({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="voice_response_enabled" className="text-foreground">
+                      <Label htmlFor="voice_response_enabled" className="text-gray-900 dark:text-gray-100">
                         Resposta por Voz
                       </Label>
-                      <p className="text-xs text-muted-foreground">Envia respostas em áudio além do texto</p>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Envia respostas em áudio além do texto
+                      </p>
                     </div>
                     <Switch
                       id="voice_response_enabled"
@@ -864,7 +885,7 @@ export function AgentModal({
                   {formData.voice_response_enabled && (
                     <div className="space-y-3 pl-4 border-l-2 border-blue-200 bg-blue-50 p-4 rounded">
                       <div>
-                        <Label htmlFor="voice_provider" className="text-foreground">
+                        <Label htmlFor="voice_provider" className="text-gray-900 dark:text-gray-100">
                           Provedor de Voz
                         </Label>
                         <Select
@@ -872,17 +893,17 @@ export function AgentModal({
                           value={formData.voice_provider || ""}
                           onValueChange={(value) => handleSelectChange("voice_provider", value)}
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o provedor" className="text-foreground" />
+                          <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                            <SelectValue placeholder="Selecione o provedor" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
                             <SelectItem value="eleven_labs">ElevenLabs (Recomendado)</SelectItem>
                             <SelectItem value="fish_audio">Fish Audio</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="voice_api_key" className="text-foreground">
+                        <Label htmlFor="voice_api_key" className="text-gray-900 dark:text-gray-100">
                           Chave da API do Provedor de Voz
                         </Label>
                         <div className="relative">
@@ -893,6 +914,7 @@ export function AgentModal({
                             value={formData.voice_api_key || ""}
                             onChange={handleInputChange}
                             placeholder="Sua chave da API do provedor de voz"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                           />
                           <Button
                             type="button"
@@ -906,7 +928,7 @@ export function AgentModal({
                         </div>
                       </div>
                       <div>
-                        <Label htmlFor="voice_id" className="text-foreground">
+                        <Label htmlFor="voice_id" className="text-gray-900 dark:text-gray-100">
                           ID da Voz
                         </Label>
                         <Input
@@ -914,8 +936,9 @@ export function AgentModal({
                           value={formData.model_config?.voice_id || ""}
                           onChange={(e) => handleConfigChange("voice_id", e.target.value)}
                           placeholder="ID específico da voz no provedor (ex: pMsXgVXv3BLzUgSXRplE)"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                         />
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                           Encontre este ID na plataforma do seu provedor de voz
                         </p>
                       </div>
@@ -927,10 +950,12 @@ export function AgentModal({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="calendar_integration" className="text-foreground">
+                      <Label htmlFor="calendar_integration" className="text-gray-900 dark:text-gray-100">
                         Agendamento de Reuniões
                       </Label>
-                      <p className="text-xs text-muted-foreground">Permite agendar reuniões via calendário</p>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Permite agendar reuniões via calendário
+                      </p>
                     </div>
                     <Switch
                       id="calendar_integration"
@@ -943,7 +968,7 @@ export function AgentModal({
                   {formData.calendar_integration && (
                     <div className="space-y-3 pl-4 border-l-2 border-green-200 bg-green-50 p-4 rounded">
                       <div>
-                        <Label htmlFor="calendar_api_key" className="text-foreground">
+                        <Label htmlFor="calendar_api_key" className="text-gray-900 dark:text-gray-100">
                           Chave da API do Calendário
                         </Label>
                         <div className="relative">
@@ -954,6 +979,7 @@ export function AgentModal({
                             value={formData.calendar_api_key || ""}
                             onChange={handleInputChange}
                             placeholder="Sua chave da API do calendário (Cal.com, Calendly, etc.)"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                           />
                           <Button
                             type="button"
@@ -967,7 +993,7 @@ export function AgentModal({
                         </div>
                       </div>
                       <div>
-                        <Label htmlFor="calendar_event_id" className="text-foreground">
+                        <Label htmlFor="calendar_event_id" className="text-gray-900 dark:text-gray-100">
                           ID da Agenda/Evento
                         </Label>
                         <Input
@@ -975,8 +1001,9 @@ export function AgentModal({
                           value={formData.model_config?.calendar_event_id || ""}
                           onChange={(e) => handleConfigChange("calendar_event_id", e.target.value)}
                           placeholder="ID do tipo de evento no seu calendário"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                         />
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                           ID específico do tipo de reunião que será agendada
                         </p>
                       </div>
@@ -986,10 +1013,12 @@ export function AgentModal({
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label htmlFor="is_default" className="text-foreground">
+                    <Label htmlFor="is_default" className="text-gray-900 dark:text-gray-100">
                       IA Padrão desta Conexão
                     </Label>
-                    <p className="text-xs text-muted-foreground">Esta será a IA principal deste número WhatsApp</p>
+                    <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                      Esta será a IA principal deste número WhatsApp
+                    </p>
                   </div>
                   <Switch
                     id="is_default"
@@ -1004,13 +1033,13 @@ export function AgentModal({
             {/* Integrações de Vector Store */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center text-lg text-foreground">
+                <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
                   <Database className="w-5 h-5 mr-2" />
                   Integrações de Vector Store (Base de Conhecimento)
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="text-sm text-muted-foreground mb-4">
+                <div className="text-sm text-muted-foreground mb-4 text-gray-500 dark:text-gray-400">
                   <Brain className="w-4 h-4 inline mr-1" />
                   Vector stores permitem que sua IA tenha acesso a uma base de conhecimento específica, melhorando a
                   qualidade das respostas.
@@ -1020,10 +1049,12 @@ export function AgentModal({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="chatnode_integration" className="text-foreground">
+                      <Label htmlFor="chatnode_integration" className="text-gray-900 dark:text-gray-100">
                         ChatNode.ai
                       </Label>
-                      <p className="text-xs text-muted-foreground">Integração com base de conhecimento ChatNode.ai</p>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Integração com base de conhecimento ChatNode.ai
+                      </p>
                     </div>
                     <Switch
                       id="chatnode_integration"
@@ -1036,7 +1067,7 @@ export function AgentModal({
                   {formData.chatnode_integration && (
                     <div className="space-y-3 pl-4 border-l-2 border-purple-200 bg-purple-50 p-4 rounded">
                       <div>
-                        <Label htmlFor="chatnode_api_key" className="text-foreground">
+                        <Label htmlFor="chatnode_api_key" className="text-gray-900 dark:text-gray-100">
                           Chave da API ChatNode.ai
                         </Label>
                         <div className="relative">
@@ -1047,6 +1078,7 @@ export function AgentModal({
                             value={formData.chatnode_api_key || ""}
                             onChange={handleInputChange}
                             placeholder="Sua chave da API do ChatNode.ai"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                           />
                           <Button
                             type="button"
@@ -1060,7 +1092,7 @@ export function AgentModal({
                         </div>
                       </div>
                       <div>
-                        <Label htmlFor="chatnode_bot_id" className="text-foreground">
+                        <Label htmlFor="chatnode_bot_id" className="text-gray-900 dark:text-gray-100">
                           ID do Bot ChatNode.ai
                         </Label>
                         <Input
@@ -1069,8 +1101,11 @@ export function AgentModal({
                           value={formData.chatnode_bot_id || ""}
                           onChange={handleInputChange}
                           placeholder="ID do seu bot no ChatNode.ai"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                         />
-                        <p className="text-xs text-muted-foreground mt-1">Encontre este ID no painel do ChatNode.ai</p>
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          Encontre este ID no painel do ChatNode.ai
+                        </p>
                       </div>
                     </div>
                   )}
@@ -1080,10 +1115,12 @@ export function AgentModal({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="orimon_integration" className="text-foreground">
+                      <Label htmlFor="orimon_integration" className="text-gray-900 dark:text-gray-100">
                         Orimon.ai
                       </Label>
-                      <p className="text-xs text-muted-foreground">Integração com base de conhecimento Orimon.ai</p>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Integração com base de conhecimento Orimon.ai
+                      </p>
                     </div>
                     <Switch
                       id="orimon_integration"
@@ -1096,7 +1133,7 @@ export function AgentModal({
                   {formData.orimon_integration && (
                     <div className="space-y-3 pl-4 border-l-2 border-orange-200 bg-orange-50 p-4 rounded">
                       <div>
-                        <Label htmlFor="orimon_api_key" className="text-foreground">
+                        <Label htmlFor="orimon_api_key" className="text-gray-900 dark:text-gray-100">
                           Chave da API Orimon.ai
                         </Label>
                         <div className="relative">
@@ -1107,6 +1144,7 @@ export function AgentModal({
                             value={formData.orimon_api_key || ""}
                             onChange={handleInputChange}
                             placeholder="Sua chave da API do Orimon.ai"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                           />
                           <Button
                             type="button"
@@ -1120,7 +1158,7 @@ export function AgentModal({
                         </div>
                       </div>
                       <div>
-                        <Label htmlFor="orimon_bot_id" className="text-foreground">
+                        <Label htmlFor="orimon_bot_id" className="text-gray-900 dark:text-gray-100">
                           ID do Bot Orimon.ai
                         </Label>
                         <Input
@@ -1129,8 +1167,11 @@ export function AgentModal({
                           value={formData.orimon_bot_id || ""}
                           onChange={handleInputChange}
                           placeholder="ID do seu bot no Orimon.ai"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                         />
-                        <p className="text-xs text-muted-foreground mt-1">Encontre este ID no painel do Orimon.ai</p>
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          Encontre este ID no painel do Orimon.ai
+                        </p>
                       </div>
                     </div>
                   )}

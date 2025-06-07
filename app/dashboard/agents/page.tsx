@@ -277,8 +277,8 @@ export default function AgentsPage() {
       return (
         <div className="flex flex-col items-center justify-center p-8 text-center">
           <Bot className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">Nenhum agente encontrado</h3>
-          <p className="text-sm text-muted-foreground mt-2">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Nenhum agente encontrado</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
             Crie seu primeiro agente para começar a usar a plataforma
           </p>
         </div>
@@ -291,7 +291,7 @@ export default function AgentsPage() {
           <Card key={agent.id} className="overflow-hidden hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+                <CardTitle className="text-lg flex items-center gap-2 text-gray-900 dark:text-gray-100">
                   <Bot className="h-5 w-5 text-primary" />
                   {agent.name}
                 </CardTitle>
@@ -300,7 +300,7 @@ export default function AgentsPage() {
                 )}
               </div>
               {agent.description && (
-                <CardDescription className="line-clamp-2 text-sm text-muted-foreground">
+                <CardDescription className="line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
                   {agent.description}
                 </CardDescription>
               )}
@@ -390,8 +390,8 @@ export default function AgentsPage() {
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Meus Agentes</h1>
-          <p className="text-muted-foreground">Gerencie seus agentes de IA e suas configurações</p>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">Meus Agentes</h1>
+          <p className="text-gray-600 dark:text-gray-400">Gerencie seus agentes de IA e suas configurações</p>
         </div>
         <Button
           onClick={handleCreateAgent}
@@ -411,7 +411,7 @@ export default function AgentsPage() {
       )}
 
       {limitInfo && (
-        <div className="text-sm text-muted-foreground">
+        <div className="text-sm text-gray-600 dark:text-gray-400">
           Agentes: {limitInfo.currentCount} de {limitInfo.maxAllowed} utilizados
         </div>
       )}

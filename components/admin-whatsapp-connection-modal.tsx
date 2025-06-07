@@ -143,11 +143,11 @@ export default function AdminWhatsAppConnectionModal({
       <Dialog open={open} onOpenChange={handleModalClose}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-foreground">
+            <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
               <Plus className="w-5 h-5" />
               Nova Conexão WhatsApp
             </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
               Crie uma nova conexão WhatsApp e atribua a um usuário
             </DialogDescription>
           </DialogHeader>
@@ -161,7 +161,7 @@ export default function AdminWhatsAppConnectionModal({
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="connectionName" className="text-foreground">
+              <Label htmlFor="connectionName" className="text-gray-900 dark:text-gray-100">
                 Nome da Conexão
               </Label>
               <Input
@@ -171,15 +171,15 @@ export default function AdminWhatsAppConnectionModal({
                 placeholder="Ex: minha_conexao_principal"
                 disabled={loading}
                 maxLength={20}
-                className="text-foreground"
+                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
               />
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Use apenas letras, números e underscores. Mínimo 3 caracteres.
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="userId" className="text-foreground">
+              <Label htmlFor="userId" className="text-gray-900 dark:text-gray-100">
                 Atribuir a Usuário
               </Label>
               <Select value={selectedUserId} onValueChange={setSelectedUserId} disabled={loading || loadingUsers}>
@@ -209,7 +209,7 @@ export default function AdminWhatsAppConnectionModal({
                 variant="outline"
                 onClick={() => handleModalClose(false)}
                 disabled={loading}
-                className="text-foreground"
+                className="text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
               >
                 Cancelar
               </Button>
