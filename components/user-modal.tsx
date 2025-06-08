@@ -34,7 +34,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
-    password: "", // Adicionar campo de senha
+    password: "",
     role: "user",
     status: "active",
     whatsapp_limit: DEFAULT_WHATSAPP_LIMIT,
@@ -54,11 +54,21 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
 
           if (userError) throw userError
 
-          const { data: settingsData } = await supabase
-            .from("user_settings")
-            .select("*")
-            .eq("user_id", user.id)
-            .single()
+          // Buscar configurações do usuário
+          let settingsData = null
+          try {
+            const { data, error: settingsError } = await supabase
+              .from("user_settings")
+              .select("*")
+              .eq("user_id", user.id)
+              .single()
+
+            if (!settingsError) {
+              settingsData = data
+            }
+          } catch (settingsErr) {
+            console.error("Erro ao buscar configurações do usuário:", settingsErr)
+          }
 
           setFormData({
             full_name: userData.full_name || "",
@@ -87,7 +97,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         setFormData({
           full_name: "",
           email: "",
-          password: "", // Limpar senha
+          password: "",
           role: "user",
           status: "active",
           whatsapp_limit: DEFAULT_WHATSAPP_LIMIT,
@@ -130,6 +140,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     setError("")
 
     try {
+      // Verificar se o email já existe (exceto para o usuário atual)
       let emailCheckQuery = supabase.from("user_profiles").select("id").eq("email", formData.email.trim())
 
       if (user) {
@@ -149,10 +160,9 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         return
       }
 
-      let newUser
-
+      // Processar usuário existente ou novo
       if (user) {
-        // Para usuários existentes, só incluir password se foi fornecido
+        // Atualizar usuário existente
         const updateData = {
           full_name: formData.full_name.trim(),
           email: formData.email.trim(),
@@ -161,65 +171,102 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           updated_at: new Date().toISOString(),
         }
 
-        // Só adicionar password se foi fornecido
+        // Adicionar senha apenas se fornecida
         if (formData.password.trim()) {
           updateData.password = formData.password.trim()
         }
 
+        console.log("Atualizando usuário:", user.id, updateData)
         const { error: profileError } = await supabase.from("user_profiles").update(updateData).eq("id", user.id)
 
-        if (profileError) throw profileError
+        if (profileError) {
+          console.error("Erro ao atualizar perfil:", profileError)
+          throw profileError
+        }
 
-        const { error: settingsError } = await supabase.from("user_settings").upsert(
-          {
-            user_id: user ? user.id : newUser ? newUser.id : undefined,
-            whatsapp_connections_limit: formData.whatsapp_limit,
-            agents_limit: formData.agents_limit,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" },
-        )
+        // Verificar se a tabela user_settings existe e tem o registro
+        const { data: existingSettings } = await supabase
+          .from("user_settings")
+          .select("user_id")
+          .eq("user_id", user.id)
+          .maybeSingle()
 
-        if (settingsError) throw settingsError
+        // Usar upsert para inserir ou atualizar configurações
+        const settingsData = {
+          user_id: user.id,
+          whatsapp_connections_limit: formData.whatsapp_limit,
+          agents_limit: formData.agents_limit,
+          updated_at: new Date().toISOString(),
+        }
+
+        console.log("Atualizando configurações:", settingsData)
+        const { error: settingsError } = await supabase
+          .from("user_settings")
+          .upsert(settingsData, { onConflict: "user_id" })
+
+        if (settingsError) {
+          console.error("Erro ao atualizar configurações:", settingsError)
+          // Não lançar erro, apenas logar
+        }
       } else {
-        // Para novos usuários, incluir password obrigatoriamente
-        const { data: newUserResult, error: profileError } = await supabase
+        // Criar novo usuário
+        console.log("Criando novo usuário")
+        const { data: newUser, error: profileError } = await supabase
           .from("user_profiles")
-          .insert([
-            {
-              full_name: formData.full_name.trim(),
-              email: formData.email.trim(),
-              password: formData.password.trim(), // Senha obrigatória para novos usuários
-              role: formData.role,
-              status: formData.status,
-            },
-          ])
+          .insert({
+            full_name: formData.full_name.trim(),
+            email: formData.email.trim(),
+            password: formData.password.trim(),
+            role: formData.role,
+            status: formData.status,
+          })
           .select()
           .single()
 
-        newUser = newUserResult
+        if (profileError) {
+          console.error("Erro ao criar usuário:", profileError)
+          throw profileError
+        }
 
-        if (profileError) throw profileError
-        if (!newUser) throw new Error("Falha ao criar perfil do usuário.")
+        if (!newUser) {
+          throw new Error("Falha ao criar perfil do usuário. Nenhum dado retornado.")
+        }
 
-        const { error: settingsError } = await supabase.from("user_settings").insert([
-          {
-            user_id: newUser.id,
-            whatsapp_connections_limit: formData.whatsapp_limit,
-            agents_limit: formData.agents_limit,
-          },
-        ])
+        console.log("Novo usuário criado:", newUser.id)
 
-        if (settingsError) throw settingsError
+        // Criar configurações para o novo usuário
+        const { error: settingsError } = await supabase.from("user_settings").insert({
+          user_id: newUser.id,
+          whatsapp_connections_limit: formData.whatsapp_limit,
+          agents_limit: formData.agents_limit,
+        })
+
+        if (settingsError) {
+          console.error("Erro ao criar configurações:", settingsError)
+          // Não lançar erro, apenas logar
+        }
       }
 
+      console.log("Usuário salvo com sucesso!")
       onSuccess()
       onOpenChange(false)
     } catch (error: any) {
       console.error("Erro ao salvar usuário:", error)
-      if (error.message !== "Este email já está em uso por outro usuário." && error.code !== "23505") {
-        setError("Erro ao salvar usuário: " + error.message)
+
+      // Melhorar o tratamento de erro para mostrar mensagens mais detalhadas
+      let errorMessage = "Erro ao salvar usuário"
+
+      if (error.message) {
+        errorMessage += ": " + error.message
+      } else if (error.code) {
+        errorMessage += ` (código ${error.code})`
       }
+
+      if (error.details) {
+        errorMessage += " - " + error.details
+      }
+
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -300,6 +347,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                 disabled={loading}
                 className="text-foreground"
               />
+              {!user && <p className="text-xs text-muted-foreground mt-1">Mínimo de 6 caracteres</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -391,7 +439,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                 <strong className="text-blue-800 dark:text-blue-200">Dica:</strong>
                 <span className="text-blue-700 dark:text-blue-300">
                   {" "}
-                  Para alterar a senha deste usuário, use o botão específico "Alterar Senha" na lista de usuários.
+                  Deixe o campo senha em branco para manter a senha atual do usuário.
                 </span>
               </div>
             )}
