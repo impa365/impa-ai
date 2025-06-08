@@ -34,6 +34,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
+    password: "", // Adicionar campo de senha
     role: "user",
     status: "active",
     whatsapp_limit: DEFAULT_WHATSAPP_LIMIT,
@@ -62,6 +63,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           setFormData({
             full_name: userData.full_name || "",
             email: userData.email || "",
+            password: "",
             role: userData.role || "user",
             status: userData.status || "active",
             whatsapp_limit: settingsData?.whatsapp_connections_limit || DEFAULT_WHATSAPP_LIMIT,
@@ -72,6 +74,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           setFormData({
             full_name: user.full_name || "",
             email: user.email || "",
+            password: "",
             role: user.role || "user",
             status: user.status || "active",
             whatsapp_limit: user.whatsapp_connections_limit || DEFAULT_WHATSAPP_LIMIT,
@@ -84,6 +87,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         setFormData({
           full_name: "",
           email: "",
+          password: "", // Limpar senha
           role: "user",
           status: "active",
           whatsapp_limit: DEFAULT_WHATSAPP_LIMIT,
@@ -102,6 +106,17 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
   const handleSave = async () => {
     if (!formData.full_name.trim() || !formData.email.trim()) {
       setError("Nome e email são obrigatórios")
+      return
+    }
+
+    // Validação de senha para novos usuários
+    if (!user && !formData.password.trim()) {
+      setError("Senha é obrigatória para novos usuários")
+      return
+    }
+
+    if (!user && formData.password.length < 6) {
+      setError("A senha deve ter pelo menos 6 caracteres")
       return
     }
 
@@ -137,16 +152,21 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
       let newUser
 
       if (user) {
-        const { error: profileError } = await supabase
-          .from("user_profiles")
-          .update({
-            full_name: formData.full_name.trim(),
-            email: formData.email.trim(),
-            role: formData.role,
-            status: formData.status,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", user.id)
+        // Para usuários existentes, só incluir password se foi fornecido
+        const updateData = {
+          full_name: formData.full_name.trim(),
+          email: formData.email.trim(),
+          role: formData.role,
+          status: formData.status,
+          updated_at: new Date().toISOString(),
+        }
+
+        // Só adicionar password se foi fornecido
+        if (formData.password.trim()) {
+          updateData.password = formData.password.trim()
+        }
+
+        const { error: profileError } = await supabase.from("user_profiles").update(updateData).eq("id", user.id)
 
         if (profileError) throw profileError
 
@@ -162,12 +182,14 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
 
         if (settingsError) throw settingsError
       } else {
+        // Para novos usuários, incluir password obrigatoriamente
         const { data: newUserResult, error: profileError } = await supabase
           .from("user_profiles")
           .insert([
             {
               full_name: formData.full_name.trim(),
               email: formData.email.trim(),
+              password: formData.password.trim(), // Senha obrigatória para novos usuários
               role: formData.role,
               status: formData.status,
             },
@@ -260,6 +282,21 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="email@exemplo.com"
+                disabled={loading}
+                className="text-foreground"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="password" className="text-foreground">
+                Senha {!user && "*"}
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder={user ? "Deixe em branco para manter a senha atual" : "Senha do usuário"}
                 disabled={loading}
                 className="text-foreground"
               />
