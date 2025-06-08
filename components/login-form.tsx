@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff } from "lucide-react"
-import { signIn } from "@/lib/auth"
+import { signIn } from "@/lib/auth" // Importa a função signIn manual
 import { useTheme } from "@/components/theme-provider"
 import RegisterForm from "./register-form"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
 export default function LoginForm() {
   const [email, setEmail] = useState("")
@@ -24,16 +25,25 @@ export default function LoginForm() {
   const [checkingRegistration, setCheckingRegistration] = useState(true)
   const router = useRouter()
   const { theme } = useTheme()
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
     // Verificar se o cadastro público está habilitado
     const checkRegistrationSetting = async () => {
       try {
         setCheckingRegistration(true)
-
-        // Simulação da verificação - em produção, fazer chamada para API
-        // Por enquanto, vamos assumir que está habilitado
-        setAllowRegistration(true)
+        // Em um ambiente real, você buscaria essa configuração do banco de dados
+        // Por enquanto, vamos assumir que está habilitado para testes
+        const { data, error } = await supabase
+          .from("system_settings")
+          .select("setting_value")
+          .eq("setting_key", "allow_public_registration")
+          .single()
+        if (data && data.setting_value === true) {
+          setAllowRegistration(true)
+        } else {
+          setAllowRegistration(false)
+        }
       } catch (error) {
         console.error("Error checking registration setting:", error)
         setAllowRegistration(false)
@@ -51,7 +61,7 @@ export default function LoginForm() {
     setError("")
 
     try {
-      const { user, error: authError } = await signIn(email, password)
+      const { user, error: authError } = await signIn(email, password) // Chama a função signIn manual
 
       if (authError) {
         setError(authError.message)

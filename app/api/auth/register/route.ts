@@ -6,21 +6,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { email, password, full_name } = body
 
-    // Validações básicas
+    // As validações mais detalhadas agora estão dentro de registerUser em lib/auth.ts
+    // Mas podemos manter uma validação básica aqui para campos obrigatórios antes de chamar a função
     if (!email || !password || !full_name) {
       return NextResponse.json({ error: "Todos os campos são obrigatórios" }, { status: 400 })
     }
 
-    if (password.length < 6) {
-      return NextResponse.json({ error: "A senha deve ter pelo menos 6 caracteres" }, { status: 400 })
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      return NextResponse.json({ error: "Email inválido" }, { status: 400 })
-    }
-
-    // Registrar usuário
+    // Chamar a função de registro manual
     const result = await registerUser({ email, password, full_name })
 
     if (!result.success) {

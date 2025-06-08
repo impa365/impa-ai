@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, ArrowLeft } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
+import { registerUser } from "@/lib/auth" // Importa a função registerUser manual
 
 interface RegisterFormProps {
   onBackToLogin: () => void
@@ -35,32 +36,28 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
 
     console.log("🚀 Iniciando submissão do formulário...")
 
-    // Validações
+    // Validações básicas (algumas já estão em registerUser, mas manter aqui para feedback rápido)
     if (!formData.fullName.trim()) {
       setError("Nome completo é obrigatório")
       setLoading(false)
       return
     }
-
     if (!formData.email.trim()) {
       setError("Email é obrigatório")
       setLoading(false)
       return
     }
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(formData.email)) {
       setError("Email inválido")
       setLoading(false)
       return
     }
-
     if (formData.password.length < 6) {
       setError("Senha deve ter pelo menos 6 caracteres")
       setLoading(false)
       return
     }
-
     if (formData.password !== formData.confirmPassword) {
       setError("Senhas não coincidem")
       setLoading(false)
@@ -70,25 +67,17 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
     try {
       console.log("📡 Enviando dados para API...")
 
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          full_name: formData.fullName.trim(), // Alterado de 'fullName' para 'full_name'
-          email: formData.email.trim(),
-          password: formData.password,
-        }),
+      // Chama a função registerUser manual
+      const result = await registerUser({
+        full_name: formData.fullName.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
       })
 
-      console.log("📨 Resposta da API:", response.status)
+      console.log("📄 Dados da resposta:", result)
 
-      const data = await response.json()
-      console.log("📄 Dados da resposta:", data)
-
-      if (!response.ok) {
-        throw new Error(data.error || "Erro ao criar conta")
+      if (!result.success) {
+        throw new Error(result.error || "Erro ao criar conta")
       }
 
       console.log("✅ Conta criada com sucesso!")

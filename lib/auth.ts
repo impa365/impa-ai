@@ -1,4 +1,5 @@
 import { supabase } from "./supabase"
+import bcrypt from "bcryptjs" // Certifique-se de que bcryptjs está instalado: npm install bcryptjs
 
 export interface UserProfile {
   id: string
@@ -22,55 +23,70 @@ export interface RegisterData {
   full_name: string
 }
 
+// Função de login manual, sem usar supabase.auth
 export async function signIn(email: string, password: string) {
   try {
-    console.log("🔐 Iniciando processo de login para:", email)
+    console.log("🔐 Iniciando processo de login manual para:", email)
 
-    // Usar o método de login do Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    if (authError) {
-      console.error("❌ Erro de login na autenticação do Supabase:", authError.message)
-      return { user: null, error: authError }
-    }
-
-    if (!authData.user) {
-      return { user: null, error: new Error("Nenhum dado de usuário retornado após o login.") }
-    }
-
-    // Buscar o perfil do usuário na sua tabela customizada (impaai.user_profiles)
-    const { data: userProfile, error: profileError } = await supabase
+    // 1. Buscar o usuário na tabela impaai.user_profiles
+    const { data: users, error: fetchError } = await supabase
       .from("user_profiles")
-      .select("id, full_name, email, role, status")
-      .eq("id", authData.user.id)
-      .single()
+      .select("*")
+      .eq("email", email.trim().toLowerCase())
+      .single() // Usar single() para esperar um único resultado ou null
 
-    if (profileError) {
-      console.error("❌ Erro ao buscar perfil do usuário em impaai.user_profiles:", profileError.message)
-      // Se o perfil não for encontrado, pode ser um usuário recém-criado ou um problema de sincronização
-      // Retornar um erro ou um perfil padrão, dependendo da sua lógica de negócio
-      return { user: null, error: new Error("Perfil de usuário não encontrado ou erro ao buscar.") }
+    if (fetchError || !users) {
+      console.error("❌ Usuário não encontrado ou erro ao buscar:", fetchError?.message)
+      return {
+        user: null,
+        error: { message: "Credenciais inválidas ou usuário inativo." },
+      }
     }
 
-    // Atualizar o último login na sua tabela de perfis
-    await supabase.from("user_profiles").update({ last_login_at: new Date().toISOString() }).eq("id", userProfile.id)
+    const userProfile = users
+    console.log("👤 Usuário encontrado:", userProfile.email)
 
-    console.log("✅ Login bem-sucedido!")
-    return {
-      user: {
-        id: userProfile.id,
-        email: userProfile.email,
-        full_name: userProfile.full_name,
-        role: userProfile.role,
-        status: userProfile.status,
-      },
-      error: null,
+    // 2. Comparar a senha fornecida com o hash armazenado
+    if (!userProfile.password_hash) {
+      console.warn(`⚠️ Usuário ${email} não possui password_hash.`)
+      return { user: null, error: { message: "Credenciais inválidas." } }
     }
+
+    const passwordMatch = await bcrypt.compare(password, userProfile.password_hash)
+
+    if (!passwordMatch) {
+      console.warn(`❌ Senha incorreta para ${email}`)
+      return { user: null, error: { message: "Credenciais inválidas." } }
+    }
+
+    // 3. Verificar status do usuário
+    if (userProfile.status !== "active") {
+      console.warn(`⚠️ Usuário ${email} está inativo ou suspenso. Status: ${userProfile.status}`)
+      return { user: null, error: { message: "Sua conta está inativa ou suspensa. Entre em contato com o suporte." } }
+    }
+
+    console.log("✅ Login manual bem-sucedido!")
+
+    const user = {
+      id: userProfile.id,
+      email: userProfile.email,
+      full_name: userProfile.full_name,
+      role: userProfile.role,
+      status: userProfile.status,
+    }
+
+    // 4. Atualizar último login e contador
+    await supabase
+      .from("user_profiles")
+      .update({
+        last_login_at: new Date().toISOString(),
+        login_count: (userProfile.login_count || 0) + 1,
+      })
+      .eq("id", userProfile.id)
+
+    return { user, error: null }
   } catch (error: any) {
-    console.error("💥 Erro inesperado no login:", error.message)
+    console.error("💥 Erro no login manual:", error.message)
     return {
       user: null,
       error: { message: "Erro interno do servidor ao tentar fazer login." },
@@ -78,60 +94,64 @@ export async function signIn(email: string, password: string) {
   }
 }
 
+// Função de registro manual, sem usar supabase.auth
 export async function registerUser(userData: RegisterData): Promise<{ success: boolean; user?: any; error?: string }> {
   try {
     const { email, password, full_name } = userData
 
-    // 1. Registrar o usuário na autenticação do Supabase
-    // Supabase Auth irá lidar com o hashing da senha e a criação do usuário em auth.users
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: full_name, // Passa o full_name para os metadados do usuário de autenticação
-        },
-      },
-    })
-
-    if (authError) {
-      console.error("Erro ao registrar usuário na autenticação:", authError.message)
-      return { success: false, error: authError.message }
+    // Validações básicas
+    if (!full_name || !email || !password) {
+      return { success: false, error: "Todos os campos são obrigatórios." }
+    }
+    if (password.length < 6) {
+      return { success: false, error: "A senha deve ter pelo menos 6 caracteres." }
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return { success: false, error: "Email inválido." }
     }
 
-    if (!authData.user) {
-      return { success: false, error: "Nenhum usuário retornado após o registro de autenticação." }
+    // 1. Verificar se o email já existe na tabela impaai.user_profiles
+    const { data: existingUsers, error: checkError } = await supabase
+      .from("user_profiles")
+      .select("id")
+      .eq("email", email.toLowerCase())
+
+    if (checkError) {
+      console.error("Erro ao verificar email existente:", checkError)
+      return { success: false, error: "Erro interno do servidor ao verificar email." }
+    }
+    if (existingUsers && existingUsers.length > 0) {
+      return { success: false, error: "Este email já está em uso." }
     }
 
-    // 2. Inserir o perfil do usuário na tabela 'impaai.user_profiles'
-    // Usamos o ID do usuário criado pelo Supabase Auth para manter a sincronia
-    const { data: newUserProfile, error: profileError } = await supabase
+    // 2. Hash da senha
+    const saltRounds = 10
+    const password_hash = await bcrypt.hash(password, saltRounds)
+    console.log("🔐 Senha hasheada com sucesso.")
+
+    // 3. Inserir o novo usuário na tabela impaai.user_profiles
+    const { data: newUserProfile, error: insertError } = await supabase
       .from("user_profiles")
       .insert([
         {
-          id: authData.user.id, // ID do usuário do Supabase Auth
           full_name: full_name,
           email: email.toLowerCase(),
-          role: "user", // Define o papel padrão como 'user'
-          status: "active", // Define o status padrão como 'active'
+          password_hash: password_hash, // Armazenar o hash da senha
+          role: "user", // Papel padrão
+          status: "active", // Status padrão
         },
       ])
       .select()
       .single()
 
-    if (profileError) {
-      console.error("Erro ao criar perfil do usuário em impaai.user_profiles:", profileError.message)
-      // Se a criação do perfil falhar, tente reverter o registro de autenticação
-      // Nota: Deletar usuário via admin API requer uma chave de serviço Supabase,
-      // que não deve ser exposta no cliente. Para este ambiente, vamos apenas logar.
-      console.warn(
-        `Falha ao criar perfil para o usuário ${authData.user.id}. Considere deletar manualmente no Supabase Auth.`,
-      )
-      return { success: false, error: "Falha ao criar perfil do usuário. Tente novamente." }
+    if (insertError) {
+      console.error("Erro ao criar usuário em impaai.user_profiles:", insertError)
+      return { success: false, error: "Erro ao criar conta. Tente novamente." }
     }
+    console.log("✅ Usuário inserido em impaai.user_profiles:", newUserProfile.email)
 
-    // Criar configurações padrão do usuário (se necessário, como em user_agent_settings)
-    // Certifique-se de que esta tabela existe e que os valores padrão estão corretos
+    // 4. Criar configurações padrão do usuário (se a tabela user_agent_settings existir)
     const { error: settingsError } = await supabase.from("user_agent_settings").insert([
       {
         user_id: newUserProfile.id,
@@ -145,24 +165,26 @@ export async function registerUser(userData: RegisterData): Promise<{ success: b
     ])
 
     if (settingsError) {
-      console.error("Erro ao criar configurações padrão do usuário:", settingsError.message)
-      // Não é um erro crítico para o registro, mas deve ser investigado
+      console.error("Erro ao criar configurações padrão do usuário (user_agent_settings):", settingsError.message)
+      // Este erro não impede o registro, mas deve ser logado
     }
 
-    return { success: true, user: newUserProfile }
+    // Remover o hash da senha do objeto retornado por segurança
+    const { password_hash: _, ...userWithoutPassword } = newUserProfile
+
+    return { success: true, user: userWithoutPassword }
   } catch (error: any) {
-    console.error("Erro inesperado no registro:", error.message)
+    console.error("💥 Erro no registro manual:", error.message)
     return { success: false, error: "Erro interno do servidor ao tentar registrar." }
   }
 }
 
+// Funções de gerenciamento de sessão local (permanecem as mesmas)
 export function getCurrentUser(): UserProfile | null {
   if (typeof window === "undefined") return null
-
   try {
     const userStr = localStorage.getItem("user")
     if (!userStr) return null
-
     return JSON.parse(userStr)
   } catch (error) {
     console.error("Erro ao obter usuário atual do localStorage:", error)
@@ -172,7 +194,6 @@ export function getCurrentUser(): UserProfile | null {
 
 export function setCurrentUser(user: UserProfile): void {
   if (typeof window === "undefined") return
-
   try {
     localStorage.setItem("user", JSON.stringify(user))
   } catch (error) {
@@ -182,7 +203,6 @@ export function setCurrentUser(user: UserProfile): void {
 
 export function clearCurrentUser(): void {
   if (typeof window === "undefined") return
-
   try {
     localStorage.removeItem("user")
   } catch (error) {
@@ -190,31 +210,73 @@ export function clearCurrentUser(): void {
   }
 }
 
+// Função de logout manual (apenas limpa a sessão local)
 export async function signOut() {
-  const { error } = await supabase.auth.signOut()
-  if (error) {
-    console.error("Erro ao fazer logout no Supabase:", error.message)
-    return { success: false, error: error.message }
-  }
+  console.log("🚪 Realizando logout manual.")
   clearCurrentUser()
   return { success: true, error: null }
 }
 
+// Função de atualização de perfil (permanece a mesma, interage com user_profiles)
 export async function updateUserProfile(
   userId: string,
   updates: Partial<UserProfile>,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { error } = await supabase.from("user_profiles").update(updates).eq("id", userId)
-
     if (error) {
       console.error("Erro ao atualizar perfil:", error)
       return { success: false, error: "Erro ao atualizar perfil" }
     }
-
     return { success: true }
   } catch (error) {
     console.error("Erro ao atualizar perfil:", error)
     return { success: false, error: "Erro interno do servidor" }
+  }
+}
+
+// Função para trocar a senha (nova função)
+export async function changePassword(
+  userId: string,
+  oldPassword: string,
+  newPassword: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // 1. Buscar o usuário para verificar a senha antiga
+    const { data: userProfile, error: fetchError } = await supabase
+      .from("impaai.user_profiles")
+      .select("password_hash")
+      .eq("id", userId)
+      .single()
+
+    if (fetchError || !userProfile) {
+      return { success: false, error: "Usuário não encontrado." }
+    }
+
+    // 2. Verificar a senha antiga
+    const passwordMatch = await bcrypt.compare(oldPassword, userProfile.password_hash)
+    if (!passwordMatch) {
+      return { success: false, error: "Senha antiga incorreta." }
+    }
+
+    // 3. Hash da nova senha
+    const saltRounds = 10
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds)
+
+    // 4. Atualizar a senha na tabela user_profiles
+    const { error: updateError } = await supabase
+      .from("impaai.user_profiles")
+      .update({ password_hash: newPasswordHash })
+      .eq("id", userId)
+
+    if (updateError) {
+      console.error("Erro ao atualizar senha:", updateError)
+      return { success: false, error: "Erro ao trocar a senha." }
+    }
+
+    return { success: true }
+  } catch (error: any) {
+    console.error("Erro inesperado ao trocar a senha:", error.message)
+    return { success: false, error: "Erro interno do servidor." }
   }
 }
