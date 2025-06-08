@@ -235,7 +235,7 @@ export async function updateUserProfile(
   }
 }
 
-// Função para trocar a senha (nova função)
+// Função para trocar a senha (já existente)
 export async function changePassword(
   userId: string,
   oldPassword: string,
@@ -244,7 +244,7 @@ export async function changePassword(
   try {
     // 1. Buscar o usuário para verificar a senha antiga
     const { data: userProfile, error: fetchError } = await supabase
-      .from("impaai.user_profiles")
+      .from("user_profiles") // Removido 'impaai.' pois já está no schema padrão
       .select("password_hash")
       .eq("id", userId)
       .single()
@@ -265,7 +265,7 @@ export async function changePassword(
 
     // 4. Atualizar a senha na tabela user_profiles
     const { error: updateError } = await supabase
-      .from("impaai.user_profiles")
+      .from("user_profiles") // Removido 'impaai.'
       .update({ password_hash: newPasswordHash })
       .eq("id", userId)
 
@@ -278,5 +278,55 @@ export async function changePassword(
   } catch (error: any) {
     console.error("Erro inesperado ao trocar a senha:", error.message)
     return { success: false, error: "Erro interno do servidor." }
+  }
+}
+
+/**
+ * AVISO DE SEGURANÇA CRÍTICO:
+ * Esta função é APENAS PARA DESENVOLVIMENTO/TESTE.
+ * Ela permite redefinir a senha de um usuário usando APENAS o email,
+ * sem qualquer verificação de segurança (como token de redefinição).
+ * NÃO USE EM PRODUÇÃO.
+ */
+export async function resetPasswordByEmailTemporary(
+  email: string,
+  newPassword: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.warn(`⚠️ [TEMPORÁRIO] Tentando redefinir senha para ${email} sem verificação.`)
+
+    // 1. Buscar o usuário pelo email
+    const { data: userProfile, error: fetchError } = await supabase
+      .from("user_profiles")
+      .select("id")
+      .eq("email", email.trim().toLowerCase())
+      .single()
+
+    if (fetchError || !userProfile) {
+      console.error(`❌ [TEMPORÁRIO] Usuário com email ${email} não encontrado.`)
+      return { success: false, error: "Usuário não encontrado." }
+    }
+
+    // 2. Hash da nova senha
+    const saltRounds = 10
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds)
+    console.log(`🔐 [TEMPORÁRIO] Nova senha hasheada para ${email}.`)
+
+    // 3. Atualizar a senha na tabela user_profiles
+    const { error: updateError } = await supabase
+      .from("user_profiles")
+      .update({ password_hash: newPasswordHash })
+      .eq("id", userProfile.id)
+
+    if (updateError) {
+      console.error(`❌ [TEMPORÁRIO] Erro ao atualizar senha para ${email}:`, updateError)
+      return { success: false, error: "Erro ao redefinir a senha." }
+    }
+
+    console.log(`✅ [TEMPORÁRIO] Senha de ${email} redefinida com sucesso.`)
+    return { success: true }
+  } catch (error: any) {
+    console.error(`💥 [TEMPORÁRIO] Erro inesperado ao redefinir senha para ${email}:`, error.message)
+    return { success: false, error: "Erro interno do servidor ao redefinir senha." }
   }
 }
