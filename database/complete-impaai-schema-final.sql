@@ -36,7 +36,6 @@ CREATE TABLE impaai.user_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
     role VARCHAR(50) DEFAULT 'user' CHECK (role IN ('admin', 'user', 'moderator')),
     status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended', 'hibernated')),
     
@@ -506,7 +505,6 @@ INSERT INTO impaai.user_profiles (
     id,
     full_name, 
     email, 
-    password_hash, 
     role, 
     status,
     agents_limit,
@@ -537,7 +535,6 @@ INSERT INTO impaai.user_profiles (
     id,
     full_name, 
     email, 
-    password_hash, 
     role, 
     status,
     agents_limit,
