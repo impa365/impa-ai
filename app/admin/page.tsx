@@ -315,7 +315,7 @@ export default function AdminDashboard() {
             <Download className="w-4 h-4" />
             Exportar Relatório
           </Button>
-          <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+          <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => updateURL("settings")}>
             <Settings className="w-4 h-4" />
             Configurações
           </Button>
