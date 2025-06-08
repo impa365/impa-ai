@@ -4,11 +4,10 @@ import { registerUser } from "@/lib/auth"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, fullName } = body // Alterado de full_name para fullName
+    const { email, password, full_name } = body
 
     // Validações básicas
-    if (!email || !password || !fullName) {
-      // Usando fullName aqui
+    if (!email || !password || !full_name) {
       return NextResponse.json({ error: "Todos os campos são obrigatórios" }, { status: 400 })
     }
 
@@ -22,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Registrar usuário
-    const result = await registerUser({ email, password, full_name: fullName }) // Passando fullName como full_name
+    const result = await registerUser({ email, password, full_name })
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 })
