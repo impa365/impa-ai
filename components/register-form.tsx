@@ -16,7 +16,7 @@ interface RegisterFormProps {
 
 export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
   const [formData, setFormData] = useState({
-    full_name: "", // Alterado de fullName para full_name
+    fullName: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -36,7 +36,7 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
     console.log("🚀 Iniciando submissão do formulário...")
 
     // Validações
-    if (!formData.full_name.trim()) {
+    if (!formData.fullName.trim()) {
       setError("Nome completo é obrigatório")
       setLoading(false)
       return
@@ -76,7 +76,7 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          full_name: formData.full_name.trim(), // Alterado de fullName para full_name
+          full_name: formData.fullName.trim(), // Alterado de 'fullName' para 'full_name'
           email: formData.email.trim(),
           password: formData.password,
         }),
@@ -156,8 +156,8 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
               <Input
                 id="fullName"
                 type="text"
-                value={formData.full_name} // Alterado de formData.fullName para formData.full_name
-                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} // Alterado de fullName para full_name
+                value={formData.fullName}
+                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                 placeholder="Seu nome completo"
                 required
                 disabled={loading}
