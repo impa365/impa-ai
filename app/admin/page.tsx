@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
-  MessageSquare,
   Download,
   Settings,
   Plus,
@@ -39,13 +38,6 @@ import {
   Bot,
   Smartphone,
   Activity,
-  DollarSign,
-  ArrowUpRight,
-  Shield,
-  Target,
-  AlertTriangle,
-  Wifi,
-  WifiOff,
 } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/supabase"
@@ -117,64 +109,6 @@ export default function AdminDashboard() {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [selectedWhatsAppConnection, setSelectedWhatsAppConnection] = useState<any>(null)
 
-  // Dados fictícios para o dashboard
-  const mockData = {
-    metrics: {
-      totalUsers: 1247,
-      activeUsers: 892,
-      totalAgents: 156,
-      activeAgents: 134,
-      whatsappConnections: 89,
-      activeConnections: 76,
-      dailyMessages: 12847,
-      monthlyRevenue: 45670,
-      systemUptime: 99.8,
-      apiCalls: 234567,
-    },
-    recentActivity: [
-      { id: 1, type: "user_registered", user: "João Silva", time: "2 min atrás", status: "success" },
-      {
-        id: 2,
-        type: "agent_created",
-        user: "Maria Santos",
-        agent: "Atendimento Vendas",
-        time: "5 min atrás",
-        status: "success",
-      },
-      { id: 3, type: "whatsapp_connected", user: "Pedro Costa", time: "8 min atrás", status: "success" },
-      { id: 4, type: "integration_error", integration: "Evolution API", time: "12 min atrás", status: "error" },
-      {
-        id: 5,
-        type: "agent_activated",
-        user: "Ana Oliveira",
-        agent: "Suporte Técnico",
-        time: "15 min atrás",
-        status: "success",
-      },
-    ],
-    topAgents: [
-      { id: 1, name: "Atendimento Vendas", owner: "João Silva", messages: 2847, uptime: 98.5, status: "active" },
-      { id: 2, name: "Suporte Técnico", owner: "Maria Santos", messages: 1923, uptime: 99.2, status: "active" },
-      { id: 3, name: "FAQ Automático", owner: "Pedro Costa", messages: 1456, uptime: 97.8, status: "active" },
-      { id: 4, name: "Agendamento", owner: "Ana Oliveira", messages: 987, uptime: 96.3, status: "active" },
-      { id: 5, name: "Cobrança", owner: "Carlos Lima", messages: 654, uptime: 94.7, status: "maintenance" },
-    ],
-    systemHealth: [
-      { service: "API Principal", status: "online", uptime: 99.9, responseTime: 45 },
-      { service: "Evolution API", status: "online", uptime: 98.7, responseTime: 120 },
-      { service: "Banco de Dados", status: "online", uptime: 99.8, responseTime: 23 },
-      { service: "n8n Workflows", status: "warning", uptime: 95.2, responseTime: 340 },
-      { service: "WhatsApp Gateway", status: "online", uptime: 97.4, responseTime: 89 },
-    ],
-    monthlyStats: [
-      { month: "Jan", users: 45, agents: 12, revenue: 15420 },
-      { month: "Fev", users: 67, agents: 18, revenue: 22340 },
-      { month: "Mar", users: 89, agents: 25, revenue: 31250 },
-      { month: "Abr", users: 123, agents: 34, revenue: 38900 },
-      { month: "Mai", users: 156, agents: 42, revenue: 45670 },
-    ],
-  }
-
   const fetchWhatsAppConnections = async () => {
     const { data } = await db
       .whatsappConnections()
@@ -245,12 +179,11 @@ export default function AdminDashboard() {
     const { count: userCount } = await db.users().select("*", { count: "exact", head: true })
     const { count: agentCount } = await db.agents().select("*", { count: "exact", head: true }).eq("status", "active")
 
-    // Usar dados fictícios mais realistas
     setMetrics({
-      totalUsers: userCount || mockData.metrics.totalUsers,
-      activeAgents: agentCount || mockData.metrics.activeAgents,
-      totalRevenue: mockData.metrics.monthlyRevenue,
-      dailyMessages: mockData.metrics.dailyMessages,
+      totalUsers: userCount || 0,
+      activeAgents: agentCount || 0,
+      totalRevenue: 0, // Remover ou implementar cálculo real
+      dailyMessages: 0, // Remover ou implementar cálculo real
     })
   }
 
@@ -375,7 +308,7 @@ export default function AdminDashboard() {
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Painel Administrativo</h1>
-          <p className="text-gray-600">Visão geral completa do sistema {theme.systemName}</p>
+          <p className="text-gray-600">Visão geral do sistema {theme.systemName}</p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline" className="gap-2 text-gray-700 border-gray-300 hover:bg-gray-100">
@@ -399,11 +332,8 @@ export default function AdminDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-900">{mockData.metrics.totalUsers.toLocaleString()}</div>
-            <div className="flex items-center text-sm text-blue-600 mt-2">
-              <ArrowUpRight className="w-4 h-4 mr-1" />
-              <span>+12% este mês</span>
-            </div>
+            <div className="text-3xl font-bold text-blue-900">{metrics.totalUsers}</div>
+            <div className="text-sm text-blue-600 mt-2">Usuários registrados</div>
           </CardContent>
         </Card>
 
@@ -415,74 +345,64 @@ export default function AdminDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-900">{mockData.metrics.activeAgents}</div>
-            <div className="flex items-center text-sm text-green-600 mt-2">
-              <ArrowUpRight className="w-4 h-4 mr-1" />
-              <span>+8% este mês</span>
-            </div>
+            <div className="text-3xl font-bold text-green-900">{metrics.activeAgents}</div>
+            <div className="text-sm text-green-600 mt-2">Agentes em funcionamento</div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-purple-700">Receita Mensal</CardTitle>
+            <CardTitle className="text-sm font-medium text-purple-700">Conexões WhatsApp</CardTitle>
             <div className="p-2 bg-purple-600 rounded-lg">
-              <DollarSign className="w-5 h-5 text-white" />
+              <Smartphone className="w-5 h-5 text-white" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-purple-900">
-              R$ {(mockData.metrics.monthlyRevenue / 1000).toFixed(0)}k
-            </div>
-            <div className="flex items-center text-sm text-purple-600 mt-2">
-              <ArrowUpRight className="w-4 h-4 mr-1" />
-              <span>+15% este mês</span>
-            </div>
+            <div className="text-3xl font-bold text-purple-900">{whatsappConnections.length}</div>
+            <div className="text-sm text-purple-600 mt-2">Conexões cadastradas</div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-orange-700">Mensagens/Dia</CardTitle>
+            <CardTitle className="text-sm font-medium text-orange-700">Integrações</CardTitle>
             <div className="p-2 bg-orange-600 rounded-lg">
-              <MessageSquare className="w-5 h-5 text-white" />
+              <Plug className="w-5 h-5 text-white" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-orange-900">
-              {(mockData.metrics.dailyMessages / 1000).toFixed(1)}k
-            </div>
-            <div className="flex items-center text-sm text-orange-600 mt-2">
-              <ArrowUpRight className="w-4 h-4 mr-1" />
-              <span>+23% hoje</span>
-            </div>
+            <div className="text-3xl font-bold text-orange-900">{integrations.length}</div>
+            <div className="text-sm text-orange-600 mt-2">Integrações configuradas</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Métricas Secundárias */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Detalhes das Conexões WhatsApp */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg text-gray-900">WhatsApp Connections</CardTitle>
+            <CardTitle className="text-lg text-gray-900 flex items-center gap-2">
+              <Smartphone className="w-5 h-5" />
+              WhatsApp Status
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Total de Conexões</span>
-                <span className="font-bold text-gray-900">{mockData.metrics.whatsappConnections}</span>
+                <span className="font-bold text-gray-900">{whatsappConnections.length}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Conexões Ativas</span>
-                <span className="font-bold text-green-600">{mockData.metrics.activeConnections}</span>
+                <span className="font-bold text-green-600">
+                  {whatsappConnections.filter((conn) => conn.status === "connected").length}
+                </span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-green-600 h-2 rounded-full"
-                  style={{
-                    width: `${(mockData.metrics.activeConnections / mockData.metrics.whatsappConnections) * 100}%`,
-                  }}
-                ></div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Desconectadas</span>
+                <span className="font-bold text-red-600">
+                  {whatsappConnections.filter((conn) => conn.status !== "connected").length}
+                </span>
               </div>
             </div>
           </CardContent>
@@ -490,21 +410,28 @@ export default function AdminDashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg text-gray-900">Sistema</CardTitle>
+            <CardTitle className="text-lg text-gray-900 flex items-center gap-2">
+              <Bot className="w-5 h-5" />
+              Agentes Status
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Uptime</span>
-                <span className="font-bold text-green-600">{mockData.metrics.systemUptime}%</span>
+                <span className="text-gray-600">Total de Agentes</span>
+                <span className="font-bold text-gray-900">{agents.length}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">API Calls</span>
-                <span className="font-bold text-gray-900">{mockData.metrics.apiCalls.toLocaleString()}</span>
+                <span className="text-gray-600">Agentes Ativos</span>
+                <span className="font-bold text-green-600">
+                  {agents.filter((agent) => agent.status === "active").length}
+                </span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-sm text-gray-600">Sistema Online</span>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Inativos</span>
+                <span className="font-bold text-gray-600">
+                  {agents.filter((agent) => agent.status !== "active").length}
+                </span>
               </div>
             </div>
           </CardContent>
@@ -512,145 +439,84 @@ export default function AdminDashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg text-gray-900">Crescimento</CardTitle>
+            <CardTitle className="text-lg text-gray-900 flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Usuários Status
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Novos Usuários</span>
-                <span className="font-bold text-blue-600">+{mockData.monthlyStats[4].users}</span>
+                <span className="text-gray-600">Total de Usuários</span>
+                <span className="font-bold text-gray-900">{users.length}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Novos Agentes</span>
-                <span className="font-bold text-purple-600">+{mockData.monthlyStats[4].agents}</span>
+                <span className="text-gray-600">Usuários Ativos</span>
+                <span className="font-bold text-green-600">
+                  {users.filter((user) => user.status === "active").length}
+                </span>
               </div>
-              <div className="text-xs text-gray-500">Este mês vs anterior</div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Administradores</span>
+                <span className="font-bold text-blue-600">{users.filter((user) => user.role === "admin").length}</span>
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Atividade Recente e Top Agentes */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Status das Integrações */}
+      {integrations.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg text-gray-900 flex items-center gap-2">
-              <Activity className="w-5 h-5" />
-              Atividade Recente
+              <Plug className="w-5 h-5" />
+              Status das Integrações
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {mockData.recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {integrations.map((integration) => (
+                <div key={integration.id} className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-900">{integration.name}</span>
                     <div
-                      className={`w-2 h-2 rounded-full ${
-                        activity.status === "success"
-                          ? "bg-green-500"
-                          : activity.status === "error"
-                            ? "bg-red-500"
-                            : "bg-yellow-500"
-                      }`}
+                      className={`w-2 h-2 rounded-full ${integration.is_active ? "bg-green-500" : "bg-red-500"}`}
                     ></div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {activity.type === "user_registered" && `${activity.user} se registrou`}
-                        {activity.type === "agent_created" && `${activity.user} criou agente "${activity.agent}"`}
-                        {activity.type === "whatsapp_connected" && `${activity.user} conectou WhatsApp`}
-                        {activity.type === "integration_error" && `Erro na integração ${activity.integration}`}
-                        {activity.type === "agent_activated" && `${activity.user} ativou agente "${activity.agent}"`}
-                      </div>
-                      <div className="text-xs text-gray-500">{activity.time}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Status</span>
+                      <span className={`font-medium ${integration.is_active ? "text-green-600" : "text-red-600"}`}>
+                        {integration.is_active ? "Ativo" : "Inativo"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Tipo</span>
+                      <span className="text-gray-700">{integration.type}</span>
                     </div>
                   </div>
-                  <Badge variant={activity.status === "success" ? "default" : "destructive"} className="text-xs">
-                    {activity.status === "success" ? "Sucesso" : "Erro"}
-                  </Badge>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
+      )}
 
+      {/* Mensagem quando não há dados */}
+      {users.length === 0 && agents.length === 0 && whatsappConnections.length === 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg text-gray-900 flex items-center gap-2">
-              <Target className="w-5 h-5" />
-              Top Agentes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {mockData.topAgents.map((agent, index) => (
-                <div key={agent.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-bold text-purple-600">#{index + 1}</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{agent.name}</div>
-                      <div className="text-xs text-gray-500">{agent.owner}</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-bold text-gray-900">{agent.messages.toLocaleString()}</div>
-                    <div className="text-xs text-gray-500">{agent.uptime}% uptime</div>
-                  </div>
-                </div>
-              ))}
+          <CardContent className="text-center py-12">
+            <div className="text-gray-400 mb-4">
+              <Activity className="w-16 h-16 mx-auto" />
             </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Sistema Iniciado</h3>
+            <p className="text-gray-600">
+              O sistema está funcionando. Os dados aparecerão aqui conforme usuários se registrarem e criarem agentes.
+            </p>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Status do Sistema */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg text-gray-900 flex items-center gap-2">
-            <Shield className="w-5 h-5" />
-            Status do Sistema
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {mockData.systemHealth.map((service) => (
-              <div key={service.service} className="p-4 border rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-900">{service.service}</span>
-                  {service.status === "online" ? (
-                    <Wifi className="w-4 h-4 text-green-600" />
-                  ) : service.status === "warning" ? (
-                    <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                  ) : (
-                    <WifiOff className="w-4 h-4 text-red-600" />
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Uptime</span>
-                    <span
-                      className={`font-medium ${
-                        service.uptime > 98
-                          ? "text-green-600"
-                          : service.uptime > 95
-                            ? "text-yellow-600"
-                            : "text-red-600"
-                      }`}
-                    >
-                      {service.uptime}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Resposta</span>
-                    <span className="text-gray-700">{service.responseTime}ms</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      )}
     </div>
   )
 
@@ -1587,5 +1453,17 @@ export default function AdminDashboard() {
     )
   }
 
-  return <div className="p-6">{renderDashboard()}</div>
+  return (
+    <div className="p-6">
+      {activeTab === "dashboard"
+        ? renderDashboard()
+        : activeTab === "users"
+          ? renderUsers()
+          : activeTab === "agents"
+            ? renderAgents()
+            : activeTab === "whatsapp"
+              ? renderWhatsAppConnections()
+              : renderSettings()}
+    </div>
+  )
 }
