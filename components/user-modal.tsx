@@ -160,6 +160,8 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         return
       }
 
+      let userId = user?.id
+
       // Processar usuário existente ou novo
       if (user) {
         // Atualizar usuário existente
@@ -182,31 +184,6 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         if (profileError) {
           console.error("Erro ao atualizar perfil:", profileError)
           throw profileError
-        }
-
-        // Verificar se a tabela user_settings existe e tem o registro
-        const { data: existingSettings } = await supabase
-          .from("user_settings")
-          .select("user_id")
-          .eq("user_id", user.id)
-          .maybeSingle()
-
-        // Usar upsert para inserir ou atualizar configurações
-        const settingsData = {
-          user_id: user.id,
-          whatsapp_connections_limit: formData.whatsapp_limit,
-          agents_limit: formData.agents_limit,
-          updated_at: new Date().toISOString(),
-        }
-
-        console.log("Atualizando configurações:", settingsData)
-        const { error: settingsError } = await supabase
-          .from("user_settings")
-          .upsert(settingsData, { onConflict: "user_id" })
-
-        if (settingsError) {
-          console.error("Erro ao atualizar configurações:", settingsError)
-          // Não lançar erro, apenas logar
         }
       } else {
         // Criar novo usuário
@@ -233,17 +210,64 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         }
 
         console.log("Novo usuário criado:", newUser.id)
+        userId = newUser.id
+      }
 
-        // Criar configurações para o novo usuário
-        const { error: settingsError } = await supabase.from("user_settings").insert({
-          user_id: newUser.id,
-          whatsapp_connections_limit: formData.whatsapp_limit,
-          agents_limit: formData.agents_limit,
-        })
+      // Agora vamos tentar atualizar as configurações do usuário
+      // Mas não vamos falhar se isso não funcionar
+      if (userId) {
+        try {
+          // Primeiro, verificar se a tabela user_settings existe
+          const { error: tableCheckError } = await supabase
+            .from("user_settings")
+            .select("count(*)")
+            .limit(1)
+            .throwOnError()
 
-        if (settingsError) {
-          console.error("Erro ao criar configurações:", settingsError)
-          // Não lançar erro, apenas logar
+          if (tableCheckError) {
+            console.warn("A tabela user_settings pode não existir:", tableCheckError)
+            // Não vamos falhar aqui, apenas logar o aviso
+          } else {
+            // A tabela existe, vamos tentar inserir/atualizar
+            // Primeiro verificar se já existe um registro para este usuário
+            const { data: existingSettings } = await supabase
+              .from("user_settings")
+              .select("user_id")
+              .eq("user_id", userId)
+              .maybeSingle()
+
+            if (existingSettings) {
+              // Atualizar configurações existentes
+              const { error: updateError } = await supabase
+                .from("user_settings")
+                .update({
+                  whatsapp_connections_limit: formData.whatsapp_limit,
+                  agents_limit: formData.agents_limit,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("user_id", userId)
+
+              if (updateError) {
+                console.warn("Erro ao atualizar configurações:", updateError)
+                // Não vamos falhar aqui, apenas logar o aviso
+              }
+            } else {
+              // Inserir novas configurações
+              const { error: insertError } = await supabase.from("user_settings").insert({
+                user_id: userId,
+                whatsapp_connections_limit: formData.whatsapp_limit,
+                agents_limit: formData.agents_limit,
+              })
+
+              if (insertError) {
+                console.warn("Erro ao inserir configurações:", insertError)
+                // Não vamos falhar aqui, apenas logar o aviso
+              }
+            }
+          }
+        } catch (settingsError) {
+          console.warn("Erro ao processar configurações do usuário:", settingsError)
+          // Não vamos falhar aqui, apenas logar o aviso
         }
       }
 
