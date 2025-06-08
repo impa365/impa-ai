@@ -36,7 +36,7 @@ CREATE TABLE impaai.user_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL, -- Re-adicionado para gerenciamento manual
+    password TEXT NOT NULL, -- Re-adicionado para gerenciamento manual
     role VARCHAR(50) DEFAULT 'user' CHECK (role IN ('admin', 'user', 'moderator')),
     status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended', 'hibernated')),
     
@@ -506,7 +506,7 @@ INSERT INTO impaai.user_profiles (
     id,
     full_name, 
     email, 
-    password_hash, -- Adicionado novamente
+    password, -- Adicionado novamente
     role, 
     status,
     agents_limit,
@@ -520,7 +520,7 @@ INSERT INTO impaai.user_profiles (
     gen_random_uuid(),
     'Administrador do Sistema',
     'admin@impa.ai',
-    '$2a$12$LQv3c1yqBwEHxPuNYkGOSuOiUiIq6QEX9K6FhmXEuKtcsNdvQqDAa', -- admin123
+    'admin123', -- admin123
     'admin',
     'active',
     999,
@@ -537,7 +537,7 @@ INSERT INTO impaai.user_profiles (
     id,
     full_name, 
     email, 
-    password_hash, -- Adicionado novamente
+    password, -- Adicionado novamente
     role, 
     status,
     agents_limit,
@@ -551,7 +551,7 @@ INSERT INTO impaai.user_profiles (
     gen_random_uuid(),
     'Usuário de Teste',
     'user@impa.ai',
-    '$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- user123
+    'user123', -- user123
     'user',
     'active',
     3,
