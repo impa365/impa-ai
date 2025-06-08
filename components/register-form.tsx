@@ -76,7 +76,7 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          fullName: formData.fullName.trim(),
+          full_name: formData.fullName.trim(), // Alterado de 'fullName' para 'full_name'
           email: formData.email.trim(),
           password: formData.password,
         }),
