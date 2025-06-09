@@ -25,10 +25,6 @@ interface WhatsAppConnection {
   status: string
   user_id: string
   phone_number?: string
-  user_profiles?: {
-    full_name: string
-    email: string
-  }
 }
 
 export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalProps) {
@@ -56,70 +52,44 @@ export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalP
 
   const fetchWhatsAppConnections = async () => {
     setLoadingConnections(true)
-    setDebugInfo("Iniciando busca por conexões...")
+    setDebugInfo("🔍 Iniciando busca...")
 
     try {
-      console.log("🔍 Buscando conexões WhatsApp...")
+      console.log("🚀 Buscando conexões WhatsApp - versão simplificada")
 
-      // Primeira tentativa: buscar todas as conexões
-      const { data: allConnections, error: allError } = await supabase
+      // Busca simples sem joins
+      const { data, error, count } = await supabase
         .from("whatsapp_connections")
-        .select("*")
+        .select("id, connection_name, instance_name, status, user_id, phone_number, created_at", { count: "exact" })
         .order("created_at", { ascending: false })
 
-      console.log("📊 Todas as conexões encontradas:", allConnections)
-      console.log("❌ Erro na busca geral:", allError)
+      console.log("📊 Resultado da busca:")
+      console.log("- Data:", data)
+      console.log("- Error:", error)
+      console.log("- Count:", count)
 
-      if (allError) {
-        setDebugInfo(`Erro na busca geral: ${allError.message}`)
-        console.error("Erro ao buscar todas as conexões:", allError)
+      if (error) {
+        console.error("❌ Erro na consulta:", error)
+        setDebugInfo(`❌ Erro: ${error.message}`)
+        return
       }
 
-      // Segunda tentativa: buscar com join
-      const { data: connectionsWithUsers, error: joinError } = await supabase
-        .from("whatsapp_connections")
-        .select(`
-          id,
-          connection_name,
-          instance_name,
-          status,
-          user_id,
-          phone_number,
-          created_at,
-          user_profiles!whatsapp_connections_user_id_fkey(
-            full_name,
-            email
-          )
-        `)
-        .order("created_at", { ascending: false })
-
-      console.log("👥 Conexões com usuários:", connectionsWithUsers)
-      console.log("❌ Erro no join:", joinError)
-
-      if (joinError) {
-        setDebugInfo((prev) => prev + ` | Erro no join: ${joinError.message}`)
-        console.error("Erro ao buscar conexões com usuários:", joinError)
+      if (!data) {
+        console.log("⚠️ Nenhum dado retornado")
+        setDebugInfo("⚠️ Consulta retornou null")
+        return
       }
 
-      // Usar os dados que funcionaram
-      const finalData = connectionsWithUsers || allConnections || []
-
-      console.log("✅ Dados finais para o dropdown:", finalData)
-      setDebugInfo(`Encontradas ${finalData.length} conexões`)
-      setWhatsappConnections(finalData)
-
-      // Log detalhado de cada conexão
-      finalData.forEach((conn, index) => {
-        console.log(`📱 Conexão ${index + 1}:`, {
-          id: conn.id,
-          name: conn.connection_name || conn.instance_name,
-          status: conn.status,
-          user: conn.user_profiles?.full_name || conn.user_id,
-        })
+      console.log(`✅ ${data.length} conexões encontradas:`)
+      data.forEach((conn, index) => {
+        console.log(`  ${index + 1}. ${conn.instance_name} (${conn.status}) - ID: ${conn.id}`)
       })
+
+      setWhatsappConnections(data)
+      setDebugInfo(`✅ ${data.length} conexões carregadas`)
     } catch (error) {
-      console.error("💥 Erro geral ao buscar conexões:", error)
-      setDebugInfo(`Erro geral: ${error}`)
+      console.error("💥 Erro geral:", error)
+      setDebugInfo(`💥 Erro: ${error}`)
     } finally {
       setLoadingConnections(false)
     }
@@ -130,7 +100,7 @@ export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalP
     setLoading(true)
 
     try {
-      console.log("💾 Salvando agente com dados:", formData)
+      console.log("💾 Dados do agente para salvar:", formData)
 
       // Simular salvamento
       await new Promise((resolve) => setTimeout(resolve, 1000))
@@ -153,21 +123,22 @@ export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalP
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="name">Nome</Label>
+              <Label htmlFor="name">Nome da IA *</Label>
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Nome do agente"
+                placeholder="Ex: Luna, Assistente de Vendas, Bot Atendimento"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">Este será o nome que identifica sua IA no sistema</p>
             </div>
 
             <div>
-              <Label htmlFor="type">Tipo</Label>
+              <Label htmlFor="type">Função Principal</Label>
               <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Atendimento ao Cliente" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="vendas">Vendas</SelectItem>
@@ -180,10 +151,27 @@ export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalP
           </div>
 
           <div>
+            <Label htmlFor="description">Descrição do Propósito da IA</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Ex: IA especializada em vendas de produtos digitais, focada em qualificar leads e agendar reuniões"
+              rows={3}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Descreva qual é o objetivo principal desta IA (vendas, suporte, agendamento, etc.)
+            </p>
+          </div>
+
+          <div>
             <Label htmlFor="whatsapp_connection">Conexão WhatsApp *</Label>
             <Select
               value={formData.whatsapp_connection_id}
-              onValueChange={(value) => setFormData({ ...formData, whatsapp_connection_id: value })}
+              onValueChange={(value) => {
+                console.log("🔄 Conexão selecionada:", value)
+                setFormData({ ...formData, whatsapp_connection_id: value })
+              }}
               disabled={loadingConnections}
             >
               <SelectTrigger>
@@ -193,19 +181,18 @@ export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalP
                       ? "Carregando conexões..."
                       : whatsappConnections.length === 0
                         ? "Nenhuma conexão disponível"
-                        : "Selecione uma conexão WhatsApp"
+                        : "Selecione qual número WhatsApp esta IA irá usar"
                   }
                 />
               </SelectTrigger>
               <SelectContent>
                 {whatsappConnections.map((connection) => (
                   <SelectItem key={connection.id} value={connection.id}>
-                    <div className="flex flex-col">
+                    <div className="flex flex-col text-left">
                       <span className="font-medium">{connection.connection_name || connection.instance_name}</span>
                       <span className="text-xs text-gray-500">
                         {connection.phone_number && `📱 ${connection.phone_number} • `}
                         Status: {connection.status}
-                        {connection.user_profiles?.full_name && ` • ${connection.user_profiles.full_name}`}
                       </span>
                     </div>
                   </SelectItem>
@@ -213,39 +200,40 @@ export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalP
               </SelectContent>
             </Select>
 
-            {/* Debug info */}
+            <p className="text-xs text-gray-500 mt-1">
+              Escolha qual número de WhatsApp esta IA irá utilizar para se comunicar
+            </p>
+
+            {/* Debug info mais visível */}
             {debugInfo && (
-              <div className="text-xs text-blue-600 mt-1 p-2 bg-blue-50 rounded">🔍 Debug: {debugInfo}</div>
+              <div className="text-sm text-blue-700 mt-2 p-3 bg-blue-50 rounded border border-blue-200">
+                <strong>Debug:</strong> {debugInfo}
+              </div>
             )}
 
             {whatsappConnections.length === 0 && !loadingConnections && (
-              <p className="text-xs text-red-500 mt-1">
-                ⚠️ Nenhuma conexão WhatsApp encontrada. Verifique se existem conexões criadas.
-              </p>
+              <div className="text-sm text-red-600 mt-2 p-3 bg-red-50 rounded border border-red-200">
+                <strong>⚠️ Atenção:</strong> Nenhuma conexão WhatsApp encontrada.{" "}
+                <a href="/admin/whatsapp" className="underline text-blue-600">
+                  Crie uma conexão primeiro
+                </a>
+              </div>
             )}
           </div>
 
           <div>
-            <Label htmlFor="description">Descrição</Label>
-            <Textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Descrição do agente"
-              rows={3}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="training_prompt">Prompt de Treinamento *</Label>
+            <Label htmlFor="training_prompt">Instruções de Comportamento (Prompt de Treinamento) *</Label>
             <Textarea
               id="training_prompt"
               value={formData.training_prompt}
               onChange={(e) => setFormData({ ...formData, training_prompt: e.target.value })}
-              placeholder="Instruções de comportamento para o agente..."
+              placeholder="Ex: Você é uma assistente de vendas especializada em produtos digitais. Seja sempre educada, faça perguntas para entender as necessidades do cliente, e conduza a conversa para agendar uma reunião. Nunca invente informações que não possui."
               rows={4}
               required
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Instruções detalhadas sobre como a IA deve se comportar, responder e agir durante as conversas
+            </p>
           </div>
 
           <div>
@@ -262,7 +250,7 @@ export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalP
             </Select>
           </div>
 
-          <div className="flex justify-end space-x-2 pt-4">
+          <div className="flex justify-end space-x-2 pt-4 border-t">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
