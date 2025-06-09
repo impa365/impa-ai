@@ -237,7 +237,7 @@ export async function changePassword(
 
     // 1. Buscar o usuário para verificar a senha antiga
     const { data: userProfile, error: fetchError } = await supabase
-      .from("user_profiles") // Remover "impaai." pois já está configurado no supabase
+      .from("user_profiles")
       .select("password")
       .eq("id", userId)
       .single()
@@ -255,26 +255,24 @@ export async function changePassword(
       return { success: false, error: "Senha atual incorreta." }
     }
 
-    console.log("✅ Senha antiga verificada, atualizando...")
+    console.log("✅ Senha antiga verificada, atualizando para nova senha...")
 
-    // 3. Atualizar a senha (texto plano)
-    const { error: updateError } = await supabase
+    // 3. Atualizar a senha (texto plano) - CORREÇÃO AQUI
+    const { data, error: updateError } = await supabase
       .from("user_profiles")
-      .update({
-        password: newPassword,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ password: newPassword })
       .eq("id", userId)
+      .select()
 
     if (updateError) {
       console.error("Erro ao atualizar senha:", updateError)
-      return { success: false, error: "Erro ao atualizar a senha." }
+      return { success: false, error: "Erro ao atualizar a senha: " + updateError.message }
     }
 
-    console.log("✅ Senha atualizada com sucesso!")
+    console.log("✅ Senha atualizada com sucesso!", data)
     return { success: true }
   } catch (error: any) {
     console.error("💥 Erro inesperado ao trocar senha:", error.message)
-    return { success: false, error: "Erro interno do servidor." }
+    return { success: false, error: "Erro interno do servidor: " + error.message }
   }
 }

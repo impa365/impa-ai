@@ -165,26 +165,31 @@ export default function UserSettings() {
       // Validações
       if (!profileForm.full_name.trim()) {
         setProfileMessage("Nome é obrigatório")
+        setSavingProfile(false)
         return
       }
 
       if (!profileForm.email.trim()) {
         setProfileMessage("Email é obrigatório")
+        setSavingProfile(false)
         return
       }
 
       if (profileForm.newPassword && profileForm.newPassword !== profileForm.confirmPassword) {
         setProfileMessage("Senhas não coincidem")
+        setSavingProfile(false)
         return
       }
 
       if (profileForm.newPassword && !profileForm.currentPassword) {
         setProfileMessage("Senha atual é obrigatória para alterar a senha")
+        setSavingProfile(false)
         return
       }
 
       if (profileForm.newPassword && profileForm.newPassword.length < 6) {
         setProfileMessage("A nova senha deve ter pelo menos 6 caracteres")
+        setSavingProfile(false)
         return
       }
 
@@ -198,14 +203,22 @@ export default function UserSettings() {
         })
         .eq("id", user.id)
 
-      if (error) throw error
+      if (error) {
+        console.error("Erro ao atualizar perfil:", error)
+        throw error
+      }
 
       // Se há nova senha, trocar a senha
       if (profileForm.newPassword) {
+        console.log("Alterando senha do usuário:", user.id)
+
         const passwordResult = await changePassword(user.id, profileForm.currentPassword, profileForm.newPassword)
+
+        console.log("Resultado da alteração de senha:", passwordResult)
 
         if (!passwordResult.success) {
           setProfileMessage(passwordResult.error || "Erro ao alterar senha")
+          setSavingProfile(false)
           return
         }
       }
@@ -231,7 +244,6 @@ export default function UserSettings() {
       setProfileMessage("Erro ao atualizar perfil: " + (error as any).message)
     } finally {
       setSavingProfile(false)
-      setTimeout(() => setProfileMessage(""), 5000)
     }
   }
 
