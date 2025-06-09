@@ -56,14 +56,7 @@ export default function WhatsAppQRModal({ open, onOpenChange, connection, onStat
       if (!connection?.instance_name) return
 
       try {
-        // Aqui você implementaria a verificação de status via API
-        // const status = await checkInstanceStatus(connection.instance_name)
-        // onStatusChange(status)
-        // Se conectado, parar verificação e fechar modal
-        // if (status === 'connected') {
-        //   clearInterval(statusCheckRef.current!)
-        //   onOpenChange(false)
-        // }
+        // Implementar verificação de status via API
       } catch (error) {
         console.error("Erro ao verificar status:", error)
       }
@@ -116,7 +109,7 @@ export default function WhatsAppQRModal({ open, onOpenChange, connection, onStat
   const getStatusBadge = () => {
     if (loading) {
       return (
-        <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+        <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
           <Loader2 className="w-3 h-3 mr-1 animate-spin" />
           Carregando
         </Badge>
@@ -125,7 +118,7 @@ export default function WhatsAppQRModal({ open, onOpenChange, connection, onStat
 
     if (connection?.status === "connected") {
       return (
-        <Badge variant="default" className="bg-green-100 text-green-700">
+        <Badge variant="default" className="bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300">
           <CheckCircle className="w-3 h-3 mr-1" />
           Conectado
         </Badge>
@@ -134,7 +127,7 @@ export default function WhatsAppQRModal({ open, onOpenChange, connection, onStat
 
     if (connection?.status === "connecting") {
       return (
-        <Badge variant="secondary" className="bg-yellow-100 text-yellow-700">
+        <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300">
           <Clock className="w-3 h-3 mr-1" />
           Conectando
         </Badge>
@@ -142,7 +135,7 @@ export default function WhatsAppQRModal({ open, onOpenChange, connection, onStat
     }
 
     return (
-      <Badge variant="secondary" className="bg-gray-100 text-gray-700">
+      <Badge variant="secondary" className="bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
         <XCircle className="w-3 h-3 mr-1" />
         Desconectado
       </Badge>
@@ -153,25 +146,27 @@ export default function WhatsAppQRModal({ open, onOpenChange, connection, onStat
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <Smartphone className="w-5 h-5" />
             Conectar WhatsApp - {connection?.connection_name}
           </DialogTitle>
-          <DialogDescription>Escaneie o QR Code com seu WhatsApp para conectar</DialogDescription>
+          <DialogDescription className="text-muted-foreground">
+            Escaneie o QR Code com seu WhatsApp para conectar
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex justify-center mb-4">{getStatusBadge()}</div>
 
         {error && (
           <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription className="text-destructive-foreground">{error}</AlertDescription>
           </Alert>
         )}
 
         <div className="space-y-4">
           <div className="flex justify-center">
             {loading ? (
-              <div className="w-64 h-64 border rounded-lg flex items-center justify-center bg-gray-50">
+              <div className="w-64 h-64 border rounded-lg flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
               </div>
             ) : qrCode ? (
@@ -191,8 +186,8 @@ export default function WhatsAppQRModal({ open, onOpenChange, connection, onStat
                 )}
               </div>
             ) : (
-              <div className="w-64 h-64 border rounded-lg flex items-center justify-center bg-gray-50">
-                <div className="text-center text-gray-500">
+              <div className="w-64 h-64 border rounded-lg flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                <div className="text-center text-muted-foreground">
                   <Smartphone className="w-8 h-8 mx-auto mb-2" />
                   <p className="text-sm">Clique em "Gerar QR Code"</p>
                 </div>
@@ -203,19 +198,19 @@ export default function WhatsAppQRModal({ open, onOpenChange, connection, onStat
           {qrCode && !isExpired && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span>Tempo restante:</span>
-                <span className="font-mono">{timeLeft}s</span>
+                <span className="text-foreground">Tempo restante:</span>
+                <span className="font-mono text-foreground">{timeLeft}s</span>
               </div>
               <Progress value={(timeLeft / 40) * 100} className="h-2" />
             </div>
           )}
 
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h4 className="font-medium mb-2 flex items-center">
+          <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+            <h4 className="font-medium mb-2 flex items-center text-blue-800 dark:text-blue-200">
               <Smartphone className="w-4 h-4 mr-2" />
               Como conectar:
             </h4>
-            <ol className="text-sm space-y-1 list-decimal list-inside text-gray-600">
+            <ol className="text-sm space-y-1 list-decimal list-inside text-blue-700 dark:text-blue-300">
               <li>Abra o WhatsApp no seu celular</li>
               <li>Toque em "Mais opções" (⋮) e depois "Aparelhos conectados"</li>
               <li>Toque em "Conectar um aparelho"</li>
@@ -233,7 +228,7 @@ export default function WhatsAppQRModal({ open, onOpenChange, connection, onStat
               <RefreshCw className="w-4 h-4 mr-2" />
               {isExpired ? "Gerar Novo QR Code" : "Atualizar QR Code"}
             </Button>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="text-foreground">
               Fechar
             </Button>
           </div>

@@ -1,15 +1,29 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Edit, Trash2, QrCode, Smartphone, PowerOff, UserPlus, Plus, Search, Filter, X } from "lucide-react"
+import {
+  Edit,
+  Trash2,
+  QrCode,
+  Smartphone,
+  PowerOff,
+  UserPlus,
+  Plus,
+  Search,
+  Filter,
+  X,
+  RefreshCw,
+  Info,
+} from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
-import { disconnectInstance } from "@/lib/whatsapp-settings-api"
+import WhatsAppInfoModal from "@/components/whatsapp-info-modal"
+import { syncInstanceStatus, disconnectInstance } from "@/lib/whatsapp-settings-api"
 import { getCurrentUser } from "@/lib/auth"
 import AdminWhatsAppConnectionModal from "@/components/admin-whatsapp-connection-modal"
 import TransferConnectionModal from "@/components/transfer-connection-modal"
@@ -29,6 +43,7 @@ export default function AdminWhatsAppPage() {
   const [loading, setLoading] = useState(true)
   const [qrModalOpen, setQrModalOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [infoModalOpen, setInfoModalOpen] = useState(false)
   const [selectedConnection, setSelectedConnection] = useState<any>(null)
   const [saveMessage, setSaveMessage] = useState("")
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -47,6 +62,8 @@ export default function AdminWhatsAppPage() {
   // Estados para confirmação de exclusão
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [connectionToDelete, setConnectionToDelete] = useState<any>(null)
+
+  const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
     const user = getCurrentUser()
@@ -92,13 +109,97 @@ export default function AdminWhatsAppPage() {
     })
   }, [connections, searchTerm, statusFilter])
 
+  // Função para sincronizar status de uma conexão específica
+  const syncConnection = useCallback(
+    async (connectionId: string) => {
+      if (syncing) return
+
+      setSyncing(true)
+      try {
+        await syncInstanceStatus(connectionId)
+        await fetchConnections()
+      } catch (error) {
+        console.error("Erro ao sincronizar:", error)
+      } finally {
+        setSyncing(false)
+      }
+    },
+    [syncing],
+  )
+
+  // Modifique a função de sincronização manual para lidar melhor com erros
+  const handleManualSync = async () => {
+    if (syncing || !connections.length) return
+
+    setSyncing(true)
+    try {
+      // Sincronizar conexões em paralelo com Promise.allSettled para continuar mesmo com erros
+      const syncPromises = connections.map((connection) =>
+        syncInstanceStatus(connection.id).catch((error) => {
+          console.error(`Erro ao sincronizar conexão ${connection.id}:`, error)
+          return { success: false, updated: false, error: String(error) }
+        }),
+      )
+
+      await Promise.allSettled(syncPromises)
+
+      // Recarregar conexões após sincronização
+      await fetchConnections()
+    } catch (error) {
+      console.error("Erro na sincronização manual:", error)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Modifique a função de sincronização silenciosa para lidar melhor com erros
+  useEffect(() => {
+    if (connections.length > 0) {
+      // Sincronização silenciosa (sem indicador visual)
+      const syncSilently = async () => {
+        try {
+          // Sincronizar conexões em paralelo com Promise.allSettled para continuar mesmo com erros
+          const syncPromises = connections.map((connection) =>
+            syncInstanceStatus(connection.id).catch((error) => {
+              console.error(`Erro ao sincronizar conexão ${connection.id}:`, error)
+              return { success: false, updated: false, error: String(error) }
+            }),
+          )
+
+          await Promise.allSettled(syncPromises)
+
+          // Recarregar conexões após sincronização
+          await fetchConnections()
+        } catch (error) {
+          console.error("Erro na sincronização silenciosa:", error)
+        }
+      }
+
+      syncSilently()
+    }
+  }, [connections.length])
+
+  // Quando o modal QR é aberto, sincronizar a conexão selecionada
+  useEffect(() => {
+    if (qrModalOpen && selectedConnection) {
+      syncConnection(selectedConnection.id)
+    }
+  }, [qrModalOpen, selectedConnection, syncConnection])
+
+  // Quando o modal de configurações é aberto, sincronizar a conexão selecionada
+  useEffect(() => {
+    if (settingsModalOpen && selectedConnection) {
+      syncConnection(selectedConnection.id)
+    }
+  }, [settingsModalOpen, selectedConnection, syncConnection])
+
   const handleDisconnectConnection = async (connection: any) => {
     try {
       const result = await disconnectInstance(connection.instance_name)
 
       if (result.success) {
-        await supabase.from("whatsapp_connections").update({ status: "disconnected" }).eq("id", connection.id)
-        await fetchConnections()
+        // Sincronizar status após desconectar
+        await syncConnection(connection.id)
         setSaveMessage("Conexão desconectada com sucesso!")
         setTimeout(() => setSaveMessage(""), 3000)
       }
@@ -168,10 +269,22 @@ export default function AdminWhatsAppPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Conexões WhatsApp</h1>
           <p className="text-gray-600">Todas as conexões WhatsApp dos usuários</p>
         </div>
-        <Button onClick={() => setCreateModalOpen(true)} className="gap-2">
-          <Plus className="w-4 h-4" />
-          Nova Conexão
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleManualSync}
+            disabled={syncing}
+            className="gap-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+            title="Sincronizar status das conexões"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+            <span className="text-gray-700">{syncing ? "Sincronizando..." : "Sincronizar"}</span>
+          </Button>
+          <Button onClick={() => setCreateModalOpen(true)} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+            <Plus className="w-4 h-4" />
+            Nova Conexão
+          </Button>
+        </div>
       </div>
 
       {saveMessage && (
@@ -189,7 +302,12 @@ export default function AdminWhatsAppPage() {
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Filtros</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className="gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
+            >
               <Filter className="w-4 h-4" />
               {showFilters ? "Ocultar" : "Mostrar"} Filtros
             </Button>
@@ -246,18 +364,12 @@ export default function AdminWhatsAppPage() {
             </div>
           )}
 
-          {/* Contador de resultados */}
-          <div className="flex items-center justify-between text-sm text-gray-600">
-            <span>
+          <div className="flex justify-between items-start mb-6">
+            <div className="text-sm text-gray-500">
               Mostrando {filteredConnections.length} de {connections.length} conexões
               {hasActiveFilters && " (filtrado)"}
-            </span>
-            {hasActiveFilters && (
-              <Badge variant="secondary" className="gap-1">
-                <Filter className="w-3 h-3" />
-                Filtros ativos
-              </Badge>
-            )}
+              {syncing && <span className="ml-2 text-blue-600">• Sincronizando status...</span>}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -299,64 +411,98 @@ export default function AdminWhatsAppPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge
-                      variant={connection.status === "connected" ? "default" : "secondary"}
+                      variant={
+                        connection.status === "connected"
+                          ? "default"
+                          : connection.status === "connecting"
+                            ? "secondary"
+                            : "secondary"
+                      }
                       className={
-                        connection.status === "connected" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
+                        connection.status === "connected"
+                          ? "bg-green-100 text-green-700"
+                          : connection.status === "connecting"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-gray-100 text-gray-700"
                       }
                     >
-                      {connection.status === "connected" ? "Conectado" : "Desconectado"}
+                      {connection.status === "connected"
+                        ? "Conectado"
+                        : connection.status === "connecting"
+                          ? "Conectando"
+                          : connection.status === "error"
+                            ? "Erro"
+                            : "Desconectado"}
                     </Badge>
                     <div className="flex gap-1">
+                      {connection.status === "connected" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedConnection(connection)
+                            setInfoModalOpen(true)
+                          }}
+                          title="Ver Informações"
+                          className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                        >
+                          <Info className="w-4 h-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedConnection(connection)
+                            setQrModalOpen(true)
+                          }}
+                          title="Ver QR Code"
+                          className="border-green-200 text-green-600 hover:bg-green-50"
+                        >
+                          <QrCode className="w-4 h-4" />
+                        </Button>
+                      )}
                       <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedConnection(connection)
-                          setQrModalOpen(true)
-                        }}
-                        title="Ver QR Code"
-                      >
-                        <QrCode className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => {
                           setSelectedConnection(connection)
                           setSettingsModalOpen(true)
                         }}
                         title="Configurações"
+                        className="border-gray-200 text-gray-600 hover:bg-gray-50"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => {
                           setSelectedConnection(connection)
                           setTransferModalOpen(true)
                         }}
                         title="Transferir Propriedade"
+                        className="border-purple-200 text-purple-600 hover:bg-purple-50"
                       >
                         <UserPlus className="w-4 h-4" />
                       </Button>
-                      {connection.status === "connected" && (
+                      {(connection.status === "connected" || connection.status === "connecting") && (
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="text-orange-600"
                           onClick={() => handleDisconnectConnection(connection)}
                           title="Desconectar"
+                          className="border-orange-200 text-orange-600 hover:bg-orange-50"
                         >
                           <PowerOff className="w-4 h-4" />
                         </Button>
                       )}
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        className="text-red-600"
                         onClick={() => handleDeleteConnection(connection)}
                         title="Excluir"
+                        className="border-red-200 text-red-600 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -392,6 +538,21 @@ export default function AdminWhatsAppPage() {
         onSettingsSaved={() => {
           setSaveMessage("Configurações salvas com sucesso!")
           setTimeout(() => setSaveMessage(""), 3000)
+        }}
+      />
+
+      <WhatsAppInfoModal
+        open={infoModalOpen}
+        onOpenChange={setInfoModalOpen}
+        connection={selectedConnection}
+        onStatusChange={(status) => {
+          if (selectedConnection) {
+            supabase
+              .from("whatsapp_connections")
+              .update({ status })
+              .eq("id", selectedConnection.id)
+              .then(() => fetchConnections())
+          }
         }}
       />
 

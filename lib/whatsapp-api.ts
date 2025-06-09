@@ -144,6 +144,67 @@ export async function createEvolutionInstance(
   }
 }
 
+// Função para buscar detalhes da instância
+export async function fetchInstanceDetails(instanceName: string): Promise<{
+  success: boolean
+  data?: any
+  error?: string
+}> {
+  try {
+    // Buscar configurações da Evolution API
+    const { data: integrationData } = await supabase
+      .from("integrations")
+      .select("config")
+      .eq("type", "evolution_api")
+      .eq("is_active", true)
+      .single()
+
+    if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
+      return {
+        success: false,
+        error: "Evolution API não configurada.",
+      }
+    }
+
+    const response = await fetch(`${integrationData.config.apiUrl}/instance/fetchInstances`, {
+      method: "GET",
+      headers: {
+        apikey: integrationData.config.apiKey,
+      },
+    })
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `Erro ao buscar detalhes: ${response.status}`,
+      }
+    }
+
+    const data = await response.json()
+
+    // Filtrar para obter apenas a instância solicitada
+    const instanceDetails = Array.isArray(data) ? data.find((instance) => instance.name === instanceName) : data
+
+    if (!instanceDetails) {
+      return {
+        success: false,
+        error: "Instância não encontrada",
+      }
+    }
+
+    return {
+      success: true,
+      data: instanceDetails,
+    }
+  } catch (error) {
+    console.error("Erro ao buscar detalhes da instância:", error)
+    return {
+      success: false,
+      error: "Erro interno do servidor.",
+    }
+  }
+}
+
 // Função para buscar QR Code
 export async function getInstanceQRCode(instanceName: string): Promise<{
   success: boolean

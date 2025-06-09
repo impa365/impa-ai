@@ -4,11 +4,10 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Plus, Edit, Trash2, Users } from "lucide-react"
+import { Plus, Edit, Trash2, Users, Key } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import UserModal from "@/components/user-modal"
+import ChangePasswordModal from "@/components/change-password-modal"
 import {
   Dialog,
   DialogContent,
@@ -22,40 +21,58 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [userModalOpen, setUserModalOpen] = useState(false)
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false)
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<any>(null)
+  const [selectedUserForPassword, setSelectedUserForPassword] = useState<any>(null)
   const [deleteUserModal, setDeleteUserModal] = useState(false)
   const [userToDelete, setUserToDelete] = useState<any>(null)
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState("")
-  const [systemLimits, setSystemLimits] = useState({
-    defaultLimit: 2,
-  })
 
   useEffect(() => {
     fetchUsers()
-    fetchSystemSettings()
   }, [])
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase.from("user_profiles").select("*").order("created_at", { ascending: false })
-      if (data) setUsers(data)
+      // Buscar usuários com suas configurações diretamente de user_profiles
+      const { data: usersData, error } = await supabase
+        .from("user_profiles")
+        .select(`
+        id,
+        full_name,
+        email,
+        role,
+        status,
+        last_login_at,
+        created_at,
+        agents_limit,
+        connections_limit 
+      `)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("Erro ao buscar usuários:", error)
+        setSaveMessage("Erro ao buscar usuários: " + error.message)
+        setUsers([])
+        setLoading(false)
+        return
+      }
+
+      if (usersData) {
+        // Mapear os dados para usar os nomes corretos das colunas
+        const mappedUsers = usersData.map((user) => ({
+          ...user,
+          // Os limites agora vêm diretamente da tabela user_profiles
+          // Se connections_limit for null, usar um valor padrão (ex: 2)
+          whatsapp_connections_limit: user.connections_limit || 2,
+        }))
+        setUsers(mappedUsers)
+      }
     } catch (error) {
       console.error("Erro ao buscar usuários:", error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const fetchSystemSettings = async () => {
-    const { data } = await supabase
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "default_whatsapp_connections_limit")
-      .single()
-
-    if (data) {
-      setSystemLimits({ defaultLimit: data.setting_value })
     }
   }
 
@@ -65,7 +82,7 @@ export default function AdminUsersPage() {
     setSaving(true)
     try {
       await supabase.from("whatsapp_connections").delete().eq("user_id", userToDelete.id)
-      await supabase.from("user_settings").delete().eq("user_id", userToDelete.id)
+      await supabase.from("user_agent_settings").delete().eq("user_id", userToDelete.id)
       const { error } = await supabase.from("user_profiles").delete().eq("id", userToDelete.id)
 
       if (error) throw error
@@ -108,7 +125,7 @@ export default function AdminUsersPage() {
           <p className="text-gray-600">Controle total sobre usuários do sistema</p>
         </div>
         <Button
-          className="gap-2 bg-blue-600 hover:bg-blue-700"
+          className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
           onClick={() => {
             setSelectedUserForEdit(null)
             setUserModalOpen(true)
@@ -129,41 +146,6 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Configurações do Sistema</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="defaultLimit">Limite Padrão de Conexões WhatsApp</Label>
-              <Input
-                id="defaultLimit"
-                type="number"
-                value={systemLimits.defaultLimit}
-                onChange={(e) => setSystemLimits({ defaultLimit: Number.parseInt(e.target.value) || 2 })}
-                min="1"
-                max="10"
-              />
-            </div>
-            <div className="flex items-end">
-              <Button
-                onClick={async () => {
-                  await supabase.from("system_settings").upsert({
-                    setting_key: "default_whatsapp_connections_limit",
-                    setting_value: systemLimits.defaultLimit,
-                  })
-                  setSaveMessage("Configurações salvas!")
-                  setTimeout(() => setSaveMessage(""), 3000)
-                }}
-              >
-                Salvar Configurações
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader>
           <CardTitle>Usuários do Sistema</CardTitle>
@@ -180,7 +162,9 @@ export default function AdminUsersPage() {
                     <div className="font-medium">{user.full_name || "Sem nome"}</div>
                     <div className="text-sm text-gray-600">{user.email}</div>
                     <div className="text-xs text-gray-500">
-                      Último login: {user.last_login ? new Date(user.last_login).toLocaleDateString() : "Nunca"}
+                      Último login: {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : "Nunca"}
+                      {" • "}
+                      Limite WhatsApp: {user.whatsapp_connections_limit} conexões
                     </div>
                   </div>
                 </div>
@@ -210,23 +194,38 @@ export default function AdminUsersPage() {
                   </Badge>
                   <div className="flex gap-1">
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
+                      className="text-blue-600 border-blue-200 hover:bg-blue-50"
                       onClick={() => {
                         setSelectedUserForEdit(user)
                         setUserModalOpen(true)
                       }}
+                      title="Editar usuário"
                     >
                       <Edit className="w-4 h-4" />
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="text-red-600"
+                      className="text-orange-600 border-orange-200 hover:bg-orange-50"
+                      onClick={() => {
+                        setSelectedUserForPassword(user)
+                        setPasswordModalOpen(true)
+                      }}
+                      title="Alterar senha"
+                    >
+                      <Key className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 border-red-200 hover:bg-red-50"
                       onClick={() => {
                         setUserToDelete(user)
                         setDeleteUserModal(true)
                       }}
+                      title="Excluir usuário"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -242,6 +241,13 @@ export default function AdminUsersPage() {
         open={userModalOpen}
         onOpenChange={setUserModalOpen}
         user={selectedUserForEdit}
+        onSuccess={fetchUsers}
+      />
+
+      <ChangePasswordModal
+        open={passwordModalOpen}
+        onOpenChange={setPasswordModalOpen}
+        user={selectedUserForPassword}
         onSuccess={fetchUsers}
       />
 

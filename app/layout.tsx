@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Impa AI - Plataforma de Agentes Inteligentes",
   description: "Sistema de gerenciamento de agentes de IA",
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default function RootLayout({

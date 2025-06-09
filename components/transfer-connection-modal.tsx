@@ -36,7 +36,6 @@ export default function TransferConnectionModal({
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
-  // Carregar usuários quando o modal abrir
   useEffect(() => {
     if (open && connection) {
       fetchUsers()
@@ -65,7 +64,6 @@ export default function TransferConnectionModal({
   const handleTransfer = async () => {
     if (!connection || !selectedUserId) return
 
-    // Se o usuário selecionado é o mesmo, não faz nada
     if (selectedUserId === connection.user_id) {
       setError("Selecione um usuário diferente do atual")
       return
@@ -76,14 +74,12 @@ export default function TransferConnectionModal({
     setSuccess("")
 
     try {
-      // Verificar limite de conexões do usuário
       const { data: userSettings } = await supabase
         .from("user_settings")
         .select("whatsapp_connections_limit")
         .eq("user_id", selectedUserId)
         .single()
 
-      // Contar conexões atuais do usuário
       const { data: userConnections, count } = await supabase
         .from("whatsapp_connections")
         .select("id", { count: "exact" })
@@ -97,7 +93,6 @@ export default function TransferConnectionModal({
         return
       }
 
-      // Transferir a conexão
       const { error: updateError } = await supabase
         .from("whatsapp_connections")
         .update({ user_id: selectedUserId })
@@ -107,7 +102,6 @@ export default function TransferConnectionModal({
 
       setSuccess("Conexão transferida com sucesso!")
 
-      // Fechar o modal após 2 segundos
       setTimeout(() => {
         onOpenChange(false)
         onSuccess()
@@ -120,7 +114,6 @@ export default function TransferConnectionModal({
     }
   }
 
-  // Reset states when modal closes
   const handleModalClose = (open: boolean) => {
     if (!open) {
       setError("")
@@ -134,38 +127,44 @@ export default function TransferConnectionModal({
     <Dialog open={open} onOpenChange={handleModalClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <UserPlus className="w-5 h-5" />
             Transferir Conexão WhatsApp
           </DialogTitle>
-          <DialogDescription>Transferir a conexão "{connection?.connection_name}" para outro usuário</DialogDescription>
+          <DialogDescription className="text-muted-foreground">
+            Transferir a conexão "{connection?.connection_name}" para outro usuário
+          </DialogDescription>
         </DialogHeader>
 
         {error && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription className="text-destructive-foreground">{error}</AlertDescription>
           </Alert>
         )}
 
         {success && (
-          <Alert variant="default" className="bg-green-50 text-green-800 border-green-200">
-            <AlertDescription>{success}</AlertDescription>
+          <Alert className="border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
+            <AlertDescription className="text-green-700 dark:text-green-300">{success}</AlertDescription>
           </Alert>
         )}
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="currentUser">Usuário Atual</Label>
-            <div className="p-2 border rounded-md bg-gray-50">
+            <Label htmlFor="currentUser" className="text-foreground">
+              Usuário Atual
+            </Label>
+            <div className="p-2 border rounded-md bg-muted text-foreground">
               {connection?.user_profiles?.full_name || connection?.user_profiles?.email || "Desconhecido"}
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="newUser">Novo Usuário</Label>
+            <Label htmlFor="newUser" className="text-foreground">
+              Novo Usuário
+            </Label>
             <Select value={selectedUserId} onValueChange={setSelectedUserId} disabled={loading || loadingUsers}>
-              <SelectTrigger id="newUser" className="w-full">
+              <SelectTrigger id="newUser" className="w-full text-foreground">
                 <SelectValue placeholder="Selecione um usuário" />
               </SelectTrigger>
               <SelectContent>
@@ -188,12 +187,19 @@ export default function TransferConnectionModal({
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => handleModalClose(false)} disabled={loading}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => handleModalClose(false)}
+            disabled={loading}
+            className="text-foreground"
+          >
             Cancelar
           </Button>
           <Button
             onClick={handleTransfer}
             disabled={loading || !selectedUserId || selectedUserId === connection?.user_id}
+            className="bg-blue-600 text-white hover:bg-blue-700"
           >
             {loading ? (
               <>

@@ -18,8 +18,6 @@ import {
 } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
-  TrendingUp,
-  MessageSquare,
   Download,
   Settings,
   Plus,
@@ -39,15 +37,13 @@ import {
   Users,
   Bot,
   Smartphone,
+  Activity,
 } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
-import { supabase } from "@/lib/supabase"
+import { db } from "@/lib/supabase"
 import { useTheme } from "@/components/theme-provider"
 import { themePresets, type ThemeConfig } from "@/lib/theme"
 import Image from "next/image"
-import UserModal from "@/components/user-modal"
-import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
-import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
 import { disconnectInstance } from "@/lib/whatsapp-settings-api"
 
 export default function AdminDashboard() {
@@ -114,8 +110,8 @@ export default function AdminDashboard() {
   const [selectedWhatsAppConnection, setSelectedWhatsAppConnection] = useState<any>(null)
 
   const fetchWhatsAppConnections = async () => {
-    const { data } = await supabase
-      .from("whatsapp_connections")
+    const { data } = await db
+      .whatsappConnections()
       .select(`
         *,
         user_profiles!whatsapp_connections_user_id_fkey(full_name, email)
@@ -126,8 +122,8 @@ export default function AdminDashboard() {
   }
 
   const fetchSystemSettings = async () => {
-    const { data } = await supabase
-      .from("system_settings")
+    const { data } = await db
+      .systemSettings()
       .select("setting_value")
       .eq("setting_key", "default_whatsapp_connections_limit")
       .single()
@@ -159,21 +155,20 @@ export default function AdminDashboard() {
   }, [router])
 
   const handleLogout = async () => {
-    // await signOut() // removido pois não existe mais
     router.push("/")
   }
 
   const fetchUsers = async () => {
-    const { data, error } = await supabase.from("user_profiles").select("*").order("created_at", { ascending: false })
+    const { data, error } = await db.users().select("*").order("created_at", { ascending: false })
     if (data) setUsers(data)
   }
 
   const fetchAgents = async () => {
-    const { data, error } = await supabase
-      .from("ai_agents")
+    const { data, error } = await db
+      .agents()
       .select(`
         *,
-        user_profiles!ai_agents_organization_id_fkey(email)
+        user_profiles!ai_agents_user_id_fkey(email)
       `)
       .order("created_at", { ascending: false })
 
@@ -181,29 +176,19 @@ export default function AdminDashboard() {
   }
 
   const fetchMetrics = async () => {
-    const { count: userCount } = await supabase.from("user_profiles").select("*", { count: "exact", head: true })
-    const { count: agentCount } = await supabase
-      .from("ai_agents")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "active")
-    const { data: revenueData } = await supabase.from("daily_metrics").select("revenue_generated")
-    const totalRevenue = revenueData?.reduce((sum, item) => sum + (item.revenue_generated || 0), 0) || 0
-    const { data: messagesData } = await supabase
-      .from("daily_metrics")
-      .select("total_messages")
-      .gte("date", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
-    const dailyMessages = messagesData?.reduce((sum, item) => sum + (item.total_messages || 0), 0) || 0
+    const { count: userCount } = await db.users().select("*", { count: "exact", head: true })
+    const { count: agentCount } = await db.agents().select("*", { count: "exact", head: true }).eq("status", "active")
 
     setMetrics({
       totalUsers: userCount || 0,
       activeAgents: agentCount || 0,
-      totalRevenue: totalRevenue,
-      dailyMessages: dailyMessages,
+      totalRevenue: 0, // Remover ou implementar cálculo real
+      dailyMessages: 0, // Remover ou implementar cálculo real
     })
   }
 
   const fetchIntegrations = async () => {
-    const { data, error } = await supabase.from("integrations").select("*").order("created_at", { ascending: false })
+    const { data, error } = await db.integrations().select("*").order("created_at", { ascending: false })
     if (data) setIntegrations(data)
   }
 
@@ -230,9 +215,9 @@ export default function AdminDashboard() {
 
     setSaving(true)
     try {
-      await supabase.from("whatsapp_connections").delete().eq("user_id", userToDelete.id)
-      await supabase.from("user_settings").delete().eq("user_id", userToDelete.id)
-      const { error } = await supabase.from("user_profiles").delete().eq("id", userToDelete.id)
+      await db.whatsappConnections().delete().eq("user_id", userToDelete.id)
+      await db.userSettings().delete().eq("user_id", userToDelete.id)
+      const { error } = await db.users().delete().eq("id", userToDelete.id)
 
       if (error) throw error
 
@@ -275,8 +260,8 @@ export default function AdminDashboard() {
         return
       }
 
-      const { error } = await supabase
-        .from("user_profiles")
+      const { error } = await db
+        .users()
         .update({
           full_name: adminProfileForm.full_name.trim(),
           email: adminProfileForm.email.trim(),
@@ -318,65 +303,220 @@ export default function AdminDashboard() {
   }
 
   const renderDashboard = () => (
-    <div>
-      <div className="flex justify-between items-start mb-8">
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Painel Administrativo</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Painel Administrativo</h1>
           <p className="text-gray-600">Visão geral do sistema {theme.systemName}</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2 text-gray-700 border-gray-300 hover:bg-gray-100">
             <Download className="w-4 h-4" />
-            Relatório Geral
+            Exportar Relatório
           </Button>
-          <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => updateURL("settings")}>
             <Settings className="w-4 h-4" />
-            Configurações Sistema
+            Configurações
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card>
+      {/* Métricas Principais */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Total de Usuários</CardTitle>
-            <Users className="w-5 h-5 text-blue-600" />
+            <CardTitle className="text-sm font-medium text-blue-700">Total de Usuários</CardTitle>
+            <div className="p-2 bg-blue-600 rounded-lg">
+              <Users className="w-5 h-5 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics.totalUsers}</div>
+            <div className="text-3xl font-bold text-blue-900">{metrics.totalUsers}</div>
+            <div className="text-sm text-blue-600 mt-2">Usuários registrados</div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Agentes Ativos</CardTitle>
-            <Bot className="w-5 h-5 text-green-600" />
+            <CardTitle className="text-sm font-medium text-green-700">Agentes Ativos</CardTitle>
+            <div className="p-2 bg-green-600 rounded-lg">
+              <Bot className="w-5 h-5 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics.activeAgents}</div>
+            <div className="text-3xl font-bold text-green-900">{metrics.activeAgents}</div>
+            <div className="text-sm text-green-600 mt-2">Agentes em funcionamento</div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Receita Total</CardTitle>
-            <TrendingUp className="w-5 h-5 text-purple-600" />
+            <CardTitle className="text-sm font-medium text-purple-700">Conexões WhatsApp</CardTitle>
+            <div className="p-2 bg-purple-600 rounded-lg">
+              <Smartphone className="w-5 h-5 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">R$ {(metrics.totalRevenue / 1000).toFixed(1)}k</div>
+            <div className="text-3xl font-bold text-purple-900">{whatsappConnections.length}</div>
+            <div className="text-sm text-purple-600 mt-2">Conexões cadastradas</div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Mensagens/Dia</CardTitle>
-            <MessageSquare className="w-5 h-5 text-orange-600" />
+            <CardTitle className="text-sm font-medium text-orange-700">Integrações</CardTitle>
+            <div className="p-2 bg-orange-600 rounded-lg">
+              <Plug className="w-5 h-5 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{(metrics.dailyMessages / 1000).toFixed(1)}k</div>
+            <div className="text-3xl font-bold text-orange-900">{integrations.length}</div>
+            <div className="text-sm text-orange-600 mt-2">Integrações configuradas</div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Detalhes das Conexões WhatsApp */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg text-gray-900 flex items-center gap-2">
+              <Smartphone className="w-5 h-5" />
+              WhatsApp Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Total de Conexões</span>
+                <span className="font-bold text-gray-900">{whatsappConnections.length}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Conexões Ativas</span>
+                <span className="font-bold text-green-600">
+                  {whatsappConnections.filter((conn) => conn.status === "connected").length}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Desconectadas</span>
+                <span className="font-bold text-red-600">
+                  {whatsappConnections.filter((conn) => conn.status !== "connected").length}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg text-gray-900 flex items-center gap-2">
+              <Bot className="w-5 h-5" />
+              Agentes Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Total de Agentes</span>
+                <span className="font-bold text-gray-900">{agents.length}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Agentes Ativos</span>
+                <span className="font-bold text-green-600">
+                  {agents.filter((agent) => agent.status === "active").length}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Inativos</span>
+                <span className="font-bold text-gray-600">
+                  {agents.filter((agent) => agent.status !== "active").length}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg text-gray-900 flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Usuários Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Total de Usuários</span>
+                <span className="font-bold text-gray-900">{users.length}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Usuários Ativos</span>
+                <span className="font-bold text-green-600">
+                  {users.filter((user) => user.status === "active").length}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Administradores</span>
+                <span className="font-bold text-blue-600">{users.filter((user) => user.role === "admin").length}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Status das Integrações */}
+      {integrations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg text-gray-900 flex items-center gap-2">
+              <Plug className="w-5 h-5" />
+              Status das Integrações
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {integrations.map((integration) => (
+                <div key={integration.id} className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-900">{integration.name}</span>
+                    <div
+                      className={`w-2 h-2 rounded-full ${integration.is_active ? "bg-green-500" : "bg-red-500"}`}
+                    ></div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Status</span>
+                      <span className={`font-medium ${integration.is_active ? "text-green-600" : "text-red-600"}`}>
+                        {integration.is_active ? "Ativo" : "Inativo"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Tipo</span>
+                      <span className="text-gray-700">{integration.type}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Mensagem quando não há dados */}
+      {users.length === 0 && agents.length === 0 && whatsappConnections.length === 0 && (
+        <Card>
+          <CardContent className="text-center py-12">
+            <div className="text-gray-400 mb-4">
+              <Activity className="w-16 h-16 mx-auto" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Sistema Iniciado</h3>
+            <p className="text-gray-600">
+              O sistema está funcionando. Os dados aparecerão aqui conforme usuários se registrarem e criarem agentes.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 
@@ -388,7 +528,7 @@ export default function AdminDashboard() {
           <p className="text-gray-600">Controle total sobre usuários do sistema</p>
         </div>
         <Button
-          className="gap-2 bg-blue-600 hover:bg-blue-700"
+          className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
           onClick={() => {
             setSelectedUserForEdit(null)
             setUserModalOpen(true)
@@ -419,13 +559,14 @@ export default function AdminDashboard() {
             <div className="flex items-end">
               <Button
                 onClick={async () => {
-                  await supabase.from("system_settings").upsert({
+                  await db.systemSettings().upsert({
                     setting_key: "default_whatsapp_connections_limit",
                     setting_value: systemLimits.defaultLimit,
                   })
                   setSaveMessage("Configurações salvas!")
                   setTimeout(() => setSaveMessage(""), 3000)
                 }}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 Salvar Configurações
               </Button>
@@ -570,7 +711,7 @@ export default function AdminDashboard() {
 
       if (result.success) {
         // Atualizar status no banco
-        await supabase.from("whatsapp_connections").update({ status: "disconnected" }).eq("id", connection.id)
+        await db.whatsappConnections().update({ status: "disconnected" }).eq("id", connection.id)
 
         await fetchWhatsAppConnections()
         setSaveMessage("Conexão desconectada com sucesso!")
@@ -687,8 +828,8 @@ export default function AdminDashboard() {
       const existing = integrations.find((int) => int.type === type)
 
       if (existing) {
-        const { error } = await supabase
-          .from("integrations")
+        const { error } = await db
+          .integrations()
           .update({
             config,
             is_active: true,
@@ -697,7 +838,7 @@ export default function AdminDashboard() {
 
         if (error) throw error
       } else {
-        const { error } = await supabase.from("integrations").insert([
+        const { error } = await db.integrations().insert([
           {
             name: type === "evolution_api" ? "Evolution API" : "n8n",
             type,
@@ -836,7 +977,11 @@ export default function AdminDashboard() {
       </div>
 
       <div className="flex justify-end mt-6">
-        <Button onClick={handleUpdateAdminProfile} disabled={savingAdminProfile} className="gap-2">
+        <Button
+          onClick={handleUpdateAdminProfile}
+          disabled={savingAdminProfile}
+          className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+        >
           {savingAdminProfile ? "Salvando..." : "Salvar Alterações"}
         </Button>
       </div>
@@ -1102,7 +1247,7 @@ export default function AdminDashboard() {
               <p className="text-sm text-gray-600 mb-4">Integração com WhatsApp Business</p>
               <Button
                 onClick={() => openIntegrationModal("evolution_api", "Evolution API")}
-                className="w-full"
+                className={`w-full ${getIntegrationConfig("evolution_api").apiUrl ? "bg-green-600 text-white hover:bg-green-700" : ""}`}
                 variant={getIntegrationConfig("evolution_api").apiUrl ? "default" : "outline"}
               >
                 {getIntegrationConfig("evolution_api").apiUrl ? "Configurado" : "Configurar"}
@@ -1119,7 +1264,7 @@ export default function AdminDashboard() {
               <p className="text-sm text-gray-600 mb-4">Automação de fluxos de trabalho</p>
               <Button
                 onClick={() => openIntegrationModal("n8n", "n8n")}
-                className="w-full"
+                className={`w-full ${getIntegrationConfig("n8n").flowUrl ? "bg-green-600 text-white hover:bg-green-700" : ""}`}
                 variant={getIntegrationConfig("n8n").flowUrl ? "default" : "outline"}
               >
                 {getIntegrationConfig("n8n").flowUrl ? "Configurado" : "Configurar"}
@@ -1223,7 +1368,7 @@ export default function AdminDashboard() {
               <Button
                 onClick={() => handleIntegrationSave(selectedIntegration?.type)}
                 disabled={saving}
-                className="gap-2"
+                className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
               >
                 {saving ? "Salvando..." : "Salvar"}
               </Button>
@@ -1254,7 +1399,7 @@ export default function AdminDashboard() {
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" className="gap-2 text-gray-700 border-gray-300 hover:bg-gray-50">
                   {settingsSubTab === "profile" ? (
                     <>
                       <User className="w-4 h-4" />
@@ -1274,16 +1419,25 @@ export default function AdminDashboard() {
                   <ChevronDown className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => updateURL("settings", "profile")}>
+              <DropdownMenuContent align="end" className="bg-white border border-gray-200">
+                <DropdownMenuItem
+                  onClick={() => updateURL("settings", "profile")}
+                  className="text-gray-700 hover:bg-gray-100 focus:bg-gray-100"
+                >
                   <User className="w-4 h-4 mr-2" />
                   Perfil
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => updateURL("settings", "branding")}>
+                <DropdownMenuItem
+                  onClick={() => updateURL("settings", "branding")}
+                  className="text-gray-700 hover:bg-gray-100 focus:bg-gray-100"
+                >
                   <Palette className="w-4 h-4 mr-2" />
                   Branding
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => updateURL("settings", "integrations")}>
+                <DropdownMenuItem
+                  onClick={() => updateURL("settings", "integrations")}
+                  className="text-gray-700 hover:bg-gray-100 focus:bg-gray-100"
+                >
                   <Plug className="w-4 h-4 mr-2" />
                   Integrações
                 </DropdownMenuItem>
@@ -1301,70 +1455,15 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-6">
-      {activeTab === "dashboard" && renderDashboard()}
-      {activeTab === "users" && renderUsers()}
-      {activeTab === "agents" && renderAgents()}
-      {activeTab === "whatsapp" && renderWhatsAppConnections()}
-      {activeTab === "admin" && (
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Administração Avançada</h1>
-          <p className="text-gray-600">Configurações avançadas do sistema</p>
-        </div>
-      )}
-      {activeTab === "settings" && renderSettings()}
-
-      {/* Manter todos os modais */}
-      <UserModal
-        open={userModalOpen}
-        onOpenChange={setUserModalOpen}
-        user={selectedUserForEdit}
-        onSuccess={fetchUsers}
-      />
-
-      <Dialog open={deleteUserModal} onOpenChange={setDeleteUserModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar Exclusão</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja excluir o usuário "{userToDelete?.full_name}" ({userToDelete?.email})? Esta ação
-              não pode ser desfeita e todas as conexões WhatsApp do usuário serão removidas.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteUserModal(false)}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteUser} disabled={saving}>
-              {saving ? "Excluindo..." : "Excluir"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <WhatsAppQRModal
-        open={qrModalOpen}
-        onOpenChange={setQrModalOpen}
-        connection={selectedWhatsAppConnection}
-        onStatusChange={(status) => {
-          if (selectedWhatsAppConnection) {
-            supabase
-              .from("whatsapp_connections")
-              .update({ status })
-              .eq("id", selectedWhatsAppConnection.id)
-              .then(() => fetchWhatsAppConnections())
-          }
-        }}
-      />
-
-      <WhatsAppSettingsModal
-        open={settingsModalOpen}
-        onOpenChange={setSettingsModalOpen}
-        connection={selectedWhatsAppConnection}
-        onSettingsSaved={() => {
-          setSaveMessage("Configurações salvas com sucesso!")
-          setTimeout(() => setSaveMessage(""), 3000)
-        }}
-      />
+      {activeTab === "dashboard"
+        ? renderDashboard()
+        : activeTab === "users"
+          ? renderUsers()
+          : activeTab === "agents"
+            ? renderAgents()
+            : activeTab === "whatsapp"
+              ? renderWhatsAppConnections()
+              : renderSettings()}
     </div>
   )
 }

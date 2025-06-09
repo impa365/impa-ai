@@ -1,19 +1,20 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
+import { useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { ChevronDown, Palette, Plug, Upload, ImageIcon, User, Eye, EyeOff, Plus } from "lucide-react"
-import { useTheme } from "@/components/theme-provider"
-import { themePresets, type ThemeConfig } from "@/lib/theme"
+import { ChevronDown, Palette, Plug, Upload, ImageIcon, User, Eye, EyeOff, Plus, SettingsIcon } from "lucide-react"
+import { useTheme, themePresets, type ThemeConfig } from "@/components/theme-provider"
 import Image from "next/image"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getCurrentUser } from "@/lib/auth"
-import { supabase } from "@/lib/supabase"
+import { db } from "@/lib/supabase"
 import { useEffect } from "react"
 import {
   Dialog,
@@ -56,10 +57,43 @@ export default function AdminSettingsPage() {
   const [savingAdminProfile, setSavingAdminProfile] = useState(false)
   const [adminProfileMessage, setAdminProfileMessage] = useState("")
 
+  // Estados para configurações do sistema
+  const [systemSettings, setSystemSettings] = useState({
+    defaultWhatsAppLimit: 2,
+    defaultAgentsLimit: 5,
+    allowPublicRegistration: false,
+  })
+
+  // Estados para upload de arquivos
+  const logoInputRef = useRef<HTMLInputElement>(null)
+  const faviconInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [uploadingFavicon, setUploadingFavicon] = useState(false)
+
+  // Estados para branding
+  const [brandingForm, setBrandingForm] = useState<ThemeConfig>({
+    systemName: "",
+    description: "",
+    logoIcon: "",
+    primaryColor: "",
+    secondaryColor: "",
+    accentColor: "",
+    logoUrl: "",
+    faviconUrl: "",
+    sidebarStyle: "",
+    brandingEnabled: true,
+  })
+  const [brandingChanged, setBrandingChanged] = useState(false)
+
   useEffect(() => {
     const currentUser = getCurrentUser()
     setUser(currentUser)
     fetchIntegrations()
+    fetchSystemSettings()
+
+    // Inicializar formulário de branding com o tema atual
+    setBrandingForm(theme)
+
     if (currentUser) {
       setAdminProfileForm({
         full_name: currentUser.full_name || "",
@@ -69,11 +103,100 @@ export default function AdminSettingsPage() {
         confirmPassword: "",
       })
     }
-  }, [])
+  }, [theme])
 
-  const fetchIntegrations = async () => {
-    const { data, error } = await supabase.from("integrations").select("*").order("created_at", { ascending: false })
-    if (data) setIntegrations(data)
+  const fetchSystemSettings = async () => {
+    try {
+      // Buscar configurações específicas usando a nova estrutura
+      const { data: limitData, error: limitError } = await db
+        .systemSettings()
+        .select("setting_value")
+        .eq("setting_key", "default_whatsapp_connections_limit")
+        .single()
+
+      const { data: agentsLimitData, error: agentsError } = await db
+        .systemSettings()
+        .select("setting_value")
+        .eq("setting_key", "default_agents_limit")
+        .single()
+
+      const { data: registrationData, error: regError } = await db
+        .systemSettings()
+        .select("setting_value")
+        .eq("setting_key", "allow_public_registration")
+        .single()
+
+      // Se alguma configuração não existir, usar valores padrão
+      if (limitError && limitError.code === "PGRST116") {
+        console.log("Configuração 'default_whatsapp_connections_limit' não encontrada")
+      }
+      if (agentsError && agentsError.code === "PGRST116") {
+        console.log("Configuração 'default_agents_limit' não encontrada")
+      }
+      if (regError && regError.code === "PGRST116") {
+        console.log("Configuração 'allow_public_registration' não encontrada")
+      }
+
+      setSystemSettings({
+        defaultWhatsAppLimit: limitData?.setting_value || 2,
+        defaultAgentsLimit: agentsLimitData?.setting_value || 5,
+        allowPublicRegistration: registrationData?.setting_value === true,
+      })
+    } catch (error) {
+      console.error("Erro ao buscar configurações do sistema:", error)
+      setSaveMessage("Erro ao carregar configurações. Verifique se as tabelas foram criadas.")
+    }
+  }
+
+  const saveSystemSettings = async () => {
+    setSaving(true)
+    try {
+      // Salvar configurações usando upsert na nova estrutura
+      const settingsToUpsert = [
+        {
+          setting_key: "default_whatsapp_connections_limit",
+          setting_value: systemSettings.defaultWhatsAppLimit,
+          category: "limits",
+          description: "Limite padrão de conexões WhatsApp para novos usuários",
+          is_public: false,
+          requires_restart: false,
+        },
+        {
+          setting_key: "default_agents_limit",
+          setting_value: systemSettings.defaultAgentsLimit,
+          category: "limits",
+          description: "Limite padrão de agentes IA para novos usuários",
+          is_public: false,
+          requires_restart: false,
+        },
+        {
+          setting_key: "allow_public_registration",
+          setting_value: systemSettings.allowPublicRegistration,
+          category: "auth",
+          description: "Permitir cadastro público de usuários",
+          is_public: true,
+          requires_restart: false,
+        },
+      ]
+
+      for (const setting of settingsToUpsert) {
+        const { error } = await db.systemSettings().upsert(setting, { onConflict: "setting_key" })
+
+        if (error) {
+          console.error(`Erro ao salvar ${setting.setting_key}:`, error)
+          throw error
+        }
+      }
+
+      setSaveMessage("Configurações do sistema salvas com sucesso!")
+      setTimeout(() => setSaveMessage(""), 3000)
+    } catch (error) {
+      console.error("Erro ao salvar configurações:", error)
+      setSaveMessage("Erro ao salvar configurações do sistema")
+      setTimeout(() => setSaveMessage(""), 3000)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleUpdateAdminProfile = async () => {
@@ -96,18 +219,24 @@ export default function AdminSettingsPage() {
         return
       }
 
-      if (adminProfileForm.newPassword && !adminProfileForm.currentPassword) {
-        setAdminProfileMessage("Senha atual é obrigatória para alterar a senha")
+      if (adminProfileForm.newPassword && adminProfileForm.newPassword.length < 6) {
+        setAdminProfileMessage("Nova senha deve ter pelo menos 6 caracteres")
         return
       }
 
-      const { error } = await supabase
-        .from("user_profiles")
-        .update({
-          full_name: adminProfileForm.full_name.trim(),
-          email: adminProfileForm.email.trim(),
-        })
-        .eq("id", user.id)
+      // Preparar dados para atualização
+      const updateData: any = {
+        full_name: adminProfileForm.full_name.trim(),
+        email: adminProfileForm.email.trim(),
+        updated_at: new Date().toISOString(),
+      }
+
+      // Se há nova senha, incluir na atualização
+      if (adminProfileForm.newPassword) {
+        updateData.password = adminProfileForm.newPassword
+      }
+
+      const { error } = await db.users().update(updateData).eq("id", user.id)
 
       if (error) throw error
 
@@ -119,7 +248,11 @@ export default function AdminSettingsPage() {
       setUser(updatedUser)
       localStorage.setItem("user", JSON.stringify(updatedUser))
 
-      setAdminProfileMessage("Perfil atualizado com sucesso!")
+      setAdminProfileMessage(
+        adminProfileForm.newPassword ? "Perfil e senha atualizados com sucesso!" : "Perfil atualizado com sucesso!",
+      )
+
+      // Limpar campos de senha após sucesso
       setAdminProfileForm({
         ...adminProfileForm,
         currentPassword: "",
@@ -138,62 +271,215 @@ export default function AdminSettingsPage() {
   const handleIntegrationSave = async (type: string) => {
     setSaving(true)
     try {
+      // Validar campos obrigatórios
+      if (type === "evolution_api") {
+        if (!integrationForm.evolutionApiUrl.trim()) {
+          throw new Error("URL da API Evolution é obrigatória")
+        }
+        if (!integrationForm.evolutionApiKey.trim()) {
+          throw new Error("API Key da Evolution é obrigatória")
+        }
+      } else if (type === "n8n") {
+        if (!integrationForm.n8nFlowUrl.trim()) {
+          throw new Error("URL do Fluxo n8n é obrigatória")
+        }
+      }
+
+      // Preparar dados de configuração
       let config = {}
       if (type === "evolution_api") {
         config = {
-          apiUrl: integrationForm.evolutionApiUrl,
-          apiKey: integrationForm.evolutionApiKey,
+          apiUrl: integrationForm.evolutionApiUrl.trim(),
+          apiKey: integrationForm.evolutionApiKey.trim(),
         }
       } else if (type === "n8n") {
         config = {
-          flowUrl: integrationForm.n8nFlowUrl,
-          apiKey: integrationForm.n8nApiKey || null,
+          flowUrl: integrationForm.n8nFlowUrl.trim(),
+          apiKey: integrationForm.n8nApiKey?.trim() || null,
         }
       }
 
-      const existing = integrations.find((int) => int.type === type)
+      // Verificar se já existe uma integração deste tipo
+      const existing = integrations.find((int: any) => int.type === type)
 
       if (existing) {
-        const { error } = await supabase
-          .from("integrations")
+        // Atualizar integração existente
+        const { data, error } = await db
+          .integrations()
           .update({
             config,
             is_active: true,
+            updated_at: new Date().toISOString(),
           })
           .eq("id", existing.id)
+          .select()
 
-        if (error) throw error
+        if (error) {
+          console.error("Erro ao atualizar integração:", error)
+          throw error
+        }
+
+        console.log("Integração atualizada:", data)
       } else {
-        const { error } = await supabase.from("integrations").insert([
-          {
-            name: type === "evolution_api" ? "Evolution API" : "n8n",
-            type,
-            config,
-            is_active: true,
-          },
-        ])
+        // Criar nova integração
+        const { data, error } = await db
+          .integrations()
+          .insert([
+            {
+              name: type === "evolution_api" ? "Evolution API" : "n8n",
+              type,
+              config,
+              is_active: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ])
+          .select()
 
-        if (error) throw error
+        if (error) {
+          console.error("Erro ao criar integração:", error)
+          throw error
+        }
+
+        console.log("Nova integração criada:", data)
       }
 
+      // Recarregar lista de integrações
       await fetchIntegrations()
       setIntegrationModalOpen(false)
       setSaveMessage("Integração salva com sucesso!")
       setTimeout(() => setSaveMessage(""), 3000)
-    } catch (error) {
-      console.error("Erro ao salvar integração:", error)
-      setSaveMessage("Erro ao salvar integração")
-      setTimeout(() => setSaveMessage(""), 3000)
+    } catch (error: any) {
+      console.error("Erro detalhado ao salvar integração:", error)
+      setSaveMessage(`Erro ao salvar integração: ${error.message}`)
+      setTimeout(() => setSaveMessage(""), 5000)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const fetchIntegrations = async () => {
+    try {
+      const { data, error } = await db.integrations().select("*").order("created_at", { ascending: false })
+
+      if (error) {
+        // Se a tabela não existir, mostrar mensagem específica
+        if (error.code === "PGRST116" || error.message.includes("does not exist")) {
+          console.log("Tabela 'integrations' não encontrada no schema impaai")
+          setSaveMessage("Tabela 'integrations' não encontrada. Execute o script SQL para criar a estrutura.")
+          setIntegrations([])
+          return
+        }
+        console.error("Erro ao buscar integrações:", error)
+        throw error
+      }
+
+      console.log("Integrações carregadas:", data)
+      if (data) setIntegrations(data)
+    } catch (err) {
+      console.error("Erro ao buscar integrações:", err)
+      setSaveMessage("Erro ao conectar com o banco de dados. Verifique se as tabelas foram criadas.")
+      setIntegrations([])
+    }
+  }
+
+  const validateImageFile = (file: File, type: "logo" | "favicon") => {
+    const validTypes = ["image/png", "image/jpeg", "image/jpg"]
+    if (type === "favicon") {
+      validTypes.push("image/x-icon", "image/vnd.microsoft.icon")
+    }
+
+    if (!validTypes.includes(file.type)) {
+      throw new Error(`Formato inválido. Use ${type === "favicon" ? "ICO, PNG" : "PNG, JPG"}`)
+    }
+
+    const maxSize = type === "favicon" ? 1 * 1024 * 1024 : 2 * 1024 * 1024
+    if (file.size > maxSize) {
+      throw new Error(`Arquivo muito grande. Máximo ${type === "favicon" ? "1MB" : "2MB"}`)
+    }
+
+    return new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        if (type === "favicon") {
+          if (img.width !== 32 || img.height !== 32) {
+            reject(new Error("Favicon deve ter exatamente 32x32 pixels"))
+            return
+          }
+        } else {
+          if (img.width < 100 || img.height < 100) {
+            reject(new Error("Logo deve ter pelo menos 100x100 pixels"))
+            return
+          }
+          if (img.width > 500 || img.height > 500) {
+            reject(new Error("Logo deve ter no máximo 500x500 pixels"))
+            return
+          }
+        }
+        resolve({ width: img.width, height: img.height })
+      }
+      img.onerror = () => reject(new Error("Erro ao carregar imagem"))
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploadingLogo(true)
+    setSaveMessage("")
+
+    try {
+      await validateImageFile(file, "logo")
+
+      // TODO: Implementar upload real para Supabase Storage
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      setSaveMessage("Logo enviado com sucesso!")
+      setTimeout(() => setSaveMessage(""), 3000)
+    } catch (error: any) {
+      setSaveMessage(error.message)
+      setTimeout(() => setSaveMessage(""), 3000)
+    } finally {
+      setUploadingLogo(false)
+      if (logoInputRef.current) {
+        logoInputRef.current.value = ""
+      }
+    }
+  }
+
+  const handleFaviconUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploadingFavicon(true)
+    setSaveMessage("")
+
+    try {
+      await validateImageFile(file, "favicon")
+
+      // TODO: Implementar upload real para Supabase Storage
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      setSaveMessage("Favicon enviado com sucesso!")
+      setTimeout(() => setSaveMessage(""), 3000)
+    } catch (error: any) {
+      setSaveMessage(error.message)
+      setTimeout(() => setSaveMessage(""), 3000)
+    } finally {
+      setUploadingFavicon(false)
+      if (faviconInputRef.current) {
+        faviconInputRef.current.value = ""
+      }
     }
   }
 
   const renderAdminProfileSettings = () => (
     <div>
       <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2">Perfil do Administrador</h3>
-        <p className="text-gray-600">Gerencie suas informações pessoais e senha</p>
+        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Perfil do Administrador</h3>
+        <p className="text-gray-600 dark:text-gray-400">Gerencie suas informações pessoais e senha</p>
       </div>
 
       {adminProfileMessage && (
@@ -205,26 +491,32 @@ export default function AdminSettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Informações Pessoais</CardTitle>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Informações Pessoais</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="adminFullName">Nome Completo</Label>
+              <Label htmlFor="adminFullName" className="text-gray-900 dark:text-gray-100">
+                Nome Completo
+              </Label>
               <Input
                 id="adminFullName"
                 value={adminProfileForm.full_name}
                 onChange={(e) => setAdminProfileForm({ ...adminProfileForm, full_name: e.target.value })}
                 placeholder="Seu nome completo"
+                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
               />
             </div>
             <div>
-              <Label htmlFor="adminEmail">Email</Label>
+              <Label htmlFor="adminEmail" className="text-gray-900 dark:text-gray-100">
+                Email
+              </Label>
               <Input
                 id="adminEmail"
                 type="email"
                 value={adminProfileForm.email}
                 onChange={(e) => setAdminProfileForm({ ...adminProfileForm, email: e.target.value })}
                 placeholder="seu@email.com"
+                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
               />
             </div>
           </CardContent>
@@ -232,18 +524,21 @@ export default function AdminSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Alterar Senha</CardTitle>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Alterar Senha</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="adminCurrentPassword">Senha Atual</Label>
+              <Label htmlFor="adminCurrentPassword" className="text-gray-900 dark:text-gray-100">
+                Senha Atual (opcional para admin)
+              </Label>
               <div className="relative">
                 <Input
                   id="adminCurrentPassword"
                   type={showAdminPasswords.current ? "text" : "password"}
                   value={adminProfileForm.currentPassword}
                   onChange={(e) => setAdminProfileForm({ ...adminProfileForm, currentPassword: e.target.value })}
-                  placeholder="Senha atual"
+                  placeholder="Senha atual (não obrigatória para admin)"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
                 <Button
                   type="button"
@@ -255,9 +550,14 @@ export default function AdminSettingsPage() {
                   {showAdminPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Como administrador, você pode alterar sua senha sem informar a atual
+              </p>
             </div>
             <div>
-              <Label htmlFor="adminNewPassword">Nova Senha</Label>
+              <Label htmlFor="adminNewPassword" className="text-gray-900 dark:text-gray-100">
+                Nova Senha
+              </Label>
               <div className="relative">
                 <Input
                   id="adminNewPassword"
@@ -265,6 +565,7 @@ export default function AdminSettingsPage() {
                   value={adminProfileForm.newPassword}
                   onChange={(e) => setAdminProfileForm({ ...adminProfileForm, newPassword: e.target.value })}
                   placeholder="Nova senha"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
                 <Button
                   type="button"
@@ -278,7 +579,9 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div>
-              <Label htmlFor="adminConfirmPassword">Confirmar Nova Senha</Label>
+              <Label htmlFor="adminConfirmPassword" className="text-gray-900 dark:text-gray-100">
+                Confirmar Nova Senha
+              </Label>
               <div className="relative">
                 <Input
                   id="adminConfirmPassword"
@@ -286,6 +589,7 @@ export default function AdminSettingsPage() {
                   value={adminProfileForm.confirmPassword}
                   onChange={(e) => setAdminProfileForm({ ...adminProfileForm, confirmPassword: e.target.value })}
                   placeholder="Confirme a nova senha"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
                 <Button
                   type="button"
@@ -303,218 +607,421 @@ export default function AdminSettingsPage() {
       </div>
 
       <div className="flex justify-end mt-6">
-        <Button onClick={handleUpdateAdminProfile} disabled={savingAdminProfile} className="gap-2">
+        <Button
+          onClick={handleUpdateAdminProfile}
+          disabled={savingAdminProfile}
+          className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+        >
           {savingAdminProfile ? "Salvando..." : "Salvar Alterações"}
         </Button>
       </div>
     </div>
   )
 
+  const renderSystemSettings = () => (
+    <div>
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Configurações do Sistema</h3>
+        <p className="text-gray-600 dark:text-gray-400">Configure parâmetros globais da plataforma</p>
+      </div>
+
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Limites e Restrições</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="defaultWhatsAppLimit" className="text-gray-900 dark:text-gray-100">
+                Limite Padrão de Conexões WhatsApp
+              </Label>
+              <Input
+                id="defaultWhatsAppLimit"
+                type="number"
+                value={systemSettings.defaultWhatsAppLimit}
+                onChange={(e) =>
+                  setSystemSettings({
+                    ...systemSettings,
+                    defaultWhatsAppLimit: Number.parseInt(e.target.value) || 2,
+                  })
+                }
+                min="1"
+                max="50"
+                className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Número máximo de conexões WhatsApp que novos usuários podem criar
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="defaultAgentsLimit" className="text-gray-900 dark:text-gray-100">
+                Limite Padrão de Agentes IA
+              </Label>
+              <Input
+                id="defaultAgentsLimit"
+                type="number"
+                value={systemSettings.defaultAgentsLimit}
+                onChange={(e) =>
+                  setSystemSettings({
+                    ...systemSettings,
+                    defaultAgentsLimit: Number.parseInt(e.target.value) || 5,
+                  })
+                }
+                min="1"
+                max="100"
+                className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Número máximo de agentes IA que novos usuários podem criar
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Cadastro de Usuários</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="allowRegistration" className="text-gray-900 dark:text-gray-100">
+                  Permitir Cadastro Público
+                </Label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Permite que novos usuários se cadastrem na tela de login
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="allowRegistration"
+                  checked={systemSettings.allowPublicRegistration}
+                  onChange={(e) =>
+                    setSystemSettings({
+                      ...systemSettings,
+                      allowPublicRegistration: e.target.checked,
+                    })
+                  }
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {systemSettings.allowPublicRegistration ? "Habilitado" : "Desabilitado"}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end">
+          <Button
+            onClick={saveSystemSettings}
+            disabled={saving}
+            className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+          >
+            {saving ? "Salvando..." : "Salvar Configurações"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+
   const renderBrandingSettings = () => {
-    const handleThemeUpdate = async (updates: Partial<ThemeConfig>) => {
+    const handleBrandingChange = (updates: Partial<ThemeConfig>) => {
+      setBrandingForm((prev) => ({ ...prev, ...updates }))
+      setBrandingChanged(true)
+    }
+
+    const handleSaveBranding = async () => {
       setSaving(true)
       setSaveMessage("")
 
       try {
-        await updateTheme(updates)
-        setSaveMessage("Configurações salvas com sucesso!")
+        await updateTheme(brandingForm)
+        setBrandingChanged(false)
+        setSaveMessage("Configurações de branding salvas com sucesso!")
         setTimeout(() => setSaveMessage(""), 3000)
       } catch (error) {
-        setSaveMessage("Erro ao salvar configurações")
+        setSaveMessage("Erro ao salvar configurações de branding")
         setTimeout(() => setSaveMessage(""), 3000)
       } finally {
         setSaving(false)
       }
     }
 
+    const handleResetBranding = () => {
+      setBrandingForm(theme)
+      setBrandingChanged(false)
+    }
+
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Branding e Identidade</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="systemName">Nome do Sistema</Label>
-              <Input
-                id="systemName"
-                value={theme.systemName}
-                onChange={(e) => handleThemeUpdate({ systemName: e.target.value })}
-                placeholder="Nome da sua plataforma"
-                disabled={saving}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="description">Descrição</Label>
-              <Textarea
-                id="description"
-                value={theme.description || ""}
-                onChange={(e) => handleThemeUpdate({ description: e.target.value })}
-                placeholder="Descrição da sua plataforma"
-                disabled={saving}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="logoIcon">Ícone/Emoji do Logo</Label>
-              <Input
-                id="logoIcon"
-                value={theme.logoIcon}
-                onChange={(e) => handleThemeUpdate({ logoIcon: e.target.value })}
-                placeholder="🤖"
-                maxLength={2}
-                disabled={saving}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="logoUpload">Upload de Logo</Label>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" className="gap-2" disabled={saving}>
-                  <Upload className="w-4 h-4" />
-                  Escolher Logo
-                </Button>
-                <span className="text-sm text-gray-500">PNG, JPG até 2MB</span>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="faviconUpload">Upload de Favicon</Label>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" className="gap-2" disabled={saving}>
-                  <ImageIcon className="w-4 h-4" />
-                  Escolher Favicon
-                </Button>
-                <span className="text-sm text-gray-500">ICO, PNG 32x32px</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Esquema de Cores</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="primaryColor">Cor Primária</Label>
-              <div className="flex gap-2">
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-gray-900 dark:text-gray-100">Branding e Identidade</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="systemName" className="text-gray-900 dark:text-gray-100">
+                  Nome do Sistema
+                </Label>
                 <Input
-                  id="primaryColor"
-                  type="color"
-                  value={theme.primaryColor}
-                  onChange={(e) => handleThemeUpdate({ primaryColor: e.target.value })}
-                  className="w-16 h-10"
-                  disabled={saving}
-                />
-                <Input
-                  value={theme.primaryColor}
-                  onChange={(e) => handleThemeUpdate({ primaryColor: e.target.value })}
-                  placeholder="#2563eb"
-                  className="flex-1"
-                  disabled={saving}
+                  id="systemName"
+                  value={brandingForm.systemName}
+                  onChange={(e) => handleBrandingChange({ systemName: e.target.value })}
+                  placeholder="Nome da sua plataforma"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
               </div>
-            </div>
 
-            <div>
-              <Label htmlFor="secondaryColor">Cor Secundária</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="secondaryColor"
-                  type="color"
-                  value={theme.secondaryColor}
-                  onChange={(e) => handleThemeUpdate({ secondaryColor: e.target.value })}
-                  className="w-16 h-10"
-                  disabled={saving}
-                />
-                <Input
-                  value={theme.secondaryColor}
-                  onChange={(e) => handleThemeUpdate({ secondaryColor: e.target.value })}
-                  placeholder="#10b981"
-                  className="flex-1"
-                  disabled={saving}
+              <div>
+                <Label htmlFor="description" className="text-gray-900 dark:text-gray-100">
+                  Descrição
+                </Label>
+                <Textarea
+                  id="description"
+                  value={brandingForm.description || ""}
+                  onChange={(e) => handleBrandingChange({ description: e.target.value })}
+                  placeholder="Descrição da sua plataforma"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
               </div>
-            </div>
 
-            <div>
-              <Label htmlFor="accentColor">Cor de Destaque</Label>
-              <div className="flex gap-2">
+              <div>
+                <Label htmlFor="logoIcon" className="text-gray-900 dark:text-gray-100">
+                  Ícone/Emoji do Logo
+                </Label>
                 <Input
-                  id="accentColor"
-                  type="color"
-                  value={theme.accentColor}
-                  onChange={(e) => handleThemeUpdate({ accentColor: e.target.value })}
-                  className="w-16 h-10"
-                  disabled={saving}
-                />
-                <Input
-                  value={theme.accentColor}
-                  onChange={(e) => handleThemeUpdate({ accentColor: e.target.value })}
-                  placeholder="#8b5cf6"
-                  className="flex-1"
-                  disabled={saving}
+                  id="logoIcon"
+                  value={brandingForm.logoIcon}
+                  onChange={(e) => handleBrandingChange({ logoIcon: e.target.value })}
+                  placeholder="🤖"
+                  maxLength={2}
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
               </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Temas Predefinidos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              {Object.entries(themePresets).map(([key, preset]) => (
-                <Button
-                  key={key}
-                  variant="outline"
-                  className="h-auto p-4 flex flex-col items-center gap-2"
-                  onClick={() => handleThemeUpdate(preset)}
-                  disabled={saving}
-                >
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white"
-                    style={{ backgroundColor: preset.primaryColor }}
-                  >
-                    <span className="text-sm">{preset.logoIcon}</span>
+              <div>
+                <Label htmlFor="logoUpload" className="text-gray-900 dark:text-gray-100">
+                  Upload de Logo
+                </Label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      disabled={saving || uploadingLogo}
+                      onClick={() => logoInputRef.current?.click()}
+                    >
+                      <Upload className="w-4 h-4" />
+                      {uploadingLogo ? "Enviando..." : "Escolher Logo"}
+                    </Button>
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg"
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                    />
                   </div>
-                  <span className="text-sm font-medium capitalize">{key}</span>
-                </Button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Preview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="border rounded-lg p-4 bg-gray-50">
-              <div className="flex items-center gap-2 mb-4">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
-                  style={{ backgroundColor: theme.primaryColor }}
-                >
-                  <span className="text-sm">{theme.logoIcon}</span>
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <p>• Formatos: PNG, JPG</p>
+                    <p>• Tamanho: 100x100 até 500x500 pixels</p>
+                    <p>• Máximo: 2MB</p>
+                  </div>
                 </div>
-                <span className="font-semibold">{theme.systemName}</span>
               </div>
-              <div className="space-y-2">
-                <div className="h-3 rounded" style={{ backgroundColor: theme.primaryColor, opacity: 0.8 }}></div>
-                <div
-                  className="h-3 rounded w-3/4"
-                  style={{ backgroundColor: theme.secondaryColor, opacity: 0.6 }}
-                ></div>
-                <div className="h-3 rounded w-1/2" style={{ backgroundColor: theme.accentColor, opacity: 0.4 }}></div>
+
+              <div>
+                <Label htmlFor="faviconUpload" className="text-gray-900 dark:text-gray-100">
+                  Upload de Favicon
+                </Label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      disabled={saving || uploadingFavicon}
+                      onClick={() => faviconInputRef.current?.click()}
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      {uploadingFavicon ? "Enviando..." : "Escolher Favicon"}
+                    </Button>
+                    <input
+                      ref={faviconInputRef}
+                      type="file"
+                      accept="image/x-icon,image/vnd.microsoft.icon,image/png"
+                      onChange={handleFaviconUpload}
+                      className="hidden"
+                    />
+                  </div>
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <p>• Formatos: ICO, PNG</p>
+                    <p>• Tamanho: exatamente 32x32 pixels</p>
+                    <p>• Máximo: 1MB</p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-gray-900 dark:text-gray-100">Esquema de Cores</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="primaryColor" className="text-gray-900 dark:text-gray-100">
+                  Cor Primária
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="primaryColor"
+                    type="color"
+                    value={brandingForm.primaryColor}
+                    onChange={(e) => handleBrandingChange({ primaryColor: e.target.value })}
+                    className="w-16 h-10 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                  <Input
+                    value={brandingForm.primaryColor}
+                    onChange={(e) => handleBrandingChange({ primaryColor: e.target.value })}
+                    placeholder="#2563eb"
+                    className="flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="secondaryColor" className="text-gray-900 dark:text-gray-100">
+                  Cor Secundária
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="secondaryColor"
+                    type="color"
+                    value={brandingForm.secondaryColor}
+                    onChange={(e) => handleBrandingChange({ secondaryColor: e.target.value })}
+                    className="w-16 h-10 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                  <Input
+                    value={brandingForm.secondaryColor}
+                    onChange={(e) => handleBrandingChange({ secondaryColor: e.target.value })}
+                    placeholder="#10b981"
+                    className="flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="accentColor" className="text-gray-900 dark:text-gray-100">
+                  Cor de Destaque
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="accentColor"
+                    type="color"
+                    value={brandingForm.accentColor}
+                    onChange={(e) => handleBrandingChange({ accentColor: e.target.value })}
+                    className="w-16 h-10 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                  <Input
+                    value={brandingForm.accentColor}
+                    onChange={(e) => handleBrandingChange({ accentColor: e.target.value })}
+                    placeholder="#8b5cf6"
+                    className="flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-gray-900 dark:text-gray-100">Temas Predefinidos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                {Object.entries(themePresets).map(([key, preset]) => (
+                  <Button
+                    key={key}
+                    variant="outline"
+                    className="h-auto p-4 flex flex-col items-center gap-2"
+                    onClick={() => handleBrandingChange(preset)}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white"
+                      style={{ backgroundColor: preset.primaryColor }}
+                    >
+                      <span className="text-sm">{preset.logoIcon}</span>
+                    </div>
+                    <span className="text-sm font-medium capitalize">{key}</span>
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-gray-900 dark:text-gray-100">Preview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="border rounded-lg p-4 bg-gray-50">
+                <div className="flex items-center gap-2 mb-4">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
+                    style={{ backgroundColor: brandingForm.primaryColor }}
+                  >
+                    <span className="text-sm">{brandingForm.logoIcon}</span>
+                  </div>
+                  <span className="font-semibold">{brandingForm.systemName}</span>
+                </div>
+                <div className="space-y-2">
+                  <div
+                    className="h-3 rounded"
+                    style={{ backgroundColor: brandingForm.primaryColor, opacity: 0.8 }}
+                  ></div>
+                  <div
+                    className="h-3 rounded w-3/4"
+                    style={{ backgroundColor: brandingForm.secondaryColor, opacity: 0.6 }}
+                  ></div>
+                  <div
+                    className="h-3 rounded w-1/2"
+                    style={{ backgroundColor: brandingForm.accentColor, opacity: 0.4 }}
+                  ></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex justify-between items-center pt-6 border-t">
+          <div className="flex items-center gap-2">
+            {brandingChanged && (
+              <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/50 px-3 py-1 rounded-md">
+                Você tem alterações não salvas
+              </div>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={handleResetBranding}
+              disabled={!brandingChanged || saving}
+              className="text-gray-700 border-gray-300 hover:bg-gray-100"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveBranding}
+              disabled={!brandingChanged || saving}
+              className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+            >
+              {saving ? "Salvando..." : "Salvar Alterações"}
+            </Button>
+          </div>
+        </div>
       </div>
     )
   }
@@ -549,8 +1056,26 @@ export default function AdminSettingsPage() {
     return (
       <div>
         <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-2">Integrações Disponíveis</h3>
-          <p className="text-gray-600">Configure as integrações para expandir as funcionalidades da plataforma</p>
+          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Integrações Disponíveis</h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Configure as integrações para expandir as funcionalidades da plataforma
+          </p>
+
+          {saveMessage.includes("Tabela") && (
+            <Alert className="mt-4" variant="destructive">
+              <AlertDescription>
+                {saveMessage}
+                <br />
+                <strong>Execute este script SQL no seu Supabase:</strong>
+                <code className="block mt-2 p-2 bg-gray-100 rounded text-xs">
+                  CREATE TABLE IF NOT EXISTS impaai.integrations ( id UUID DEFAULT gen_random_uuid() PRIMARY KEY, name
+                  VARCHAR(255) NOT NULL, type VARCHAR(100) NOT NULL, config JSONB DEFAULT '{}', is_active BOOLEAN
+                  DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE
+                  DEFAULT NOW() );
+                </code>
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -565,12 +1090,17 @@ export default function AdminSettingsPage() {
                   className="rounded"
                 />
               </div>
-              <h4 className="font-semibold mb-2">Evolution API</h4>
-              <p className="text-sm text-gray-600 mb-4">Integração com WhatsApp Business</p>
+              <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Evolution API</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Integração com WhatsApp Business</p>
               <Button
                 onClick={() => openIntegrationModal("evolution_api", "Evolution API")}
-                className="w-full"
-                variant={getIntegrationConfig("evolution_api").apiUrl ? "default" : "outline"}
+                className={
+                  getIntegrationConfig("evolution_api").apiUrl
+                    ? "w-full bg-green-600 text-white hover:bg-green-700"
+                    : "w-full"
+                }
+                variant={getIntegrationConfig("evolution_api").apiUrl ? undefined : "outline"}
+                disabled={saveMessage.includes("Tabela")}
               >
                 {getIntegrationConfig("evolution_api").apiUrl ? "Configurado" : "Configurar"}
               </Button>
@@ -582,27 +1112,17 @@ export default function AdminSettingsPage() {
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Image src="/images/n8n-logo.png" alt="n8n" width={40} height={40} className="rounded" />
               </div>
-              <h4 className="font-semibold mb-2">n8n</h4>
-              <p className="text-sm text-gray-600 mb-4">Automação de fluxos de trabalho</p>
+              <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">n8n</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Automação de fluxos de trabalho</p>
               <Button
                 onClick={() => openIntegrationModal("n8n", "n8n")}
-                className="w-full"
-                variant={getIntegrationConfig("n8n").flowUrl ? "default" : "outline"}
+                className={
+                  getIntegrationConfig("n8n").flowUrl ? "w-full bg-green-600 text-white hover:bg-green-700" : "w-full"
+                }
+                variant={getIntegrationConfig("n8n").flowUrl ? undefined : "outline"}
+                disabled={saveMessage.includes("Tabela")}
               >
                 {getIntegrationConfig("n8n").flowUrl ? "Configurado" : "Configurar"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="opacity-50">
-            <CardContent className="p-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Plus className="w-8 h-8 text-gray-400" />
-              </div>
-              <h4 className="font-semibold mb-2">Em Breve</h4>
-              <p className="text-sm text-gray-600 mb-4">Nova integração chegando</p>
-              <Button className="w-full" variant="outline" disabled>
-                Em Breve
               </Button>
             </CardContent>
           </Card>
@@ -624,8 +1144,10 @@ export default function AdminSettingsPage() {
         <Dialog open={integrationModalOpen} onOpenChange={setIntegrationModalOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Configurar {selectedIntegration?.name}</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-gray-900 dark:text-gray-100">
+                Configurar {selectedIntegration?.name}
+              </DialogTitle>
+              <DialogDescription className="text-gray-600 dark:text-gray-400">
                 Configure as credenciais para integração com {selectedIntegration?.name}
               </DialogDescription>
             </DialogHeader>
@@ -634,17 +1156,22 @@ export default function AdminSettingsPage() {
               {selectedIntegration?.type === "evolution_api" && (
                 <>
                   <div>
-                    <Label htmlFor="evolutionApiUrl">URL da API Evolution *</Label>
+                    <Label htmlFor="evolutionApiUrl" className="text-gray-900 dark:text-gray-100">
+                      URL da API Evolution *
+                    </Label>
                     <Input
                       id="evolutionApiUrl"
                       value={integrationForm.evolutionApiUrl}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, evolutionApiUrl: e.target.value })}
                       placeholder="https://api.evolution.com"
                       required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="evolutionApiKey">API Key Global *</Label>
+                    <Label htmlFor="evolutionApiKey" className="text-gray-900 dark:text-gray-100">
+                      API Key Global *
+                    </Label>
                     <Input
                       id="evolutionApiKey"
                       type="password"
@@ -652,6 +1179,7 @@ export default function AdminSettingsPage() {
                       onChange={(e) => setIntegrationForm({ ...integrationForm, evolutionApiKey: e.target.value })}
                       placeholder="Sua API Key"
                       required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
                   </div>
                 </>
@@ -660,23 +1188,29 @@ export default function AdminSettingsPage() {
               {selectedIntegration?.type === "n8n" && (
                 <>
                   <div>
-                    <Label htmlFor="n8nFlowUrl">URL do Fluxo *</Label>
+                    <Label htmlFor="n8nFlowUrl" className="text-gray-900 dark:text-gray-100">
+                      URL do Fluxo *
+                    </Label>
                     <Input
                       id="n8nFlowUrl"
                       value={integrationForm.n8nFlowUrl}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, n8nFlowUrl: e.target.value })}
                       placeholder="https://n8n.exemplo.com/webhook/..."
                       required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="n8nApiKey">API Key do Fluxo (Opcional)</Label>
+                    <Label htmlFor="n8nApiKey" className="text-gray-900 dark:text-gray-100">
+                      API Key do Fluxo (Opcional)
+                    </Label>
                     <Input
                       id="n8nApiKey"
                       type="password"
                       value={integrationForm.n8nApiKey}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, n8nApiKey: e.target.value })}
                       placeholder="API Key (se necessário)"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
                   </div>
                 </>
@@ -684,13 +1218,17 @@ export default function AdminSettingsPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIntegrationModalOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setIntegrationModalOpen(false)}
+                className="text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+              >
                 Cancelar
               </Button>
               <Button
                 onClick={() => handleIntegrationSave(selectedIntegration?.type)}
                 disabled={saving}
-                className="gap-2"
+                className="gap-2 bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
               >
                 {saving ? "Salvando..." : "Salvar"}
               </Button>
@@ -705,8 +1243,8 @@ export default function AdminSettingsPage() {
     <div className="p-6">
       <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Configurações do Sistema</h1>
-          <p className="text-gray-600">Personalize a plataforma e configure integrações</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Configurações do Sistema</h1>
+          <p className="text-gray-600 dark:text-gray-400">Personalize a plataforma e configure integrações</p>
         </div>
         <div className="flex items-center gap-4">
           {saveMessage && (
@@ -720,11 +1258,19 @@ export default function AdminSettingsPage() {
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2">
+              <Button
+                variant="outline"
+                className="gap-2 text-gray-700 dark:text-gray-300 border-gray-300 hover:bg-gray-50"
+              >
                 {settingsSubTab === "profile" ? (
                   <>
                     <User className="w-4 h-4" />
                     Perfil
+                  </>
+                ) : settingsSubTab === "system" ? (
+                  <>
+                    <SettingsIcon className="w-4 h-4" />
+                    Sistema
                   </>
                 ) : settingsSubTab === "branding" ? (
                   <>
@@ -740,16 +1286,32 @@ export default function AdminSettingsPage() {
                 <ChevronDown className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setSettingsSubTab("profile")}>
+            <DropdownMenuContent align="end" className="bg-white border border-gray-200">
+              <DropdownMenuItem
+                onClick={() => setSettingsSubTab("profile")}
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
+              >
                 <User className="w-4 h-4 mr-2" />
                 Perfil
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSettingsSubTab("branding")}>
+              <DropdownMenuItem
+                onClick={() => setSettingsSubTab("system")}
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
+              >
+                <SettingsIcon className="w-4 h-4 mr-2" />
+                Sistema
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setSettingsSubTab("branding")}
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
+              >
                 <Palette className="w-4 h-4 mr-2" />
                 Branding
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSettingsSubTab("integrations")}>
+              <DropdownMenuItem
+                onClick={() => setSettingsSubTab("integrations")}
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
+              >
                 <Plug className="w-4 h-4 mr-2" />
                 Integrações
               </DropdownMenuItem>
@@ -759,6 +1321,7 @@ export default function AdminSettingsPage() {
       </div>
 
       {settingsSubTab === "profile" && renderAdminProfileSettings()}
+      {settingsSubTab === "system" && renderSystemSettings()}
       {settingsSubTab === "branding" && renderBrandingSettings()}
       {settingsSubTab === "integrations" && renderIntegrationsSettings()}
     </div>

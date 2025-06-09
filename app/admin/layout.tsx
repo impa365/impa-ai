@@ -77,7 +77,7 @@ export default function AdminLayout({
             >
               <span className="text-white">{theme.logoIcon}</span>
             </div>
-            <span className="font-semibold text-lg">Admin Panel</span>
+            <span className="font-semibold text-lg text-gray-900">Admin Panel</span>
           </div>
           <p className="text-sm text-gray-600 mt-1">Olá, {user?.full_name}</p>
         </div>
@@ -88,8 +88,8 @@ export default function AdminLayout({
               <li key={index}>
                 <Button
                   variant="ghost"
-                  className={`w-full justify-start gap-3 ${
-                    item.active ? "bg-red-50 text-red-700 border border-red-200" : "text-gray-600 hover:bg-gray-50"
+                  className={`w-full justify-start gap-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${
+                    item.active ? "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100" : ""
                   }`}
                   onClick={() => router.push(item.href)}
                 >
@@ -102,7 +102,11 @@ export default function AdminLayout({
         </nav>
 
         <div className="p-4 border-t border-gray-200">
-          <Button variant="ghost" className="w-full justify-start gap-2 text-gray-600" onClick={handleLogout}>
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+            onClick={handleLogout}
+          >
             <LogOut className="w-4 h-4" />
             Sair
           </Button>

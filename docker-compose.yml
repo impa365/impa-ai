@@ -1,0 +1,153 @@
+version: "3.7"
+services:
+
+## --------------------------- PostgreSQL --------------------------- ##
+
+  postgres:
+    image: postgres:14
+    container_name: impa-postgres
+    
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/complete-setup.sql:/docker-entrypoint-initdb.d/01-setup.sql:ro
+
+    networks:
+      - ImpaServer
+
+    ports:
+      - "5432:5432"
+
+    environment:
+      - POSTGRES_DB=impa_ai
+      - POSTGRES_USER=impa_user
+      - POSTGRES_PASSWORD=604284e2b54efbb2b7a6946e8e63fa04
+      - PG_MAX_CONNECTIONS=500
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U impa_user -d impa_ai"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+
+## --------------------------- IMPA AI Application --------------------------- ##
+
+  impa-ai:
+    build: .
+    container_name: impa-ai-app
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - ImpaServer
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://impa_user:604284e2b54efbb2b7a6946e8e63fa04@postgres:5432/impa_ai
+      - POSTGRES_URL=postgresql://impa_user:604284e2b54efbb2b7a6946e8e63fa04@postgres:5432/impa_ai
+      - POSTGRES_PRISMA_URL=postgresql://impa_user:604284e2b54efbb2b7a6946e8e63fa04@postgres:5432/impa_ai?pgbouncer=true&connect_timeout=15
+      - POSTGRES_URL_NON_POOLING=postgresql://impa_user:604284e2b54efbb2b7a6946e8e63fa04@postgres:5432/impa_ai
+      - POSTGRES_USER=impa_user
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PASSWORD=604284e2b54efbb2b7a6946e8e63fa04
+      - POSTGRES_DATABASE=impa_ai
+      
+      # Supabase (usando PostgreSQL local)
+      - SUPABASE_URL=http://postgres:5432
+      - NEXT_PUBLIC_SUPABASE_URL=http://localhost:5432
+      - SUPABASE_ANON_KEY=your-anon-key-here
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+      - SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+      - SUPABASE_JWT_SECRET=your-jwt-secret-here
+      
+      # Application
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=your-nextauth-secret-here
+      - NODE_ENV=production
+
+    volumes:
+      - app_uploads:/app/uploads
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2048M
+
+## --------------------------- Nginx (Opcional) --------------------------- ##
+
+  nginx:
+    image: nginx:alpine
+    container_name: impa-nginx
+    
+    depends_on:
+      - impa-ai
+
+    networks:
+      - ImpaServer
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+## --------------------------- Volumes --------------------------- ##
+
+volumes:
+  postgres_data:
+    external: true
+    name: postgres_data
+  app_uploads:
+    external: true
+    name: impa_uploads
+  nginx_logs:
+    external: true
+    name: nginx_logs
+
+## --------------------------- Networks --------------------------- ##
+
+networks:
+  ImpaServer:
+    external: true
+    name: ImpaServer
