@@ -20,9 +20,11 @@ interface AgentModalProps {
 
 interface WhatsAppConnection {
   id: string
-  connection_name: string
+  connection_name: string | null
   instance_name: string
   status: string
+  user_id: string
+  phone_number?: string
   user_profiles?: {
     full_name: string
     email: string
@@ -33,6 +35,7 @@ export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalP
   const [loading, setLoading] = useState(false)
   const [loadingConnections, setLoadingConnections] = useState(false)
   const [whatsappConnections, setWhatsappConnections] = useState<WhatsAppConnection[]>([])
+  const [debugInfo, setDebugInfo] = useState<string>("")
   const [formData, setFormData] = useState({
     name: agent?.name || "",
     type: agent?.type || "geral",
@@ -53,27 +56,70 @@ export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalP
 
   const fetchWhatsAppConnections = async () => {
     setLoadingConnections(true)
+    setDebugInfo("Iniciando busca por conexões...")
+
     try {
-      const { data, error } = await supabase
+      console.log("🔍 Buscando conexões WhatsApp...")
+
+      // Primeira tentativa: buscar todas as conexões
+      const { data: allConnections, error: allError } = await supabase
+        .from("whatsapp_connections")
+        .select("*")
+        .order("created_at", { ascending: false })
+
+      console.log("📊 Todas as conexões encontradas:", allConnections)
+      console.log("❌ Erro na busca geral:", allError)
+
+      if (allError) {
+        setDebugInfo(`Erro na busca geral: ${allError.message}`)
+        console.error("Erro ao buscar todas as conexões:", allError)
+      }
+
+      // Segunda tentativa: buscar com join
+      const { data: connectionsWithUsers, error: joinError } = await supabase
         .from("whatsapp_connections")
         .select(`
           id,
           connection_name,
           instance_name,
           status,
-          user_profiles!whatsapp_connections_user_id_fkey(full_name, email)
+          user_id,
+          phone_number,
+          created_at,
+          user_profiles!whatsapp_connections_user_id_fkey(
+            full_name,
+            email
+          )
         `)
         .order("created_at", { ascending: false })
 
-      if (error) {
-        console.error("Erro ao buscar conexões WhatsApp:", error)
-        return
+      console.log("👥 Conexões com usuários:", connectionsWithUsers)
+      console.log("❌ Erro no join:", joinError)
+
+      if (joinError) {
+        setDebugInfo((prev) => prev + ` | Erro no join: ${joinError.message}`)
+        console.error("Erro ao buscar conexões com usuários:", joinError)
       }
 
-      console.log("Conexões WhatsApp carregadas:", data)
-      setWhatsappConnections(data || [])
+      // Usar os dados que funcionaram
+      const finalData = connectionsWithUsers || allConnections || []
+
+      console.log("✅ Dados finais para o dropdown:", finalData)
+      setDebugInfo(`Encontradas ${finalData.length} conexões`)
+      setWhatsappConnections(finalData)
+
+      // Log detalhado de cada conexão
+      finalData.forEach((conn, index) => {
+        console.log(`📱 Conexão ${index + 1}:`, {
+          id: conn.id,
+          name: conn.connection_name || conn.instance_name,
+          status: conn.status,
+          user: conn.user_profiles?.full_name || conn.user_id,
+        })
+      })
     } catch (error) {
-      console.error("Erro ao buscar conexões WhatsApp:", error)
+      console.error("💥 Erro geral ao buscar conexões:", error)
+      setDebugInfo(`Erro geral: ${error}`)
     } finally {
       setLoadingConnections(false)
     }
@@ -84,6 +130,8 @@ export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalP
     setLoading(true)
 
     try {
+      console.log("💾 Salvando agente com dados:", formData)
+
       // Simular salvamento
       await new Promise((resolve) => setTimeout(resolve, 1000))
       onSuccess()
@@ -155,16 +203,24 @@ export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalP
                     <div className="flex flex-col">
                       <span className="font-medium">{connection.connection_name || connection.instance_name}</span>
                       <span className="text-xs text-gray-500">
-                        {connection.user_profiles?.full_name || connection.user_profiles?.email} • {connection.status}
+                        {connection.phone_number && `📱 ${connection.phone_number} • `}
+                        Status: {connection.status}
+                        {connection.user_profiles?.full_name && ` • ${connection.user_profiles.full_name}`}
                       </span>
                     </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+
+            {/* Debug info */}
+            {debugInfo && (
+              <div className="text-xs text-blue-600 mt-1 p-2 bg-blue-50 rounded">🔍 Debug: {debugInfo}</div>
+            )}
+
             {whatsappConnections.length === 0 && !loadingConnections && (
-              <p className="text-xs text-gray-500 mt-1">
-                Nenhuma conexão WhatsApp encontrada. Crie uma conexão primeiro.
+              <p className="text-xs text-red-500 mt-1">
+                ⚠️ Nenhuma conexão WhatsApp encontrada. Verifique se existem conexões criadas.
               </p>
             )}
           </div>
