@@ -1,8 +1,22 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/supabase"
 
+// Verificar se as variáveis de ambiente estão definidas
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  console.error("NEXT_PUBLIC_SUPABASE_URL não está definida")
+}
+
+if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  console.error("NEXT_PUBLIC_SUPABASE_ANON_KEY não está definida")
+}
+
 export async function POST(request: NextRequest) {
   try {
+    // Verificar se o Supabase está configurado
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      return NextResponse.json({ error: "Configuração do Supabase não encontrada" }, { status: 500 })
+    }
+
     const body = await request.json()
     const { agent_id, activity_type, activity_data } = body
 
@@ -39,6 +53,11 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    // Verificar se o Supabase está configurado
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      return NextResponse.json({ error: "Configuração do Supabase não encontrada" }, { status: 500 })
+    }
+
     const searchParams = request.nextUrl.searchParams
     const agent_id = searchParams.get("agent_id")
     const limit = Number.parseInt(searchParams.get("limit") || "50")

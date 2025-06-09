@@ -1,9 +1,19 @@
 import { createClient } from "@supabase/supabase-js"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Verificar se as variáveis de ambiente estão definidas
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+if (!supabaseUrl) {
+  console.error("NEXT_PUBLIC_SUPABASE_URL não está definida nas variáveis de ambiente")
+}
+
+if (!supabaseAnonKey) {
+  console.error("NEXT_PUBLIC_SUPABASE_ANON_KEY não está definida nas variáveis de ambiente")
+}
+
+// Criar cliente com valores padrão se as variáveis não estiverem definidas (para evitar erro de build)
+export const supabase = createClient(supabaseUrl || "http://localhost:54321", supabaseAnonKey || "dummy-key", {
   db: {
     schema: "impaai",
   },
@@ -47,7 +57,7 @@ export interface UserProfile {
   email: string
   role: "user" | "admin" | "moderator"
   status: "active" | "inactive" | "suspended" | "hibernated"
-  password_hash?: string
+  password?: string
   organization_id?: string | null
   last_login_at?: string | null
   created_at: string
