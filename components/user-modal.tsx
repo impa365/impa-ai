@@ -28,6 +28,7 @@ interface UserModalProps {
 export default function UserModal({ open, onOpenChange, user, onSuccess }: UserModalProps) {
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(false)
+  const [loadingDefaults, setLoadingDefaults] = useState(true)
   const [error, setError] = useState("")
   const [formData, setFormData] = useState({
     full_name: "",
@@ -35,37 +36,49 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     password: "",
     role: "user",
     status: "active",
-    whatsapp_limit: 1, // Valor inicial temporário
-    agents_limit: 2, // Valor inicial temporário
+    whatsapp_limit: null as number | null, // Inicializar como null
+    agents_limit: null as number | null, // Inicializar como null
   })
 
-  // Buscar valores padrão das configurações do sistema
+  // Buscar valores padrão das configurações do sistema SEMPRE
   useEffect(() => {
     const loadDefaultLimits = async () => {
+      if (!open) return
+
+      setLoadingDefaults(true)
       try {
+        console.log("🔄 Buscando limites padrão do sistema...")
         const whatsappLimit = await getDefaultWhatsAppLimit()
         const agentsLimit = await getDefaultAgentsLimit()
 
-        console.log("Limites padrão carregados:", { whatsappLimit, agentsLimit })
+        console.log("✅ Limites padrão carregados:", { whatsappLimit, agentsLimit })
 
-        setFormData((prev) => ({
-          ...prev,
-          whatsapp_limit: prev.whatsapp_limit === 1 ? whatsappLimit : prev.whatsapp_limit,
-          agents_limit: prev.agents_limit === 2 ? agentsLimit : prev.agents_limit,
-        }))
+        // Se não há usuário sendo editado, usar os valores padrão
+        if (!user) {
+          setFormData((prev) => ({
+            ...prev,
+            whatsapp_limit: whatsappLimit,
+            agents_limit: agentsLimit,
+          }))
+        }
       } catch (error) {
-        console.error("Erro ao carregar limites padrão:", error)
+        console.error("❌ Erro ao carregar limites padrão:", error)
+        setError("Erro ao carregar configurações padrão do sistema")
+      } finally {
+        setLoadingDefaults(false)
       }
     }
 
     loadDefaultLimits()
-  }, [])
+  }, [open, user])
 
   useEffect(() => {
     const fetchUserData = async () => {
       if (user && open) {
         setLoadingData(true)
         try {
+          console.log("🔄 Buscando dados do usuário:", user.id)
+
           const { data: userData, error: userError } = await supabase
             .from("user_profiles")
             .select("*")
@@ -87,41 +100,65 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
               settingsData = data
             }
           } catch (settingsErr) {
-            console.error("Erro ao buscar configurações do usuário:", settingsErr)
+            console.error("⚠️ Erro ao buscar configurações do usuário:", settingsErr)
           }
 
-          // Obter limites padrão do sistema
+          // Obter limites padrão do sistema como fallback
           const defaultWhatsAppLimit = await getDefaultWhatsAppLimit()
           const defaultAgentsLimit = await getDefaultAgentsLimit()
+
+          console.log("📊 Dados do usuário:", {
+            userProfileLimits: {
+              connections_limit: userData.connections_limit,
+              agents_limit: userData.agents_limit,
+            },
+            userSettingsLimits: {
+              whatsapp_connections_limit: settingsData?.whatsapp_connections_limit,
+              agents_limit: settingsData?.agents_limit,
+            },
+            systemDefaults: {
+              whatsappLimit: defaultWhatsAppLimit,
+              agentsLimit: defaultAgentsLimit,
+            },
+          })
 
           // Definir valores com prioridade:
           // 1. Valor do usuário na tabela user_profiles
           // 2. Valor do usuário na tabela user_settings
           // 3. Valor padrão do sistema
-          // 4. Valor fixo de fallback
+          const whatsappLimitValue =
+            userData.connections_limit !== undefined && userData.connections_limit !== null
+              ? userData.connections_limit
+              : settingsData?.whatsapp_connections_limit !== undefined &&
+                  settingsData?.whatsapp_connections_limit !== null
+                ? settingsData.whatsapp_connections_limit
+                : defaultWhatsAppLimit
+
+          const agentsLimitValue =
+            userData.agents_limit !== undefined && userData.agents_limit !== null
+              ? userData.agents_limit
+              : settingsData?.agents_limit !== undefined && settingsData?.agents_limit !== null
+                ? settingsData.agents_limit
+                : defaultAgentsLimit
+
+          console.log("✅ Valores finais definidos:", {
+            whatsappLimit: whatsappLimitValue,
+            agentsLimit: agentsLimitValue,
+          })
+
           setFormData({
             full_name: userData.full_name || "",
             email: userData.email || "",
             password: "",
             role: userData.role || "user",
             status: userData.status || "active",
-            whatsapp_limit:
-              userData.connections_limit !== undefined
-                ? userData.connections_limit
-                : settingsData?.whatsapp_connections_limit !== undefined
-                  ? settingsData.whatsapp_connections_limit
-                  : defaultWhatsAppLimit,
-            agents_limit:
-              userData.agents_limit !== undefined
-                ? userData.agents_limit
-                : settingsData?.agents_limit !== undefined
-                  ? settingsData.agents_limit
-                  : defaultAgentsLimit,
+            whatsapp_limit: whatsappLimitValue,
+            agents_limit: agentsLimitValue,
           })
         } catch (error) {
-          console.error("Erro ao buscar dados do usuário:", error)
+          console.error("❌ Erro ao buscar dados do usuário:", error)
 
-          // Obter limites padrão do sistema
+          // Obter limites padrão do sistema como fallback
           const defaultWhatsAppLimit = await getDefaultWhatsAppLimit()
           const defaultAgentsLimit = await getDefaultAgentsLimit()
 
@@ -131,39 +168,43 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             password: "",
             role: user.role || "user",
             status: user.status || "active",
-            whatsapp_limit: user.connections_limit || defaultWhatsAppLimit,
-            agents_limit: user.agents_limit || defaultAgentsLimit,
+            whatsapp_limit: user.connections_limit ?? defaultWhatsAppLimit,
+            agents_limit: user.agents_limit ?? defaultAgentsLimit,
           })
         } finally {
           setLoadingData(false)
         }
-      } else if (!user && open) {
-        // Novo usuário - usar valores padrão do sistema
-        const defaultWhatsAppLimit = await getDefaultWhatsAppLimit()
-        const defaultAgentsLimit = await getDefaultAgentsLimit()
-
-        setFormData({
-          full_name: "",
-          email: "",
-          password: "",
-          role: "user",
-          status: "active",
-          whatsapp_limit: defaultWhatsAppLimit,
-          agents_limit: defaultAgentsLimit,
-        })
+      } else if (!user && open && !loadingDefaults) {
+        // Novo usuário - valores padrão já foram carregados no useEffect anterior
+        console.log("👤 Novo usuário - usando valores padrão já carregados")
       }
     }
 
-    if (open) {
+    if (open && !loadingDefaults) {
       fetchUserData()
-    } else {
+    } else if (!open) {
       setError("")
+      // Reset form data when modal closes
+      setFormData({
+        full_name: "",
+        email: "",
+        password: "",
+        role: "user",
+        status: "active",
+        whatsapp_limit: null,
+        agents_limit: null,
+      })
     }
-  }, [user, open])
+  }, [user, open, loadingDefaults])
 
   const handleSave = async () => {
     if (!formData.full_name.trim() || !formData.email.trim()) {
       setError("Nome e email são obrigatórios")
+      return
+    }
+
+    if (formData.whatsapp_limit === null || formData.agents_limit === null) {
+      setError("Erro: Limites não foram carregados corretamente")
       return
     }
 
@@ -229,16 +270,16 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           updateData.password = formData.password.trim()
         }
 
-        console.log("Atualizando usuário:", user.id, updateData)
+        console.log("🔄 Atualizando usuário:", user.id, updateData)
         const { error: profileError } = await supabase.from("user_profiles").update(updateData).eq("id", user.id)
 
         if (profileError) {
-          console.error("Erro ao atualizar perfil:", profileError)
+          console.error("❌ Erro ao atualizar perfil:", profileError)
           throw profileError
         }
       } else {
         // Criar novo usuário
-        console.log("Criando novo usuário")
+        console.log("🔄 Criando novo usuário")
         const { data: newUser, error: profileError } = await supabase
           .from("user_profiles")
           .insert({
@@ -255,7 +296,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           .single()
 
         if (profileError) {
-          console.error("Erro ao criar usuário:", profileError)
+          console.error("❌ Erro ao criar usuário:", profileError)
           throw profileError
         }
 
@@ -263,7 +304,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           throw new Error("Falha ao criar perfil do usuário. Nenhum dado retornado.")
         }
 
-        console.log("Novo usuário criado:", newUser.id)
+        console.log("✅ Novo usuário criado:", newUser.id)
         userId = newUser.id
       }
 
@@ -295,15 +336,15 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             })
           }
         } catch (settingsError) {
-          console.warn("Tabela user_settings não disponível, usando apenas user_profiles")
+          console.warn("⚠️ Tabela user_settings não disponível, usando apenas user_profiles")
         }
       }
 
-      console.log("Usuário salvo com sucesso!")
+      console.log("✅ Usuário salvo com sucesso!")
       onSuccess()
       onOpenChange(false)
     } catch (error: any) {
-      console.error("Erro ao salvar usuário:", error)
+      console.error("❌ Erro ao salvar usuário:", error)
 
       // Melhorar o tratamento de erro para mostrar mensagens mais detalhadas
       let errorMessage = "Erro ao salvar usuário"
@@ -329,6 +370,10 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     onOpenChange(false)
   }
 
+  // Verificar se ainda está carregando dados essenciais
+  const isLoadingEssentialData =
+    loadingDefaults || loadingData || formData.whatsapp_limit === null || formData.agents_limit === null
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
@@ -350,10 +395,12 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           </Alert>
         )}
 
-        {loadingData ? (
+        {isLoadingEssentialData ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin mr-2 text-muted-foreground" />
-            <span className="text-muted-foreground">Carregando dados do usuário...</span>
+            <span className="text-muted-foreground">
+              {loadingDefaults ? "Carregando configurações do sistema..." : "Carregando dados do usuário..."}
+            </span>
           </div>
         ) : (
           <div className="space-y-4">
@@ -451,11 +498,11 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
               <Input
                 id="whatsappLimit"
                 type="number"
-                value={formData.whatsapp_limit}
+                value={formData.whatsapp_limit || ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    whatsapp_limit: Number.parseInt(e.target.value) || 1,
+                    whatsapp_limit: Number.parseInt(e.target.value) || 0,
                   })
                 }
                 min="0"
@@ -472,11 +519,11 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
               <Input
                 id="agentsLimit"
                 type="number"
-                value={formData.agents_limit}
+                value={formData.agents_limit || ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    agents_limit: Number.parseInt(e.target.value) || 2,
+                    agents_limit: Number.parseInt(e.target.value) || 0,
                   })
                 }
                 min="0"
@@ -499,12 +546,17 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={loading || loadingData} className="text-foreground">
+          <Button
+            variant="outline"
+            onClick={handleClose}
+            disabled={loading || isLoadingEssentialData}
+            className="text-foreground"
+          >
             Cancelar
           </Button>
           <Button
             onClick={handleSave}
-            disabled={loading || loadingData}
+            disabled={loading || isLoadingEssentialData}
             className="bg-blue-600 text-white hover:bg-blue-700"
           >
             {loading ? (

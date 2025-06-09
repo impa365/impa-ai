@@ -12,7 +12,7 @@ import { Eye, EyeOff } from "lucide-react"
 import { signIn } from "@/lib/auth" // Importa a função signIn manual
 import { useTheme } from "@/components/theme-provider"
 import RegisterForm from "./register-form"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { supabase } from "@/lib/supabase"
 
 export default function LoginForm() {
   const [email, setEmail] = useState("")
@@ -25,27 +25,48 @@ export default function LoginForm() {
   const [checkingRegistration, setCheckingRegistration] = useState(true)
   const router = useRouter()
   const { theme } = useTheme()
-  const supabase = createClientComponentClient()
 
   useEffect(() => {
     // Verificar se o cadastro público está habilitado
     const checkRegistrationSetting = async () => {
       try {
         setCheckingRegistration(true)
-        // Em um ambiente real, você buscaria essa configuração do banco de dados
-        // Por enquanto, vamos assumir que está habilitado para testes
+        console.log("🔍 Verificando configuração de registro público...")
+
+        // Buscar a configuração específica da tabela system_settings
         const { data, error } = await supabase
           .from("system_settings")
           .select("setting_value")
           .eq("setting_key", "allow_public_registration")
           .single()
-        if (data && data.setting_value === true) {
-          setAllowRegistration(true)
+
+        console.log("📊 Dados retornados:", data)
+        console.log("❌ Erro (se houver):", error)
+
+        if (error) {
+          console.error("Erro ao buscar configuração:", error)
+          // Se houver erro, assumir que o registro está desabilitado por segurança
+          setAllowRegistration(false)
+        } else if (data) {
+          // Verificar o valor retornado - pode ser boolean, string ou number
+          let isAllowed = false
+
+          if (typeof data.setting_value === "boolean") {
+            isAllowed = data.setting_value
+          } else if (typeof data.setting_value === "string") {
+            isAllowed = data.setting_value.toLowerCase() === "true" || data.setting_value === "1"
+          } else if (typeof data.setting_value === "number") {
+            isAllowed = data.setting_value === 1
+          }
+
+          console.log("✅ Registro público permitido:", isAllowed)
+          setAllowRegistration(isAllowed)
         } else {
+          console.log("⚠️ Configuração não encontrada, desabilitando registro")
           setAllowRegistration(false)
         }
       } catch (error) {
-        console.error("Error checking registration setting:", error)
+        console.error("💥 Erro inesperado ao verificar configuração:", error)
         setAllowRegistration(false)
       } finally {
         setCheckingRegistration(false)
@@ -160,6 +181,7 @@ export default function LoginForm() {
             </Button>
           </form>
 
+          {/* Seção de registro - só aparece se permitido e não estiver verificando */}
           {!checkingRegistration && allowRegistration && (
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600 mb-2">Não tem uma conta?</p>
@@ -169,11 +191,19 @@ export default function LoginForm() {
             </div>
           )}
 
-          {/* Debug info - remover em produção */}
+          {/* Mensagem de carregamento */}
+          {checkingRegistration && (
+            <div className="mt-6 text-center">
+              <p className="text-sm text-gray-500">Verificando configurações...</p>
+            </div>
+          )}
+
+          {/* Debug info - só em desenvolvimento */}
           {process.env.NODE_ENV === "development" && (
             <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
               <p>Debug: Registration allowed = {allowRegistration.toString()}</p>
               <p>Debug: Checking = {checkingRegistration.toString()}</p>
+              <p>Debug: Show register button = {(!checkingRegistration && allowRegistration).toString()}</p>
             </div>
           )}
         </CardContent>

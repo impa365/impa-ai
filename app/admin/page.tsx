@@ -48,7 +48,7 @@ import { disconnectInstance } from "@/lib/whatsapp-settings-api"
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false) // Mudado para false - não mostra loading inicial
   const router = useRouter()
   const searchParams = useSearchParams()
   const activeTab = searchParams.get("tab") || "dashboard"
@@ -141,6 +141,7 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => {
+    // Verificação rápida do usuário - já foi feita no layout
     const currentUser = getCurrentUser()
     if (!currentUser) {
       router.push("/")
@@ -151,7 +152,32 @@ export default function AdminDashboard() {
       return
     }
     setUser(currentUser)
-    setLoading(false)
+
+    // Carregamento assíncrono dos dados sem bloquear a UI
+    const loadData = async () => {
+      try {
+        await Promise.all([
+          fetchUsers(),
+          fetchAgents(),
+          fetchMetrics(),
+          fetchIntegrations(),
+          fetchWhatsAppConnections(),
+          fetchSystemSettings(),
+        ])
+
+        setAdminProfileForm({
+          full_name: currentUser.full_name || "",
+          email: currentUser.email || "",
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        })
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error)
+      }
+    }
+
+    loadData()
   }, [router])
 
   const handleLogout = async () => {
@@ -191,24 +217,6 @@ export default function AdminDashboard() {
     const { data, error } = await db.integrations().select("*").order("created_at", { ascending: false })
     if (data) setIntegrations(data)
   }
-
-  useEffect(() => {
-    if (user) {
-      fetchUsers()
-      fetchAgents()
-      fetchMetrics()
-      fetchIntegrations()
-      fetchWhatsAppConnections()
-      fetchSystemSettings()
-      setAdminProfileForm({
-        full_name: user.full_name || "",
-        email: user.email || "",
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      })
-    }
-  }, [user])
 
   const handleDeleteUser = async () => {
     if (!userToDelete) return
@@ -294,13 +302,14 @@ export default function AdminDashboard() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
+  // Removido o loading - mostra conteúdo imediatamente
+  // if (loading) {
+  //   return (
+  //     <div className="min-h-screen flex items-center justify-center">
+  //       <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+  //     </div>
+  //   )
+  // }
 
   const renderDashboard = () => (
     <div className="space-y-8">

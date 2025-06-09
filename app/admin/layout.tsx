@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useState, Suspense } from "react"
+import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Home, Users, Bot, Smartphone, Shield, Cog, LogOut } from "lucide-react"
@@ -21,17 +21,23 @@ export default function AdminLayout({
   const { theme } = useTheme()
 
   useEffect(() => {
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
-      router.push("/")
-      return
+    // Otimização: verificação mais rápida do usuário
+    const checkUser = () => {
+      const currentUser = getCurrentUser()
+      if (!currentUser) {
+        router.push("/")
+        return
+      }
+      if (currentUser.role !== "admin") {
+        router.push("/dashboard")
+        return
+      }
+      setUser(currentUser)
+      setLoading(false)
     }
-    if (currentUser.role !== "admin") {
-      router.push("/dashboard")
-      return
-    }
-    setUser(currentUser)
-    setLoading(false)
+
+    // Executa imediatamente sem delay
+    checkUser()
   }, [router])
 
   const handleLogout = async () => {
@@ -58,10 +64,48 @@ export default function AdminLayout({
     { icon: Cog, label: "Configurações", href: "/admin/settings", active: pathname === "/admin/settings" },
   ]
 
+  // Loading otimizado - apenas um spinner discreto
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="flex h-screen bg-gray-50">
+        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ backgroundColor: theme.primaryColor }}
+              >
+                <span className="text-white">{theme.logoIcon}</span>
+              </div>
+              <span className="font-semibold text-lg text-gray-900">Admin Panel</span>
+            </div>
+          </div>
+
+          <nav className="flex-1 p-4">
+            <ul className="space-y-2">
+              {sidebarItems.map((item, index) => (
+                <li key={index}>
+                  <div className="w-full h-10 bg-gray-100 rounded animate-pulse"></div>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          <div className="p-4 border-t border-gray-200">
+            <div className="w-full h-10 bg-gray-100 rounded animate-pulse"></div>
+            <div className="text-xs text-gray-500 mt-2">
+              <div>{theme.systemName} Admin</div>
+              <div>v1.0.0</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-gray-600 text-sm">Carregando painel...</p>
+          </div>
+        </div>
       </div>
     )
   }
@@ -118,7 +162,8 @@ export default function AdminLayout({
       </div>
 
       <div className="flex-1 overflow-auto">
-        <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+        {/* Removido o Suspense com fallback - carregamento direto */}
+        {children}
       </div>
     </div>
   )
