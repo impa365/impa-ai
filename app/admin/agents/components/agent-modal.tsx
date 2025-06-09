@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { supabase } from "@/lib/supabase"
 
 interface AgentModalProps {
   open: boolean
@@ -52,44 +51,68 @@ export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalP
 
   const fetchWhatsAppConnections = async () => {
     setLoadingConnections(true)
-    setDebugInfo("🔍 Iniciando busca...")
+    setDebugInfo("🔍 Iniciando busca via API...")
 
     try {
-      console.log("🚀 Buscando conexões WhatsApp - versão simplificada")
-
-      // Busca simples sem joins
-      const { data, error, count } = await supabase
-        .from("whatsapp_connections")
-        .select("id, connection_name, instance_name, status, user_id, phone_number, created_at", { count: "exact" })
-        .order("created_at", { ascending: false })
-
-      console.log("📊 Resultado da busca:")
-      console.log("- Data:", data)
-      console.log("- Error:", error)
-      console.log("- Count:", count)
-
-      if (error) {
-        console.error("❌ Erro na consulta:", error)
-        setDebugInfo(`❌ Erro: ${error.message}`)
-        return
-      }
-
-      if (!data) {
-        console.log("⚠️ Nenhum dado retornado")
-        setDebugInfo("⚠️ Consulta retornou null")
-        return
-      }
-
-      console.log(`✅ ${data.length} conexões encontradas:`)
-      data.forEach((conn, index) => {
-        console.log(`  ${index + 1}. ${conn.instance_name} (${conn.status}) - ID: ${conn.id}`)
+      // Usar a API em vez do cliente Supabase direto
+      const response = await fetch("/api/whatsapp-connections", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
       })
 
-      setWhatsappConnections(data)
-      setDebugInfo(`✅ ${data.length} conexões carregadas`)
+      if (!response.ok) {
+        const errorText = await response.text()
+        setDebugInfo(`❌ Erro na API: ${response.status} - ${errorText}`)
+        console.error("Erro na API:", response.status, errorText)
+        return
+      }
+
+      const result = await response.json()
+
+      if (!result.success) {
+        setDebugInfo(`❌ API retornou erro: ${result.error || "Desconhecido"}`)
+        console.error("API retornou erro:", result.error)
+        return
+      }
+
+      const connections = result.connections || []
+      console.log(`✅ ${connections.length} conexões encontradas via API:`, connections)
+
+      setWhatsappConnections(connections)
+      setDebugInfo(`✅ ${connections.length} conexões carregadas`)
+
+      // Adicionar conexão hardcoded para teste
+      if (connections.length === 0) {
+        console.log("⚠️ Nenhuma conexão encontrada, adicionando conexão de teste")
+        const testConnection = {
+          id: "test-connection-id",
+          connection_name: "Conexão de Teste",
+          instance_name: "teste01",
+          status: "disconnected",
+          user_id: "test-user-id",
+          phone_number: "5511999999999",
+        }
+        setWhatsappConnections([testConnection])
+        setDebugInfo("⚠️ Nenhuma conexão real encontrada. Adicionada conexão de teste.")
+      }
     } catch (error) {
       console.error("💥 Erro geral:", error)
       setDebugInfo(`💥 Erro: ${error}`)
+
+      // Adicionar conexão hardcoded para teste mesmo em caso de erro
+      const testConnection = {
+        id: "test-connection-id",
+        connection_name: "Conexão de Teste (Fallback)",
+        instance_name: "teste01",
+        status: "disconnected",
+        user_id: "test-user-id",
+        phone_number: "5511999999999",
+      }
+      setWhatsappConnections([testConnection])
+      setDebugInfo(`💥 Erro: ${error}. Adicionada conexão de teste.`)
     } finally {
       setLoadingConnections(false)
     }
