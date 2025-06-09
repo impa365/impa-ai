@@ -116,8 +116,13 @@ export default function AdminWhatsAppPage() {
 
       setSyncing(true)
       try {
-        await syncInstanceStatus(connectionId)
-        await fetchConnections()
+        const result = await syncInstanceStatus(connectionId)
+        if (result.success) {
+          await fetchConnections()
+          console.log("Sincronização realizada:", result)
+        } else {
+          console.error("Erro na sincronização:", result.error)
+        }
       } catch (error) {
         console.error("Erro ao sincronizar:", error)
       } finally {
@@ -127,57 +132,46 @@ export default function AdminWhatsAppPage() {
     [syncing],
   )
 
-  // Modifique a função de sincronização manual para lidar melhor com erros
+  // Função de sincronização manual melhorada
   const handleManualSync = async () => {
     if (syncing || !connections.length) return
 
     setSyncing(true)
     try {
-      // Sincronizar conexões em paralelo com Promise.allSettled para continuar mesmo com erros
-      const syncPromises = connections.map((connection) =>
-        syncInstanceStatus(connection.id).catch((error) => {
-          console.error(`Erro ao sincronizar conexão ${connection.id}:`, error)
-          return { success: false, updated: false, error: String(error) }
-        }),
-      )
+      console.log(`[MANUAL-SYNC] Iniciando sincronização de ${connections.length} conexões`)
 
-      await Promise.allSettled(syncPromises)
+      // Sincronizar conexões uma por vez para evitar sobrecarga
+      for (const connection of connections) {
+        try {
+          console.log(`[MANUAL-SYNC] Sincronizando: ${connection.instance_name}`)
+          await syncInstanceStatus(connection.id)
+          // Pequena pausa entre sincronizações
+          await new Promise((resolve) => setTimeout(resolve, 500))
+        } catch (error) {
+          console.error(`[MANUAL-SYNC] Erro na conexão ${connection.instance_name}:`, error)
+          // Continuar com as outras conexões mesmo se uma falhar
+        }
+      }
 
       // Recarregar conexões após sincronização
       await fetchConnections()
+      setSaveMessage("Sincronização concluída!")
+      setTimeout(() => setSaveMessage(""), 3000)
     } catch (error) {
       console.error("Erro na sincronização manual:", error)
+      setSaveMessage("Erro na sincronização")
+      setTimeout(() => setSaveMessage(""), 3000)
     } finally {
       setSyncing(false)
     }
   }
 
-  // Modifique a função de sincronização silenciosa para lidar melhor com erros
-  useEffect(() => {
-    if (connections.length > 0) {
-      // Sincronização silenciosa (sem indicador visual)
-      const syncSilently = async () => {
-        try {
-          // Sincronizar conexões em paralelo com Promise.allSettled para continuar mesmo com erros
-          const syncPromises = connections.map((connection) =>
-            syncInstanceStatus(connection.id).catch((error) => {
-              console.error(`Erro ao sincronizar conexão ${connection.id}:`, error)
-              return { success: false, updated: false, error: String(error) }
-            }),
-          )
-
-          await Promise.allSettled(syncPromises)
-
-          // Recarregar conexões após sincronização
-          await fetchConnections()
-        } catch (error) {
-          console.error("Erro na sincronização silenciosa:", error)
-        }
-      }
-
-      syncSilently()
-    }
-  }, [connections.length])
+  // Remover sincronização automática silenciosa que estava causando erro
+  // useEffect(() => {
+  //   if (connections.length > 0) {
+  //     // Sincronização silenciosa removida para evitar erros
+  //   }
+  // }, [connections.length])
 
   // Quando o modal QR é aberto, sincronizar a conexão selecionada
   useEffect(() => {
@@ -198,9 +192,12 @@ export default function AdminWhatsAppPage() {
       const result = await disconnectInstance(connection.instance_name)
 
       if (result.success) {
-        // Sincronizar status após desconectar
-        await syncConnection(connection.id)
+        // Recarregar conexões após desconectar
+        await fetchConnections()
         setSaveMessage("Conexão desconectada com sucesso!")
+        setTimeout(() => setSaveMessage(""), 3000)
+      } else {
+        setSaveMessage("Erro ao desconectar conexão")
         setTimeout(() => setSaveMessage(""), 3000)
       }
     } catch (error) {

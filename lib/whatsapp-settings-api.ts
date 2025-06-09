@@ -117,13 +117,13 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
   }
 }
 
-import { db } from "@/lib/supabase"
-
 export async function syncInstanceStatus(connectionId: string) {
   try {
+    console.log(`[SYNC] Iniciando sincronização para conexão: ${connectionId}`)
+
     // Buscar informações da conexão
-    const { data: connection, error: connectionError } = await db
-      .whatsappConnections()
+    const { data: connection, error: connectionError } = await supabase
+      .from("whatsapp_connections")
       .select("instance_name, status")
       .eq("id", connectionId)
       .single()
@@ -133,24 +133,56 @@ export async function syncInstanceStatus(connectionId: string) {
       return { success: false, error: "Conexão não encontrada" }
     }
 
-    // Aqui você faria a chamada para a Evolution API para verificar o status real
-    // Por enquanto, vamos simular uma atualização
+    console.log(`[SYNC] Conexão encontrada: ${connection.instance_name}`)
 
-    // Atualizar timestamp de sincronização
-    const { error: updateError } = await db
-      .whatsappConnections()
-      .update({
-        last_sync: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", connectionId)
+    // Verificar status real da instância via API
+    const statusResult = await checkInstanceStatus(connection.instance_name)
 
-    if (updateError) {
-      console.error("Erro ao atualizar sincronização:", updateError)
-      return { success: false, error: "Erro ao sincronizar" }
+    if (statusResult.success && statusResult.status) {
+      // Atualizar apenas com colunas que sabemos que existem
+      const currentTime = new Date().toISOString()
+
+      const { data, error: updateError } = await supabase
+        .from("whatsapp_connections")
+        .update({
+          status: statusResult.status,
+          updated_at: currentTime,
+          // Remover last_sync completamente para evitar erro de cache
+        })
+        .eq("id", connectionId)
+        .select()
+
+      if (updateError) {
+        console.error("Erro ao atualizar status:", updateError)
+        return { success: false, error: updateError.message }
+      }
+
+      console.log(`[SYNC] Status atualizado para: ${statusResult.status}`)
+      return {
+        success: true,
+        updated: true,
+        status: statusResult.status,
+        data: data?.[0],
+      }
+    } else {
+      // Se não conseguir verificar o status, apenas atualizar o timestamp
+      const currentTime = new Date().toISOString()
+
+      const { error: updateError } = await supabase
+        .from("whatsapp_connections")
+        .update({
+          updated_at: currentTime,
+        })
+        .eq("id", connectionId)
+
+      if (updateError) {
+        console.error("Erro ao atualizar timestamp:", updateError)
+        return { success: false, error: updateError.message }
+      }
+
+      console.log("[SYNC] Timestamp atualizado (status não verificado)")
+      return { success: true, updated: true, note: "Apenas timestamp atualizado" }
     }
-
-    return { success: true, updated: true }
   } catch (error) {
     console.error("Erro na sincronização:", error)
     return { success: false, error: "Erro interno" }
@@ -159,12 +191,39 @@ export async function syncInstanceStatus(connectionId: string) {
 
 export async function disconnectInstance(instanceName: string) {
   try {
-    // Aqui você faria a chamada para a Evolution API para desconectar
-    // Por enquanto, vamos simular uma desconexão
+    console.log(`[DISCONNECT] Desconectando instância: ${instanceName}`)
+
+    // Buscar configuração da Evolution API
+    const { data: integrationData } = await supabase
+      .from("integrations")
+      .select("config")
+      .eq("type", "evolution_api")
+      .eq("is_active", true)
+      .single()
+
+    if (integrationData?.config?.apiUrl && integrationData?.config?.apiKey) {
+      try {
+        // Tentar desconectar via API
+        const response = await fetch(`${integrationData.config.apiUrl}/instance/logout/${instanceName}`, {
+          method: "DELETE",
+          headers: {
+            apikey: integrationData.config.apiKey,
+          },
+        })
+
+        if (response.ok) {
+          console.log(`[DISCONNECT] Instância ${instanceName} desconectada via API`)
+        } else {
+          console.warn(`[DISCONNECT] Falha ao desconectar via API: ${response.status}`)
+        }
+      } catch (apiError) {
+        console.warn("[DISCONNECT] Erro na API, continuando com atualização local:", apiError)
+      }
+    }
 
     // Atualizar status no banco
-    const { error } = await db
-      .whatsappConnections()
+    const { error } = await supabase
+      .from("whatsapp_connections")
       .update({
         status: "disconnected",
         updated_at: new Date().toISOString(),
@@ -172,10 +231,11 @@ export async function disconnectInstance(instanceName: string) {
       .eq("instance_name", instanceName)
 
     if (error) {
-      console.error("Erro ao desconectar instância:", error)
+      console.error("Erro ao atualizar status de desconexão:", error)
       return { success: false, error: "Erro ao desconectar" }
     }
 
+    console.log(`[DISCONNECT] Status atualizado para disconnected`)
     return { success: true }
   } catch (error) {
     console.error("Erro ao desconectar instância:", error)
@@ -186,8 +246,8 @@ export async function disconnectInstance(instanceName: string) {
 export async function getInstanceSettings(instanceName: string) {
   try {
     // Buscar configurações da instância no banco
-    const { data: connection, error } = await db
-      .whatsappConnections()
+    const { data: connection, error } = await supabase
+      .from("whatsapp_connections")
       .select("*")
       .eq("instance_name", instanceName)
       .single()
@@ -229,8 +289,8 @@ export async function getInstanceSettings(instanceName: string) {
 export async function saveInstanceSettings(instanceName: string, settings: any) {
   try {
     // Salvar configurações no banco (você pode criar uma tabela específica para isso)
-    const { error } = await db
-      .whatsappConnections()
+    const { error } = await supabase
+      .from("whatsapp_connections")
       .update({
         settings: settings,
         updated_at: new Date().toISOString(),
