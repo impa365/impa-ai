@@ -1,287 +1,319 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2, AlertTriangle, CheckCircle, Info, ExternalLink } from "lucide-react"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+
+export interface WhatsAppConnection {
+  id: string
+  connection_name: string | null
+  instance_name: string
+  status: string
+  user_id: string
+  phone_number?: string | null
+}
+
+export interface ConnectionFetchLog {
+  timestamp: Date
+  message: string
+  type: "info" | "error" | "success"
+}
 
 interface AgentModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   agent?: any
   onSuccess: () => void
+  whatsappConnections: WhatsAppConnection[]
+  isLoadingConnections: boolean
+  fetchLogs: ConnectionFetchLog[]
 }
 
-interface WhatsAppConnection {
-  id: string
-  connection_name: string | null
-  instance_name: string
-  status: string
-  user_id: string
-  phone_number?: string
-}
-
-export function AgentModal({ open, onOpenChange, agent, onSuccess }: AgentModalProps) {
-  const [loading, setLoading] = useState(false)
-  const [loadingConnections, setLoadingConnections] = useState(false)
-  const [whatsappConnections, setWhatsappConnections] = useState<WhatsAppConnection[]>([])
-  const [debugInfo, setDebugInfo] = useState<string>("")
+export function AgentModal({
+  open,
+  onOpenChange,
+  agent,
+  onSuccess,
+  whatsappConnections,
+  isLoadingConnections,
+  fetchLogs,
+}: AgentModalProps) {
+  const [isSaving, setIsSaving] = useState(false)
   const [formData, setFormData] = useState({
     name: agent?.name || "",
     type: agent?.type || "geral",
     description: agent?.description || "",
     status: agent?.status || "active",
     whatsapp_connection_id: agent?.whatsapp_connection_id || "",
-    training_prompt:
-      agent?.training_prompt ||
-      "Você é um assistente virtual especializado em atendimento ao cliente. Seja sempre educado, prestativo e profissional.",
+    training_prompt: agent?.training_prompt || "Você é um assistente virtual. Seja sempre educado e prestativo.",
   })
 
-  // Carregar conexões WhatsApp quando o modal abrir
   useEffect(() => {
-    if (open) {
-      fetchWhatsAppConnections()
-    }
-  }, [open])
-
-  const fetchWhatsAppConnections = async () => {
-    setLoadingConnections(true)
-    setDebugInfo("🔍 Iniciando busca via API...")
-
-    try {
-      // Usar a API em vez do cliente Supabase direto
-      const response = await fetch("/api/whatsapp-connections", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        cache: "no-store",
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        setDebugInfo(`❌ Erro na API: ${response.status} - ${errorText}`)
-        console.error("Erro na API:", response.status, errorText)
-        return
-      }
-
-      const result = await response.json()
-
-      if (!result.success) {
-        setDebugInfo(`❌ API retornou erro: ${result.error || "Desconhecido"}`)
-        console.error("API retornou erro:", result.error)
-        return
-      }
-
-      const connections = result.connections || []
-      console.log(`✅ ${connections.length} conexões encontradas via API:`, connections)
-
-      setWhatsappConnections(connections)
-      setDebugInfo(`✅ ${connections.length} conexões carregadas`)
-
-      // Adicionar conexão hardcoded para teste
-      if (connections.length === 0) {
-        console.log("⚠️ Nenhuma conexão encontrada, adicionando conexão de teste")
-        const testConnection = {
-          id: "test-connection-id",
-          connection_name: "Conexão de Teste",
-          instance_name: "teste01",
-          status: "disconnected",
-          user_id: "test-user-id",
-          phone_number: "5511999999999",
-        }
-        setWhatsappConnections([testConnection])
-        setDebugInfo("⚠️ Nenhuma conexão real encontrada. Adicionada conexão de teste.")
-      }
-    } catch (error) {
-      console.error("💥 Erro geral:", error)
-      setDebugInfo(`💥 Erro: ${error}`)
-
-      // Adicionar conexão hardcoded para teste mesmo em caso de erro
-      const testConnection = {
-        id: "test-connection-id",
-        connection_name: "Conexão de Teste (Fallback)",
-        instance_name: "teste01",
-        status: "disconnected",
-        user_id: "test-user-id",
-        phone_number: "5511999999999",
-      }
-      setWhatsappConnections([testConnection])
-      setDebugInfo(`💥 Erro: ${error}. Adicionada conexão de teste.`)
-    } finally {
-      setLoadingConnections(false)
-    }
-  }
+    setFormData({
+      name: agent?.name || "",
+      type: agent?.type || "geral",
+      description: agent?.description || "",
+      status: agent?.status || "active",
+      whatsapp_connection_id: agent?.whatsapp_connection_id || "",
+      training_prompt: agent?.training_prompt || "Você é um assistente virtual. Seja sempre educado e prestativo.",
+    })
+  }, [agent, open])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
 
+    // Validação adicional: verificar se há conexão selecionada
+    if (!formData.whatsapp_connection_id) {
+      alert("Por favor, selecione uma conexão WhatsApp antes de criar o agente.")
+      return
+    }
+
+    setIsSaving(true)
     try {
-      console.log("💾 Dados do agente para salvar:", formData)
-
-      // Simular salvamento
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      console.log("💾 Salvando agente:", formData)
+      await new Promise((resolve) => setTimeout(resolve, 1500))
       onSuccess()
       onOpenChange(false)
     } catch (error) {
       console.error("Erro ao salvar agente:", error)
     } finally {
-      setLoading(false)
+      setIsSaving(false)
     }
   }
 
+  const getPlaceholderText = () => {
+    if (isLoadingConnections) return "Carregando conexões..."
+    if (whatsappConnections.length === 0) return "Nenhuma conexão disponível"
+    return "Selecione uma conexão"
+  }
+
+  const LogIcon = ({ type }: { type: ConnectionFetchLog["type"] }) => {
+    if (type === "error") return <AlertTriangle className="h-4 w-4 text-red-500 mr-2 flex-shrink-0" />
+    if (type === "success") return <CheckCircle className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
+    return <Info className="h-4 w-4 text-blue-500 mr-2 flex-shrink-0" />
+  }
+
+  // Determinar se o formulário pode ser submetido
+  const canSubmit =
+    !isSaving &&
+    !isLoadingConnections &&
+    formData.whatsapp_connection_id &&
+    formData.name.trim() &&
+    formData.training_prompt.trim() &&
+    whatsappConnections.length > 0
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[95vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{agent ? "Editar Agente" : "Criar Agente"}</DialogTitle>
+          <DialogTitle>{agent ? "Editar Agente IA" : "Criar Novo Agente IA"}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="name">Nome da IA *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Ex: Luna, Assistente de Vendas, Bot Atendimento"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">Este será o nome que identifica sua IA no sistema</p>
+        <ScrollArea className="flex-grow pr-6 -mr-6">
+          <form onSubmit={handleSubmit} className="space-y-6 py-2">
+            {/* Alert quando não há conexões */}
+            {!isLoadingConnections && whatsappConnections.length === 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Impossível criar agente:</strong> Nenhuma conexão WhatsApp disponível.
+                  <br />
+                  <a
+                    href="/admin/whatsapp"
+                    className="inline-flex items-center mt-2 text-sm underline hover:no-underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="mr-1 h-3 w-3" />
+                    Configurar Conexões WhatsApp
+                  </a>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              <div>
+                <Label htmlFor="name">Nome da IA *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                  disabled={whatsappConnections.length === 0}
+                />
+              </div>
+              <div>
+                <Label htmlFor="type">Função Principal</Label>
+                <Select
+                  value={formData.type}
+                  onValueChange={(value) => setFormData({ ...formData, type: value })}
+                  disabled={whatsappConnections.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a função" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vendas">Vendas</SelectItem>
+                    <SelectItem value="suporte">Suporte</SelectItem>
+                    <SelectItem value="marketing">Marketing</SelectItem>
+                    <SelectItem value="geral">Geral</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div>
-              <Label htmlFor="type">Função Principal</Label>
-              <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+              <Label htmlFor="description">Descrição do Propósito da IA</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                rows={3}
+                disabled={whatsappConnections.length === 0}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="whatsapp_connection">Conexão WhatsApp *</Label>
+              <Select
+                value={formData.whatsapp_connection_id}
+                onValueChange={(value) => setFormData({ ...formData, whatsapp_connection_id: value })}
+                disabled={isLoadingConnections || whatsappConnections.length === 0}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Atendimento ao Cliente" />
+                  {isLoadingConnections && whatsappConnections.length === 0 && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  <SelectValue placeholder={getPlaceholderText()} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="vendas">Vendas</SelectItem>
-                  <SelectItem value="suporte">Suporte</SelectItem>
-                  <SelectItem value="marketing">Marketing</SelectItem>
-                  <SelectItem value="geral">Geral</SelectItem>
+                  {whatsappConnections.length > 0
+                    ? whatsappConnections.map((connection) => (
+                        <SelectItem key={connection.id} value={connection.id}>
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex flex-col text-left">
+                              <span className="font-medium">
+                                {connection.connection_name || connection.instance_name}
+                              </span>
+                              <span className="text-xs text-gray-500">ID: {connection.id.slice(0, 8)}...</span>
+                            </div>
+                            <Badge
+                              variant={
+                                connection.status === "connected" || connection.status === "Authenticated"
+                                  ? "default"
+                                  : "outline"
+                              }
+                              className={
+                                connection.status === "connected" || connection.status === "Authenticated"
+                                  ? "bg-green-500 text-white"
+                                  : ""
+                              }
+                            >
+                              {connection.status}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))
+                    : !isLoadingConnections && (
+                        <SelectItem value="no-connections-placeholder" disabled>
+                          Nenhuma conexão encontrada.
+                        </SelectItem>
+                      )}
+                  {isLoadingConnections && whatsappConnections.length === 0 && (
+                    <div className="flex items-center justify-center p-4 text-sm text-muted-foreground">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Carregando...
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+              {whatsappConnections.length === 0 && !isLoadingConnections && (
+                <p className="text-xs text-red-500 mt-1">
+                  ⚠️ É necessário ter pelo menos uma conexão WhatsApp configurada para criar agentes.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="training_prompt">Instruções de Comportamento (Prompt de Treinamento) *</Label>
+              <Textarea
+                id="training_prompt"
+                value={formData.training_prompt}
+                onChange={(e) => setFormData({ ...formData, training_prompt: e.target.value })}
+                rows={5}
+                required
+                disabled={whatsappConnections.length === 0}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="status">Status do Agente</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value) => setFormData({ ...formData, status: value })}
+                disabled={whatsappConnections.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Ativo</SelectItem>
+                  <SelectItem value="inactive">Inativo</SelectItem>
+                  <SelectItem value="training">Treinando</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          <div>
-            <Label htmlFor="description">Descrição do Propósito da IA</Label>
-            <Textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Ex: IA especializada em vendas de produtos digitais, focada em qualificar leads e agendar reuniões"
-              rows={3}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Descreva qual é o objetivo principal desta IA (vendas, suporte, agendamento, etc.)
-            </p>
-          </div>
-
-          <div>
-            <Label htmlFor="whatsapp_connection">Conexão WhatsApp *</Label>
-            <Select
-              value={formData.whatsapp_connection_id}
-              onValueChange={(value) => {
-                console.log("🔄 Conexão selecionada:", value)
-                setFormData({ ...formData, whatsapp_connection_id: value })
-              }}
-              disabled={loadingConnections}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    loadingConnections
-                      ? "Carregando conexões..."
-                      : whatsappConnections.length === 0
-                        ? "Nenhuma conexão disponível"
-                        : "Selecione qual número WhatsApp esta IA irá usar"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {whatsappConnections.map((connection) => (
-                  <SelectItem key={connection.id} value={connection.id}>
-                    <div className="flex flex-col text-left">
-                      <span className="font-medium">{connection.connection_name || connection.instance_name}</span>
-                      <span className="text-xs text-gray-500">
-                        {connection.phone_number && `📱 ${connection.phone_number} • `}
-                        Status: {connection.status}
+            <details className="mt-4">
+              <summary className="text-sm font-medium text-gray-600 cursor-pointer hover:text-gray-900">
+                Painel de Logs da Busca de Conexões ({fetchLogs.length})
+              </summary>
+              <ScrollArea className="h-32 mt-2 border rounded-md p-2 bg-gray-50 text-xs">
+                {fetchLogs.length === 0 && <p className="text-gray-500">Nenhum log disponível.</p>}
+                {fetchLogs.map((log, index) => (
+                  <div
+                    key={index}
+                    className={`flex items-start py-1 ${
+                      log.type === "error"
+                        ? "text-red-700"
+                        : log.type === "success"
+                          ? "text-green-700"
+                          : "text-gray-700"
+                    }`}
+                  >
+                    <LogIcon type={log.type} />
+                    <div className="flex-grow">
+                      <span className="font-mono text-gray-400 mr-2">
+                        {log.timestamp.toLocaleTimeString()}.
+                        {log.timestamp.getMilliseconds().toString().padStart(3, "0")}
                       </span>
+                      <span>{log.message}</span>
                     </div>
-                  </SelectItem>
+                  </div>
                 ))}
-              </SelectContent>
-            </Select>
+              </ScrollArea>
+            </details>
+          </form>
+        </ScrollArea>
 
-            <p className="text-xs text-gray-500 mt-1">
-              Escolha qual número de WhatsApp esta IA irá utilizar para se comunicar
-            </p>
-
-            {/* Debug info mais visível */}
-            {debugInfo && (
-              <div className="text-sm text-blue-700 mt-2 p-3 bg-blue-50 rounded border border-blue-200">
-                <strong>Debug:</strong> {debugInfo}
-              </div>
-            )}
-
-            {whatsappConnections.length === 0 && !loadingConnections && (
-              <div className="text-sm text-red-600 mt-2 p-3 bg-red-50 rounded border border-red-200">
-                <strong>⚠️ Atenção:</strong> Nenhuma conexão WhatsApp encontrada.{" "}
-                <a href="/admin/whatsapp" className="underline text-blue-600">
-                  Crie uma conexão primeiro
-                </a>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <Label htmlFor="training_prompt">Instruções de Comportamento (Prompt de Treinamento) *</Label>
-            <Textarea
-              id="training_prompt"
-              value={formData.training_prompt}
-              onChange={(e) => setFormData({ ...formData, training_prompt: e.target.value })}
-              placeholder="Ex: Você é uma assistente de vendas especializada em produtos digitais. Seja sempre educada, faça perguntas para entender as necessidades do cliente, e conduza a conversa para agendar uma reunião. Nunca invente informações que não possui."
-              rows={4}
-              required
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Instruções detalhadas sobre como a IA deve se comportar, responder e agir durante as conversas
-            </p>
-          </div>
-
-          <div>
-            <Label htmlFor="status">Status</Label>
-            <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Ativo</SelectItem>
-                <SelectItem value="inactive">Inativo</SelectItem>
-                <SelectItem value="training">Treinando</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex justify-end space-x-2 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading || !formData.whatsapp_connection_id} className="min-w-[100px]">
-              {loading ? "Salvando..." : agent ? "Atualizar" : "Criar"}
-            </Button>
-          </div>
-        </form>
+        <DialogFooter className="pt-4 border-t">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={!canSubmit} onClick={handleSubmit}>
+            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {agent ? "Atualizar Agente" : "Criar Agente"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
