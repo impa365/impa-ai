@@ -14,6 +14,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Key, Eye, EyeOff, RefreshCw } from "lucide-react"
+import { changePassword } from "@/lib/auth"
+
+// Remover a importação do supabase se não estiver sendo usado para outras coisas
 import { supabase } from "@/lib/supabase"
 
 interface ChangePasswordModalProps {
@@ -66,26 +69,35 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
     setSuccess("")
 
     try {
-      const { error: updateError } = await supabase
+      // Usar a função changePassword, mas como admin não precisa da senha atual
+      // Vamos buscar a senha atual primeiro e depois usar a função
+      const { data: currentUser, error: fetchError } = await supabase
         .from("user_profiles")
-        .update({
-          password: formData.newPassword,
-          updated_at: new Date().toISOString(),
-        })
+        .select("password")
         .eq("id", user.id)
+        .single()
 
-      if (updateError) throw updateError
+      if (fetchError || !currentUser) {
+        throw new Error("Usuário não encontrado")
+      }
 
-      setSuccess(`Senha alterada com sucesso para ${user.full_name}! A nova senha é: ${formData.newPassword}`)
+      // Como admin, usar a senha atual para validação
+      const result = await changePassword(user.id, currentUser.password, formData.newPassword)
+
+      if (!result.success) {
+        throw new Error(result.error || "Erro ao alterar senha")
+      }
+
+      setSuccess(`Senha alterada com sucesso para ${user.full_name}!`)
       setTimeout(() => {
         onSuccess()
         onOpenChange(false)
         setFormData({ newPassword: "", confirmPassword: "" })
         setSuccess("")
-      }, 3000)
+      }, 2000)
     } catch (error: any) {
       console.error("Erro ao alterar senha:", error)
-      setError("Erro ao alterar senha. Detalhes: " + error.message)
+      setError("Erro ao alterar senha: " + error.message)
     } finally {
       setLoading(false)
     }

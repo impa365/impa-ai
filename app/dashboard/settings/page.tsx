@@ -11,6 +11,7 @@ import { Eye, EyeOff, Copy, Plus, Trash2, Code } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/components/ui/use-toast"
+import { changePassword } from "@/lib/auth"
 
 interface ApiKey {
   id: string
@@ -182,16 +183,32 @@ export default function UserSettings() {
         return
       }
 
+      if (profileForm.newPassword && profileForm.newPassword.length < 6) {
+        setProfileMessage("A nova senha deve ter pelo menos 6 caracteres")
+        return
+      }
+
       // Atualizar perfil
       const { error } = await supabase
         .from("user_profiles")
         .update({
           full_name: profileForm.full_name.trim(),
           email: profileForm.email.trim(),
+          updated_at: new Date().toISOString(),
         })
         .eq("id", user.id)
 
       if (error) throw error
+
+      // Se há nova senha, trocar a senha
+      if (profileForm.newPassword) {
+        const passwordResult = await changePassword(user.id, profileForm.currentPassword, profileForm.newPassword)
+
+        if (!passwordResult.success) {
+          setProfileMessage(passwordResult.error || "Erro ao alterar senha")
+          return
+        }
+      }
 
       // Atualizar usuário local
       const updatedUser = {
@@ -202,7 +219,7 @@ export default function UserSettings() {
       setUser(updatedUser)
       localStorage.setItem("user", JSON.stringify(updatedUser))
 
-      setProfileMessage("Perfil atualizado com sucesso!")
+      setProfileMessage("Perfil atualizado com sucesso!" + (profileForm.newPassword ? " Senha alterada." : ""))
       setProfileForm({
         ...profileForm,
         currentPassword: "",
@@ -211,10 +228,10 @@ export default function UserSettings() {
       })
     } catch (error) {
       console.error("Erro ao atualizar perfil:", error)
-      setProfileMessage("Erro ao atualizar perfil")
+      setProfileMessage("Erro ao atualizar perfil: " + (error as any).message)
     } finally {
       setSavingProfile(false)
-      setTimeout(() => setProfileMessage(""), 3000)
+      setTimeout(() => setProfileMessage(""), 5000)
     }
   }
 
