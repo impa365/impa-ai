@@ -39,16 +39,16 @@ export default function AdminUsersPage() {
       const { data: usersData, error } = await supabase
         .from("user_profiles")
         .select(`
-        id,
-        full_name,
-        email,
-        role,
-        status,
-        last_login_at,
-        created_at,
-        agents_limit,
-        connections_limit 
-      `)
+    id,
+    full_name,
+    email,
+    role,
+    status,
+    last_login_at,
+    created_at,
+    agents_limit,
+    connections_limit
+  `)
         .order("created_at", { ascending: false })
 
       if (error) {
@@ -63,9 +63,9 @@ export default function AdminUsersPage() {
         // Mapear os dados para usar os nomes corretos das colunas
         const mappedUsers = usersData.map((user) => ({
           ...user,
-          // Os limites agora vêm diretamente da tabela user_profiles
-          // Se connections_limit for null, usar um valor padrão (ex: 2)
+          // Usar os valores diretamente da tabela user_profiles
           whatsapp_connections_limit: user.connections_limit || 2,
+          agents_limit: user.agents_limit || 5,
         }))
         setUsers(mappedUsers)
       }

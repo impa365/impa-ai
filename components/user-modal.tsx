@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, User } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { getDefaultWhatsAppLimit, getDefaultAgentsLimit } from "@/lib/system-settings"
 
 interface UserModalProps {
   open: boolean
@@ -23,9 +24,6 @@ interface UserModalProps {
   user?: any
   onSuccess: () => void
 }
-
-const DEFAULT_WHATSAPP_LIMIT = 1
-const DEFAULT_AGENTS_LIMIT = 5
 
 export default function UserModal({ open, onOpenChange, user, onSuccess }: UserModalProps) {
   const [loading, setLoading] = useState(false)
@@ -37,9 +35,31 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     password: "",
     role: "user",
     status: "active",
-    whatsapp_limit: DEFAULT_WHATSAPP_LIMIT,
-    agents_limit: DEFAULT_AGENTS_LIMIT,
+    whatsapp_limit: 1, // Valor inicial temporário
+    agents_limit: 2, // Valor inicial temporário
   })
+
+  // Buscar valores padrão das configurações do sistema
+  useEffect(() => {
+    const loadDefaultLimits = async () => {
+      try {
+        const whatsappLimit = await getDefaultWhatsAppLimit()
+        const agentsLimit = await getDefaultAgentsLimit()
+
+        console.log("Limites padrão carregados:", { whatsappLimit, agentsLimit })
+
+        setFormData((prev) => ({
+          ...prev,
+          whatsapp_limit: prev.whatsapp_limit === 1 ? whatsappLimit : prev.whatsapp_limit,
+          agents_limit: prev.agents_limit === 2 ? agentsLimit : prev.agents_limit,
+        }))
+      } catch (error) {
+        console.error("Erro ao carregar limites padrão:", error)
+      }
+    }
+
+    loadDefaultLimits()
+  }, [])
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -70,38 +90,66 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             console.error("Erro ao buscar configurações do usuário:", settingsErr)
           }
 
+          // Obter limites padrão do sistema
+          const defaultWhatsAppLimit = await getDefaultWhatsAppLimit()
+          const defaultAgentsLimit = await getDefaultAgentsLimit()
+
+          // Definir valores com prioridade:
+          // 1. Valor do usuário na tabela user_profiles
+          // 2. Valor do usuário na tabela user_settings
+          // 3. Valor padrão do sistema
+          // 4. Valor fixo de fallback
           setFormData({
             full_name: userData.full_name || "",
             email: userData.email || "",
             password: "",
             role: userData.role || "user",
             status: userData.status || "active",
-            whatsapp_limit: settingsData?.whatsapp_connections_limit || DEFAULT_WHATSAPP_LIMIT,
-            agents_limit: settingsData?.agents_limit || DEFAULT_AGENTS_LIMIT,
+            whatsapp_limit:
+              userData.connections_limit !== undefined
+                ? userData.connections_limit
+                : settingsData?.whatsapp_connections_limit !== undefined
+                  ? settingsData.whatsapp_connections_limit
+                  : defaultWhatsAppLimit,
+            agents_limit:
+              userData.agents_limit !== undefined
+                ? userData.agents_limit
+                : settingsData?.agents_limit !== undefined
+                  ? settingsData.agents_limit
+                  : defaultAgentsLimit,
           })
         } catch (error) {
           console.error("Erro ao buscar dados do usuário:", error)
+
+          // Obter limites padrão do sistema
+          const defaultWhatsAppLimit = await getDefaultWhatsAppLimit()
+          const defaultAgentsLimit = await getDefaultAgentsLimit()
+
           setFormData({
             full_name: user.full_name || "",
             email: user.email || "",
             password: "",
             role: user.role || "user",
             status: user.status || "active",
-            whatsapp_limit: user.whatsapp_connections_limit || DEFAULT_WHATSAPP_LIMIT,
-            agents_limit: user.agents_limit || DEFAULT_AGENTS_LIMIT,
+            whatsapp_limit: user.connections_limit || defaultWhatsAppLimit,
+            agents_limit: user.agents_limit || defaultAgentsLimit,
           })
         } finally {
           setLoadingData(false)
         }
       } else if (!user && open) {
+        // Novo usuário - usar valores padrão do sistema
+        const defaultWhatsAppLimit = await getDefaultWhatsAppLimit()
+        const defaultAgentsLimit = await getDefaultAgentsLimit()
+
         setFormData({
           full_name: "",
           email: "",
           password: "",
           role: "user",
           status: "active",
-          whatsapp_limit: DEFAULT_WHATSAPP_LIMIT,
-          agents_limit: DEFAULT_AGENTS_LIMIT,
+          whatsapp_limit: defaultWhatsAppLimit,
+          agents_limit: defaultAgentsLimit,
         })
       }
     }
@@ -171,6 +219,9 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           role: formData.role,
           status: formData.status,
           updated_at: new Date().toISOString(),
+          // Salvar limites diretamente na tabela user_profiles
+          connections_limit: formData.whatsapp_limit,
+          agents_limit: formData.agents_limit,
         }
 
         // Adicionar senha apenas se fornecida
@@ -196,6 +247,9 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             password: formData.password.trim(),
             role: formData.role,
             status: formData.status,
+            // Salvar limites diretamente na tabela user_profiles
+            connections_limit: formData.whatsapp_limit,
+            agents_limit: formData.agents_limit,
           })
           .select()
           .single()
@@ -213,61 +267,35 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         userId = newUser.id
       }
 
-      // Agora vamos tentar atualizar as configurações do usuário
-      // Mas não vamos falhar se isso não funcionar
+      // Também tentar salvar na user_settings como backup (se a tabela existir)
       if (userId) {
         try {
-          // Primeiro, verificar se a tabela user_settings existe
-          const { error: tableCheckError } = await supabase
+          const { data: existingSettings } = await supabase
             .from("user_settings")
-            .select("count(*)")
-            .limit(1)
-            .throwOnError()
+            .select("user_id")
+            .eq("user_id", userId)
+            .maybeSingle()
 
-          if (tableCheckError) {
-            console.warn("A tabela user_settings pode não existir:", tableCheckError)
-            // Não vamos falhar aqui, apenas logar o aviso
-          } else {
-            // A tabela existe, vamos tentar inserir/atualizar
-            // Primeiro verificar se já existe um registro para este usuário
-            const { data: existingSettings } = await supabase
+          if (existingSettings) {
+            // Atualizar configurações existentes
+            await supabase
               .from("user_settings")
-              .select("user_id")
-              .eq("user_id", userId)
-              .maybeSingle()
-
-            if (existingSettings) {
-              // Atualizar configurações existentes
-              const { error: updateError } = await supabase
-                .from("user_settings")
-                .update({
-                  whatsapp_connections_limit: formData.whatsapp_limit,
-                  agents_limit: formData.agents_limit,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("user_id", userId)
-
-              if (updateError) {
-                console.warn("Erro ao atualizar configurações:", updateError)
-                // Não vamos falhar aqui, apenas logar o aviso
-              }
-            } else {
-              // Inserir novas configurações
-              const { error: insertError } = await supabase.from("user_settings").insert({
-                user_id: userId,
+              .update({
                 whatsapp_connections_limit: formData.whatsapp_limit,
                 agents_limit: formData.agents_limit,
+                updated_at: new Date().toISOString(),
               })
-
-              if (insertError) {
-                console.warn("Erro ao inserir configurações:", insertError)
-                // Não vamos falhar aqui, apenas logar o aviso
-              }
-            }
+              .eq("user_id", userId)
+          } else {
+            // Inserir novas configurações
+            await supabase.from("user_settings").insert({
+              user_id: userId,
+              whatsapp_connections_limit: formData.whatsapp_limit,
+              agents_limit: formData.agents_limit,
+            })
           }
         } catch (settingsError) {
-          console.warn("Erro ao processar configurações do usuário:", settingsError)
-          // Não vamos falhar aqui, apenas logar o aviso
+          console.warn("Tabela user_settings não disponível, usando apenas user_profiles")
         }
       }
 
@@ -427,7 +455,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    whatsapp_limit: Number.parseInt(e.target.value) || DEFAULT_WHATSAPP_LIMIT,
+                    whatsapp_limit: Number.parseInt(e.target.value) || 1,
                   })
                 }
                 min="0"
@@ -448,7 +476,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    agents_limit: Number.parseInt(e.target.value) || DEFAULT_AGENTS_LIMIT,
+                    agents_limit: Number.parseInt(e.target.value) || 2,
                   })
                 }
                 min="0"
