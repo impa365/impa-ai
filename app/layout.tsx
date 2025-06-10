@@ -6,8 +6,9 @@ import { ThemeProvider } from "@/components/theme-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
+// Metadata será sobrescrita pelo DynamicTitle nos componentes
 export const metadata: Metadata = {
-  title: "Impa AI - Plataforma de Agentes Inteligentes",
+  title: "Carregando...",
   description: "Sistema de gerenciamento de agentes de IA",
   generator: "v0.dev",
 }

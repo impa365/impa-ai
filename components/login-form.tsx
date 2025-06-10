@@ -14,7 +14,7 @@ import { useTheme } from "@/components/theme-provider"
 import RegisterForm from "./register-form"
 import { supabase } from "@/lib/supabase"
 
-export default function LoginForm() {
+function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -211,3 +211,7 @@ export default function LoginForm() {
     </div>
   )
 }
+
+// Named export para compatibilidade
+export { LoginForm }
+export default LoginForm

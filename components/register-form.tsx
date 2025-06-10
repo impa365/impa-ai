@@ -15,7 +15,7 @@ interface RegisterFormProps {
   onBackToLogin: () => void
 }
 
-export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
+function RegisterForm({ onBackToLogin }: RegisterFormProps) {
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -249,3 +249,7 @@ export default function RegisterForm({ onBackToLogin }: RegisterFormProps) {
     </div>
   )
 }
+
+// Named export para compatibilidade
+export { RegisterForm }
+export default RegisterForm
