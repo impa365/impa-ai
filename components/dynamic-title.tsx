@@ -11,9 +11,9 @@ function DynamicTitle({ suffix }: DynamicTitleProps) {
   const { theme, isLoading } = useTheme()
 
   useEffect(() => {
-    // Só atualizar o título quando o tema estiver carregado
-    if (!isLoading && theme) {
-      const baseTitle = theme.systemName || "Sistema"
+    // Só atualizar o título quando tiver tema do banco de dados
+    if (!isLoading && theme && theme.systemName) {
+      const baseTitle = theme.systemName
       const fullTitle = suffix ? `${baseTitle} - ${suffix}` : baseTitle
       document.title = fullTitle
     }

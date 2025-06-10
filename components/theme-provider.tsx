@@ -22,7 +22,7 @@ export interface ThemeConfig {
 
 // Context para o tema
 interface ThemeContextType {
-  theme: ThemeConfig
+  theme: ThemeConfig | null
   updateTheme: (updates: Partial<ThemeConfig>) => Promise<void>
   loadTheme: () => Promise<void>
   isLoading: boolean
@@ -39,43 +39,43 @@ export function useTheme() {
   return context
 }
 
-// Temas predefinidos
+// Temas predefinidos - usando nomes genéricos para white label
 export const themePresets: Record<string, ThemeConfig> = {
   blue: {
-    systemName: "Impa AI",
-    description: "Plataforma de construção de agentes de IA",
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
     logoIcon: "🤖",
     primaryColor: "#3b82f6",
     secondaryColor: "#10b981",
     accentColor: "#8b5cf6",
   },
   purple: {
-    systemName: "Impa AI",
-    description: "Plataforma de construção de agentes de IA",
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
     logoIcon: "🔮",
     primaryColor: "#8b5cf6",
     secondaryColor: "#ec4899",
     accentColor: "#3b82f6",
   },
   green: {
-    systemName: "Impa AI",
-    description: "Plataforma de construção de agentes de IA",
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
     logoIcon: "🌱",
     primaryColor: "#10b981",
     secondaryColor: "#3b82f6",
     accentColor: "#f59e0b",
   },
   orange: {
-    systemName: "Impa AI",
-    description: "Plataforma de construção de agentes de IA",
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
     logoIcon: "🔥",
     primaryColor: "#f97316",
     secondaryColor: "#8b5cf6",
     accentColor: "#10b981",
   },
   dark: {
-    systemName: "Impa AI",
-    description: "Plataforma de construção de agentes de IA",
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
     logoIcon: "⚡",
     primaryColor: "#6366f1",
     secondaryColor: "#ec4899",
@@ -90,8 +90,15 @@ let themeCache: ThemeConfig | null = null
 let themeCacheTime = 0
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutos
 
-// Tema padrão
-export const defaultTheme: ThemeConfig = themePresets.blue
+// Tema padrão genérico
+export const defaultTheme: ThemeConfig = {
+  systemName: "Sistema",
+  description: "Plataforma de gestão",
+  logoIcon: "🔧",
+  primaryColor: "#3b82f6",
+  secondaryColor: "#10b981",
+  accentColor: "#8b5cf6",
+}
 
 // Função para validar se uma cor é um código hexadecimal válido
 export function isValidHexColor(color: string): boolean {
@@ -236,12 +243,12 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
 
     // Mapear os dados do banco para o formato ThemeConfig
     const theme: ThemeConfig = {
-      systemName: data.display_name || data.name || defaultTheme.systemName,
-      description: data.description || defaultTheme.description,
-      logoIcon: data.logo_icon || defaultTheme.logoIcon,
-      primaryColor: data.colors?.primary || defaultTheme.primaryColor,
-      secondaryColor: data.colors?.secondary || defaultTheme.secondaryColor,
-      accentColor: data.colors?.accent || defaultTheme.accentColor,
+      systemName: data.display_name || data.name || "Sistema",
+      description: data.description || "Sistema de gestão",
+      logoIcon: data.logo_icon || "🔧",
+      primaryColor: data.colors?.primary || "#3b82f6",
+      secondaryColor: data.colors?.secondary || "#10b981",
+      accentColor: data.colors?.accent || "#8b5cf6",
       textColor: data.colors?.text,
       backgroundColor: data.colors?.background,
       fontFamily: data.fonts?.primary,
@@ -438,7 +445,7 @@ export function saveThemeToLocalStorage(theme: ThemeConfig): void {
 }
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<ThemeConfig>(defaultTheme)
+  const [theme, setTheme] = useState<ThemeConfig | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   const loadTheme = async () => {
@@ -453,16 +460,13 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
         loadedTheme = loadThemeFromLocalStorage()
       }
 
-      // Se ainda não tiver tema, usar o padrão
-      const finalTheme = loadedTheme || defaultTheme
-
-      setTheme(finalTheme)
-      applyThemeColors(finalTheme)
+      // IMPORTANTE: Só definir tema se conseguir carregar do banco/localStorage
+      if (loadedTheme) {
+        setTheme(loadedTheme)
+        applyThemeColors(loadedTheme)
+      }
     } catch (error) {
       console.error("Error loading theme:", error)
-      const fallbackTheme = defaultTheme
-      setTheme(fallbackTheme)
-      applyThemeColors(fallbackTheme)
     } finally {
       setIsLoading(false)
     }
@@ -470,6 +474,8 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 
   const updateTheme = async (updates: Partial<ThemeConfig>) => {
     try {
+      if (!theme) return
+
       const newTheme = { ...theme, ...updates }
 
       setTheme(newTheme)
@@ -482,8 +488,9 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
       }
     } catch (error) {
       console.error("Error updating theme:", error)
-      // Fallback para localStorage
-      saveThemeToLocalStorage({ ...theme, ...updates })
+      if (theme) {
+        saveThemeToLocalStorage({ ...theme, ...updates })
+      }
     }
   }
 
@@ -493,10 +500,19 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 
   // Apply theme colors whenever theme changes
   useEffect(() => {
-    if (!isLoading) {
+    if (theme && !isLoading) {
       applyThemeColors(theme)
     }
   }, [theme, isLoading])
+
+  // NÃO RENDERIZAR NADA até ter o tema do banco de dados
+  if (isLoading || !theme) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    )
+  }
 
   return (
     <ThemeContext.Provider value={{ theme, updateTheme, loadTheme, isLoading }}>
