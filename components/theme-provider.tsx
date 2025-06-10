@@ -438,7 +438,7 @@ export function saveThemeToLocalStorage(theme: ThemeConfig): void {
 }
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<ThemeConfig | null>(null)
+  const [theme, setTheme] = useState<ThemeConfig>(defaultTheme)
   const [isLoading, setIsLoading] = useState(true)
 
   const loadTheme = async () => {
@@ -470,8 +470,7 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 
   const updateTheme = async (updates: Partial<ThemeConfig>) => {
     try {
-      const currentTheme = theme || defaultTheme
-      const newTheme = { ...currentTheme, ...updates }
+      const newTheme = { ...theme, ...updates }
 
       setTheme(newTheme)
       applyThemeColors(newTheme)
@@ -484,8 +483,7 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
     } catch (error) {
       console.error("Error updating theme:", error)
       // Fallback para localStorage
-      const currentTheme = theme || defaultTheme
-      saveThemeToLocalStorage({ ...currentTheme, ...updates })
+      saveThemeToLocalStorage({ ...theme, ...updates })
     }
   }
 
@@ -495,19 +493,10 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 
   // Apply theme colors whenever theme changes
   useEffect(() => {
-    if (theme && !isLoading) {
+    if (!isLoading) {
       applyThemeColors(theme)
     }
   }, [theme, isLoading])
-
-  // Não renderizar children até o tema estar carregado
-  if (isLoading || !theme) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
 
   return (
     <ThemeContext.Provider value={{ theme, updateTheme, loadTheme, isLoading }}>

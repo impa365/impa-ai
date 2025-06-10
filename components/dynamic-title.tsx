@@ -8,13 +8,16 @@ interface DynamicTitleProps {
 }
 
 function DynamicTitle({ suffix }: DynamicTitleProps) {
-  const { theme } = useTheme()
+  const { theme, isLoading } = useTheme()
 
   useEffect(() => {
-    const baseTitle = theme.systemName || "Carregando..."
-    const fullTitle = suffix ? `${baseTitle} - ${suffix}` : baseTitle
-    document.title = fullTitle
-  }, [theme.systemName, suffix])
+    // Só atualizar o título quando o tema estiver carregado
+    if (!isLoading && theme) {
+      const baseTitle = theme.systemName || "Sistema"
+      const fullTitle = suffix ? `${baseTitle} - ${suffix}` : baseTitle
+      document.title = fullTitle
+    }
+  }, [theme, isLoading, suffix])
 
   return null
 }
