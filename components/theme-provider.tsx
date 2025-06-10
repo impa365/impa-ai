@@ -159,49 +159,50 @@ export function applyThemeColors(theme: ThemeConfig): void {
   }
 }
 
+// Função para verificar se a tabela system_themes tem a estrutura correta
+async function checkSystemThemesStructure(): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.from("system_themes").select("logo_icon").limit(1)
+
+    if (error) {
+      console.log("Tabela system_themes não existe ou tem problemas de estrutura:", error.message)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.log("Erro ao verificar estrutura da tabela system_themes:", error)
+    return false
+  }
+}
+
 // Função para carregar o tema do banco de dados
 export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
   try {
-    // Primeiro, tentar carregar da tabela system_themes
-    let { data, error } = await supabase.from("system_themes").select("*").eq("is_active", true).single()
+    // Verificar se a estrutura da tabela está correta
+    const hasCorrectStructure = await checkSystemThemesStructure()
 
-    // Se não encontrar na system_themes, tentar na tabela themes
-    if (error && error.code === "PGRST116") {
-      const { data: themeData, error: themeError } = await supabase
-        .from("themes")
-        .select("*")
-        .eq("is_active", true)
-        .single()
-      data = themeData
-      error = themeError
+    if (!hasCorrectStructure) {
+      console.log("Estrutura da tabela system_themes incorreta, usando fallback")
+      return await loadThemeFromSystemSettings()
     }
 
-    // Se ainda não encontrar, tentar carregar das configurações do sistema
-    if (error && error.code === "PGRST116") {
-      const { data: settingsData, error: settingsError } = await supabase
-        .from("system_settings")
-        .select("*")
-        .eq("setting_key", "active_theme")
-        .single()
+    // Tentar carregar da tabela system_themes
+    const { data, error } = await supabase.from("system_themes").select("*").eq("is_active", true).single()
 
-      if (!settingsError && settingsData?.setting_value) {
-        // Se encontrar configuração de tema, usar o preset correspondente
-        const presetName = settingsData.setting_value
-        if (themePresets[presetName]) {
-          console.log(`Usando preset de tema: ${presetName}`)
-          return themePresets[presetName]
-        }
-      }
+    if (error && error.code === "PGRST116") {
+      console.log("Nenhum tema ativo encontrado em system_themes, tentando system_settings")
+      return await loadThemeFromSystemSettings()
     }
 
     if (error) {
-      console.log("Nenhum tema encontrado no banco, usando tema padrão")
-      return null
+      console.log("Erro ao carregar tema de system_themes:", error.message)
+      return await loadThemeFromSystemSettings()
     }
 
     if (!data) {
-      console.log("Nenhum tema ativo encontrado, usando tema padrão")
-      return null
+      console.log("Nenhum tema ativo encontrado, usando fallback")
+      return await loadThemeFromSystemSettings()
     }
 
     // Mapear os dados do banco para o formato ThemeConfig
@@ -222,7 +223,38 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
     console.log("Tema carregado do banco:", theme)
     return theme
   } catch (error) {
-    console.log("Erro ao carregar tema do banco, usando tema padrão:", error)
+    console.log("Erro ao carregar tema do banco, usando fallback:", error)
+    return await loadThemeFromSystemSettings()
+  }
+}
+
+// Função fallback para carregar tema das configurações do sistema
+async function loadThemeFromSystemSettings(): Promise<ThemeConfig | null> {
+  try {
+    const { data: settingsData, error: settingsError } = await supabase
+      .from("system_settings")
+      .select("setting_value")
+      .eq("setting_key", "current_theme")
+      .single()
+
+    if (!settingsError && settingsData?.setting_value) {
+      // Se encontrar configuração de tema como JSON, usar diretamente
+      if (typeof settingsData.setting_value === "object") {
+        console.log("Tema carregado das configurações do sistema")
+        return settingsData.setting_value as ThemeConfig
+      }
+      // Se for string, tentar usar como preset
+      const presetName = settingsData.setting_value as string
+      if (themePresets[presetName]) {
+        console.log(`Usando preset de tema: ${presetName}`)
+        return themePresets[presetName]
+      }
+    }
+
+    console.log("Nenhum tema encontrado nas configurações, usando tema padrão")
+    return null
+  } catch (error) {
+    console.log("Erro ao carregar tema das configurações:", error)
     return null
   }
 }
@@ -230,7 +262,15 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
 // Função para salvar o tema no banco de dados
 export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
   try {
-    // Verificar se já existe um tema ativo na tabela system_themes
+    // Verificar se a estrutura da tabela está correta
+    const hasCorrectStructure = await checkSystemThemesStructure()
+
+    if (!hasCorrectStructure) {
+      console.log("Estrutura da tabela system_themes incorreta, usando fallback para system_settings")
+      return await saveThemeAsSystemSetting(theme)
+    }
+
+    // Verificar se já existe um tema ativo
     const { data: existingTheme } = await supabase.from("system_themes").select("id").eq("is_active", true).single()
 
     // Preparar os dados para salvar
@@ -263,7 +303,6 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
 
       if (error) {
         console.error("Erro ao atualizar tema:", error)
-        // Fallback: salvar nas configurações do sistema
         return await saveThemeAsSystemSetting(theme)
       }
     } else {
@@ -272,7 +311,6 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
 
       if (error) {
         console.error("Erro ao criar tema:", error)
-        // Fallback: salvar nas configurações do sistema
         return await saveThemeAsSystemSetting(theme)
       }
     }
@@ -281,7 +319,6 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
     return true
   } catch (error) {
     console.error("Erro ao salvar tema no banco:", error)
-    // Fallback: salvar nas configurações do sistema
     return await saveThemeAsSystemSetting(theme)
   }
 }
@@ -289,27 +326,45 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
 // Função fallback para salvar tema nas configurações do sistema
 async function saveThemeAsSystemSetting(theme: ThemeConfig): Promise<boolean> {
   try {
-    // Salvar tema completo como JSON nas configurações do sistema
-    const { error } = await supabase.from("system_settings").upsert({
+    // Verificar se já existe uma configuração de tema
+    const { data: existingSetting } = await supabase
+      .from("system_settings")
+      .select("id")
+      .eq("setting_key", "current_theme")
+      .single()
+
+    const settingData = {
       setting_key: "current_theme",
       setting_value: theme,
       category: "appearance",
       description: "Configurações do tema atual",
       is_public: true,
-    })
+    }
 
-    if (error) {
-      console.error("Erro ao salvar tema nas configurações:", error)
-      // Último fallback: localStorage
-      saveThemeToLocalStorage(theme)
-      return false
+    if (existingSetting) {
+      // Atualizar configuração existente
+      const { error } = await supabase.from("system_settings").update(settingData).eq("id", existingSetting.id)
+
+      if (error) {
+        console.error("Erro ao atualizar tema nas configurações:", error)
+        saveThemeToLocalStorage(theme)
+        return false
+      }
+    } else {
+      // Criar nova configuração
+      const { error } = await supabase.from("system_settings").insert(settingData)
+
+      if (error) {
+        console.error("Erro ao inserir tema nas configurações:", error)
+        saveThemeToLocalStorage(theme)
+        return false
+      }
     }
 
     console.log("Tema salvo nas configurações do sistema")
     return true
   } catch (error) {
     console.error("Erro ao salvar tema nas configurações:", error)
-    // Último fallback: localStorage
     saveThemeToLocalStorage(theme)
     return false
   }
