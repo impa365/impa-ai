@@ -25,6 +25,7 @@ interface ThemeContextType {
   theme: ThemeConfig
   updateTheme: (updates: Partial<ThemeConfig>) => Promise<void>
   loadTheme: () => Promise<void>
+  isLoading: boolean
 }
 
 export const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
@@ -83,6 +84,11 @@ export const themePresets: Record<string, ThemeConfig> = {
     textColor: "#f8fafc",
   },
 }
+
+// Cache global para evitar múltiplas consultas
+let themeCache: ThemeConfig | null = null
+let themeCacheTime = 0
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutos
 
 // Tema padrão
 export const defaultTheme: ThemeConfig = themePresets.blue
@@ -176,33 +182,56 @@ async function checkSystemThemesStructure(): Promise<boolean> {
   }
 }
 
-// Função para carregar o tema do banco de dados
+// Função otimizada para carregar tema com cache
 export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
+  // Verificar cache primeiro
+  const now = Date.now()
+  if (themeCache && now - themeCacheTime < CACHE_DURATION) {
+    return themeCache
+  }
+
   try {
     // Verificar se a estrutura da tabela está correta
     const hasCorrectStructure = await checkSystemThemesStructure()
 
     if (!hasCorrectStructure) {
-      console.log("Estrutura da tabela system_themes incorreta, usando fallback")
-      return await loadThemeFromSystemSettings()
+      const fallbackTheme = await loadThemeFromSystemSettings()
+      if (fallbackTheme) {
+        themeCache = fallbackTheme
+        themeCacheTime = now
+      }
+      return fallbackTheme
     }
 
     // Tentar carregar da tabela system_themes
     const { data, error } = await supabase.from("system_themes").select("*").eq("is_active", true).single()
 
     if (error && error.code === "PGRST116") {
-      console.log("Nenhum tema ativo encontrado em system_themes, tentando system_settings")
-      return await loadThemeFromSystemSettings()
+      const fallbackTheme = await loadThemeFromSystemSettings()
+      if (fallbackTheme) {
+        themeCache = fallbackTheme
+        themeCacheTime = now
+      }
+      return fallbackTheme
     }
 
     if (error) {
       console.log("Erro ao carregar tema de system_themes:", error.message)
-      return await loadThemeFromSystemSettings()
+      const fallbackTheme = await loadThemeFromSystemSettings()
+      if (fallbackTheme) {
+        themeCache = fallbackTheme
+        themeCacheTime = now
+      }
+      return fallbackTheme
     }
 
     if (!data) {
-      console.log("Nenhum tema ativo encontrado, usando fallback")
-      return await loadThemeFromSystemSettings()
+      const fallbackTheme = await loadThemeFromSystemSettings()
+      if (fallbackTheme) {
+        themeCache = fallbackTheme
+        themeCacheTime = now
+      }
+      return fallbackTheme
     }
 
     // Mapear os dados do banco para o formato ThemeConfig
@@ -220,11 +249,19 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
       customCss: data.custom_css,
     }
 
-    console.log("Tema carregado do banco:", theme)
+    // Atualizar cache
+    themeCache = theme
+    themeCacheTime = now
+
     return theme
   } catch (error) {
     console.log("Erro ao carregar tema do banco, usando fallback:", error)
-    return await loadThemeFromSystemSettings()
+    const fallbackTheme = await loadThemeFromSystemSettings()
+    if (fallbackTheme) {
+      themeCache = fallbackTheme
+      themeCacheTime = now
+    }
+    return fallbackTheme
   }
 }
 
@@ -240,18 +277,15 @@ async function loadThemeFromSystemSettings(): Promise<ThemeConfig | null> {
     if (!settingsError && settingsData?.setting_value) {
       // Se encontrar configuração de tema como JSON, usar diretamente
       if (typeof settingsData.setting_value === "object") {
-        console.log("Tema carregado das configurações do sistema")
         return settingsData.setting_value as ThemeConfig
       }
       // Se for string, tentar usar como preset
       const presetName = settingsData.setting_value as string
       if (themePresets[presetName]) {
-        console.log(`Usando preset de tema: ${presetName}`)
         return themePresets[presetName]
       }
     }
 
-    console.log("Nenhum tema encontrado nas configurações, usando tema padrão")
     return null
   } catch (error) {
     console.log("Erro ao carregar tema das configurações:", error)
@@ -259,14 +293,22 @@ async function loadThemeFromSystemSettings(): Promise<ThemeConfig | null> {
   }
 }
 
+// Função para invalidar cache
+export function invalidateThemeCache(): void {
+  themeCache = null
+  themeCacheTime = 0
+}
+
 // Função para salvar o tema no banco de dados
 export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
   try {
+    // Invalidar cache ao salvar
+    invalidateThemeCache()
+
     // Verificar se a estrutura da tabela está correta
     const hasCorrectStructure = await checkSystemThemesStructure()
 
     if (!hasCorrectStructure) {
-      console.log("Estrutura da tabela system_themes incorreta, usando fallback para system_settings")
       return await saveThemeAsSystemSetting(theme)
     }
 
@@ -315,7 +357,6 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
       }
     }
 
-    console.log("Tema salvo no banco com sucesso")
     return true
   } catch (error) {
     console.error("Erro ao salvar tema no banco:", error)
@@ -361,7 +402,6 @@ async function saveThemeAsSystemSetting(theme: ThemeConfig): Promise<boolean> {
       }
     }
 
-    console.log("Tema salvo nas configurações do sistema")
     return true
   } catch (error) {
     console.error("Erro ao salvar tema nas configurações:", error)
@@ -392,14 +432,13 @@ export function saveThemeToLocalStorage(theme: ThemeConfig): void {
 
   try {
     localStorage.setItem("theme", JSON.stringify(theme))
-    console.log("Tema salvo no localStorage")
   } catch (error) {
     console.error("Erro ao salvar tema no localStorage:", error)
   }
 }
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<ThemeConfig>(defaultTheme)
+  const [theme, setTheme] = useState<ThemeConfig | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   const loadTheme = async () => {
@@ -419,12 +458,11 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 
       setTheme(finalTheme)
       applyThemeColors(finalTheme)
-
-      console.log("Tema carregado:", finalTheme)
     } catch (error) {
       console.error("Error loading theme:", error)
-      setTheme(defaultTheme)
-      applyThemeColors(defaultTheme)
+      const fallbackTheme = defaultTheme
+      setTheme(fallbackTheme)
+      applyThemeColors(fallbackTheme)
     } finally {
       setIsLoading(false)
     }
@@ -432,7 +470,9 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 
   const updateTheme = async (updates: Partial<ThemeConfig>) => {
     try {
-      const newTheme = { ...theme, ...updates }
+      const currentTheme = theme || defaultTheme
+      const newTheme = { ...currentTheme, ...updates }
+
       setTheme(newTheme)
       applyThemeColors(newTheme)
 
@@ -441,12 +481,11 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
       if (!saved) {
         saveThemeToLocalStorage(newTheme)
       }
-
-      console.log("Tema atualizado:", newTheme)
     } catch (error) {
       console.error("Error updating theme:", error)
       // Fallback para localStorage
-      saveThemeToLocalStorage({ ...theme, ...updates })
+      const currentTheme = theme || defaultTheme
+      saveThemeToLocalStorage({ ...currentTheme, ...updates })
     }
   }
 
@@ -456,13 +495,22 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 
   // Apply theme colors whenever theme changes
   useEffect(() => {
-    if (!isLoading) {
+    if (theme && !isLoading) {
       applyThemeColors(theme)
     }
   }, [theme, isLoading])
 
+  // Não renderizar children até o tema estar carregado
+  if (isLoading || !theme) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
   return (
-    <ThemeContext.Provider value={{ theme, updateTheme, loadTheme }}>
+    <ThemeContext.Provider value={{ theme, updateTheme, loadTheme, isLoading }}>
       <NextThemesProvider {...props}>{children}</NextThemesProvider>
     </ThemeContext.Provider>
   )
