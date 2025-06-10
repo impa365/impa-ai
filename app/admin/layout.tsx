@@ -1,13 +1,15 @@
 "use client"
 
 import type React from "react"
-
 import { useEffect, useState } from "react"
-import { useRouter, usePathname } from "next/navigation"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Home, Users, Bot, Smartphone, Shield, Cog, LogOut } from "lucide-react"
-import { getCurrentUser, signOut } from "@/lib/auth"
+import { Users, Bot, MessageSquare, Settings, Home, LogOut, Shield, Menu, X } from "lucide-react"
+import { getCurrentUser } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
+import { DynamicTitle } from "@/components/dynamic-title"
+import { getAppVersion } from "@/lib/app-version"
 
 export default function AdminLayout({
   children,
@@ -16,155 +18,127 @@ export default function AdminLayout({
 }) {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [appVersion, setAppVersion] = useState("1.0.0")
   const router = useRouter()
-  const pathname = usePathname()
   const { theme } = useTheme()
 
   useEffect(() => {
-    // Otimização: verificação mais rápida do usuário
-    const checkUser = () => {
-      const currentUser = getCurrentUser()
-      if (!currentUser) {
-        router.push("/")
-        return
-      }
-      if (currentUser.role !== "admin") {
-        router.push("/dashboard")
-        return
-      }
-      setUser(currentUser)
-      setLoading(false)
+    const currentUser = getCurrentUser()
+    if (!currentUser || currentUser.role !== "admin") {
+      router.push("/")
+      return
     }
+    setUser(currentUser)
+    setLoading(false)
 
-    // Executa imediatamente sem delay
-    checkUser()
+    // Carregar versão da aplicação
+    getAppVersion().then(setAppVersion)
   }, [router])
 
-  const handleLogout = async () => {
-    await signOut()
+  const handleLogout = () => {
+    localStorage.removeItem("user")
     router.push("/")
   }
 
-  const sidebarItems = [
-    { icon: Home, label: "Dashboard", href: "/admin", active: pathname === "/admin" },
-    { icon: Users, label: "Gerenciar Usuários", href: "/admin/users", active: pathname === "/admin/users" },
-    { icon: Bot, label: "Agentes IA", href: "/admin/agents", active: pathname === "/admin/agents" },
-    {
-      icon: Smartphone,
-      label: "Conexões WhatsApp",
-      href: "/admin/whatsapp",
-      active: pathname === "/admin/whatsapp",
-    },
-    {
-      icon: Shield,
-      label: "Administração",
-      href: "/admin/administration",
-      active: pathname === "/admin/administration",
-    },
-    { icon: Cog, label: "Configurações", href: "/admin/settings", active: pathname === "/admin/settings" },
-  ]
-
-  // Loading otimizado - apenas um spinner discreto
   if (loading) {
-    return (
-      <div className="flex h-screen bg-gray-50">
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center gap-2">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: theme.primaryColor }}
-              >
-                <span className="text-white">{theme.logoIcon}</span>
-              </div>
-              <span className="font-semibold text-lg text-gray-900">Admin Panel</span>
-            </div>
-          </div>
-
-          <nav className="flex-1 p-4">
-            <ul className="space-y-2">
-              {sidebarItems.map((item, index) => (
-                <li key={index}>
-                  <div className="w-full h-10 bg-gray-100 rounded animate-pulse"></div>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          <div className="p-4 border-t border-gray-200">
-            <div className="w-full h-10 bg-gray-100 rounded animate-pulse"></div>
-            <div className="text-xs text-gray-500 mt-2">
-              <div>{theme.systemName} Admin</div>
-              <div>v1.0.0</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-gray-600 text-sm">Carregando painel...</p>
-          </div>
-        </div>
-      </div>
-    )
+    return <div className="flex items-center justify-center min-h-screen">Carregando...</div>
   }
 
+  const menuItems = [
+    { href: "/admin", icon: Home, label: "Dashboard" },
+    { href: "/admin/users", icon: Users, label: "Gerenciar Usuários" },
+    { href: "/admin/agents", icon: Bot, label: "Agentes IA" },
+    { href: "/admin/whatsapp", icon: MessageSquare, label: "Conexões WhatsApp" },
+    { href: "/admin/administration", icon: Shield, label: "Administração Avançada" },
+    { href: "/admin/settings", icon: Settings, label: "Configurações" },
+  ]
+
   return (
-    <div className="flex h-screen bg-gray-50">
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: theme.primaryColor }}
-            >
-              <span className="text-white">{theme.logoIcon}</span>
+    <>
+      <DynamicTitle suffix="Admin Panel" />
+      <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
+        {/* Sidebar */}
+        <div
+          className={`${
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          } fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}
+        >
+          <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center space-x-2">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
+                style={{ backgroundColor: theme.primaryColor }}
+              >
+                <span className="text-sm font-bold">{theme.logoIcon}</span>
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold text-gray-900 dark:text-white">{theme.systemName}</h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Admin Panel</p>
+              </div>
             </div>
-            <span className="font-semibold text-lg text-gray-900">Admin Panel</span>
+            <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
+              <X className="h-4 w-4" />
+            </Button>
           </div>
-          <p className="text-sm text-gray-600 mt-1">Olá, {user?.full_name}</p>
+
+          <div className="flex flex-col h-full">
+            <div className="flex-1 px-4 py-6 space-y-2">
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Olá, {user?.full_name || "Administrador"}</p>
+              </div>
+
+              {menuItems.map((item) => (
+                <Link key={item.href} href={item.href}>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    <item.icon className="mr-3 h-4 w-4" />
+                    {item.label}
+                  </Button>
+                </Link>
+              ))}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">{theme.systemName} Admin</div>
+              <div className="text-xs text-gray-400 dark:text-gray-500 mb-3">v{appVersion}</div>
+              <Button
+                onClick={handleLogout}
+                variant="ghost"
+                className="w-full justify-start text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                <LogOut className="mr-3 h-4 w-4" />
+                Sair
+              </Button>
+            </div>
+          </div>
         </div>
 
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {sidebarItems.map((item, index) => (
-              <li key={index}>
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start gap-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${
-                    item.active ? "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100" : ""
-                  }`}
-                  onClick={() => router.push(item.href)}
-                >
-                  <item.icon className="w-5 h-5" />
-                  {item.label}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        {/* Overlay para mobile */}
+        {sidebarOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        )}
 
-        <div className="p-4 border-t border-gray-200">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-            onClick={handleLogout}
-          >
-            <LogOut className="w-4 h-4" />
-            Sair
-          </Button>
-          <div className="text-xs text-gray-500 mt-2">
-            <div>{theme.systemName} Admin</div>
-            <div>v1.0.0</div>
-          </div>
+        {/* Main content */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Header */}
+          <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between h-16 px-4">
+              <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
+                <Menu className="h-4 w-4" />
+              </Button>
+              <div className="flex items-center space-x-4">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Painel de Administração</h2>
+              </div>
+            </div>
+          </header>
+
+          {/* Page content */}
+          <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900">{children}</main>
         </div>
       </div>
-
-      <div className="flex-1 overflow-auto">
-        {/* Removido o Suspense com fallback - carregamento direto */}
-        {children}
-      </div>
-    </div>
+    </>
   )
 }

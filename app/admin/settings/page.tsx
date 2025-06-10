@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { getSystemSettings, updateSystemSettings } from "@/lib/system-settings"
+import { DynamicTitle } from "@/components/dynamic-title"
 
 interface ApiKey {
   id: string
@@ -1500,371 +1501,374 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Configurações de Administrador</h1>
-      <Tabs defaultValue="profile">
-        <TabsList>
-          <TabsTrigger value="profile">Perfil</TabsTrigger>
-          <TabsTrigger value="system">Sistema</TabsTrigger>
-          <TabsTrigger value="apiKeys">API Keys</TabsTrigger>
-          <TabsTrigger value="integrations">Integrações</TabsTrigger>
-          <TabsTrigger value="branding">Branding</TabsTrigger>
-        </TabsList>
+    <>
+      <DynamicTitle suffix="Configurações" />
+      <div className="p-6">
+        <h1 className="text-2xl font-bold mb-4">Configurações - {theme.systemName}</h1>
+        <Tabs defaultValue="profile">
+          <TabsList>
+            <TabsTrigger value="profile">Perfil</TabsTrigger>
+            <TabsTrigger value="system">Sistema</TabsTrigger>
+            <TabsTrigger value="apiKeys">API Keys</TabsTrigger>
+            <TabsTrigger value="integrations">Integrações</TabsTrigger>
+            <TabsTrigger value="branding">Branding</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="profile" className="mt-4">
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Perfil do Administrador</h3>
-            <p className="text-gray-600 dark:text-gray-400">Gerencie suas informações pessoais e senha</p>
-          </div>
+          <TabsContent value="profile" className="mt-4">
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Perfil do Administrador</h3>
+              <p className="text-gray-600 dark:text-gray-400">Gerencie suas informações pessoais e senha</p>
+            </div>
 
-          {profileMessage && (
-            <Alert variant={profileMessage.includes("sucesso") ? "default" : "destructive"} className="mb-6">
-              <AlertDescription>{profileMessage}</AlertDescription>
-            </Alert>
-          )}
+            {profileMessage && (
+              <Alert variant={profileMessage.includes("sucesso") ? "default" : "destructive"} className="mb-6">
+                <AlertDescription>{profileMessage}</AlertDescription>
+              </Alert>
+            )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-gray-900 dark:text-gray-100">Informações Pessoais</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="adminFullName" className="text-gray-900 dark:text-gray-100">
-                    Nome Completo
-                  </Label>
-                  <Input
-                    id="adminFullName"
-                    value={profileForm.full_name}
-                    onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
-                    placeholder="Seu nome completo"
-                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="adminEmail" className="text-gray-900 dark:text-gray-100">
-                    Email
-                  </Label>
-                  <Input
-                    id="adminEmail"
-                    type="email"
-                    value={profileForm.email}
-                    onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
-                    placeholder="seu@email.com"
-                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-gray-900 dark:text-gray-100">Alterar Senha</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="adminCurrentPassword" className="text-gray-900 dark:text-gray-100">
-                    Senha Atual (opcional para admin)
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="adminCurrentPassword"
-                      type={showPasswords.current ? "text" : "password"}
-                      value={profileForm.currentPassword}
-                      onChange={(e) => setProfileForm({ ...profileForm, currentPassword: e.target.value })}
-                      placeholder="Senha atual (não obrigatória para admin)"
-                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3"
-                      onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
-                    >
-                      {showPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Como administrador, você pode alterar sua senha sem informar a atual
-                  </p>
-                </div>
-                <div>
-                  <Label htmlFor="adminNewPassword" className="text-gray-900 dark:text-gray-100">
-                    Nova Senha
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="adminNewPassword"
-                      type={showPasswords.new ? "text" : "password"}
-                      value={profileForm.newPassword}
-                      onChange={(e) => setProfileForm({ ...profileForm, newPassword: e.target.value })}
-                      placeholder="Nova senha"
-                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3"
-                      onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
-                    >
-                      {showPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="adminConfirmPassword" className="text-gray-900 dark:text-gray-100">
-                    Confirmar Nova Senha
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="adminConfirmPassword"
-                      type={showPasswords.confirm ? "text" : "password"}
-                      value={profileForm.confirmPassword}
-                      onChange={(e) => setProfileForm({ ...profileForm, confirmPassword: e.target.value })}
-                      placeholder="Confirme a nova senha"
-                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3"
-                      onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
-                    >
-                      {showPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="flex justify-end mt-6">
-            <Button
-              onClick={handleUpdateProfile}
-              disabled={savingProfile}
-              className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
-            >
-              {savingProfile ? "Salvando..." : "Salvar Alterações"}
-            </Button>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="system" className="mt-4">
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Configurações do Sistema</h3>
-            <p className="text-gray-600 dark:text-gray-400">Configure parâmetros globais da plataforma</p>
-          </div>
-
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-gray-900 dark:text-gray-100">Limites e Restrições</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="defaultWhatsAppLimit" className="text-gray-900 dark:text-gray-100">
-                    Limite Padrão de Conexões WhatsApp
-                  </Label>
-                  <Input
-                    id="defaultWhatsAppLimit"
-                    type="number"
-                    value={systemSettings2.default_whatsapp_connections_limit || 2}
-                    onChange={(e) =>
-                      setSystemSettings2({
-                        ...systemSettings2,
-                        default_whatsapp_connections_limit: Number.parseInt(e.target.value) || 2,
-                      })
-                    }
-                    min="1"
-                    max="50"
-                    className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Número máximo de conexões WhatsApp que novos usuários podem criar
-                  </p>
-                </div>
-                <div>
-                  <Label htmlFor="defaultAgentsLimit" className="text-gray-900 dark:text-gray-100">
-                    Limite Padrão de Agentes IA
-                  </Label>
-                  <Input
-                    id="defaultAgentsLimit"
-                    type="number"
-                    value={systemSettings2.default_agents_limit || 5}
-                    onChange={(e) =>
-                      setSystemSettings2({
-                        ...systemSettings2,
-                        default_agents_limit: Number.parseInt(e.target.value) || 5,
-                      })
-                    }
-                    min="1"
-                    max="100"
-                    className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Número máximo de agentes IA que novos usuários podem criar
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-gray-900 dark:text-gray-100">Cadastro de Usuários</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-gray-900 dark:text-gray-100">Informações Pessoais</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div>
-                    <Label htmlFor="allowRegistration" className="text-gray-900 dark:text-gray-100">
-                      Permitir Cadastro Público
+                    <Label htmlFor="adminFullName" className="text-gray-900 dark:text-gray-100">
+                      Nome Completo
                     </Label>
+                    <Input
+                      id="adminFullName"
+                      value={profileForm.full_name}
+                      onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                      placeholder="Seu nome completo"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="adminEmail" className="text-gray-900 dark:text-gray-100">
+                      Email
+                    </Label>
+                    <Input
+                      id="adminEmail"
+                      type="email"
+                      value={profileForm.email}
+                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      placeholder="seu@email.com"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-gray-900 dark:text-gray-100">Alterar Senha</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="adminCurrentPassword" className="text-gray-900 dark:text-gray-100">
+                      Senha Atual (opcional para admin)
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="adminCurrentPassword"
+                        type={showPasswords.current ? "text" : "password"}
+                        value={profileForm.currentPassword}
+                        onChange={(e) => setProfileForm({ ...profileForm, currentPassword: e.target.value })}
+                        placeholder="Senha atual (não obrigatória para admin)"
+                        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                      >
+                        {showPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Permite que novos usuários se cadastrem na tela de login
+                      Como administrador, você pode alterar sua senha sem informar a atual
                     </p>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="allowRegistration"
-                      checked={systemSettings2.allow_public_registration === true}
-                      onCheckedChange={(checked) =>
-                        setSystemSettings2({
-                          ...systemSettings2,
-                          allow_public_registration: checked,
-                        })
-                      }
-                    />
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {systemSettings2.allow_public_registration ? "Habilitado" : "Desabilitado"}
-                    </span>
+                  <div>
+                    <Label htmlFor="adminNewPassword" className="text-gray-900 dark:text-gray-100">
+                      Nova Senha
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="adminNewPassword"
+                        type={showPasswords.new ? "text" : "password"}
+                        value={profileForm.newPassword}
+                        onChange={(e) => setProfileForm({ ...profileForm, newPassword: e.target.value })}
+                        placeholder="Nova senha"
+                        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                      >
+                        {showPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                  <div>
+                    <Label htmlFor="adminConfirmPassword" className="text-gray-900 dark:text-gray-100">
+                      Confirmar Nova Senha
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="adminConfirmPassword"
+                        type={showPasswords.confirm ? "text" : "password"}
+                        value={profileForm.confirmPassword}
+                        onChange={(e) => setProfileForm({ ...profileForm, confirmPassword: e.target.value })}
+                        placeholder="Confirme a nova senha"
+                        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                      >
+                        {showPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end mt-6">
               <Button
-                onClick={handleUpdateSystemSettings}
-                disabled={savingSettings}
+                onClick={handleUpdateProfile}
+                disabled={savingProfile}
                 className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
               >
-                {savingSettings ? "Salvando..." : "Salvar Configurações"}
+                {savingProfile ? "Salvando..." : "Salvar Alterações"}
               </Button>
             </div>
-          </div>
-        </TabsContent>
+          </TabsContent>
 
-        <TabsContent value="apiKeys" className="mt-4">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle>Gerenciamento de API Keys</CardTitle>
-                  <CardDescription>Crie e gerencie chaves de API para você.</CardDescription>
-                </div>
-                {!showNewKeyForm ? (
-                  <Button onClick={() => setShowNewKeyForm(true)} className="gap-2">
-                    <Plus className="h-4 w-4" /> Nova API Key
-                  </Button>
-                ) : (
-                  <Button onClick={() => setShowNewKeyForm(false)} variant="outline">
-                    Cancelar
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {showNewKeyForm && (
-                <div className="mb-6 p-4 border rounded-lg space-y-4">
-                  <h4 className="font-medium">Criar Nova API Key</h4>
+          <TabsContent value="system" className="mt-4">
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Configurações do Sistema</h3>
+              <p className="text-gray-600 dark:text-gray-400">Configure parâmetros globais da plataforma</p>
+            </div>
+
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-gray-900 dark:text-gray-100">Limites e Restrições</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div>
-                    <Label htmlFor="keyName">Nome da API Key (Opcional)</Label>
+                    <Label htmlFor="defaultWhatsAppLimit" className="text-gray-900 dark:text-gray-100">
+                      Limite Padrão de Conexões WhatsApp
+                    </Label>
                     <Input
-                      id="keyName"
-                      value={newKeyName}
-                      onChange={(e) => setNewKeyName(e.target.value)}
-                      placeholder="Ex: Integração N8N Pessoal"
+                      id="defaultWhatsAppLimit"
+                      type="number"
+                      value={systemSettings2.default_whatsapp_connections_limit || 2}
+                      onChange={(e) =>
+                        setSystemSettings2({
+                          ...systemSettings2,
+                          default_whatsapp_connections_limit: Number.parseInt(e.target.value) || 2,
+                        })
+                      }
+                      min="1"
+                      max="50"
+                      className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Número máximo de conexões WhatsApp que novos usuários podem criar
+                    </p>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <Button
-                      onClick={() => createApiKey(false)}
-                      className="w-full"
-                      disabled={creatingApiKey}
-                      variant="outline"
-                    >
-                      {creatingApiKey ? "Criando..." : "Criar Chave Padrão (Acesso Próprio)"}
-                    </Button>
-                    <Button
-                      onClick={() => createApiKey(true)}
-                      className="w-full gap-2 bg-red-600 hover:bg-red-700 text-white"
-                      disabled={creatingApiKey}
-                    >
-                      <ShieldCheck className="h-4 w-4" />
-                      {creatingApiKey ? "Criando..." : "Criar Chave de Admin (Acesso Global)"}
-                    </Button>
+                  <div>
+                    <Label htmlFor="defaultAgentsLimit" className="text-gray-900 dark:text-gray-100">
+                      Limite Padrão de Agentes IA
+                    </Label>
+                    <Input
+                      id="defaultAgentsLimit"
+                      type="number"
+                      value={systemSettings2.default_agents_limit || 5}
+                      onChange={(e) =>
+                        setSystemSettings2({
+                          ...systemSettings2,
+                          default_agents_limit: Number.parseInt(e.target.value) || 5,
+                        })
+                      }
+                      min="1"
+                      max="100"
+                      className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Número máximo de agentes IA que novos usuários podem criar
+                    </p>
                   </div>
-                </div>
-              )}
+                </CardContent>
+              </Card>
 
-              {loadingApiKeys ? (
-                <p>Carregando API keys...</p>
-              ) : apiKeys.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">Nenhuma API key encontrada.</p>
-              ) : (
-                <div className="space-y-4">
-                  {apiKeys.map((apiKey) => (
-                    <div key={apiKey.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-medium">{apiKey.name}</h4>
-                            {apiKey.is_admin_key ? (
-                              <Badge className="bg-red-100 text-red-700">ADMIN</Badge>
-                            ) : (
-                              <Badge variant="secondary">PADRÃO</Badge>
-                            )}
-                            <Badge variant="outline">
-                              {apiKey.access_scope === "admin" ? "Acesso Global" : "Acesso Próprio"}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-gray-600 mt-1">{apiKey.description}</p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteApiKey(apiKey.id)}
-                          className="text-red-600 hover:bg-red-100"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="flex gap-2 mt-2">
-                        <Input value={apiKey.api_key} readOnly className="font-mono text-sm" />
-                        <Button variant="outline" size="sm" onClick={() => copyToClipboard(apiKey.api_key)}>
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-gray-900 dark:text-gray-100">Cadastro de Usuários</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="allowRegistration" className="text-gray-900 dark:text-gray-100">
+                        Permitir Cadastro Público
+                      </Label>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Permite que novos usuários se cadastrem na tela de login
+                      </p>
                     </div>
-                  ))}
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="allowRegistration"
+                        checked={systemSettings2.allow_public_registration === true}
+                        onCheckedChange={(checked) =>
+                          setSystemSettings2({
+                            ...systemSettings2,
+                            allow_public_registration: checked,
+                          })
+                        }
+                      />
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {systemSettings2.allow_public_registration ? "Habilitado" : "Desabilitado"}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleUpdateSystemSettings}
+                  disabled={savingSettings}
+                  className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  {savingSettings ? "Salvando..." : "Salvar Configurações"}
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="apiKeys" className="mt-4">
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Gerenciamento de API Keys</CardTitle>
+                    <CardDescription>Crie e gerencie chaves de API para você.</CardDescription>
+                  </div>
+                  {!showNewKeyForm ? (
+                    <Button onClick={() => setShowNewKeyForm(true)} className="gap-2">
+                      <Plus className="h-4 w-4" /> Nova API Key
+                    </Button>
+                  ) : (
+                    <Button onClick={() => setShowNewKeyForm(false)} variant="outline">
+                      Cancelar
+                    </Button>
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </CardHeader>
+              <CardContent>
+                {showNewKeyForm && (
+                  <div className="mb-6 p-4 border rounded-lg space-y-4">
+                    <h4 className="font-medium">Criar Nova API Key</h4>
+                    <div>
+                      <Label htmlFor="keyName">Nome da API Key (Opcional)</Label>
+                      <Input
+                        id="keyName"
+                        value={newKeyName}
+                        onChange={(e) => setNewKeyName(e.target.value)}
+                        placeholder="Ex: Integração N8N Pessoal"
+                      />
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <Button
+                        onClick={() => createApiKey(false)}
+                        className="w-full"
+                        disabled={creatingApiKey}
+                        variant="outline"
+                      >
+                        {creatingApiKey ? "Criando..." : "Criar Chave Padrão (Acesso Próprio)"}
+                      </Button>
+                      <Button
+                        onClick={() => createApiKey(true)}
+                        className="w-full gap-2 bg-red-600 hover:bg-red-700 text-white"
+                        disabled={creatingApiKey}
+                      >
+                        <ShieldCheck className="h-4 w-4" />
+                        {creatingApiKey ? "Criando..." : "Criar Chave de Admin (Acesso Global)"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
-        <TabsContent value="integrations" className="mt-4">
-          {renderIntegrationsSettings()}
+                {loadingApiKeys ? (
+                  <p>Carregando API keys...</p>
+                ) : apiKeys.length === 0 ? (
+                  <p className="text-center text-gray-500 py-8">Nenhuma API key encontrada.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {apiKeys.map((apiKey) => (
+                      <div key={apiKey.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-medium">{apiKey.name}</h4>
+                              {apiKey.is_admin_key ? (
+                                <Badge className="bg-red-100 text-red-700">ADMIN</Badge>
+                              ) : (
+                                <Badge variant="secondary">PADRÃO</Badge>
+                              )}
+                              <Badge variant="outline">
+                                {apiKey.access_scope === "admin" ? "Acesso Global" : "Acesso Próprio"}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">{apiKey.description}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteApiKey(apiKey.id)}
+                            className="text-red-600 hover:bg-red-100"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <Input value={apiKey.api_key} readOnly className="font-mono text-sm" />
+                          <Button variant="outline" size="sm" onClick={() => copyToClipboard(apiKey.api_key)}>
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-          {/* Keep the diagnostics section, perhaps in its own card or as part of the integrations settings */}
-        </TabsContent>
+          <TabsContent value="integrations" className="mt-4">
+            {renderIntegrationsSettings()}
 
-        <TabsContent value="branding" className="mt-4">
-          {renderBrandingSettings()}
-        </TabsContent>
-      </Tabs>
-    </div>
+            {/* Keep the diagnostics section, perhaps in its own card or as part of the integrations settings */}
+          </TabsContent>
+
+          <TabsContent value="branding" className="mt-4">
+            {renderBrandingSettings()}
+          </TabsContent>
+        </Tabs>
+      </div>
+    </>
   )
 }
