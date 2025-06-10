@@ -3,18 +3,18 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { ChevronDown, Palette, Plug, Upload, ImageIcon, User, Eye, EyeOff, Plus, SettingsIcon } from "lucide-react"
+import { Upload, ImageIcon, Eye, EyeOff, Plus, Copy, Trash2, Badge, ShieldCheck } from "lucide-react"
 import { useTheme, themePresets, type ThemeConfig } from "@/components/theme-provider"
 import Image from "next/image"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { getCurrentUser } from "@/lib/auth"
-import { db } from "@/lib/supabase"
+import { getCurrentUser, changePassword } from "@/lib/auth"
+import { db, supabase } from "@/lib/supabase"
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useToast } from "@/components/ui/use-toast"
+import { getSystemSettings, updateSystemSettings } from "@/lib/system-settings"
+
+interface ApiKey {
+  id: string
+  api_key: string
+  name: string
+  description: string
+  created_at: string
+  last_used_at: string | null
+  is_active: boolean
+  is_admin_key: boolean
+  access_scope: string
+}
 
 export default function AdminSettingsPage() {
   const [settingsSubTab, setSettingsSubTab] = useState("profile")
@@ -84,11 +100,252 @@ export default function AdminSettingsPage() {
   })
   const [brandingChanged, setBrandingChanged] = useState(false)
 
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+  const { toast } = useToast()
+
+  // Estados para perfil
+  const [profileForm, setProfileForm] = useState({
+    full_name: "",
+    email: "",
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  })
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false,
+  })
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [profileMessage, setProfileMessage] = useState("")
+
+  // Estados para Configurações do Sistema
+  const [systemSettings2, setSystemSettings2] = useState<any>({})
+  const [loadingSettings, setLoadingSettings] = useState(false)
+  const [savingSettings, setSavingSettings] = useState(false)
+
+  // Estados para API Keys
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
+  const [loadingApiKeys, setLoadingApiKeys] = useState(false)
+  const [creatingApiKey, setCreatingApiKey] = useState(false)
+  const [newKeyName, setNewKeyName] = useState("")
+  const [showNewKeyForm, setShowNewKeyForm] = useState(false)
+
+  useEffect(() => {
+    const currentUser = getCurrentUser()
+    if (!currentUser || currentUser.role !== "admin") {
+      router.push("/")
+      return
+    }
+    setUser(currentUser)
+    setProfileForm({
+      full_name: currentUser.full_name || "",
+      email: currentUser.email || "",
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    })
+    loadSystemSettings()
+    loadApiKeys(currentUser.id)
+    setLoading(false)
+  }, [router])
+
+  const loadSystemSettings = async () => {
+    setLoadingSettings(true)
+    try {
+      const settings = await getSystemSettings()
+      setSystemSettings2(settings)
+    } catch (error) {
+      console.error("Erro ao carregar configurações do sistema:", error)
+      toast({
+        title: "Erro ao carregar configurações",
+        description: "Não foi possível carregar as configurações do sistema.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingSettings(false)
+    }
+  }
+
+  const handleUpdateSystemSettings = async () => {
+    setSavingSettings(true)
+    try {
+      await updateSystemSettings(systemSettings2)
+      toast({
+        title: "Configurações salvas!",
+        description: "As configurações do sistema foram atualizadas com sucesso.",
+      })
+    } catch (error) {
+      console.error("Erro ao salvar configurações do sistema:", error)
+      toast({
+        title: "Erro ao salvar configurações",
+        description: "Não foi possível salvar as configurações do sistema.",
+        variant: "destructive",
+      })
+    } finally {
+      setSavingSettings(false)
+    }
+  }
+
+  const handleUpdateProfile = async () => {
+    setSavingProfile(true)
+    setProfileMessage("")
+
+    try {
+      if (!profileForm.full_name.trim()) {
+        setProfileMessage("Nome é obrigatório")
+        return
+      }
+
+      if (!profileForm.email.trim()) {
+        setProfileMessage("Email é obrigatório")
+        return
+      }
+
+      if (profileForm.newPassword && profileForm.newPassword !== profileForm.confirmPassword) {
+        setProfileMessage("Senhas não coincidem")
+        return
+      }
+
+      if (profileForm.newPassword && profileForm.newPassword.length < 6) {
+        setProfileMessage("Nova senha deve ter pelo menos 6 caracteres")
+        return
+      }
+
+      // Preparar dados para atualização
+      const updateData: any = {
+        full_name: profileForm.full_name.trim(),
+        email: profileForm.email.trim(),
+        updated_at: new Date().toISOString(),
+      }
+
+      // Se há nova senha, incluir na atualização
+      if (profileForm.newPassword) {
+        const passwordUpdateResult = await changePassword(profileForm.currentPassword, profileForm.newPassword)
+        if (!passwordUpdateResult.success) {
+          setProfileMessage(passwordUpdateResult.error)
+          return
+        }
+      }
+
+      const { data, error } = await supabase.from("users").update(updateData).eq("id", user.id).select().single()
+
+      if (error) throw error
+
+      const updatedUser = {
+        ...user,
+        full_name: profileForm.full_name.trim(),
+        email: profileForm.email.trim(),
+      }
+      setUser(updatedUser)
+      localStorage.setItem("user", JSON.stringify(updatedUser))
+
+      setProfileMessage(
+        profileForm.newPassword ? "Perfil e senha atualizados com sucesso!" : "Perfil atualizado com sucesso!",
+      )
+
+      // Limpar campos de senha após sucesso
+      setProfileForm({
+        ...profileForm,
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      })
+    } catch (error) {
+      console.error("Erro ao atualizar perfil:", error)
+      setProfileMessage("Erro ao atualizar perfil")
+    } finally {
+      setSavingProfile(false)
+      setTimeout(() => setProfileMessage(""), 3000)
+    }
+  }
+
+  // Funções de API Key
+  const loadApiKeys = async (userId: string) => {
+    if (!userId) return
+    setLoadingApiKeys(true)
+    try {
+      const response = await fetch(`/api/user/api-keys?user_id=${userId}`)
+      const data = await response.json()
+      if (response.ok) {
+        setApiKeys(data.apiKeys || [])
+      } else {
+        throw new Error(data.error)
+      }
+    } catch (error) {
+      console.error("Erro ao carregar API keys:", error)
+      toast({
+        title: "Erro ao carregar API Keys",
+        description: (error as Error).message,
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingApiKeys(false)
+    }
+  }
+
+  const createApiKey = async (isAdminKey = false) => {
+    if (!user?.id) return
+    setCreatingApiKey(true)
+    try {
+      const response = await fetch("/api/user/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newKeyName || (isAdminKey ? "API Key de Administrador" : "API Key Padrão"),
+          description: isAdminKey
+            ? "API Key com acesso global a todos os bots do sistema"
+            : "API Key para integração com sistemas externos (acesso próprio)",
+          user_id: user.id,
+          is_admin_key: isAdminKey,
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok) {
+        toast({
+          title: `API Key ${isAdminKey ? "de Administrador" : "Padrão"} criada!`,
+          description: `Sua nova API key ${isAdminKey ? "com acesso global" : ""} foi gerada.`,
+        })
+        setNewKeyName("")
+        setShowNewKeyForm(false)
+        loadApiKeys(user.id)
+      } else {
+        throw new Error(data.error)
+      }
+    } catch (error) {
+      toast({
+        title: "Erro ao criar API Key",
+        description: (error as Error).message,
+        variant: "destructive",
+      })
+    } finally {
+      setCreatingApiKey(false)
+    }
+  }
+
+  const deleteApiKey = async (id: string) => {
+    if (!user?.id) return
+    try {
+      await fetch(`/api/user/api-keys?id=${id}&user_id=${user.id}`, { method: "DELETE" })
+      toast({ title: "API Key removida", description: "A API key foi removida com sucesso." })
+      loadApiKeys(user.id)
+    } catch (error) {
+      toast({ title: "Erro ao remover API Key", variant: "destructive" })
+    }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    toast({ title: "Copiado!", description: "API Key copiada para a área de transferência." })
+  }
+
   useEffect(() => {
     const currentUser = getCurrentUser()
     setUser(currentUser)
     fetchIntegrations()
-    fetchSystemSettings()
+    fetchSystemSettings2()
 
     // Inicializar formulário de branding com o tema atual
     setBrandingForm(theme)
@@ -104,7 +361,7 @@ export default function AdminSettingsPage() {
     }
   }, [theme])
 
-  const fetchSystemSettings = async () => {
+  const fetchSystemSettings2 = async () => {
     try {
       // Buscar configurações específicas usando a nova estrutura
       const { data: limitData, error: limitError } = await db
@@ -147,7 +404,7 @@ export default function AdminSettingsPage() {
     }
   }
 
-  const saveSystemSettings = async () => {
+  const saveSystemSettings2 = async () => {
     setSaving(true)
     try {
       // Salvar configurações usando upsert na nova estrutura
@@ -714,7 +971,7 @@ export default function AdminSettingsPage() {
 
         <div className="flex justify-end">
           <Button
-            onClick={saveSystemSettings}
+            onClick={saveSystemSettings2}
             disabled={saving}
             className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
           >
@@ -1238,91 +1495,376 @@ export default function AdminSettingsPage() {
     )
   }
 
+  if (loading) {
+    return <div className="p-6">Carregando...</div>
+  }
+
   return (
     <div className="p-6">
-      <div className="flex justify-between items-start mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Configurações do Sistema</h1>
-          <p className="text-gray-600 dark:text-gray-400">Personalize a plataforma e configure integrações</p>
-        </div>
-        <div className="flex items-center gap-4">
-          {saveMessage && (
-            <div
-              className={`px-4 py-2 rounded-lg text-sm ${
-                saveMessage.includes("sucesso") ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-              }`}
-            >
-              {saveMessage}
-            </div>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="gap-2 text-gray-700 dark:text-gray-300 border-gray-300 hover:bg-gray-50"
-              >
-                {settingsSubTab === "profile" ? (
-                  <>
-                    <User className="w-4 h-4" />
-                    Perfil
-                  </>
-                ) : settingsSubTab === "system" ? (
-                  <>
-                    <SettingsIcon className="w-4 h-4" />
-                    Sistema
-                  </>
-                ) : settingsSubTab === "branding" ? (
-                  <>
-                    <Palette className="w-4 h-4" />
-                    Branding
-                  </>
-                ) : (
-                  <>
-                    <Plug className="w-4 h-4" />
-                    Integrações
-                  </>
-                )}
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-white border border-gray-200">
-              <DropdownMenuItem
-                onClick={() => setSettingsSubTab("profile")}
-                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
-              >
-                <User className="w-4 h-4 mr-2" />
-                Perfil
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setSettingsSubTab("system")}
-                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
-              >
-                <SettingsIcon className="w-4 h-4 mr-2" />
-                Sistema
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setSettingsSubTab("branding")}
-                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
-              >
-                <Palette className="w-4 h-4 mr-2" />
-                Branding
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setSettingsSubTab("integrations")}
-                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700"
-              >
-                <Plug className="w-4 h-4 mr-2" />
-                Integrações
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <h1 className="text-2xl font-bold mb-4">Configurações de Administrador</h1>
+      <Tabs defaultValue="profile">
+        <TabsList>
+          <TabsTrigger value="profile">Perfil</TabsTrigger>
+          <TabsTrigger value="system">Sistema</TabsTrigger>
+          <TabsTrigger value="apiKeys">API Keys</TabsTrigger>
+          <TabsTrigger value="integrations">Integrações</TabsTrigger>
+          <TabsTrigger value="branding">Branding</TabsTrigger>
+        </TabsList>
 
-      {settingsSubTab === "profile" && renderAdminProfileSettings()}
-      {settingsSubTab === "system" && renderSystemSettings()}
-      {settingsSubTab === "branding" && renderBrandingSettings()}
-      {settingsSubTab === "integrations" && renderIntegrationsSettings()}
+        <TabsContent value="profile" className="mt-4">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Perfil do Administrador</h3>
+            <p className="text-gray-600 dark:text-gray-400">Gerencie suas informações pessoais e senha</p>
+          </div>
+
+          {profileMessage && (
+            <Alert variant={profileMessage.includes("sucesso") ? "default" : "destructive"} className="mb-6">
+              <AlertDescription>{profileMessage}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-gray-900 dark:text-gray-100">Informações Pessoais</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="adminFullName" className="text-gray-900 dark:text-gray-100">
+                    Nome Completo
+                  </Label>
+                  <Input
+                    id="adminFullName"
+                    value={profileForm.full_name}
+                    onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                    placeholder="Seu nome completo"
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="adminEmail" className="text-gray-900 dark:text-gray-100">
+                    Email
+                  </Label>
+                  <Input
+                    id="adminEmail"
+                    type="email"
+                    value={profileForm.email}
+                    onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                    placeholder="seu@email.com"
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-gray-900 dark:text-gray-100">Alterar Senha</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="adminCurrentPassword" className="text-gray-900 dark:text-gray-100">
+                    Senha Atual (opcional para admin)
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="adminCurrentPassword"
+                      type={showPasswords.current ? "text" : "password"}
+                      value={profileForm.currentPassword}
+                      onChange={(e) => setProfileForm({ ...profileForm, currentPassword: e.target.value })}
+                      placeholder="Senha atual (não obrigatória para admin)"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                    >
+                      {showPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Como administrador, você pode alterar sua senha sem informar a atual
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="adminNewPassword" className="text-gray-900 dark:text-gray-100">
+                    Nova Senha
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="adminNewPassword"
+                      type={showPasswords.new ? "text" : "password"}
+                      value={profileForm.newPassword}
+                      onChange={(e) => setProfileForm({ ...profileForm, newPassword: e.target.value })}
+                      placeholder="Nova senha"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                    >
+                      {showPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="adminConfirmPassword" className="text-gray-900 dark:text-gray-100">
+                    Confirmar Nova Senha
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="adminConfirmPassword"
+                      type={showPasswords.confirm ? "text" : "password"}
+                      value={profileForm.confirmPassword}
+                      onChange={(e) => setProfileForm({ ...profileForm, confirmPassword: e.target.value })}
+                      placeholder="Confirme a nova senha"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                    >
+                      {showPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="flex justify-end mt-6">
+            <Button
+              onClick={handleUpdateProfile}
+              disabled={savingProfile}
+              className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+            >
+              {savingProfile ? "Salvando..." : "Salvar Alterações"}
+            </Button>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="system" className="mt-4">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Configurações do Sistema</h3>
+            <p className="text-gray-600 dark:text-gray-400">Configure parâmetros globais da plataforma</p>
+          </div>
+
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-gray-900 dark:text-gray-100">Limites e Restrições</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="defaultWhatsAppLimit" className="text-gray-900 dark:text-gray-100">
+                    Limite Padrão de Conexões WhatsApp
+                  </Label>
+                  <Input
+                    id="defaultWhatsAppLimit"
+                    type="number"
+                    value={systemSettings2.default_whatsapp_connections_limit || 2}
+                    onChange={(e) =>
+                      setSystemSettings2({
+                        ...systemSettings2,
+                        default_whatsapp_connections_limit: Number.parseInt(e.target.value) || 2,
+                      })
+                    }
+                    min="1"
+                    max="50"
+                    className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Número máximo de conexões WhatsApp que novos usuários podem criar
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="defaultAgentsLimit" className="text-gray-900 dark:text-gray-100">
+                    Limite Padrão de Agentes IA
+                  </Label>
+                  <Input
+                    id="defaultAgentsLimit"
+                    type="number"
+                    value={systemSettings2.default_agents_limit || 5}
+                    onChange={(e) =>
+                      setSystemSettings2({
+                        ...systemSettings2,
+                        default_agents_limit: Number.parseInt(e.target.value) || 5,
+                      })
+                    }
+                    min="1"
+                    max="100"
+                    className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Número máximo de agentes IA que novos usuários podem criar
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-gray-900 dark:text-gray-100">Cadastro de Usuários</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="allowRegistration" className="text-gray-900 dark:text-gray-100">
+                      Permitir Cadastro Público
+                    </Label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Permite que novos usuários se cadastrem na tela de login
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="allowRegistration"
+                      checked={systemSettings2.allow_public_registration === true}
+                      onCheckedChange={(checked) =>
+                        setSystemSettings2({
+                          ...systemSettings2,
+                          allow_public_registration: checked,
+                        })
+                      }
+                    />
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {systemSettings2.allow_public_registration ? "Habilitado" : "Desabilitado"}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={handleUpdateSystemSettings}
+                disabled={savingSettings}
+                className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+              >
+                {savingSettings ? "Salvando..." : "Salvar Configurações"}
+              </Button>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="apiKeys" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Gerenciamento de API Keys</CardTitle>
+                  <CardDescription>Crie e gerencie chaves de API para você.</CardDescription>
+                </div>
+                {!showNewKeyForm ? (
+                  <Button onClick={() => setShowNewKeyForm(true)} className="gap-2">
+                    <Plus className="h-4 w-4" /> Nova API Key
+                  </Button>
+                ) : (
+                  <Button onClick={() => setShowNewKeyForm(false)} variant="outline">
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {showNewKeyForm && (
+                <div className="mb-6 p-4 border rounded-lg space-y-4">
+                  <h4 className="font-medium">Criar Nova API Key</h4>
+                  <div>
+                    <Label htmlFor="keyName">Nome da API Key (Opcional)</Label>
+                    <Input
+                      id="keyName"
+                      value={newKeyName}
+                      onChange={(e) => setNewKeyName(e.target.value)}
+                      placeholder="Ex: Integração N8N Pessoal"
+                    />
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <Button
+                      onClick={() => createApiKey(false)}
+                      className="w-full"
+                      disabled={creatingApiKey}
+                      variant="outline"
+                    >
+                      {creatingApiKey ? "Criando..." : "Criar Chave Padrão (Acesso Próprio)"}
+                    </Button>
+                    <Button
+                      onClick={() => createApiKey(true)}
+                      className="w-full gap-2 bg-red-600 hover:bg-red-700 text-white"
+                      disabled={creatingApiKey}
+                    >
+                      <ShieldCheck className="h-4 w-4" />
+                      {creatingApiKey ? "Criando..." : "Criar Chave de Admin (Acesso Global)"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {loadingApiKeys ? (
+                <p>Carregando API keys...</p>
+              ) : apiKeys.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">Nenhuma API key encontrada.</p>
+              ) : (
+                <div className="space-y-4">
+                  {apiKeys.map((apiKey) => (
+                    <div key={apiKey.id} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-medium">{apiKey.name}</h4>
+                            {apiKey.is_admin_key ? (
+                              <Badge className="bg-red-100 text-red-700">ADMIN</Badge>
+                            ) : (
+                              <Badge variant="secondary">PADRÃO</Badge>
+                            )}
+                            <Badge variant="outline">
+                              {apiKey.access_scope === "admin" ? "Acesso Global" : "Acesso Próprio"}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">{apiKey.description}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteApiKey(apiKey.id)}
+                          className="text-red-600 hover:bg-red-100"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <Input value={apiKey.api_key} readOnly className="font-mono text-sm" />
+                        <Button variant="outline" size="sm" onClick={() => copyToClipboard(apiKey.api_key)}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="integrations" className="mt-4">
+          {renderIntegrationsSettings()}
+
+          {/* Keep the diagnostics section, perhaps in its own card or as part of the integrations settings */}
+        </TabsContent>
+
+        <TabsContent value="branding" className="mt-4">
+          {renderBrandingSettings()}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
