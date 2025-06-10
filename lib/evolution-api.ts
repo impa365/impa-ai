@@ -1,24 +1,42 @@
 import { supabase } from "./supabase"
 
-export interface CreateBotRequest {
+// Interface para os dados enviados ao criar/atualizar um bot individual
+export interface EvolutionBotIndividualConfig {
   enabled: boolean
-  description: string // Nome da IA
+  description: string
   apiUrl: string
   apiKey?: string
-  triggerType: string
+  triggerType: string // "keyword", "all", etc.
   triggerOperator: string
   triggerValue: string
-  expire: number
-  keywordFinish: string
-  delayMessage: number
-  unknownMessage: string
-  listeningFromMe: boolean // Ouvindo de mim
-  stopBotFromMe: boolean // Parar bot por mim
-  keepOpen: boolean // Manter aberto
-  debounceTime: number // Tempo de Debounce
-  ignoreJids: string[]
-  splitMessages: boolean // Dividir Mensagens
-  timePerChar: number // Tempo por caractere
+  // Campos que são parte das configurações da instância, mas podem ser específicos do bot se a API permitir
+  expire?: number
+  keywordFinish?: string
+  delayMessage?: number
+  unknownMessage?: string
+  listeningFromMe?: boolean
+  stopBotFromMe?: boolean
+  keepOpen?: boolean
+  debounceTime?: number
+  ignoreJids?: string[]
+  splitMessages?: boolean
+  timePerChar?: number
+}
+
+// Interface para as configurações globais da instância da Evolution API
+export interface EvolutionInstanceSettings {
+  expire?: number
+  keywordFinish?: string
+  delayMessage?: number
+  unknownMessage?: string
+  listeningFromMe?: boolean
+  stopBotFromMe?: boolean
+  keepOpen?: boolean
+  splitMessages?: boolean
+  timePerChar?: number
+  debounceTime?: number
+  ignoreJids?: string[]
+  botIdFallback?: string | null // ID do bot padrão/fallback
 }
 
 export interface CreateBotResponse {
@@ -76,17 +94,20 @@ async function getEvolutionConfig() {
 
 // Melhorar a função createEvolutionBot com logs detalhados e tratamento de erros robusto
 
-export async function createEvolutionBot(instanceName: string, botData: CreateBotRequest): Promise<CreateBotResponse> {
+export async function createEvolutionBot(
+  instanceName: string,
+  botData: EvolutionBotIndividualConfig,
+): Promise<CreateBotResponse> {
+  // ... (lógica existente, mas usando EvolutionBotIndividualConfig)
   try {
     console.log("🤖 Iniciando criação de bot na Evolution API...")
     console.log("📋 Instância:", instanceName)
-    console.log("📋 Dados do bot:", JSON.stringify(botData, null, 2))
+    console.log("📋 Dados do bot para CRIAR:", JSON.stringify(botData, null, 2))
 
     const config = await getEvolutionConfig()
     const url = `${config.apiUrl}/evolutionBot/create/${instanceName}`
 
-    console.log("🌐 Fazendo requisição para:", url)
-    console.log("🔑 API Key configurada:", !!config.apiKey)
+    console.log("🌐 Fazendo requisição POST para:", url)
 
     const response = await fetch(url, {
       method: "POST",
@@ -97,51 +118,24 @@ export async function createEvolutionBot(instanceName: string, botData: CreateBo
       body: JSON.stringify(botData),
     })
 
-    console.log("📡 Status da resposta:", response.status)
-    console.log("📡 Status text:", response.statusText)
-
-    // Capturar o corpo da resposta como texto para análise
     const responseText = await response.text()
-    console.log("📄 Corpo da resposta:", responseText)
+    console.log("📄 Corpo da resposta (Criação):", responseText)
 
     if (!response.ok) {
-      console.error("❌ Erro da Evolution API:", responseText)
+      console.error("❌ Erro da Evolution API (Criação):", responseText)
       return {
         success: false,
         error: `Erro ${response.status}: ${responseText}`,
       }
     }
-
-    // Tentar converter o texto da resposta para JSON
-    let result
-    try {
-      result = JSON.parse(responseText)
-      console.log("✅ Bot criado com sucesso:", result)
-    } catch (jsonError) {
-      console.error("❌ Erro ao analisar resposta JSON:", jsonError)
-      return {
-        success: false,
-        error: `Resposta inválida da API: ${responseText}`,
-      }
-    }
-
-    // Verificar se o resultado contém um ID de bot
+    const result = JSON.parse(responseText)
     if (!result.id) {
-      console.error("❌ Resposta não contém ID do bot:", result)
-      return {
-        success: false,
-        error: "Resposta da API não contém ID do bot",
-      }
+      console.error("❌ Resposta não contém ID do bot (Criação):", result)
+      return { success: false, error: "Resposta da API não contém ID do bot" }
     }
-
-    return {
-      success: true,
-      botId: result.id,
-    }
+    return { success: true, botId: result.id }
   } catch (error: any) {
     console.error("❌ Erro detalhado ao criar bot:", error)
-
-    // Verificar tipos específicos de erro
     if (error.name === "TypeError" && error.message.includes("fetch")) {
       return {
         success: false,
@@ -149,28 +143,25 @@ export async function createEvolutionBot(instanceName: string, botData: CreateBo
           "Não foi possível conectar com a Evolution API. Verifique se o servidor está funcionando e a URL está correta.",
       }
     }
-
-    return {
-      success: false,
-      error: error.message || "Erro desconhecido ao criar bot na Evolution API",
-    }
+    return { success: false, error: error.message || "Erro desconhecido ao criar bot na Evolution API" }
   }
 }
 
 export async function updateEvolutionBot(
   instanceName: string,
   botId: string,
-  botData: CreateBotRequest,
+  botData: EvolutionBotIndividualConfig, // Usar a interface correta
 ): Promise<boolean> {
   try {
     console.log("🔄 Atualizando bot na Evolution API...")
     console.log("📋 Instância:", instanceName)
     console.log("📋 Bot ID:", botId)
+    console.log("📋 Dados do bot para ATUALIZAR:", JSON.stringify(botData, null, 2))
 
     const config = await getEvolutionConfig()
     const url = `${config.apiUrl}/evolutionBot/update/${botId}/${instanceName}`
 
-    console.log("🌐 Fazendo requisição para:", url)
+    console.log("🌐 Fazendo requisição PUT para:", url)
 
     const response = await fetch(url, {
       method: "PUT",
@@ -181,7 +172,7 @@ export async function updateEvolutionBot(
       body: JSON.stringify(botData),
     })
 
-    console.log("📡 Status da resposta:", response.status)
+    console.log("📡 Status da resposta (Atualização):", response.status)
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -197,6 +188,48 @@ export async function updateEvolutionBot(
   }
 }
 
+export async function setEvolutionInstanceSettings(
+  instanceName: string,
+  settingsData: EvolutionInstanceSettings,
+): Promise<boolean> {
+  try {
+    console.log("⚙️ Configurando definições da instância na Evolution API...")
+    console.log("📋 Instância:", instanceName)
+    console.log("📋 Dados das definições:", JSON.stringify(settingsData, null, 2))
+
+    const config = await getEvolutionConfig()
+    // O endpoint fornecido é POST, mesmo para atualizar configurações
+    const url = `${config.apiUrl}/evolutionBot/settings/${instanceName}`
+
+    console.log("🌐 Fazendo requisição POST para:", url)
+
+    const response = await fetch(url, {
+      method: "POST", // Conforme a documentação fornecida
+      headers: {
+        "Content-Type": "application/json",
+        apikey: config.apiKey || "",
+      },
+      body: JSON.stringify(settingsData),
+    })
+
+    console.log("📡 Status da resposta (Definições da Instância):", response.status)
+    const responseText = await response.text()
+    console.log("📄 Corpo da resposta (Definições da Instância):", responseText)
+
+    if (!response.ok) {
+      console.error("❌ Erro ao configurar definições da instância:", responseText)
+      return false
+    }
+
+    console.log("✅ Definições da instância configuradas com sucesso")
+    return true
+  } catch (error: any) {
+    console.error("❌ Erro ao configurar definições da instância:", error)
+    return false
+  }
+}
+
+// deleteEvolutionBot, fetchEvolutionBot, fetchEvolutionBotSettings (código existente sem alterações)
 export async function deleteEvolutionBot(instanceName: string, botId: string): Promise<boolean> {
   try {
     console.log("🗑️ Deletando bot na Evolution API...")
