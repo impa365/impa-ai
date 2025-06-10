@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, Copy, Plus, Trash2, Code, Badge } from "lucide-react"
+import { Eye, EyeOff, Copy, Plus, Trash2, Code, BadgeIcon as UIBadge } from "lucide-react" // Renomeado para evitar conflito
 import { getCurrentUser } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/components/ui/use-toast"
@@ -74,7 +74,7 @@ export default function UserSettings() {
       confirmPassword: "",
     })
     setLoading(false)
-    loadApiKeys()
+    // loadApiKeys é chamado no useEffect abaixo quando 'user' é setado
   }, [router])
 
   const loadApiKeys = async () => {
@@ -82,15 +82,19 @@ export default function UserSettings() {
 
     setLoadingApiKeys(true)
     try {
-      const response = await fetch(`/api/user/api-keys?user_id=${user.id}`)
+      const response = await fetch(`/api/user/api-keys?user_id=${user.id}`) // Assegura que user.id existe
       const data = await response.json()
       if (response.ok) {
         setApiKeys(data.apiKeys || [])
       } else {
-        console.error("Erro ao carregar API keys:", data.error)
+        if (process.env.NODE_ENV === "development") {
+          console.error("Erro ao carregar API keys:", data.error)
+        }
       }
     } catch (error) {
-      console.error("Erro ao carregar API keys:", error)
+      if (process.env.NODE_ENV === "development") {
+        console.error("Erro ao carregar API keys:", error)
+      }
     } finally {
       setLoadingApiKeys(false)
     }
@@ -126,10 +130,10 @@ export default function UserSettings() {
       } else {
         throw new Error(data.error)
       }
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Erro ao criar API Key",
-        description: "Não foi possível criar a API key.",
+        description: error.message || "Não foi possível criar a API key.",
         variant: "destructive",
       })
     } finally {
@@ -142,6 +146,7 @@ export default function UserSettings() {
 
     try {
       const response = await fetch(`/api/user/api-keys?id=${id}&user_id=${user.id}`, {
+        // Assegura user.id
         method: "DELETE",
       })
 
@@ -216,17 +221,24 @@ export default function UserSettings() {
         .eq("id", user.id)
 
       if (error) {
-        console.error("Erro ao atualizar perfil:", error)
+        if (process.env.NODE_ENV === "development") {
+          console.error("Erro ao atualizar perfil:", error)
+        }
         throw error
       }
 
       // Se há nova senha, trocar a senha
       if (profileForm.newPassword) {
-        console.log("Alterando senha do usuário:", user.id)
+        if (process.env.NODE_ENV === "development") {
+          console.log("Alterando senha do usuário:", user.id)
+        }
 
         const passwordResult = await changePassword(user.id, profileForm.currentPassword, profileForm.newPassword)
 
-        console.log("Resultado da alteração de senha:", passwordResult)
+        if (process.env.NODE_ENV === "development") {
+          // Não logar passwordResult inteiro se contiver dados sensíveis.
+          console.log("Resultado da alteração de senha (sucesso/erro):", passwordResult.success, passwordResult.error)
+        }
 
         if (!passwordResult.success) {
           setProfileMessage(passwordResult.error || "Erro ao alterar senha")
@@ -251,9 +263,11 @@ export default function UserSettings() {
         newPassword: "",
         confirmPassword: "",
       })
-    } catch (error) {
-      console.error("Erro ao atualizar perfil:", error)
-      setProfileMessage("Erro ao atualizar perfil: " + (error as any).message)
+    } catch (error: any) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("Erro ao atualizar perfil:", error)
+      }
+      setProfileMessage("Erro ao atualizar perfil: " + error.message)
     } finally {
       setSavingProfile(false)
     }
@@ -274,7 +288,7 @@ export default function UserSettings() {
     )
   }
 
-  const curlExample = `curl -X GET "${window.location.origin}/api/getbot/SEU_BOT_ID" \\
+  const curlExample = `curl -X GET "${typeof window !== "undefined" ? window.location.origin : ""}/api/getbot/SEU_BOT_ID" \\
   -H "apikey: SUA_API_KEY_AQUI"`
 
   return (
@@ -453,7 +467,7 @@ export default function UserSettings() {
                       />
                     </div>
                     <Button
-                      onClick={createApiKey}
+                      onClick={() => createApiKey(false)} // isAdminKey = false
                       className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white"
                       disabled={creatingApiKey}
                     >
@@ -463,7 +477,7 @@ export default function UserSettings() {
                 </div>
               )}
 
-              {user?.role === "admin" && (
+              {user?.role === "admin" && ( // Somente admin pode criar chave de admin
                 <div className="mb-4 p-4 border rounded-lg bg-red-50">
                   <h4 className="font-medium mb-3 text-red-800">Criar API Key de Administrador</h4>
                   <p className="text-sm text-red-600 mb-3">
@@ -471,7 +485,7 @@ export default function UserSettings() {
                   </p>
                   <Button
                     onClick={() => {
-                      setNewKeyName("API Key de Administrador")
+                      setNewKeyName("API Key de Administrador") // Nome padrão para chave de admin
                       createApiKey(true) // true para is_admin_key
                     }}
                     className="w-full gap-2 bg-red-600 hover:bg-red-700 text-white"
@@ -497,10 +511,12 @@ export default function UserSettings() {
                         <div>
                           <div className="flex items-center gap-2">
                             <h4 className="font-medium">{apiKey.name}</h4>
-                            {apiKey.is_admin_key && <Badge className="bg-red-100 text-red-700 text-xs">ADMIN</Badge>}
-                            <Badge variant="outline" className="text-xs">
+                            {apiKey.is_admin_key && (
+                              <UIBadge className="bg-red-100 text-red-700 text-xs">ADMIN</UIBadge>
+                            )}
+                            <UIBadge variant="outline" className="text-xs">
                               {apiKey.access_scope === "admin" ? "Acesso Global" : "Acesso Próprio"}
-                            </Badge>
+                            </UIBadge>
                           </div>
                           {apiKey.description && <p className="text-sm text-gray-600">{apiKey.description}</p>}
                           <p className="text-sm text-gray-500">
@@ -553,7 +569,7 @@ export default function UserSettings() {
                     <h4 className="font-medium mb-2">1. Listar todos os seus bots:</h4>
                     <div className="relative">
                       <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-x-auto font-mono">
-                        <code>{`curl -X GET "${window.location.origin}/api/getbots" \\
+                        <code>{`curl -X GET "${typeof window !== "undefined" ? window.location.origin : ""}/api/getbots" \\
   -H "apikey: SUA_API_KEY_AQUI"`}</code>
                       </pre>
                       <Button
@@ -561,7 +577,7 @@ export default function UserSettings() {
                         size="sm"
                         className="absolute top-2 right-2"
                         onClick={() =>
-                          copyToClipboard(`curl -X GET "${window.location.origin}/api/getbots" \\
+                          copyToClipboard(`curl -X GET "${typeof window !== "undefined" ? window.location.origin : ""}/api/getbots" \\
   -H "apikey: SUA_API_KEY_AQUI"`)
                         }
                       >

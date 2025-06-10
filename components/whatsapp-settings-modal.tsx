@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { Settings, Save, Loader2, RefreshCw } from "lucide-react"
-import { getInstanceSettings, saveInstanceSettings } from "@/lib/whatsapp-settings-api"
+import { getInstanceSettings, saveInstanceSettings } from "@/lib/whatsapp-settings-api" // Usando a função atualizada
 
 interface WhatsAppSettingsModalProps {
   open: boolean
@@ -59,7 +59,9 @@ export default function WhatsAppSettingsModal({
 
   useEffect(() => {
     if (open && connection?.instance_name) {
-      console.log("Modal aberto, carregando configurações para:", connection.instance_name)
+      if (process.env.NODE_ENV === "development") {
+        console.log("Modal aberto, carregando configurações para:", connection.instance_name)
+      }
       loadCurrentSettings()
     }
   }, [open, connection?.instance_name])
@@ -83,14 +85,21 @@ export default function WhatsAppSettingsModal({
     setSuccess("")
 
     try {
-      console.log("Buscando configurações da API para:", connection.instance_name)
+      if (process.env.NODE_ENV === "development") {
+        console.log("Buscando configurações da API para:", connection.instance_name)
+      }
 
-      const result = await getInstanceSettings(connection.instance_name)
-      console.log("Resultado da API:", result)
+      const result = await getInstanceSettings(connection.instance_name) // Usando a função atualizada
+      if (process.env.NODE_ENV === "development") {
+        // Não logar 'result' inteiro se contiver dados sensíveis da API.
+        // Logar apenas o que é seguro ou necessário para debug.
+        console.log("Resultado da busca de configurações (local):", result.success, result.error)
+        if (result.settings) {
+          console.log("Configurações recebidas (local):", result.settings)
+        }
+      }
 
       if (result.success && result.settings) {
-        console.log("Configurações recebidas:", result.settings)
-
         const apiSettings = result.settings
         const newSettings: SettingsConfig = {
           groupsIgnore: apiSettings.groupsIgnore ?? defaultSettings.groupsIgnore,
@@ -101,18 +110,21 @@ export default function WhatsAppSettingsModal({
           msgCall: apiSettings.msgCall || defaultSettings.msgCall,
           syncFullHistory: apiSettings.syncFullHistory ?? defaultSettings.syncFullHistory,
         }
-
-        console.log("Configurações mapeadas:", newSettings)
+        if (process.env.NODE_ENV === "development") {
+          console.log("Configurações mapeadas:", newSettings)
+        }
         setSettings(newSettings)
       } else {
-        console.log("Usando configurações padrão devido a erro ou dados vazios")
+        if (process.env.NODE_ENV === "development") {
+          console.log("Usando configurações padrão devido a erro ou dados vazios")
+        }
         setSettings(defaultSettings)
 
         if (result.error) {
           setError(`Aviso: ${result.error}. Usando configurações padrão.`)
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao carregar configurações:", error)
       setError("Erro ao carregar configurações. Usando valores padrão.")
       setSettings(defaultSettings)
@@ -132,7 +144,9 @@ export default function WhatsAppSettingsModal({
     setSuccess("")
 
     try {
-      console.log("Salvando configurações:", settings)
+      if (process.env.NODE_ENV === "development") {
+        console.log("Salvando configurações:", settings)
+      }
 
       const settingsPayload = {
         groupsIgnore: settings.groupsIgnore,
@@ -143,11 +157,15 @@ export default function WhatsAppSettingsModal({
         msgCall: settings.rejectCall ? settings.msgCall : "",
         syncFullHistory: settings.syncFullHistory,
       }
+      if (process.env.NODE_ENV === "development") {
+        console.log("Payload enviado:", settingsPayload)
+      }
 
-      console.log("Payload enviado:", settingsPayload)
-
-      const result = await saveInstanceSettings(connection.instance_name, settingsPayload)
-      console.log("Resultado do salvamento:", result)
+      const result = await saveInstanceSettings(connection.instance_name, settingsPayload) // Usando a função atualizada
+      if (process.env.NODE_ENV === "development") {
+        // Não logar 'result' inteiro se contiver dados sensíveis da API.
+        console.log("Resultado do salvamento (local):", result.success, result.error)
+      }
 
       if (result.success) {
         setSuccess("Configurações salvas com sucesso!")
@@ -164,7 +182,7 @@ export default function WhatsAppSettingsModal({
       } else {
         setError(result.error || "Erro ao salvar configurações")
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao salvar configurações:", error)
       setError("Erro ao salvar configurações")
     } finally {
@@ -177,7 +195,9 @@ export default function WhatsAppSettingsModal({
   }
 
   const handleRefresh = () => {
-    console.log("Botão refresh clicado")
+    if (process.env.NODE_ENV === "development") {
+      console.log("Botão refresh clicado")
+    }
     loadCurrentSettings()
   }
 
@@ -211,12 +231,12 @@ export default function WhatsAppSettingsModal({
         {loadingSettings ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin mr-2 text-muted-foreground" />
-            <span className="text-muted-foreground">Carregando configurações atuais da API...</span>
+            <span className="text-muted-foreground">Carregando configurações...</span>
           </div>
         ) : (
           <div className="space-y-6 bg-background text-foreground py-4">
             <div className="flex justify-between items-center">
-              <p className="text-sm text-muted-foreground">Configurações sincronizadas com a Evolution API</p>
+              <p className="text-sm text-muted-foreground">Configurações salvas localmente</p>
               <Button
                 variant="outline"
                 size="sm"

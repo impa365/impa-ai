@@ -8,7 +8,9 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
   error?: string
 }> {
   try {
-    console.log(`[API] Verificando status da instância: ${instanceName}`)
+    if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+      console.log(`[API SERVER LOG] Verificando status da instância: ${instanceName}`)
+    }
 
     const { data: integrationData } = await supabase
       .from("integrations")
@@ -25,7 +27,7 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
     }
 
     const apiUrl = `${integrationData.config.apiUrl}/instance/connectionState/${instanceName}`
-    console.log(`[API] Fazendo requisição para: ${apiUrl}`)
+    // Removido: console.log(`[API] Fazendo requisição para: ${apiUrl}`) - Para evitar logar a URL completa no cliente
 
     // Criar uma Promise com timeout manual em vez de usar AbortController
     const fetchWithTimeout = async (url: string, options: any, timeoutMs: number) => {
@@ -48,11 +50,15 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
         8000,
       ) // 8 segundos de timeout
 
-      console.log(`[API] Status da resposta: ${response.status}`)
+      if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+        console.log(`[API SERVER LOG] Status da resposta para ${instanceName}: ${response.status}`)
+      }
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error(`[API] Erro na resposta: ${errorText}`)
+        if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+          console.error(`[API SERVER LOG] Erro na resposta para ${instanceName}: ${errorText}`)
+        }
         return {
           success: false,
           error: `Erro ao verificar status: ${response.status}`,
@@ -60,7 +66,10 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
       }
 
       const data = await response.json()
-      console.log(`[API] Dados do connectionState para ${instanceName}:`, JSON.stringify(data, null, 2))
+      if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+        // Logar apenas se estiver em desenvolvimento e no servidor para evitar expor no cliente
+        console.log(`[API SERVER LOG] Dados do connectionState para ${instanceName}:`, JSON.stringify(data, null, 2))
+      }
 
       // Extrair o estado da instância conforme o formato da API
       // Formato esperado: { "instance": { "instanceName": "nome", "state": "estado" } }
@@ -85,15 +94,21 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
           break
       }
 
-      console.log(`[API] Estado da instância ${instanceName}: "${state}" -> mapeado para "${mappedStatus}"`)
+      if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+        console.log(
+          `[API SERVER LOG] Estado da instância ${instanceName}: "${state}" -> mapeado para "${mappedStatus}"`,
+        )
+      }
 
       return {
         success: true,
         status: mappedStatus,
         number: data.instance?.wuid || data.instance?.number || null,
       }
-    } catch (fetchError) {
-      console.error(`[API] Erro de fetch para ${instanceName}:`, fetchError)
+    } catch (fetchError: any) {
+      if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+        console.error(`[API SERVER LOG] Erro de fetch para ${instanceName}:`, fetchError)
+      }
 
       // Verificar se é erro de timeout ou outro tipo de erro
       if (fetchError.message === "Request timeout") {
@@ -109,7 +124,9 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
       }
     }
   } catch (error) {
-    console.error("Erro ao verificar status:", error)
+    if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+      console.error("[API SERVER LOG] Erro ao verificar status:", error)
+    }
     return {
       success: false,
       error: "Erro interno do servidor.",
@@ -119,7 +136,9 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
 
 export async function syncInstanceStatus(connectionId: string) {
   try {
-    console.log(`[SYNC] Iniciando sincronização para conexão: ${connectionId}`)
+    if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+      console.log(`[SYNC SERVER LOG] Iniciando sincronização para conexão: ${connectionId}`)
+    }
 
     // Buscar informações da conexão
     const { data: connection, error: connectionError } = await supabase
@@ -129,11 +148,12 @@ export async function syncInstanceStatus(connectionId: string) {
       .single()
 
     if (connectionError || !connection) {
-      console.error("Conexão não encontrada:", connectionError)
+      console.error("Conexão não encontrada:", connectionError) // Este log é no servidor, ok.
       return { success: false, error: "Conexão não encontrada" }
     }
-
-    console.log(`[SYNC] Conexão encontrada: ${connection.instance_name}`)
+    if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+      console.log(`[SYNC SERVER LOG] Conexão encontrada: ${connection.instance_name}`)
+    }
 
     // Verificar status real da instância via API
     const statusResult = await checkInstanceStatus(connection.instance_name)
@@ -153,11 +173,12 @@ export async function syncInstanceStatus(connectionId: string) {
         .select()
 
       if (updateError) {
-        console.error("Erro ao atualizar status:", updateError)
+        console.error("Erro ao atualizar status:", updateError) // Servidor
         return { success: false, error: updateError.message }
       }
-
-      console.log(`[SYNC] Status atualizado para: ${statusResult.status}`)
+      if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+        console.log(`[SYNC SERVER LOG] Status atualizado para: ${statusResult.status}`)
+      }
       return {
         success: true,
         updated: true,
@@ -176,22 +197,25 @@ export async function syncInstanceStatus(connectionId: string) {
         .eq("id", connectionId)
 
       if (updateError) {
-        console.error("Erro ao atualizar timestamp:", updateError)
+        console.error("Erro ao atualizar timestamp:", updateError) // Servidor
         return { success: false, error: updateError.message }
       }
-
-      console.log("[SYNC] Timestamp atualizado (status não verificado)")
+      if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+        console.log("[SYNC SERVER LOG] Timestamp atualizado (status não verificado)")
+      }
       return { success: true, updated: true, note: "Apenas timestamp atualizado" }
     }
   } catch (error) {
-    console.error("Erro na sincronização:", error)
+    console.error("Erro na sincronização:", error) // Servidor
     return { success: false, error: "Erro interno" }
   }
 }
 
 export async function disconnectInstance(instanceName: string) {
   try {
-    console.log(`[DISCONNECT] Desconectando instância: ${instanceName}`)
+    if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+      console.log(`[DISCONNECT SERVER LOG] Desconectando instância: ${instanceName}`)
+    }
 
     // Buscar configuração da Evolution API
     const { data: integrationData } = await supabase
@@ -212,12 +236,18 @@ export async function disconnectInstance(instanceName: string) {
         })
 
         if (response.ok) {
-          console.log(`[DISCONNECT] Instância ${instanceName} desconectada via API`)
+          if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+            console.log(`[DISCONNECT SERVER LOG] Instância ${instanceName} desconectada via API`)
+          }
         } else {
-          console.warn(`[DISCONNECT] Falha ao desconectar via API: ${response.status}`)
+          if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+            console.warn(`[DISCONNECT SERVER LOG] Falha ao desconectar via API: ${response.status}`)
+          }
         }
       } catch (apiError) {
-        console.warn("[DISCONNECT] Erro na API, continuando com atualização local:", apiError)
+        if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+          console.warn("[DISCONNECT SERVER LOG] Erro na API, continuando com atualização local:", apiError)
+        }
       }
     }
 
@@ -231,14 +261,15 @@ export async function disconnectInstance(instanceName: string) {
       .eq("instance_name", instanceName)
 
     if (error) {
-      console.error("Erro ao atualizar status de desconexão:", error)
+      console.error("Erro ao atualizar status de desconexão:", error) // Servidor
       return { success: false, error: "Erro ao desconectar" }
     }
-
-    console.log(`[DISCONNECT] Status atualizado para disconnected`)
+    if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
+      console.log(`[DISCONNECT SERVER LOG] Status atualizado para disconnected`)
+    }
     return { success: true }
   } catch (error) {
-    console.error("Erro ao desconectar instância:", error)
+    console.error("Erro ao desconectar instância:", error) // Servidor
     return { success: false, error: "Erro interno" }
   }
 }
@@ -269,6 +300,7 @@ export async function getInstanceSettings(instanceName: string) {
       rejectCall: false,
       msgCall: "Não posso atender no momento, envie uma mensagem.",
       syncFullHistory: false,
+      ...(connection.settings || {}), // Mescla com configurações salvas no banco, se houver
     }
 
     return {
@@ -277,7 +309,7 @@ export async function getInstanceSettings(instanceName: string) {
       error: null,
     }
   } catch (error) {
-    console.error("Erro ao buscar configurações:", error)
+    console.error("Erro ao buscar configurações:", error) // Servidor
     return {
       success: false,
       error: "Erro interno",
@@ -292,19 +324,19 @@ export async function saveInstanceSettings(instanceName: string, settings: any) 
     const { error } = await supabase
       .from("whatsapp_connections")
       .update({
-        settings: settings,
+        settings: settings, // Salva o objeto de configurações
         updated_at: new Date().toISOString(),
       })
       .eq("instance_name", instanceName)
 
     if (error) {
-      console.error("Erro ao salvar configurações:", error)
+      console.error("Erro ao salvar configurações:", error) // Servidor
       return { success: false, error: "Erro ao salvar configurações" }
     }
 
     return { success: true }
   } catch (error) {
-    console.error("Erro ao salvar configurações:", error)
+    console.error("Erro ao salvar configurações:", error) // Servidor
     return { success: false, error: "Erro interno" }
   }
 }
@@ -325,5 +357,7 @@ export async function applyWhatsAppSettings(
   success: boolean
   error?: string
 }> {
+  // Idealmente, esta função também chamaria a API da Evolution para aplicar as configurações lá.
+  // Por enquanto, está apenas salvando no nosso banco.
   return saveInstanceSettings(instanceName, settings)
 }
