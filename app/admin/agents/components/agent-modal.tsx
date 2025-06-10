@@ -20,6 +20,11 @@ export interface WhatsAppConnection {
   status: string
   user_id: string
   phone_number?: string | null
+  user_profiles?: {
+    id: string
+    full_name: string
+    email: string
+  }
 }
 
 export interface ConnectionFetchLog {
@@ -36,6 +41,8 @@ interface AgentModalProps {
   whatsappConnections: WhatsAppConnection[]
   isLoadingConnections: boolean
   fetchLogs: ConnectionFetchLog[]
+  selectedUserId?: string
+  isAdmin?: boolean
 }
 
 export function AgentModal({
@@ -46,6 +53,8 @@ export function AgentModal({
   whatsappConnections,
   isLoadingConnections,
   fetchLogs,
+  selectedUserId,
+  isAdmin = false,
 }: AgentModalProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [formData, setFormData] = useState({
@@ -54,6 +63,7 @@ export function AgentModal({
     description: agent?.description || "",
     status: agent?.status || "active",
     whatsapp_connection_id: agent?.whatsapp_connection_id || "",
+    user_id: selectedUserId || agent?.user_id || "",
     training_prompt: agent?.training_prompt || "Você é um assistente virtual. Seja sempre educado e prestativo.",
   })
 
@@ -64,22 +74,29 @@ export function AgentModal({
       description: agent?.description || "",
       status: agent?.status || "active",
       whatsapp_connection_id: agent?.whatsapp_connection_id || "",
+      user_id: selectedUserId || agent?.user_id || "",
       training_prompt: agent?.training_prompt || "Você é um assistente virtual. Seja sempre educado e prestativo.",
     })
-  }, [agent, open])
+  }, [agent, open, selectedUserId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validação adicional: verificar se há conexão selecionada
+    // Validações
     if (!formData.whatsapp_connection_id) {
       alert("Por favor, selecione uma conexão WhatsApp antes de criar o agente.")
+      return
+    }
+
+    if (isAdmin && !formData.user_id) {
+      alert("Como administrador, você deve especificar para qual usuário está criando o agente.")
       return
     }
 
     setIsSaving(true)
     try {
       console.log("💾 Salvando agente:", formData)
+      // Aqui você implementaria a chamada real para salvar o agente
       await new Promise((resolve) => setTimeout(resolve, 1500))
       onSuccess()
       onOpenChange(false)
@@ -96,6 +113,22 @@ export function AgentModal({
     return "Selecione uma conexão"
   }
 
+  const getConnectionStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case "connected":
+      case "authenticated":
+        return "bg-green-500 text-white"
+      case "connecting":
+        return "bg-yellow-500 text-white"
+      case "disconnected":
+        return "bg-gray-500 text-white"
+      case "error":
+        return "bg-red-500 text-white"
+      default:
+        return "bg-gray-400 text-white"
+    }
+  }
+
   const LogIcon = ({ type }: { type: ConnectionFetchLog["type"] }) => {
     if (type === "error") return <AlertTriangle className="h-4 w-4 text-red-500 mr-2 flex-shrink-0" />
     if (type === "success") return <CheckCircle className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
@@ -109,13 +142,19 @@ export function AgentModal({
     formData.whatsapp_connection_id &&
     formData.name.trim() &&
     formData.training_prompt.trim() &&
-    whatsappConnections.length > 0
+    whatsappConnections.length > 0 &&
+    (!isAdmin || formData.user_id)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[95vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{agent ? "Editar Agente IA" : "Criar Novo Agente IA"}</DialogTitle>
+          <DialogTitle>
+            {agent ? "Editar Agente IA" : "Criar Novo Agente IA"}
+            {isAdmin && selectedUserId && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">(para usuário selecionado)</span>
+            )}
+          </DialogTitle>
         </DialogHeader>
 
         <ScrollArea className="flex-grow pr-6 -mr-6">
@@ -125,7 +164,8 @@ export function AgentModal({
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>Impossível criar agente:</strong> Nenhuma conexão WhatsApp disponível.
+                  <strong>Impossível criar agente:</strong> Nenhuma conexão WhatsApp disponível
+                  {isAdmin ? " para o usuário selecionado" : ""}.
                   <br />
                   <a
                     href="/admin/whatsapp"
@@ -149,6 +189,7 @@ export function AgentModal({
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
                   disabled={whatsappConnections.length === 0}
+                  placeholder="Ex: Assistente de Vendas, Bot Suporte..."
                 />
               </div>
               <div>
@@ -179,6 +220,7 @@ export function AgentModal({
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
                 disabled={whatsappConnections.length === 0}
+                placeholder="Descreva qual é o objetivo principal desta IA..."
               />
             </div>
 
@@ -204,22 +246,12 @@ export function AgentModal({
                               <span className="font-medium">
                                 {connection.connection_name || connection.instance_name}
                               </span>
-                              <span className="text-xs text-gray-500">ID: {connection.id.slice(0, 8)}...</span>
+                              <span className="text-xs text-gray-500">
+                                ID: {connection.id.slice(0, 8)}...
+                                {connection.phone_number && ` • ${connection.phone_number}`}
+                              </span>
                             </div>
-                            <Badge
-                              variant={
-                                connection.status === "connected" || connection.status === "Authenticated"
-                                  ? "default"
-                                  : "outline"
-                              }
-                              className={
-                                connection.status === "connected" || connection.status === "Authenticated"
-                                  ? "bg-green-500 text-white"
-                                  : ""
-                              }
-                            >
-                              {connection.status}
-                            </Badge>
+                            <Badge className={getConnectionStatusColor(connection.status)}>{connection.status}</Badge>
                           </div>
                         </SelectItem>
                       ))
@@ -241,6 +273,11 @@ export function AgentModal({
                   ⚠️ É necessário ter pelo menos uma conexão WhatsApp configurada para criar agentes.
                 </p>
               )}
+              {whatsappConnections.length > 0 && (
+                <p className="text-xs text-green-600 mt-1">
+                  ✅ {whatsappConnections.length} conexão(ões) disponível(eis) - incluindo todas com status válido
+                </p>
+              )}
             </div>
 
             <div>
@@ -252,6 +289,7 @@ export function AgentModal({
                 rows={5}
                 required
                 disabled={whatsappConnections.length === 0}
+                placeholder="Ex: Você é uma assistente de vendas especializada em produtos digitais. Seja sempre educada, faça perguntas para entender as necessidades do cliente..."
               />
             </div>
 

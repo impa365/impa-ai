@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import type React from "react" // type import for React
 
 import { useState, useEffect } from "react"
 import {
@@ -21,11 +21,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Sparkles, Eye, EyeOff, Settings, MessageSquare, Volume2, Database, Brain } from "lucide-react"
+import { Bot, Sparkles, Eye, EyeOff, Settings, MessageSquare, Volume2, Database, Brain, Users } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
-import { fetchWhatsAppConnections } from "@/lib/whatsapp-connections"
+import { fetchWhatsAppConnections, fetchUsers } from "@/lib/whatsapp-connections" // fetchUsers is new
 import { createEvolutionBot, updateEvolutionBot, fetchEvolutionBot } from "@/lib/evolution-api"
 
 // Estilos customizados para os switches
@@ -75,6 +75,14 @@ export interface Agent {
   is_default?: boolean | null
   created_at?: string
   updated_at?: string
+}
+
+interface User {
+  id: string
+  full_name: string
+  email: string
+  status: string
+  role?: string // Added role based on fetchUsers select
 }
 
 const initialFormData: Agent = {
@@ -138,6 +146,9 @@ export function AgentModal({
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [whatsappConnections, setWhatsappConnections] = useState<any[]>([])
+  const [users, setUsers] = useState<User[]>([]) // New state for users list
+  const [selectedUserId, setSelectedUserId] = useState<string>("") // New state for selected user by admin
+  const [loadingConnections, setLoadingConnections] = useState(false) // New state for loading connections
   const [n8nIntegrationConfig, setN8nIntegrationConfig] = useState<any>(null)
   const [showVoiceApiKey, setShowVoiceApiKey] = useState(false)
   const [showCalendarApiKey, setShowCalendarApiKey] = useState(false)
@@ -145,15 +156,60 @@ export function AgentModal({
   const [showOrimonApiKey, setShowOrimonApiKey] = useState(false)
   const [evolutionSyncStatus, setEvolutionSyncStatus] = useState<string>("")
 
+  const isAdmin = currentUser?.role === "admin"
+
   useEffect(() => {
     const user = getCurrentUser()
     setCurrentUser(user)
     if (user) {
-      setFormData((prev) => ({ ...prev, user_id: user.id }))
-      loadWhatsAppConnections(user.id)
+      if (user.role === "admin") {
+        // Admin: carregar lista de usuários
+        loadUsers()
+        // Se editando, definir o usuário do agente como selecionado
+        if (agent?.user_id) {
+          setSelectedUserId(agent.user_id)
+          // formData user_id will be set in the other useEffect dependent on `agent`
+        }
+      } else {
+        // Usuário comum: definir como usuário atual e carregar suas conexões
+        setSelectedUserId(user.id)
+        // formData user_id will be set in the other useEffect dependent on `selectedUserId`
+        loadWhatsAppConnections(user.id, false) // Pass isAdmin explicitly
+      }
       loadN8nConfig()
     }
-  }, [])
+  }, [agent, open]) // Rerun if agent or open status changes
+
+  // Carregar conexões quando o usuário selecionado mudar (para admins ou non-admins on initial load)
+  useEffect(() => {
+    if (selectedUserId) {
+      // If admin, pass true for isAdmin. If not admin, pass false.
+      // The loadWhatsAppConnections function itself will also use the isAdmin flag.
+      loadWhatsAppConnections(selectedUserId, isAdmin)
+    } else {
+      setWhatsappConnections([]) // Clear connections if no user is selected
+    }
+  }, [selectedUserId, isAdmin])
+
+  const loadUsers = async () => {
+    try {
+      // The API route `/api/users` should be called here if it's intended for fetching users for the dropdown.
+      // The current `fetchUsers()` directly calls supabase.
+      // For consistency, you might want `fetchUsers` to call your API endpoint `/api/users`
+      // which would handle the admin role check.
+      // However, the provided `fetchUsers` from `lib/whatsapp-connections.ts` directly queries Supabase.
+      // It doesn't inherently check for admin role before fetching, relying on the caller context.
+      const usersData = await fetchUsers()
+      setUsers(usersData)
+    } catch (error) {
+      console.error("Erro ao carregar usuários:", error)
+      toast({
+        title: "Erro",
+        description: "Falha ao carregar lista de usuários",
+        variant: "destructive",
+      })
+    }
+  }
 
   const loadN8nConfig = async () => {
     const { data, error } = await supabase.from("integrations").select("config").eq("type", "n8n").single()
@@ -165,9 +221,35 @@ export function AgentModal({
     }
   }
 
-  const loadWhatsAppConnections = async (userId: string) => {
-    const connections = await fetchWhatsAppConnections(userId)
-    setWhatsappConnections(connections)
+  const loadWhatsAppConnections = async (userId: string, userIsAdmin: boolean) => {
+    if (!userId) {
+      setWhatsappConnections([])
+      return
+    }
+
+    setLoadingConnections(true)
+    try {
+      // The `fetchWhatsAppConnections` from `lib/whatsapp-connections.ts` now takes `isAdmin`
+      const connections = await fetchWhatsAppConnections(userId, userIsAdmin)
+      console.log("Conexões WhatsApp carregadas:", connections)
+      setWhatsappConnections(connections)
+    } catch (error) {
+      console.error("Erro ao carregar conexões:", error)
+      toast({
+        title: "Erro",
+        description: "Falha ao carregar conexões WhatsApp",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingConnections(false)
+    }
+  }
+
+  const handleUserSelect = (userId: string) => {
+    setSelectedUserId(userId)
+    // user_id in formData will be updated by the useEffect watching `selectedUserId`
+    setFormData((prev) => ({ ...prev, user_id: userId, whatsapp_connection_id: null })) // Also reset whatsapp_connection_id
+    setWhatsappConnections([]) // Clear previous user's connections immediately
   }
 
   // Sincronizar com Evolution API quando abrir o modal para edição
@@ -182,8 +264,6 @@ export function AgentModal({
 
     try {
       setEvolutionSyncStatus("Sincronizando com Evolution API...")
-
-      // Buscar conexão WhatsApp para obter instance_name
       const { data: connection } = await supabase
         .from("whatsapp_connections")
         .select("instance_name")
@@ -192,33 +272,39 @@ export function AgentModal({
 
       if (connection?.instance_name) {
         const evolutionBot = await fetchEvolutionBot(connection.instance_name, agent.evolution_bot_id)
-
         if (evolutionBot) {
           setEvolutionSyncStatus("Sincronizado com sucesso!")
-          setTimeout(() => setEvolutionSyncStatus(""), 3000)
         } else {
           setEvolutionSyncStatus("Erro na sincronização")
-          setTimeout(() => setEvolutionSyncStatus(""), 3000)
         }
+      } else {
+        setEvolutionSyncStatus("Conexão WhatsApp não encontrada para sincronia.")
       }
     } catch (error) {
       console.error("Erro ao sincronizar com Evolution API:", error)
       setEvolutionSyncStatus("Erro na sincronização")
+    } finally {
       setTimeout(() => setEvolutionSyncStatus(""), 3000)
     }
   }
 
   useEffect(() => {
     if (agent) {
-      setFormData({ ...initialFormData, ...agent })
+      // If editing, populate form with agent data.
+      // Ensure selectedUserId is also set if admin is editing.
+      setFormData({ ...initialFormData, ...agent, user_id: agent.user_id || selectedUserId || currentUser?.id || "" })
+      if (isAdmin && agent.user_id) {
+        setSelectedUserId(agent.user_id)
+      }
     } else {
-      setFormData({ ...initialFormData, user_id: currentUser?.id || "" })
+      // If creating, use initialFormData and ensure user_id is set from selectedUserId (admin) or currentUser.id (non-admin)
+      setFormData({ ...initialFormData, user_id: selectedUserId || currentUser?.id || "" })
     }
-  }, [agent, currentUser])
+  }, [agent, currentUser, selectedUserId, isAdmin])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target
-    const checked = (e.target as HTMLInputElement).checked
+    const checked = type === "checkbox" ? (e.target as HTMLInputElement).checked : undefined
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -236,7 +322,7 @@ export function AgentModal({
   const handleConfigChange = (key: string, value: any) => {
     setFormData((prev) => ({
       ...prev,
-      model_config: { ...prev.model_config, [key]: value },
+      model_config: { ...(prev.model_config || {}), [key]: value },
     }))
   }
 
@@ -251,6 +337,12 @@ export function AgentModal({
 
     if (!formData.name.trim()) {
       setError("O nome da IA é obrigatório.")
+      setLoading(false)
+      return
+    }
+    if (!formData.user_id) {
+      // This is now critical
+      setError(isAdmin ? "É necessário selecionar um usuário." : "Erro: ID de usuário não encontrado.")
       setLoading(false)
       return
     }
@@ -272,69 +364,94 @@ export function AgentModal({
 
     try {
       let evolutionBotId = formData.evolution_bot_id
-      let botId = isEditing && agent?.id ? agent.id : null
+      let botIdToProcess = isEditing && agent?.id ? agent.id : null
 
-      // Se estamos criando um novo agente, precisamos primeiro criar o registro no banco para obter o ID
+      const agentPayload = {
+        name: formData.name,
+        type: formData.type,
+        description: formData.description,
+        status: formData.status,
+        model_config: formData.model_config,
+        prompt_template: formData.prompt_template,
+        user_id: formData.user_id,
+        whatsapp_connection_id: formData.whatsapp_connection_id,
+        evolution_bot_id: formData.evolution_bot_id, // Will be updated later if new
+        identity_description: formData.identity_description,
+        training_prompt: formData.training_prompt,
+        voice_tone: formData.voice_tone,
+        main_function: formData.main_function,
+        temperature: formData.temperature,
+        transcribe_audio: formData.transcribe_audio,
+        understand_images: formData.understand_images,
+        voice_response_enabled: formData.voice_response_enabled,
+        voice_provider: formData.voice_provider,
+        voice_api_key: formData.voice_api_key,
+        calendar_integration: formData.calendar_integration,
+        calendar_api_key: formData.calendar_api_key,
+        chatnode_integration: formData.chatnode_integration,
+        chatnode_api_key: formData.chatnode_api_key,
+        chatnode_bot_id: formData.chatnode_bot_id,
+        orimon_integration: formData.orimon_integration,
+        orimon_api_key: formData.orimon_api_key,
+        orimon_bot_id: formData.orimon_bot_id,
+        is_default: formData.is_default,
+      }
+
       if (!isEditing) {
+        console.log("📝 Criando novo agente no banco de dados...")
         const { data: newAgent, error: insertError } = await supabase
           .from("ai_agents")
-          .insert({
-            name: formData.name,
-            type: formData.type,
-            description: formData.description,
-            status: formData.status,
-            model_config: formData.model_config,
-            prompt_template: formData.prompt_template,
-            user_id: currentUser.id,
-            whatsapp_connection_id: formData.whatsapp_connection_id,
-            identity_description: formData.identity_description,
-            training_prompt: formData.training_prompt,
-            voice_tone: formData.voice_tone,
-            main_function: formData.main_function,
-            temperature: formData.temperature,
-            transcribe_audio: formData.transcribe_audio,
-            understand_images: formData.understand_images,
-            voice_response_enabled: formData.voice_response_enabled,
-            voice_provider: formData.voice_provider,
-            voice_api_key: formData.voice_api_key,
-            calendar_integration: formData.calendar_integration,
-            calendar_api_key: formData.calendar_api_key,
-            // Novas integrações de vector store
-            chatnode_integration: formData.chatnode_integration,
-            chatnode_api_key: formData.chatnode_api_key,
-            chatnode_bot_id: formData.chatnode_bot_id,
-            orimon_integration: formData.orimon_integration,
-            orimon_api_key: formData.orimon_api_key,
-            orimon_bot_id: formData.orimon_bot_id,
-            is_default: formData.is_default,
-          })
+          .insert(agentPayload)
           .select()
           .single()
 
-        if (insertError) throw insertError
-        botId = newAgent.id
+        if (insertError) {
+          console.error("❌ Erro ao inserir agente no banco:", insertError)
+          throw insertError
+        }
+
+        console.log("✅ Agente criado no banco com sucesso:", newAgent)
+        botIdToProcess = newAgent.id
+      } else {
+        console.log("📝 Editando agente existente:", agent?.id)
       }
 
-      // Buscar instance_name da conexão WhatsApp
-      const { data: connection } = await supabase
+      // Fetch instance_name for Evolution API
+      console.log("🔍 Buscando instance_name da conexão WhatsApp:", formData.whatsapp_connection_id)
+      const { data: connection, error: connectionError } = await supabase
         .from("whatsapp_connections")
         .select("instance_name")
         .eq("id", formData.whatsapp_connection_id)
         .single()
 
-      if (!connection?.instance_name) {
-        throw new Error("Instância WhatsApp não encontrada")
+      if (connectionError) {
+        console.error("❌ Erro ao buscar conexão WhatsApp:", connectionError)
+        throw new Error(`Erro ao buscar conexão WhatsApp: ${connectionError.message}`)
       }
 
-      // Sincronizar com Evolution API
-      if (n8nIntegrationConfig?.flowUrl && botId) {
-        // Usar o ID real do bot para o token
-        const agentSpecificToken = `AGENT_${botId}`
+      if (!connection?.instance_name) {
+        console.error("❌ Instância WhatsApp não encontrada:", connection)
+        throw new Error("Instância WhatsApp não encontrada para sincronização com Evolution API.")
+      }
+
+      console.log("✅ Instance_name encontrado:", connection.instance_name)
+
+      // Sync with Evolution API
+      if (n8nIntegrationConfig?.flowUrl && botIdToProcess) {
+        console.log("🔄 Preparando sincronização com Evolution API...")
+        console.log("📋 Configuração n8n:", n8nIntegrationConfig)
+
+        const agentSpecificToken = `AGENT_${botIdToProcess}`
+        console.log("🔑 Token específico do agente:", agentSpecificToken)
+
+        // Construir URL do webhook com o token do agente
+        const webhookUrl = `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`
+        console.log("🌐 URL do webhook:", webhookUrl)
 
         const evolutionBotData = {
           enabled: formData.status === "active",
-          description: formData.name, // Nome da IA vai para description na Evolution API
-          apiUrl: `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=${agentSpecificToken}`,
+          description: formData.name,
+          apiUrl: webhookUrl,
           apiKey: n8nIntegrationConfig.apiKey || "",
           triggerType: "keyword",
           triggerOperator: "equals",
@@ -342,8 +459,7 @@ export function AgentModal({
           expire: 0,
           keywordFinish: formData.model_config?.keyword_finish || "#sair",
           delayMessage: formData.model_config?.delay_message || 1000,
-          unknownMessage:
-            formData.model_config?.unknown_message || "Desculpe, não entendi. Digite a palavra-chave para começar.",
+          unknownMessage: formData.model_config?.unknown_message || "Desculpe, não entendi...",
           listeningFromMe: formData.model_config?.listening_from_me || false,
           stopBotFromMe: formData.model_config?.stop_bot_from_me || true,
           keepOpen: formData.model_config?.keep_open || false,
@@ -353,69 +469,83 @@ export function AgentModal({
           timePerChar: formData.model_config?.time_per_char || 100,
         }
 
+        console.log("📋 Dados para Evolution API:", evolutionBotData)
+
         if (formData.evolution_bot_id) {
+          // If agent already has an evolution bot id
+          console.log("🔄 Atualizando bot existente na Evolution API:", formData.evolution_bot_id)
           const updateResult = await updateEvolutionBot(
             connection.instance_name,
             formData.evolution_bot_id,
             evolutionBotData,
           )
-          if (!updateResult) throw new Error("Falha ao atualizar bot na Evolution API")
+
+          if (!updateResult) {
+            console.error("❌ Falha ao atualizar bot na Evolution API")
+            throw new Error("Falha ao atualizar bot na Evolution API")
+          }
+
+          console.log("✅ Bot atualizado com sucesso na Evolution API")
+          evolutionBotId = formData.evolution_bot_id // keep existing id
         } else {
+          // Create new bot in Evolution API
+          console.log("🆕 Criando novo bot na Evolution API...")
           const createResult = await createEvolutionBot(connection.instance_name, evolutionBotData)
-          if (!createResult.success || !createResult.botId)
+
+          if (!createResult.success || !createResult.botId) {
+            console.error("❌ Falha ao criar bot na Evolution API:", createResult.error)
             throw new Error(createResult.error || "Falha ao criar bot na Evolution API")
-          evolutionBotId = createResult.botId
+          }
+
+          console.log("✅ Bot criado com sucesso na Evolution API. ID:", createResult.botId)
+          evolutionBotId = createResult.botId // Store new evolution bot id
         }
+      } else {
+        console.warn("⚠️ Não foi possível sincronizar com Evolution API:")
+        console.warn("- n8nIntegrationConfig?.flowUrl:", n8nIntegrationConfig?.flowUrl)
+        console.warn("- botIdToProcess:", botIdToProcess)
       }
 
-      // Atualizar o registro com o ID do bot da Evolution API
-      if (botId) {
-        const finalDbData = {
-          name: formData.name,
-          type: formData.type,
-          description: formData.description,
-          status: formData.status,
-          model_config: formData.model_config,
-          prompt_template: formData.prompt_template,
-          user_id: currentUser.id,
-          whatsapp_connection_id: formData.whatsapp_connection_id,
-          evolution_bot_id: evolutionBotId,
-          identity_description: formData.identity_description,
-          training_prompt: formData.training_prompt,
-          voice_tone: formData.voice_tone,
-          main_function: formData.main_function,
-          temperature: formData.temperature,
-          transcribe_audio: formData.transcribe_audio,
-          understand_images: formData.understand_images,
-          voice_response_enabled: formData.voice_response_enabled,
-          voice_provider: formData.voice_provider,
-          voice_api_key: formData.voice_api_key,
-          calendar_integration: formData.calendar_integration,
-          calendar_api_key: formData.calendar_api_key,
-          // Novas integrações de vector store
-          chatnode_integration: formData.chatnode_integration,
-          chatnode_api_key: formData.chatnode_api_key,
-          chatnode_bot_id: formData.chatnode_bot_id,
-          orimon_integration: formData.orimon_integration,
-          orimon_api_key: formData.orimon_api_key,
-          orimon_bot_id: formData.orimon_bot_id,
-          is_default: formData.is_default,
+      // Update ai_agents table with potentially new evolution_bot_id (if created) or other changes
+      if (botIdToProcess) {
+        console.log("📝 Atualizando agente com evolution_bot_id:", evolutionBotId)
+        const finalAgentPayload = {
+          ...agentPayload,
+          evolution_bot_id: evolutionBotId, // ensure this is the latest ID
         }
 
-        const { error: updateError } = await supabase.from("ai_agents").update(finalDbData).eq("id", botId)
-        if (updateError) throw updateError
+        const { error: updateError } = await supabase
+          .from("ai_agents")
+          .update(finalAgentPayload)
+          .eq("id", botIdToProcess)
+
+        if (updateError) {
+          console.error("❌ Erro ao atualizar agente com evolution_bot_id:", updateError)
+          throw updateError
+        }
+
+        console.log("✅ Agente atualizado com evolution_bot_id com sucesso")
       }
 
       toast({
         title: "Sucesso",
         description: isEditing ? "Agente atualizado com sucesso!" : "Agente criado com sucesso!",
       })
-      onSave()
-      onOpenChange(false)
+
+      if (typeof onSave === "function") {
+        onSave()
+      } else {
+        console.warn("⚠️ Função onSave não definida ou não é uma função")
+        onOpenChange(false)
+      }
     } catch (err: any) {
-      console.error("Error saving agent:", err)
+      console.error("❌ Erro detalhado ao salvar agente:", err)
       setError(err.message || "Ocorreu um erro ao salvar o agente.")
-      toast({ title: "Erro", description: err.message || "Falha ao salvar o agente.", variant: "destructive" })
+      toast({
+        title: "Erro",
+        description: err.message || "Falha ao salvar o agente.",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -435,7 +565,11 @@ export function AgentModal({
               irá se comportar e responder aos usuários.
             </DialogDescription>
             {evolutionSyncStatus && (
-              <div className="text-sm text-green-600 bg-green-50 p-2 rounded mt-2">{evolutionSyncStatus}</div>
+              <div
+                className={`text-sm p-2 rounded mt-2 ${evolutionSyncStatus.includes("Erro") ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}
+              >
+                {evolutionSyncStatus}
+              </div>
             )}
           </DialogHeader>
 
@@ -445,6 +579,40 @@ export function AgentModal({
                 <Sparkles className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
+            )}
+
+            {/* Seleção de Usuário (apenas para admins) */}
+            {isAdmin && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
+                    <Users className="w-5 h-5 mr-2" />
+                    Seleção de Usuário (Administrador)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="user_select" className="text-gray-900 dark:text-gray-100">
+                      Selecionar Usuário *
+                    </Label>
+                    <Select value={selectedUserId} onValueChange={handleUserSelect}>
+                      <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                        <SelectValue placeholder="Escolha para qual usuário criar/editar este agente" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                        {users.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.full_name} ({user.email})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                      Como administrador, você deve primeiro escolher para qual usuário este agente pertence.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             {/* Informações Básicas da IA */}
@@ -483,12 +651,12 @@ export function AgentModal({
                     name="description"
                     value={formData.description || ""}
                     onChange={handleInputChange}
-                    placeholder="Ex: IA especializada em vendas de produtos digitais, focada em qualificar leads e agendar reuniões"
+                    placeholder="Ex: IA especializada em vendas de produtos digitais..."
                     rows={3}
                     className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Descreva qual é o objetivo principal desta IA (vendas, suporte, agendamento, etc.)
+                    Descreva qual é o objetivo principal desta IA.
                   </p>
                 </div>
 
@@ -546,20 +714,45 @@ export function AgentModal({
                     name="whatsapp_connection_id"
                     value={formData.whatsapp_connection_id || ""}
                     onValueChange={(value) => handleSelectChange("whatsapp_connection_id", value)}
+                    disabled={
+                      (!selectedUserId && isAdmin) ||
+                      loadingConnections ||
+                      (!whatsappConnections.length && !!selectedUserId)
+                    }
                   >
                     <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                      <SelectValue placeholder="Selecione qual número WhatsApp esta IA irá usar" />
+                      <SelectValue
+                        placeholder={
+                          isAdmin && !selectedUserId
+                            ? "Primeiro selecione um usuário"
+                            : loadingConnections
+                              ? "Carregando conexões..."
+                              : "Selecione qual número WhatsApp esta IA irá usar"
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                      {whatsappConnections.map((conn) => (
-                        <SelectItem key={conn.id} value={conn.id}>
-                          {conn.connection_name} ({conn.phone_number || "Número não disponível"})
+                      {whatsappConnections.length > 0 ? (
+                        whatsappConnections.map((conn) => (
+                          <SelectItem key={conn.id} value={conn.id}>
+                            {conn.connection_name} ({conn.phone_number || "Número não disponível"})
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="no-connections" disabled>
+                          {selectedUserId
+                            ? "Nenhuma conexão WhatsApp encontrada para este usuário"
+                            : isAdmin
+                              ? "Selecione um usuário para ver as conexões"
+                              : "Nenhuma conexão WhatsApp encontrada"}
                         </SelectItem>
-                      ))}
+                      )}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Escolha qual número de WhatsApp esta IA irá utilizar para conversar
+                    {isAdmin
+                      ? "Conexões WhatsApp disponíveis para o usuário selecionado"
+                      : "Escolha qual número de WhatsApp esta IA irá utilizar para conversar"}
                   </p>
                 </div>
               </CardContent>
@@ -583,12 +776,12 @@ export function AgentModal({
                     name="identity_description"
                     value={formData.identity_description || ""}
                     onChange={handleInputChange}
-                    placeholder="Ex: Olá! Eu sou a Luna, sua assistente virtual especializada em vendas. Estou aqui para te ajudar a encontrar a melhor solução para suas necessidades."
+                    placeholder="Ex: Olá! Eu sou a Luna, sua assistente virtual..."
                     rows={3}
                     className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Como a IA irá se apresentar quando alguém iniciar uma conversa
+                    Como a IA irá se apresentar ao iniciar uma conversa.
                   </p>
                 </div>
 
@@ -601,13 +794,13 @@ export function AgentModal({
                     name="training_prompt"
                     value={formData.training_prompt || ""}
                     onChange={handleInputChange}
-                    placeholder="Ex: Você é uma assistente de vendas especializada em produtos digitais. Seja sempre educada, faça perguntas para entender as necessidades do cliente, e conduza a conversa para agendar uma reunião. Nunca invente informações que não possui."
+                    placeholder="Ex: Você é uma assistente de vendas..."
                     rows={6}
                     required
                     className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Instruções detalhadas sobre como a IA deve se comportar, responder e agir durante as conversas
+                    Instruções detalhadas sobre como a IA deve se comportar.
                   </p>
                 </div>
 
@@ -621,22 +814,23 @@ export function AgentModal({
                     min={0}
                     max={2}
                     step={0.1}
+                    defaultValue={[0.7]}
                     value={[formData.temperature || 0.7]}
                     onValueChange={(value) => handleSliderChange("temperature", value)}
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    0 = Respostas mais previsíveis e consistentes | 2 = Respostas mais criativas e variadas
+                    0 = Mais previsível | 2 = Mais criativo
                   </p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Configurações de Ativação */}
+            {/* Configurações de Ativação e Controle */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
                   <Settings className="w-5 h-5 mr-2" />
-                  Configurações de Ativação e Controle
+                  Configurações de Ativação e Controle (Evolution API)
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -652,7 +846,7 @@ export function AgentModal({
                     className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Palavra que o usuário deve enviar para iniciar a conversa com a IA
+                    Palavra para iniciar a conversa com a IA.
                   </p>
                 </div>
 
@@ -668,7 +862,7 @@ export function AgentModal({
                     className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Palavra que o usuário pode enviar para encerrar a conversa com a IA
+                    Palavra para o usuário encerrar a conversa.
                   </p>
                 </div>
 
@@ -685,7 +879,7 @@ export function AgentModal({
                     className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Mensagem enviada quando alguém escreve algo que não ativa a IA
+                    Mensagem quando a IA não é ativada.
                   </p>
                 </div>
 
@@ -703,7 +897,7 @@ export function AgentModal({
                       className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
                     <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                      Tempo de espera entre mensagens (em milissegundos)
+                      Tempo de espera entre mensagens.
                     </p>
                   </div>
 
@@ -720,7 +914,7 @@ export function AgentModal({
                       className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
                     <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                      Tempo para aguardar antes de processar mensagem
+                      Tempo para aguardar antes de processar.
                     </p>
                   </div>
                 </div>
@@ -729,10 +923,10 @@ export function AgentModal({
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="listening_from_me" className="text-gray-900 dark:text-gray-100">
-                        Ouvir Mensagens Minhas
+                        Ouvir Minhas Mensagens
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        A IA responde quando EU envio mensagens
+                        IA responde quando EU envio.
                       </p>
                     </div>
                     <Switch
@@ -742,14 +936,13 @@ export function AgentModal({
                       className={switchStyles}
                     />
                   </div>
-
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="stop_bot_from_me" className="text-gray-900 dark:text-gray-100">
                         Parar Bot por Mim
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        Eu posso parar a IA enviando mensagens
+                        Eu posso parar a IA.
                       </p>
                     </div>
                     <Switch
@@ -759,14 +952,13 @@ export function AgentModal({
                       className={switchStyles}
                     />
                   </div>
-
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="keep_open" className="text-gray-900 dark:text-gray-100">
                         Manter Conversa Aberta
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        A IA continua respondendo sem precisar reativar
+                        IA continua sem reativar.
                       </p>
                     </div>
                     <Switch
@@ -776,14 +968,13 @@ export function AgentModal({
                       className={switchStyles}
                     />
                   </div>
-
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="split_messages" className="text-gray-900 dark:text-gray-100">
                         Dividir Mensagens Longas
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        Quebra respostas longas em várias mensagens
+                        Quebra respostas longas.
                       </p>
                     </div>
                     <Switch
@@ -809,7 +1000,7 @@ export function AgentModal({
                       className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
                     <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                      Tempo de espera por caractere ao dividir mensagens
+                      Tempo por caractere ao dividir mensagens.
                     </p>
                   </div>
                 )}
@@ -832,28 +1023,29 @@ export function AgentModal({
                         Transcrever Áudios
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        Converte áudios recebidos em texto
+                        Converte áudios em texto.
                       </p>
                     </div>
                     <Switch
                       id="transcribe_audio"
+                      name="transcribe_audio"
                       checked={formData.transcribe_audio || false}
                       onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, transcribe_audio: checked }))}
                       className={switchStyles}
                     />
                   </div>
-
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="understand_images" className="text-gray-900 dark:text-gray-100">
                         Analisar Imagens
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        Entende e descreve imagens enviadas
+                        Entende imagens enviadas.
                       </p>
                     </div>
                     <Switch
                       id="understand_images"
+                      name="understand_images"
                       checked={formData.understand_images || false}
                       onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, understand_images: checked }))}
                       className={switchStyles}
@@ -869,11 +1061,12 @@ export function AgentModal({
                         Resposta por Voz
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        Envia respostas em áudio além do texto
+                        Envia respostas em áudio.
                       </p>
                     </div>
                     <Switch
                       id="voice_response_enabled"
+                      name="voice_response_enabled"
                       checked={formData.voice_response_enabled || false}
                       onCheckedChange={(checked) =>
                         setFormData((prev) => ({ ...prev, voice_response_enabled: checked }))
@@ -881,7 +1074,6 @@ export function AgentModal({
                       className={switchStyles}
                     />
                   </div>
-
                   {formData.voice_response_enabled && (
                     <div className="space-y-3 pl-4 border-l-2 border-blue-200 bg-blue-50 p-4 rounded">
                       <div>
@@ -904,7 +1096,7 @@ export function AgentModal({
                       </div>
                       <div>
                         <Label htmlFor="voice_api_key" className="text-gray-900 dark:text-gray-100">
-                          Chave da API do Provedor de Voz
+                          Chave API Provedor de Voz
                         </Label>
                         <div className="relative">
                           <Input
@@ -913,7 +1105,7 @@ export function AgentModal({
                             type={showVoiceApiKey ? "text" : "password"}
                             value={formData.voice_api_key || ""}
                             onChange={handleInputChange}
-                            placeholder="Sua chave da API do provedor de voz"
+                            placeholder="Chave API do provedor de voz"
                             className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                           />
                           <Button
@@ -935,11 +1127,11 @@ export function AgentModal({
                           id="voice_id"
                           value={formData.model_config?.voice_id || ""}
                           onChange={(e) => handleConfigChange("voice_id", e.target.value)}
-                          placeholder="ID específico da voz no provedor (ex: pMsXgVXv3BLzUgSXRplE)"
+                          placeholder="ID da voz no provedor"
                           className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                         />
                         <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                          Encontre este ID na plataforma do seu provedor de voz
+                          Encontre na plataforma do provedor.
                         </p>
                       </div>
                     </div>
@@ -954,22 +1146,22 @@ export function AgentModal({
                         Agendamento de Reuniões
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        Permite agendar reuniões via calendário
+                        Permite agendar via calendário.
                       </p>
                     </div>
                     <Switch
                       id="calendar_integration"
+                      name="calendar_integration"
                       checked={formData.calendar_integration || false}
                       onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, calendar_integration: checked }))}
                       className={switchStyles}
                     />
                   </div>
-
                   {formData.calendar_integration && (
                     <div className="space-y-3 pl-4 border-l-2 border-green-200 bg-green-50 p-4 rounded">
                       <div>
                         <Label htmlFor="calendar_api_key" className="text-gray-900 dark:text-gray-100">
-                          Chave da API do Calendário
+                          Chave API do Calendário
                         </Label>
                         <div className="relative">
                           <Input
@@ -978,7 +1170,7 @@ export function AgentModal({
                             type={showCalendarApiKey ? "text" : "password"}
                             value={formData.calendar_api_key || ""}
                             onChange={handleInputChange}
-                            placeholder="Sua chave da API do calendário (Cal.com, Calendly, etc.)"
+                            placeholder="Chave API (Cal.com, etc.)"
                             className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                           />
                           <Button
@@ -1000,11 +1192,11 @@ export function AgentModal({
                           id="calendar_event_id"
                           value={formData.model_config?.calendar_event_id || ""}
                           onChange={(e) => handleConfigChange("calendar_event_id", e.target.value)}
-                          placeholder="ID do tipo de evento no seu calendário"
+                          placeholder="ID do tipo de evento"
                           className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                         />
                         <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                          ID específico do tipo de reunião que será agendada
+                          ID do tipo de reunião.
                         </p>
                       </div>
                     </div>
@@ -1017,11 +1209,12 @@ export function AgentModal({
                       IA Padrão desta Conexão
                     </Label>
                     <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                      Esta será a IA principal deste número WhatsApp
+                      IA principal deste número WhatsApp.
                     </p>
                   </div>
                   <Switch
                     id="is_default"
+                    name="is_default"
                     checked={formData.is_default || false}
                     onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked }))}
                     className={switchStyles}
@@ -1041,8 +1234,7 @@ export function AgentModal({
               <CardContent className="space-y-6">
                 <div className="text-sm text-muted-foreground mb-4 text-gray-500 dark:text-gray-400">
                   <Brain className="w-4 h-4 inline mr-1" />
-                  Vector stores permitem que sua IA tenha acesso a uma base de conhecimento específica, melhorando a
-                  qualidade das respostas.
+                  Vector stores melhoram a qualidade das respostas da IA.
                 </div>
 
                 {/* ChatNode.ai Integration */}
@@ -1053,22 +1245,22 @@ export function AgentModal({
                         ChatNode.ai
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        Integração com base de conhecimento ChatNode.ai
+                        Integração com ChatNode.ai.
                       </p>
                     </div>
                     <Switch
                       id="chatnode_integration"
+                      name="chatnode_integration"
                       checked={formData.chatnode_integration || false}
                       onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, chatnode_integration: checked }))}
                       className={switchStyles}
                     />
                   </div>
-
                   {formData.chatnode_integration && (
                     <div className="space-y-3 pl-4 border-l-2 border-purple-200 bg-purple-50 p-4 rounded">
                       <div>
                         <Label htmlFor="chatnode_api_key" className="text-gray-900 dark:text-gray-100">
-                          Chave da API ChatNode.ai
+                          Chave API ChatNode.ai
                         </Label>
                         <div className="relative">
                           <Input
@@ -1077,7 +1269,7 @@ export function AgentModal({
                             type={showChatnodeApiKey ? "text" : "password"}
                             value={formData.chatnode_api_key || ""}
                             onChange={handleInputChange}
-                            placeholder="Sua chave da API do ChatNode.ai"
+                            placeholder="Chave API ChatNode.ai"
                             className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                           />
                           <Button
@@ -1100,11 +1292,11 @@ export function AgentModal({
                           name="chatnode_bot_id"
                           value={formData.chatnode_bot_id || ""}
                           onChange={handleInputChange}
-                          placeholder="ID do seu bot no ChatNode.ai"
+                          placeholder="ID do bot ChatNode.ai"
                           className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                         />
                         <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                          Encontre este ID no painel do ChatNode.ai
+                          Encontre no painel ChatNode.ai.
                         </p>
                       </div>
                     </div>
@@ -1119,22 +1311,22 @@ export function AgentModal({
                         Orimon.ai
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        Integração com base de conhecimento Orimon.ai
+                        Integração com Orimon.ai.
                       </p>
                     </div>
                     <Switch
                       id="orimon_integration"
+                      name="orimon_integration"
                       checked={formData.orimon_integration || false}
                       onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, orimon_integration: checked }))}
                       className={switchStyles}
                     />
                   </div>
-
                   {formData.orimon_integration && (
                     <div className="space-y-3 pl-4 border-l-2 border-orange-200 bg-orange-50 p-4 rounded">
                       <div>
                         <Label htmlFor="orimon_api_key" className="text-gray-900 dark:text-gray-100">
-                          Chave da API Orimon.ai
+                          Chave API Orimon.ai
                         </Label>
                         <div className="relative">
                           <Input
@@ -1143,7 +1335,7 @@ export function AgentModal({
                             type={showOrimonApiKey ? "text" : "password"}
                             value={formData.orimon_api_key || ""}
                             onChange={handleInputChange}
-                            placeholder="Sua chave da API do Orimon.ai"
+                            placeholder="Chave API Orimon.ai"
                             className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                           />
                           <Button
@@ -1166,11 +1358,11 @@ export function AgentModal({
                           name="orimon_bot_id"
                           value={formData.orimon_bot_id || ""}
                           onChange={handleInputChange}
-                          placeholder="ID do seu bot no Orimon.ai"
+                          placeholder="ID do bot Orimon.ai"
                           className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                         />
                         <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                          Encontre este ID no painel do Orimon.ai
+                          Encontre no painel Orimon.ai.
                         </p>
                       </div>
                     </div>
@@ -1184,8 +1376,7 @@ export function AgentModal({
                       <div className="text-sm">
                         <p className="font-medium text-blue-900">💡 Dica sobre Vector Stores:</p>
                         <p className="text-blue-700 mt-1">
-                          Você pode ativar ambas as integrações simultaneamente. A IA irá consultar ambas as bases de
-                          conhecimento para fornecer respostas mais completas e precisas.
+                          Você pode ativar ambas as integrações. A IA consultará ambas as bases de conhecimento.
                         </p>
                       </div>
                     </div>
@@ -1195,7 +1386,7 @@ export function AgentModal({
             </Card>
           </div>
 
-          <DialogFooter className="p-6 pt-4 border-t bg-gray-50">
+          <DialogFooter className="p-6 pt-4 border-t bg-gray-50 dark:bg-gray-800">
             <DialogClose asChild>
               <Button variant="outline" type="button">
                 Cancelar
@@ -1203,7 +1394,16 @@ export function AgentModal({
             </DialogClose>
             <Button
               type="submit"
-              disabled={loading || (maxAgentsReached && !isEditing)}
+              disabled={
+                loading ||
+                (maxAgentsReached && !isEditing) ||
+                (isAdmin && !selectedUserId) || // Admin must select a user
+                (!formData.whatsapp_connection_id &&
+                  !!selectedUserId &&
+                  !loadingConnections &&
+                  whatsappConnections.length === 0) || // Must have a connection if user selected and no connections available
+                loadingConnections
+              }
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {loading ? "Salvando..." : isEditing ? "Salvar Alterações" : "Criar Agente de IA"}

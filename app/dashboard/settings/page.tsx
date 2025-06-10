@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, Copy, Plus, Trash2, Code } from "lucide-react"
+import { Eye, EyeOff, Copy, Plus, Trash2, Code, Badge } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/components/ui/use-toast"
@@ -21,6 +21,8 @@ interface ApiKey {
   created_at: string
   last_used_at: string | null
   is_active: boolean
+  is_admin_key: boolean
+  access_scope: string
 }
 
 export default function UserSettings() {
@@ -94,7 +96,7 @@ export default function UserSettings() {
     }
   }
 
-  const createApiKey = async () => {
+  const createApiKey = async (isAdminKey = false) => {
     if (!user?.id) return
 
     setCreatingApiKey(true)
@@ -103,17 +105,20 @@ export default function UserSettings() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: newKeyName || "API Key para integração N8N",
-          description: "API Key para integração com sistemas externos",
+          name: newKeyName || (isAdminKey ? "API Key de Administrador" : "API Key para integração N8N"),
+          description: isAdminKey
+            ? "API Key com acesso global a todos os bots do sistema"
+            : "API Key para integração com sistemas externos",
           user_id: user.id,
+          is_admin_key: isAdminKey,
         }),
       })
 
       const data = await response.json()
       if (response.ok) {
         toast({
-          title: "API Key criada com sucesso!",
-          description: "Sua nova API key foi gerada.",
+          title: `API Key ${isAdminKey ? "de Administrador" : ""} criada com sucesso!`,
+          description: `Sua nova API key ${isAdminKey ? "com acesso global" : ""} foi gerada.`,
         })
         setNewKeyName("")
         setShowNewKeyForm(false)
@@ -458,6 +463,25 @@ export default function UserSettings() {
                 </div>
               )}
 
+              {user?.role === "admin" && (
+                <div className="mb-4 p-4 border rounded-lg bg-red-50">
+                  <h4 className="font-medium mb-3 text-red-800">Criar API Key de Administrador</h4>
+                  <p className="text-sm text-red-600 mb-3">
+                    API Keys de administrador podem acessar todos os bots do sistema, não apenas os seus.
+                  </p>
+                  <Button
+                    onClick={() => {
+                      setNewKeyName("API Key de Administrador")
+                      createApiKey(true) // true para is_admin_key
+                    }}
+                    className="w-full gap-2 bg-red-600 hover:bg-red-700 text-white"
+                    disabled={creatingApiKey}
+                  >
+                    {creatingApiKey ? "Criando..." : "Criar API Key de Administrador"}
+                  </Button>
+                </div>
+              )}
+
               {loadingApiKeys ? (
                 <div className="text-center py-4">Carregando API keys...</div>
               ) : apiKeys.length === 0 ? (
@@ -471,7 +495,13 @@ export default function UserSettings() {
                     <div key={apiKey.id} className="border rounded-lg p-4">
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <h4 className="font-medium">{apiKey.name}</h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium">{apiKey.name}</h4>
+                            {apiKey.is_admin_key && <Badge className="bg-red-100 text-red-700 text-xs">ADMIN</Badge>}
+                            <Badge variant="outline" className="text-xs">
+                              {apiKey.access_scope === "admin" ? "Acesso Global" : "Acesso Próprio"}
+                            </Badge>
+                          </div>
                           {apiKey.description && <p className="text-sm text-gray-600">{apiKey.description}</p>}
                           <p className="text-sm text-gray-500">
                             Criada em {new Date(apiKey.created_at).toLocaleDateString()}

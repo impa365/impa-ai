@@ -1,160 +1,180 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { db } from "@/lib/supabase"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useToast } from "@/components/ui/use-toast"
-import { AgentModal } from "@/components/agent-modal"
-import { AgentDuplicateDialog } from "@/components/agent-duplicate-dialog"
-import { AlertCircle, Bot, Copy, Edit, Loader2, Plus, Trash2 } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Bot, Plus, Search, Edit, Trash2, Eye, AlertTriangle, Loader2 } from "lucide-react"
+import { AgentModal, type Agent } from "@/components/agent-modal"
 import { getCurrentUser } from "@/lib/auth"
+import { supabase } from "@/lib/supabase"
+import { useToast } from "@/components/ui/use-toast"
+import { deleteEvolutionBot } from "@/lib/evolution-api"
 
-type Agent = {
-  id: string
-  name: string
-  description: string
-  prompt: string
-  model: string
-  temperature: number
-  max_tokens: number
-  whatsapp_connection_id: string | null
-  user_id: string
-  created_at: string
-  type: string
-  voice_provider: string | null
-  voice_api_key: string | null
-  voice_voice_id: string | null
-  calendar_provider: string | null
-  calendar_api_key: string | null
-  calendar_calendar_id: string | null
-  is_default: boolean
-  is_active: boolean
+// Limites padrão caso não estejam definidos no banco
+const DEFAULT_LIMITS = {
+  max_agents: 5,
+  max_whatsapp_connections: 3,
+  max_integrations: 2,
 }
 
-export default function AgentsPage() {
+export default function UserAgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([])
+  const [filteredAgents, setFilteredAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false)
-  const [isDeleting, setIsDeleting] = useState<string | null>(null)
-  const [userId, setUserId] = useState<string | null>(null)
-  const [limitInfo, setLimitInfo] = useState<{
-    canCreate: boolean
-    currentCount: number
-    maxAllowed: number
-    message?: string
-  } | null>(null)
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [maxAgentsReached, setMaxAgentsReached] = useState(false)
+  const [userLimits, setUserLimits] = useState<any>(DEFAULT_LIMITS)
+  const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null)
 
-  const { toast } = useToast()
   const router = useRouter()
+  const { toast } = useToast()
 
   useEffect(() => {
-    const fetchUserAndAgents = async () => {
-      try {
-        // Buscar o usuário atual
-        const currentUser = getCurrentUser()
-
-        if (!currentUser) {
-          router.push("/")
-          return
-        }
-
-        setUserId(currentUser.id)
-
-        // Verificar limite de agentes
-        const limitCheck = await checkAgentLimit(currentUser.id)
-        setLimitInfo(limitCheck)
-
-        // Buscar agentes do usuário
-        const { data: agentsData, error } = await db
-          .agents()
-          .select("*")
-          .eq("user_id", currentUser.id)
-          .order("created_at", { ascending: false })
-
-        if (error) {
-          throw error
-        }
-
-        setAgents(agentsData || [])
-      } catch (error) {
-        console.error("Erro ao buscar agentes:", error)
-        toast({
-          title: "Erro",
-          description: "Não foi possível carregar seus agentes",
-          variant: "destructive",
-        })
-      } finally {
-        setLoading(false)
-      }
+    const user = getCurrentUser()
+    if (!user) {
+      router.push("/")
+      return
     }
+    if (user.role === "admin") {
+      router.push("/admin/agents")
+      return
+    }
+    setCurrentUser(user)
+    loadUserLimits(user.id)
+    loadAgents(user.id)
+  }, [router])
 
-    fetchUserAndAgents()
-  }, [router, toast])
+  useEffect(() => {
+    const filtered = agents.filter(
+      (agent) =>
+        agent.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        agent.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        agent.main_function?.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
+    setFilteredAgents(filtered)
+  }, [agents, searchTerm])
 
-  const checkAgentLimit = async (userId: string) => {
+  const loadUserLimits = async (userId: string) => {
     try {
-      // Buscar configurações do usuário
-      const { data: userSettings, error: userError } = await db
-        .userSettings()
-        .select("agents_limit")
-        .eq("user_id", userId)
+      console.log("🔍 Carregando limites do usuário:", userId)
+
+      // Primeiro, tentar buscar com as colunas de limite
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select("max_agents, max_whatsapp_connections, max_integrations, role")
+        .eq("id", userId)
         .single()
 
-      let maxAllowed = 5 // padrão
+      if (error) {
+        console.warn("⚠️ Erro ao carregar limites do usuário:", error.message)
 
-      if (userError && userError.code !== "PGRST116") {
-        console.warn("Erro ao buscar configurações do usuário:", userError)
-      } else if (userSettings?.agents_limit) {
-        maxAllowed = userSettings.agents_limit
-      } else {
-        // Buscar limite padrão do sistema
-        const { data: systemSettings } = await db
-          .systemSettings()
-          .select("setting_value")
-          .eq("setting_key", "default_agents_limit")
+        // Se der erro, usar limites padrão baseados no role do usuário
+        const { data: userData, error: userError } = await supabase
+          .from("user_profiles")
+          .select("role")
+          .eq("id", userId)
           .single()
 
-        if (systemSettings?.setting_value) {
-          maxAllowed = Number.parseInt(systemSettings.setting_value)
+        if (!userError && userData) {
+          const limits =
+            userData.role === "admin"
+              ? { max_agents: 999, max_whatsapp_connections: 999, max_integrations: 999 }
+              : DEFAULT_LIMITS
+
+          console.log("📊 Usando limites padrão:", limits)
+          setUserLimits(limits)
+        } else {
+          console.log("📊 Usando limites padrão globais:", DEFAULT_LIMITS)
+          setUserLimits(DEFAULT_LIMITS)
         }
+        return
       }
 
-      // Contar agentes atuais
-      const { count, error: countError } = await db
-        .agents()
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId)
-
-      if (countError) {
-        throw countError
+      // Se conseguiu buscar os dados, usar os valores do banco ou padrão
+      const limits = {
+        max_agents: data?.max_agents || DEFAULT_LIMITS.max_agents,
+        max_whatsapp_connections: data?.max_whatsapp_connections || DEFAULT_LIMITS.max_whatsapp_connections,
+        max_integrations: data?.max_integrations || DEFAULT_LIMITS.max_integrations,
       }
 
-      const currentCount = count || 0
-      const canCreate = currentCount < maxAllowed
-
-      return {
-        canCreate,
-        currentCount,
-        maxAllowed,
-        message: canCreate ? undefined : `Você atingiu o limite de ${maxAllowed} agentes.`,
-      }
+      console.log("📊 Limites carregados:", limits)
+      setUserLimits(limits)
     } catch (error) {
-      console.error("Erro ao verificar limite de agentes:", error)
-      return {
-        canCreate: true,
-        currentCount: 0,
-        maxAllowed: 5,
+      console.error("❌ Erro ao carregar limites:", error)
+      console.log("📊 Usando limites padrão por erro:", DEFAULT_LIMITS)
+      setUserLimits(DEFAULT_LIMITS)
+    }
+  }
+
+  const loadAgents = async (userId: string) => {
+    setLoading(true)
+    try {
+      console.log("🤖 Carregando agentes do usuário:", userId)
+
+      const { data, error } = await supabase
+        .from("ai_agents")
+        .select(`
+          *,
+          whatsapp_connections!inner(
+            id,
+            connection_name,
+            phone_number,
+            instance_name
+          )
+        `)
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("❌ Erro ao carregar agentes:", error)
+        toast({
+          title: "Erro",
+          description: "Falha ao carregar agentes",
+          variant: "destructive",
+        })
+        return
       }
+
+      console.log("✅ Agentes carregados:", data?.length || 0)
+      setAgents(data || [])
+
+      // Verificar se atingiu o limite máximo
+      const currentCount = data?.length || 0
+      const maxAllowed = userLimits?.max_agents || DEFAULT_LIMITS.max_agents
+      setMaxAgentsReached(currentCount >= maxAllowed)
+
+      console.log(`📊 Agentes: ${currentCount}/${maxAllowed} (limite atingido: ${currentCount >= maxAllowed})`)
+    } catch (error) {
+      console.error("❌ Erro ao carregar agentes:", error)
+      toast({
+        title: "Erro",
+        description: "Falha ao carregar agentes",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleCreateAgent = () => {
+    const currentCount = agents.length
+    const maxAllowed = userLimits?.max_agents || DEFAULT_LIMITS.max_agents
+
+    if (currentCount >= maxAllowed) {
+      toast({
+        title: "Limite atingido",
+        description: `Você atingiu o limite máximo de ${maxAllowed} agentes.`,
+        variant: "destructive",
+      })
+      return
+    }
     setSelectedAgent(null)
     setIsModalOpen(true)
   }
@@ -164,280 +184,278 @@ export default function AgentsPage() {
     setIsModalOpen(true)
   }
 
-  const handleDuplicateAgent = (agent: Agent) => {
-    setSelectedAgent(agent)
-    setIsDuplicateDialogOpen(true)
-  }
-
-  const handleDeleteAgent = async (agentId: string) => {
-    if (!confirm("Tem certeza que deseja excluir este agente?")) {
+  const handleDeleteAgent = async (agent: Agent) => {
+    if (!confirm(`Tem certeza que deseja excluir o agente "${agent.name}"?`)) {
       return
     }
 
-    setIsDeleting(agentId)
-
+    setDeletingAgentId(agent.id)
     try {
-      // Buscar informações do agente antes de excluir
-      const { data: agentData, error: fetchError } = await db
-        .agents()
-        .select("evolution_bot_id, whatsapp_connection_id")
-        .eq("id", agentId)
-        .single()
+      console.log("🗑️ Iniciando exclusão do agente:", agent.name)
 
-      if (fetchError) {
-        throw fetchError
-      }
-
-      // Se o agente tem um bot na Evolution API, excluí-lo
-      if (agentData.evolution_bot_id && agentData.whatsapp_connection_id) {
-        // Importar a função necessária
-        const { deleteEvolutionBot } = await import("@/lib/evolution-api")
-
-        // Buscar o instance_name da conexão WhatsApp
-        const { data: whatsappConnection, error: whatsappError } = await db
-          .whatsappConnections()
+      // Se o agente tem um bot na Evolution API, deletar primeiro
+      if (agent.evolution_bot_id && agent.whatsapp_connection_id) {
+        const { data: connection } = await supabase
+          .from("whatsapp_connections")
           .select("instance_name")
-          .eq("id", agentData.whatsapp_connection_id)
+          .eq("id", agent.whatsapp_connection_id)
           .single()
 
-        if (!whatsappError && whatsappConnection) {
-          // Excluir o bot na Evolution API
-          deleteEvolutionBot(whatsappConnection.instance_name, agentData.evolution_bot_id).catch((error) =>
-            console.error("Erro ao excluir bot na Evolution API:", error),
-          )
+        if (connection?.instance_name) {
+          console.log("🗑️ Deletando bot da Evolution API...")
+          const evolutionDeleteSuccess = await deleteEvolutionBot(connection.instance_name, agent.evolution_bot_id)
+
+          if (!evolutionDeleteSuccess) {
+            console.warn("⚠️ Falha ao deletar bot da Evolution API, continuando com exclusão local")
+          }
         }
       }
 
-      // Excluir o agente do banco de dados
-      const { error } = await db.agents().delete().eq("id", agentId)
+      // Deletar agente do banco de dados
+      const { error } = await supabase.from("ai_agents").delete().eq("id", agent.id).eq("user_id", currentUser.id) // Garantir que só pode deletar seus próprios agentes
 
       if (error) {
+        console.error("❌ Erro ao deletar agente:", error)
         throw error
       }
 
-      setAgents(agents.filter((agent) => agent.id !== agentId))
-
+      console.log("✅ Agente excluído com sucesso")
       toast({
-        title: "Agente excluído",
-        description: "O agente foi excluído com sucesso",
+        title: "Sucesso",
+        description: "Agente excluído com sucesso!",
       })
 
-      // Atualizar limite de agentes
-      if (userId) {
-        const limitCheck = await checkAgentLimit(userId)
-        setLimitInfo(limitCheck)
+      // Recarregar lista
+      if (currentUser?.id) {
+        loadAgents(currentUser.id)
       }
-    } catch (error) {
-      console.error("Erro ao excluir agente:", error)
+    } catch (error: any) {
+      console.error("❌ Erro ao deletar agente:", error)
       toast({
         title: "Erro",
-        description: "Não foi possível excluir o agente",
+        description: error.message || "Falha ao excluir agente",
         variant: "destructive",
       })
     } finally {
-      setIsDeleting(null)
+      setDeletingAgentId(null)
     }
   }
 
-  const handleAgentSaved = async () => {
-    // Recarregar a lista de agentes
-    const currentUser = getCurrentUser()
-    if (currentUser) {
-      const { data: agentsData, error } = await db
-        .agents()
-        .select("*")
-        .eq("user_id", currentUser.id)
-        .order("created_at", { ascending: false })
+  const handleAgentSaved = () => {
+    console.log("✅ Agente salvo com sucesso")
+    toast({
+      title: "Sucesso",
+      description: selectedAgent ? "Agente atualizado com sucesso!" : "Agente criado com sucesso!",
+    })
 
-      if (!error) {
-        setAgents(agentsData || [])
-      }
-
-      // Atualizar limite de agentes
-      const limitCheck = await checkAgentLimit(currentUser.id)
-      setLimitInfo(limitCheck)
+    // Recarregar dados
+    if (currentUser?.id) {
+      loadAgents(currentUser.id)
+      loadUserLimits(currentUser.id)
     }
 
+    // Fechar modal e limpar seleção
     setIsModalOpen(false)
+    setSelectedAgent(null)
   }
 
-  const handleAgentDuplicated = async (newAgent: Agent) => {
-    setAgents([newAgent, ...agents])
-    setIsDuplicateDialogOpen(false)
-
-    // Atualizar limite de agentes
-    if (userId) {
-      const limitCheck = await checkAgentLimit(userId)
-      setLimitInfo(limitCheck)
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "active":
+        return <Badge className="bg-green-100 text-green-800">Ativo</Badge>
+      case "inactive":
+        return <Badge className="bg-gray-100 text-gray-800">Inativo</Badge>
+      case "error":
+        return <Badge className="bg-red-100 text-red-800">Erro</Badge>
+      default:
+        return <Badge className="bg-gray-100 text-gray-800">{status}</Badge>
     }
   }
 
-  const renderAgentCards = (agents: Agent[]) => {
-    if (agents.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center p-8 text-center">
-          <Bot className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Nenhum agente encontrado</h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-            Crie seu primeiro agente para começar a usar a plataforma
-          </p>
-        </div>
-      )
+  const getFunctionBadge = (mainFunction: string) => {
+    const functionMap: Record<string, { label: string; color: string }> = {
+      atendimento: { label: "Atendimento", color: "bg-blue-100 text-blue-800" },
+      vendas: { label: "Vendas", color: "bg-green-100 text-green-800" },
+      agendamento: { label: "Agendamento", color: "bg-purple-100 text-purple-800" },
+      suporte: { label: "Suporte", color: "bg-orange-100 text-orange-800" },
+      qualificacao: { label: "Qualificação", color: "bg-yellow-100 text-yellow-800" },
     }
 
+    const config = functionMap[mainFunction] || { label: mainFunction, color: "bg-gray-100 text-gray-800" }
+    return <Badge className={config.color}>{config.label}</Badge>
+  }
+
+  if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {agents.map((agent) => (
-          <Card key={agent.id} className="overflow-hidden hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                  <Bot className="h-5 w-5 text-primary" />
-                  {agent.name}
-                </CardTitle>
-                {agent.is_default && (
-                  <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">Padrão</span>
-                )}
-              </div>
-              {agent.description && (
-                <CardDescription className="line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
-                  {agent.description}
-                </CardDescription>
-              )}
-            </CardHeader>
-            <CardContent className="pb-3">
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Modelo:</span>
-                  <span>{agent.model}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Status:</span>
-                  <span className={agent.is_active ? "text-green-600" : "text-red-600"}>
-                    {agent.is_active ? "Ativo" : "Inativo"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Criado:</span>
-                  <span>{new Date(agent.created_at).toLocaleDateString("pt-BR")}</span>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="pt-2 flex justify-between">
-              <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/agents/${agent.id}`)}>
-                Ver detalhes
-              </Button>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="icon" onClick={() => handleEditAgent(agent)} title="Editar agente">
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDuplicateAgent(agent)}
-                  disabled={limitInfo && !limitInfo.canCreate}
-                  title="Duplicar agente"
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDeleteAgent(agent.id)}
-                  disabled={isDeleting === agent.id}
-                  title="Excluir agente"
-                >
-                  {isDeleting === agent.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </CardFooter>
-          </Card>
-        ))}
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="text-gray-600">Carregando agentes...</p>
+        </div>
       </div>
     )
   }
 
-  const renderSkeletons = () => {
-    return Array(6)
-      .fill(0)
-      .map((_, i) => (
-        <Card key={i} className="overflow-hidden">
-          <CardHeader className="pb-2">
-            <Skeleton className="h-6 w-3/4 mb-2" />
-            <Skeleton className="h-4 w-full" />
-          </CardHeader>
-          <CardContent className="pb-2">
-            <Skeleton className="h-4 w-1/2 mb-2" />
-            <Skeleton className="h-4 w-2/3" />
-          </CardContent>
-          <CardFooter className="pt-2 flex justify-between">
-            <Skeleton className="h-9 w-24" />
-            <div className="flex gap-2">
-              <Skeleton className="h-8 w-8 rounded-md" />
-              <Skeleton className="h-8 w-8 rounded-md" />
-              <Skeleton className="h-8 w-8 rounded-md" />
-            </div>
-          </CardFooter>
-        </Card>
-      ))
-  }
+  const currentCount = agents.length
+  const maxAllowed = userLimits?.max_agents || DEFAULT_LIMITS.max_agents
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="p-6">
+      <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">Meus Agentes</h1>
-          <p className="text-gray-600 dark:text-gray-400">Gerencie seus agentes de IA e suas configurações</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Meus Agentes de IA</h1>
+          <p className="text-gray-600">Gerencie seus agentes de inteligência artificial para WhatsApp</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {currentCount} de {maxAllowed} agentes utilizados
+          </p>
         </div>
         <Button
           onClick={handleCreateAgent}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-          disabled={limitInfo && !limitInfo.canCreate}
+          disabled={maxAgentsReached}
+          className="gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
         >
-          <Plus className="mr-2 h-4 w-4" /> Criar Agente
+          <Plus className="h-4 w-4" />
+          Novo Agente
         </Button>
       </div>
 
-      {limitInfo && !limitInfo.canCreate && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Limite atingido</AlertTitle>
-          <AlertDescription>{limitInfo.message}</AlertDescription>
+      {maxAgentsReached && (
+        <Alert className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Você atingiu o limite máximo de {maxAllowed} agentes. Para criar mais agentes, entre em contato com o
+            suporte.
+          </AlertDescription>
         </Alert>
       )}
 
-      {limitInfo && (
-        <div className="text-sm text-gray-600 dark:text-gray-400">
-          Agentes: {limitInfo.currentCount} de {limitInfo.maxAllowed} utilizados
+      {/* Barra de Pesquisa */}
+      <div className="mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Pesquisar agentes por nome, descrição ou função..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+      </div>
+
+      {/* Lista de Agentes */}
+      {filteredAgents.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Bot className="h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {agents.length === 0 ? "Nenhum agente criado" : "Nenhum agente encontrado"}
+            </h3>
+            <p className="text-gray-600 text-center mb-6">
+              {agents.length === 0
+                ? "Crie seu primeiro agente de IA para começar a automatizar conversas no WhatsApp."
+                : "Tente ajustar os termos de pesquisa para encontrar o agente desejado."}
+            </p>
+            {agents.length === 0 && !maxAgentsReached && (
+              <Button onClick={handleCreateAgent} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+                <Plus className="h-4 w-4" />
+                Criar Primeiro Agente
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredAgents.map((agent) => (
+            <Card key={agent.id} className="hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Bot className="h-5 w-5 text-blue-600" />
+                    <CardTitle className="text-lg">{agent.name}</CardTitle>
+                  </div>
+                  {getStatusBadge(agent.status || "inactive")}
+                </div>
+                {agent.description && <p className="text-sm text-gray-600 mt-2">{agent.description}</p>}
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Função:</span>
+                    {getFunctionBadge(agent.main_function || "atendimento")}
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Tom de Voz:</span>
+                    <span className="capitalize">{agent.voice_tone || "Humanizado"}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">WhatsApp:</span>
+                    <span className="text-xs">
+                      {(agent as any).whatsapp_connections?.connection_name || "Não conectado"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Palavra-chave:</span>
+                    <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                      {agent.model_config?.activation_keyword || "Não definida"}
+                    </code>
+                  </div>
+
+                  {agent.evolution_bot_id && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Evolution Bot:</span>
+                      <Badge className="bg-green-100 text-green-800 text-xs">Sincronizado</Badge>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex space-x-2 pt-4 border-t">
+                  <Button variant="outline" size="sm" onClick={() => handleEditAgent(agent)} className="flex-1 gap-2">
+                    <Edit className="h-4 w-4" />
+                    Editar
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push(`/dashboard/agents/${agent.id}`)}
+                    className="gap-2"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Ver
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteAgent(agent)}
+                    disabled={deletingAgentId === agent.id}
+                    className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    {deletingAgentId === agent.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
-      <div className="mt-4">
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{renderSkeletons()}</div>
-        ) : (
-          renderAgentCards(agents)
-        )}
-      </div>
-
+      {/* Modal de Criação/Edição */}
       <AgentModal
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         agent={selectedAgent}
         onSave={handleAgentSaved}
-        maxAgentsReached={limitInfo ? !limitInfo.canCreate : false}
+        maxAgentsReached={maxAgentsReached}
         isEditing={!!selectedAgent}
-      />
-
-      <AgentDuplicateDialog
-        isOpen={isDuplicateDialogOpen}
-        onOpenChange={setIsDuplicateDialogOpen}
-        agent={selectedAgent}
-        onDuplicate={handleAgentDuplicated}
       />
     </div>
   )

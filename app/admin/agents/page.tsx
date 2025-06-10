@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Edit, Trash2, Power, PowerOff, Bot, Search, Filter, Plus, Users } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { AgentModal } from "@/components/agent-modal"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function AdminAgentsPage() {
   const [agents, setAgents] = useState([])
@@ -25,6 +26,8 @@ export default function AdminAgentsPage() {
     voice_enabled: "all",
     calendar_enabled: "all",
   })
+
+  const { toast } = useToast()
 
   useEffect(() => {
     fetchData()
@@ -65,6 +68,11 @@ export default function AdminAgentsPage() {
       setWhatsappConnections(connectionsData || [])
     } catch (error) {
       console.error("Erro ao buscar dados:", error)
+      toast({
+        title: "Erro",
+        description: "Falha ao carregar dados dos agentes",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -142,10 +150,20 @@ export default function AdminAgentsPage() {
 
       if (error) throw error
 
+      toast({
+        title: "Sucesso",
+        description: "Agente excluído com sucesso",
+      })
+
+      // Recarregar dados
       fetchData()
     } catch (error) {
       console.error("Erro ao excluir agente:", error)
-      alert("Erro ao excluir agente")
+      toast({
+        title: "Erro",
+        description: "Falha ao excluir agente",
+        variant: "destructive",
+      })
     }
   }
 
@@ -157,11 +175,36 @@ export default function AdminAgentsPage() {
 
       if (error) throw error
 
+      toast({
+        title: "Sucesso",
+        description: `Status do agente alterado para ${newStatus === "active" ? "ativo" : "inativo"}`,
+      })
+
+      // Recarregar dados
       fetchData()
     } catch (error) {
       console.error("Erro ao alterar status:", error)
-      alert("Erro ao alterar status do agente")
+      toast({
+        title: "Erro",
+        description: "Falha ao alterar status do agente",
+        variant: "destructive",
+      })
     }
+  }
+
+  // Função para ser chamada quando o agente for salvo
+  const handleAgentSaved = () => {
+    toast({
+      title: "Sucesso",
+      description: selectedAgent ? "Agente atualizado com sucesso!" : "Agente criado com sucesso!",
+    })
+
+    // Recarregar os dados
+    fetchData()
+
+    // Fechar o modal
+    setShowAgentModal(false)
+    setSelectedAgent(null)
   }
 
   if (loading) {
@@ -368,22 +411,15 @@ export default function AdminAgentsPage() {
         </CardContent>
       </Card>
 
-      {/* Modal de Agente */}
-      {showAgentModal && (
-        <AgentModal
-          open={showAgentModal}
-          onOpenChange={setShowAgentModal}
-          agent={selectedAgent}
-          whatsappConnections={whatsappConnections}
-          userSettings={{
-            transcribe_audio_enabled: true,
-            understand_images_enabled: true,
-            voice_response_enabled: true,
-            calendar_integration_enabled: true,
-          }}
-          onSuccess={fetchData}
-        />
-      )}
+      {/* Modal de Agente - CORRIGIDO COM onSave */}
+      <AgentModal
+        open={showAgentModal}
+        onOpenChange={setShowAgentModal}
+        agent={selectedAgent}
+        onSave={handleAgentSaved} // ✅ Função correta passada aqui
+        maxAgentsReached={false}
+        isEditing={!!selectedAgent}
+      />
     </div>
   )
 }

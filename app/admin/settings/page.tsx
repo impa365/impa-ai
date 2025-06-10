@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,7 +15,6 @@ import Image from "next/image"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/supabase"
-import { useEffect } from "react"
 import {
   Dialog,
   DialogContent,
