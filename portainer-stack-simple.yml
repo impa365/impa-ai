@@ -3,7 +3,7 @@ services:
 
 ## --------------------------- IMPA AI --------------------------- ##
   impa-ai:
-    image: "{{DOCKER_IMAGE}}" # Exemplo: seuusuario/impa-ai-app:latest
+    image: impa365/impa-ai:0.60.0 # Exemplo: seuusuario/impa-ai-app:latest
     ports:
       # A porta 3000 é exposta internamente para o Traefik, não diretamente para o host.
       # O Traefik cuidará do acesso externo nas portas 80/443.
