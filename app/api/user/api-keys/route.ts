@@ -19,14 +19,15 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("Erro ao buscar API keys:", error)
-      return NextResponse.json({ error: "Erro ao buscar API keys" }, { status: 500 })
+      console.error("Erro ao buscar API keys do Supabase:", error)
+      return NextResponse.json({ error: `Erro ao buscar API keys no banco: ${error.message}` }, { status: 500 })
     }
 
     return NextResponse.json({ apiKeys: apiKeys || [] })
-  } catch (error) {
-    console.error("Erro na API de API keys:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+  } catch (e: any) {
+    console.error("Erro crítico na API GET /api/user/api-keys:", e)
+    const errorMessage = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: `Erro interno do servidor (GET): ${errorMessage}` }, { status: 500 })
   }
 }
 
@@ -43,7 +44,11 @@ export async function POST(request: NextRequest) {
     const { data: user, error: userError } = await db.users().select("id, role").eq("id", user_id).single()
 
     if (userError || !user) {
-      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 })
+      console.error("Erro ao buscar usuário ou usuário não encontrado:", userError)
+      return NextResponse.json(
+        { error: `Usuário não encontrado ou erro ao buscar: ${userError?.message || "Usuário não existe"}` },
+        { status: 404 },
+      )
     }
 
     // Apenas administradores podem criar API keys de administrador
@@ -91,12 +96,19 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (insertError) {
-      console.error("Erro ao criar API key:", insertError)
-      return NextResponse.json({ error: "Erro ao criar API key" }, { status: 500 })
+      console.error("Erro ao inserir API key no Supabase:", insertError)
+      return NextResponse.json({ error: `Erro ao criar API key no banco: ${insertError.message}` }, { status: 500 })
+    }
+    if (!newApiKey) {
+      console.error("Falha ao criar API key, newApiKey é null/undefined após insert.")
+      return NextResponse.json({ error: "Falha ao criar API key, dados não retornados do banco." }, { status: 500 })
     }
 
     // Atualizar o usuário com a nova API key (para compatibilidade)
-    await db.users().update({ api_key: apiKey }).eq("id", user_id)
+    const { error: updateUserError } = await db.users().update({ api_key: apiKey }).eq("id", user_id)
+    if (updateUserError) {
+      console.warn("Aviso: Falha ao atualizar users.api_key (campo legado):", updateUserError.message)
+    }
 
     console.log("✅ API key criada com sucesso:", {
       id: newApiKey.id,
@@ -117,9 +129,13 @@ export async function POST(request: NextRequest) {
         access_scope: newApiKey.access_scope,
       },
     })
-  } catch (error) {
-    console.error("Erro ao criar API key:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+  } catch (e: any) {
+    console.error("Erro crítico na API POST /api/user/api-keys:", e)
+    const errorMessage = e instanceof Error ? e.message : String(e)
+    if (e.name === "SyntaxError" && e.message.includes("JSON")) {
+      return NextResponse.json({ error: `Corpo da requisição inválido, não é JSON: ${errorMessage}` }, { status: 400 })
+    }
+    return NextResponse.json({ error: `Erro interno do servidor (POST): ${errorMessage}` }, { status: 500 })
   }
 }
 
@@ -137,13 +153,14 @@ export async function DELETE(request: NextRequest) {
     const { error } = await db.apiKeys().delete().eq("id", id).eq("user_id", userId)
 
     if (error) {
-      console.error("Erro ao deletar API key:", error)
-      return NextResponse.json({ error: "Erro ao deletar API key" }, { status: 500 })
+      console.error("Erro ao deletar API key do Supabase:", error)
+      return NextResponse.json({ error: `Erro ao deletar API key no banco: ${error.message}` }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Erro ao deletar API key:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+  } catch (e: any) {
+    console.error("Erro crítico na API DELETE /api/user/api-keys:", e)
+    const errorMessage = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: `Erro interno do servidor (DELETE): ${errorMessage}` }, { status: 500 })
   }
 }

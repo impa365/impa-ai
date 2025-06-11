@@ -268,16 +268,33 @@ export default function AdminSettingsPage() {
     setLoadingApiKeys(true)
     try {
       const response = await fetch(`/api/user/api-keys?user_id=${userId}`)
-      const data = await response.json()
-      if (response.ok) {
-        setApiKeys(data.apiKeys || [])
-      } else {
-        throw new Error(data.error)
+
+      if (!response.ok) {
+        // Tentar ler como texto se não for ok, pois pode não ser JSON
+        const errorText = await response.text()
+        console.error("Erro da API ao carregar API Keys (texto):", errorText)
+
+        let errorMessage = `Erro HTTP ${response.status}: ${response.statusText}`
+        try {
+          // Tentar parsear como JSON, caso a API tenha retornado um JSON de erro estruturado
+          const errorJson = JSON.parse(errorText)
+          errorMessage = errorJson.error || errorMessage
+        } catch (e) {
+          // Não era JSON, usar o texto do erro se for curto, ou o statusText
+          if (errorText && errorText.length < 200 && !errorText.toLowerCase().includes("<html")) {
+            errorMessage = errorText
+          }
+        }
+        throw new Error(errorMessage)
       }
+
+      // Se response.ok é true, esperamos JSON
+      const data = await response.json()
+      setApiKeys(data.apiKeys || [])
     } catch (error) {
-      console.error("Erro ao carregar API keys:", error)
+      console.error("Erro detalhado ao carregar API keys:", error)
       toast({
-        title: "Erro ao carregar API Keys",
+        title: "Erro ao Carregar API Keys",
         description: (error as Error).message,
         variant: "destructive",
       })
