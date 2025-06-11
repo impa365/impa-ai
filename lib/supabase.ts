@@ -14,12 +14,18 @@ function getSupabaseClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      "Supabase URL or Anon Key is not defined. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.",
+    )
+  }
+
   // Se não tem as variáveis, usa valores padrão para não quebrar
-  const url = supabaseUrl || "http://localhost:54321"
-  const key = supabaseAnonKey || "dummy-key"
+  // const url = supabaseUrl || "http://localhost:54321" // REMOVER ESTA LINHA
+  // const key = supabaseAnonKey || "dummy-key" // REMOVER ESTA LINHA
 
   // Cria a instância
-  supabaseInstance = createClient(url, key, {
+  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
     db: { schema: "impaai" },
     global: { headers: { "Accept-Profile": "impaai", "Content-Profile": "impaai" } },
   })
