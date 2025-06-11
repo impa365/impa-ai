@@ -1,0 +1,54 @@
+version: "3.7"
+services:
+
+## --------------------------- IMPA AI --------------------------- ##
+  impa-ai:
+    image: impa365/impa-ai:latest
+    ports:
+      - "3000:3000"
+    networks:
+      - ImpaServer
+    environment:
+      # Configuração do Supabase (APENAS NEXT_PUBLIC_)
+      - NEXT_PUBLIC_SUPABASE_URL=https://supa.supab.com
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsIcyODE3MjAwCn0.cVmHXTXMMB09PuXEMevVuGxV5_ZR4yJly6pF0uab7fA
+      
+      # Configuração do NextAuth
+      - NEXTAUTH_URL=https://ia.impa365.com
+      - NEXTAUTH_SECRET=dfdghodfdfdDA9859aHNUH
+      
+      # Chaves de Aplicação Personalizadas
+      - CUSTOM_KEY=DJD233@ddfdJID897fSF8F
+
+      # Ambiente da Aplicação
+      - NODE_ENV=production
+      
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2048M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.impa_ai_router.rule=Host(`ia.impa365.com`)"
+        - "traefik.http.routers.impa_ai_router.entrypoints=websecure"
+        - "traefik.http.routers.impa_ai_router.tls=true"
+        - "traefik.http.routers.impa_ai_router.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.impa_ai_service.loadbalancer.server.port=3000"
+        - "traefik.http.services.impa_ai_service.loadbalancer.passHostHeader=true"
+        - "traefik.http.routers.impa_ai_router.service=impa_ai_service"
+        - "traefik.docker.network=ImpaServer"
+
+networks:
+  ImpaServer:
+    external: true
+    name: ImpaServer

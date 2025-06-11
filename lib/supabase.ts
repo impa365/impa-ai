@@ -10,9 +10,9 @@ function getSupabaseClient(): SupabaseClient {
     return supabaseInstance
   }
 
-  // Pega as variáveis de ambiente
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  // Pega as variáveis de ambiente (APENAS NEXT_PUBLIC_)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   // Se não tem as variáveis, usa valores padrão para não quebrar
   const url = supabaseUrl || "http://localhost:54321"
