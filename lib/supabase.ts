@@ -10,25 +10,43 @@ function getSupabaseClient(): SupabaseClient {
     return supabaseInstance
   }
 
-  // Pega as variáveis de ambiente (APENAS NEXT_PUBLIC_)
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      "Supabase URL or Anon Key is not defined. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.",
-    )
+  // LOGS DE DEPURAÇÃO TEMPORÁRIOS - REMOVA APÓS VERIFICAR NO PORTAINER
+  console.log("--- DEBUG Supabase Client Initialization ---")
+  console.log("Attempting to read NEXT_PUBLIC_SUPABASE_URL:", supabaseUrl)
+  console.log(
+    "Attempting to read NEXT_PUBLIC_SUPABASE_ANON_KEY:",
+    supabaseAnonKey ? "Exists (key hidden)" : "MISSING or EMPTY",
+  )
+  console.log("------------------------------------------")
+
+  if (!supabaseUrl || supabaseUrl.trim() === "" || supabaseUrl.includes("localhost")) {
+    const errorMsg = `CRITICAL ERROR: NEXT_PUBLIC_SUPABASE_URL is not correctly configured. Value received: '${supabaseUrl}'. It must be a valid URL and not 'localhost'.`
+    console.error(errorMsg)
+    throw new Error(errorMsg)
   }
 
-  // Se não tem as variáveis, usa valores padrão para não quebrar
-  // const url = supabaseUrl || "http://localhost:54321" // REMOVER ESTA LINHA
-  // const key = supabaseAnonKey || "dummy-key" // REMOVER ESTA LINHA
+  if (!supabaseAnonKey || supabaseAnonKey.trim() === "") {
+    const errorMsg = `CRITICAL ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is not correctly configured. It's missing or empty.`
+    console.error(errorMsg)
+    throw new Error(errorMsg)
+  }
 
   // Cria a instância
-  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
-    db: { schema: "impaai" },
-    global: { headers: { "Accept-Profile": "impaai", "Content-Profile": "impaai" } },
-  })
+  try {
+    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      db: { schema: "impaai" },
+      global: { headers: { "Accept-Profile": "impaai", "Content-Profile": "impaai" } },
+    })
+    console.log(
+      `Supabase client successfully initialized for URL (domain only for security): ${new URL(supabaseUrl).hostname}`,
+    )
+  } catch (e: any) {
+    console.error("Failed to create Supabase client instance:", e.message)
+    throw new Error(`Failed to create Supabase client instance: ${e.message}`)
+  }
 
   return supabaseInstance
 }
@@ -54,7 +72,7 @@ export const db = {
   rpc: (functionName: string, params?: any) => supabase.rpc(functionName, params),
 }
 
-// Tipos
+// Tipos (permanecem os mesmos)
 export interface UserProfile {
   id: string
   full_name: string | null
