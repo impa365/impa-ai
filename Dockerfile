@@ -16,12 +16,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Variáveis temporárias para o build (serão substituídas no runtime)
-ENV NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=temporary-key-for-build
-ENV NEXTAUTH_SECRET=temporary-secret-for-build
-ENV NEXTAUTH_URL=http://localhost:3000
+# Variáveis de ambiente para o build
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
 
 # Build da aplicação
 RUN npm run build

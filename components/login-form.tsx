@@ -143,7 +143,7 @@ function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="seu@email.com"
                 required
-                className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500 text-gray-900"
               />
             </div>
 
@@ -157,7 +157,7 @@ function LoginForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500 pr-10"
+                  className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500 text-gray-900 pr-10"
                 />
                 <Button
                   type="button"

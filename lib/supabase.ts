@@ -1,56 +1,54 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
-// Verificar se as variáveis de ambiente estão definidas
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// Variável para armazenar a instância do cliente
+let supabaseInstance: SupabaseClient | null = null
 
-if (!supabaseUrl) {
-  console.error("NEXT_PUBLIC_SUPABASE_URL não está definida nas variáveis de ambiente")
+// Função que cria o cliente apenas quando necessário
+function getSupabaseClient(): SupabaseClient {
+  // Se já existe uma instância, retorna ela
+  if (supabaseInstance) {
+    return supabaseInstance
+  }
+
+  // Pega as variáveis de ambiente
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // Se não tem as variáveis, usa valores padrão para não quebrar
+  const url = supabaseUrl || "http://localhost:54321"
+  const key = supabaseAnonKey || "dummy-key"
+
+  // Cria a instância
+  supabaseInstance = createClient(url, key, {
+    db: { schema: "impaai" },
+    global: { headers: { "Accept-Profile": "impaai", "Content-Profile": "impaai" } },
+  })
+
+  return supabaseInstance
 }
 
-if (!supabaseAnonKey) {
-  console.error("NEXT_PUBLIC_SUPABASE_ANON_KEY não está definida nas variáveis de ambiente")
-}
+// Exporta o cliente
+export const supabase = getSupabaseClient()
 
-// Criar cliente com valores padrão se as variáveis não estiverem definidas (para evitar erro de build)
-export const supabase = createClient(supabaseUrl || "http://localhost:54321", supabaseAnonKey || "dummy-key", {
-  db: {
-    schema: "impaai",
-  },
-  global: {
-    headers: {
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-    },
-  },
-})
-
-// Função para acessar qualquer tabela no schema correto
-export function getTable(tableName: string) {
-  return supabase.from(tableName)
-}
-
-// Funções específicas para cada tabela - USANDO A NOVA ESTRUTURA
+// Objeto db para facilitar o uso
 export const db = {
-  users: () => getTable("user_profiles"),
-  agents: () => getTable("ai_agents"),
-  whatsappConnections: () => getTable("whatsapp_connections"),
-  activityLogs: () => getTable("agent_activity_logs"),
-  userSettings: () => getTable("user_settings"),
-  systemSettings: () => getTable("system_settings"),
-  themes: () => getTable("system_themes"),
-  integrations: () => getTable("integrations"),
-  vectorStores: () => getTable("vector_stores"),
-  vectorDocuments: () => getTable("vector_documents"),
-  apiKeys: () => getTable("user_api_keys"),
-  organizations: () => getTable("organizations"),
-  dailyMetrics: () => getTable("daily_metrics"),
-
-  // Função para executar queries SQL diretas
+  users: () => supabase.from("user_profiles"),
+  agents: () => supabase.from("ai_agents"),
+  whatsappConnections: () => supabase.from("whatsapp_connections"),
+  activityLogs: () => supabase.from("agent_activity_logs"),
+  userSettings: () => supabase.from("user_settings"),
+  systemSettings: () => supabase.from("system_settings"),
+  themes: () => supabase.from("system_themes"),
+  integrations: () => supabase.from("integrations"),
+  vectorStores: () => supabase.from("vector_stores"),
+  vectorDocuments: () => supabase.from("vector_documents"),
+  apiKeys: () => supabase.from("user_api_keys"),
+  organizations: () => supabase.from("organizations"),
+  dailyMetrics: () => supabase.from("daily_metrics"),
   rpc: (functionName: string, params?: any) => supabase.rpc(functionName, params),
 }
 
-// Tipos para o banco de dados - NOVA ESTRUTURA
+// Tipos
 export interface UserProfile {
   id: string
   full_name: string | null

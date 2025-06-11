@@ -6,9 +6,9 @@ import { ThemeProvider } from "@/components/theme-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
-// Metadata mínima - será sobrescrita pelo DynamicTitle
 export const metadata: Metadata = {
-  description: "Sistema de gestão",
+  title: "Impa AI", // Adicione um título padrão
+  description: "Sistema de gestão de agentes IA",
   generator: "v0.dev",
 }
 
@@ -18,9 +18,17 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          // disableTransitionOnChange // Considere adicionar se tiver problemas com transições de tema
+        >
+          {/* Seu DynamicTitle e outros componentes podem vir aqui se necessário */}
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   )
