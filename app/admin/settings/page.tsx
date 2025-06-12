@@ -134,12 +134,24 @@ export default function AdminSettingsPage() {
   const [showNewKeyForm, setShowNewKeyForm] = useState(false)
 
   useEffect(() => {
+    console.log("useEffect: Verificando usuário atual...")
     const currentUser = getCurrentUser()
-    if (!currentUser || currentUser.role !== "admin") {
+
+    if (!currentUser) {
+      console.log("useEffect: Usuário não encontrado, redirecionando...")
       router.push("/")
       return
     }
+
+    if (currentUser.role !== "admin") {
+      console.log("useEffect: Usuário não é admin, redirecionando...")
+      router.push("/")
+      return
+    }
+
+    console.log("useEffect: Usuário admin encontrado:", currentUser.id)
     setUser(currentUser)
+
     setProfileForm({
       full_name: currentUser.full_name || "",
       email: currentUser.email || "",
@@ -147,8 +159,13 @@ export default function AdminSettingsPage() {
       newPassword: "",
       confirmPassword: "",
     })
+
+    console.log("useEffect: Carregando configurações do sistema...")
     loadSystemSettings()
+
+    console.log("useEffect: Carregando API keys...")
     loadApiKeys(currentUser.id)
+
     setLoading(false)
   }, [router])
 
@@ -264,40 +281,77 @@ export default function AdminSettingsPage() {
 
   // Funções de API Key
   const loadApiKeys = async (userId: string) => {
-    if (!userId) return
+    if (!userId) {
+      console.log("loadApiKeys: userId não fornecido")
+      return
+    }
+
     setLoadingApiKeys(true)
+    console.log("loadApiKeys: Iniciando carregamento para userId:", userId)
+
     try {
-      const response = await fetch(`/api/user/api-keys?user_id=${userId}`)
+      const url = `/api/user/api-keys?user_id=${userId}`
+      console.log("loadApiKeys: Fazendo requisição para:", url)
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      console.log("loadApiKeys: Status da resposta:", response.status)
+      console.log("loadApiKeys: Headers da resposta:", Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
-        // Tentar ler como texto se não for ok, pois pode não ser JSON
+        // Tentar ler como texto primeiro
         const errorText = await response.text()
-        console.error("Erro da API ao carregar API Keys (texto):", errorText)
+        console.error("loadApiKeys: Erro da API (texto):", errorText)
 
         let errorMessage = `Erro HTTP ${response.status}: ${response.statusText}`
+
+        // Tentar parsear como JSON se possível
         try {
-          // Tentar parsear como JSON, caso a API tenha retornado um JSON de erro estruturado
           const errorJson = JSON.parse(errorText)
           errorMessage = errorJson.error || errorMessage
-        } catch (e) {
-          // Não era JSON, usar o texto do erro se for curto, ou o statusText
+          console.error("loadApiKeys: Erro da API (JSON):", errorJson)
+        } catch (parseError) {
+          console.error("loadApiKeys: Resposta não é JSON válido:", parseError)
+          // Se não for JSON, usar o texto se for curto e não for HTML
           if (errorText && errorText.length < 200 && !errorText.toLowerCase().includes("<html")) {
             errorMessage = errorText
           }
         }
+
         throw new Error(errorMessage)
       }
 
       // Se response.ok é true, esperamos JSON
       const data = await response.json()
+      console.log("loadApiKeys: Dados recebidos:", data)
+
       setApiKeys(data.apiKeys || [])
+      console.log("loadApiKeys: API Keys carregadas com sucesso:", data.apiKeys?.length || 0)
     } catch (error) {
-      console.error("Erro detalhado ao carregar API keys:", error)
-      toast({
-        title: "Erro ao Carregar API Keys",
-        description: (error as Error).message,
-        variant: "destructive",
-      })
+      console.error("loadApiKeys: Erro detalhado:", error)
+
+      // Verificar se é erro de rede
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        toast({
+          title: "Erro de Conexão",
+          description: "Não foi possível conectar com o servidor. Verifique sua conexão.",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Erro ao Carregar API Keys",
+          description: (error as Error).message,
+          variant: "destructive",
+        })
+      }
+
+      // Definir array vazio em caso de erro
+      setApiKeys([])
     } finally {
       setLoadingApiKeys(false)
     }
