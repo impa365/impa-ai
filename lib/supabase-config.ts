@@ -1,47 +1,46 @@
-// Função para obter variáveis de ambiente em runtime
-function getRuntimeEnv(key: string): string {
-  // No servidor, usa process.env
+// Função auxiliar para obter a configuração correta
+function getConfigValue(key: string, placeholder: string): string {
+  // No lado do servidor, sempre usa process.env
   if (typeof window === "undefined") {
-    return process.env[key] || ""
+    return process.env[key] || placeholder
   }
 
-  // No cliente, usa window.__RUNTIME_ENV__ se disponível, senão usa process.env
-  const runtimeEnv = (window as any).__RUNTIME_ENV__
-  if (runtimeEnv && runtimeEnv[key]) {
-    return runtimeEnv[key]
+  // No lado do cliente, tenta window.__RUNTIME_CONFIG__ primeiro
+  // @ts-ignore A propriedade __RUNTIME_CONFIG__ é injetada via script
+  if (window.__RUNTIME_CONFIG__ && window.__RUNTIME_CONFIG__[key]) {
+    // @ts-ignore
+    return window.__RUNTIME_CONFIG__[key]
   }
 
-  // Fallback para process.env (valores do build)
-  return (process.env as any)[key] || ""
+  // Fallback para process.env (valores do build) se window.__RUNTIME_CONFIG__ não estiver disponível
+  // Isso é útil para desenvolvimento local fora do Docker
+  return process.env[key] || placeholder
 }
 
-// Configurações centralizadas do Supabase
 export const supabaseConfig = {
   get url() {
-    const url = getRuntimeEnv("NEXT_PUBLIC_SUPABASE_URL")
-    if (!url || url.includes("placeholder")) {
-      console.warn("⚠️ NEXT_PUBLIC_SUPABASE_URL não está configurada corretamente")
-      return "https://placeholder.supabase.co"
+    const url = getConfigValue("NEXT_PUBLIC_SUPABASE_URL", "https://placeholder.supabase.co")
+    if (url === "https://placeholder.supabase.co" && typeof window !== "undefined") {
+      console.warn("⚠️ Supabase URL está usando placeholder no cliente. Verifique a injeção de runtime config.")
     }
     return url
   },
 
   get anonKey() {
-    const key = getRuntimeEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
-    if (!key || key.includes("placeholder")) {
-      console.warn("⚠️ NEXT_PUBLIC_SUPABASE_ANON_KEY não está configurada corretamente")
-      return "placeholder-anon-key"
+    const key = getConfigValue("NEXT_PUBLIC_SUPABASE_ANON_KEY", "placeholder-anon-key")
+    if (key === "placeholder-anon-key" && typeof window !== "undefined") {
+      console.warn("⚠️ Supabase Anon Key está usando placeholder no cliente. Verifique a injeção de runtime config.")
     }
     return key
   },
 
   get serviceRoleKey() {
+    // Service role key é usada apenas no servidor, então process.env é seguro
     return process.env.SUPABASE_SERVICE_ROLE_KEY || ""
   },
 
   schema: "impaai",
 
-  // Configurações padrão
   defaultConfig: {
     db: { schema: "impaai" },
     auth: {
@@ -57,7 +56,6 @@ export const supabaseConfig = {
   },
 }
 
-// Nomes das tabelas do banco de dados
 export const TABLES = {
   USER_PROFILES: "user_profiles",
   AGENTS: "agents",
@@ -76,7 +74,6 @@ export const TABLES = {
   SYSTEM_LOGS: "system_logs",
 } as const
 
-// URLs das APIs REST (usando getters para serem dinâmicas)
 export const restApiUrls = {
   get base() {
     return `${supabaseConfig.url}/rest/v1`
@@ -110,7 +107,6 @@ export const restApiUrls = {
   },
 }
 
-// Headers padrão para requisições REST (usando getter para ser dinâmico)
 export const getDefaultHeaders = () => ({
   Accept: "application/json",
   "Content-Type": "application/json",
@@ -119,29 +115,30 @@ export const getDefaultHeaders = () => ({
   apikey: supabaseConfig.anonKey,
 })
 
-// Função para validar se todas as variáveis necessárias estão definidas
 export function validateSupabaseConfig() {
   try {
     const url = supabaseConfig.url
     const anonKey = supabaseConfig.anonKey
 
-    // Não validar durante o build
-    if (typeof window === "undefined" && (url.includes("placeholder") || anonKey.includes("placeholder"))) {
-      console.log("⚠️ Usando configuração placeholder durante o build")
-      return true
+    if (url.includes("placeholder") || anonKey.includes("placeholder")) {
+      // Não lançar erro, apenas logar, pois pode ser build time ou cliente ainda não carregou
+      console.warn("⚠️ Configuração do Supabase está usando valores placeholder.")
+      if (typeof window !== "undefined") {
+        // @ts-ignore
+        console.log("Cliente: window.__RUNTIME_CONFIG__:", window.__RUNTIME_CONFIG__)
+      }
+      return false // Indica que a validação falhou ou está incompleta
     }
 
-    console.log("✅ Configuração do Supabase validada com sucesso")
+    console.log("✅ Configuração do Supabase validada com sucesso (runtime)")
     console.log(`📍 URL: ${new URL(url).hostname}`)
-    console.log(`🔑 Anon Key: ${anonKey ? "Definida" : "Não definida"}`)
-
+    console.log(`🔑 Anon Key: ${anonKey ? "***definida***" : "Não definida"}`)
     return true
   } catch (error) {
-    console.error("❌ Erro na configuração do Supabase:", error)
+    console.error("❌ Erro na validação da configuração do Supabase:", error)
     return false
   }
 }
 
-// Tipos para TypeScript
 export type TableName = keyof typeof TABLES
 export type TableValue = (typeof TABLES)[TableName]
