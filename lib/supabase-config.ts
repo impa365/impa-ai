@@ -1,25 +1,36 @@
+// Função para obter variáveis de ambiente em runtime
+function getRuntimeEnv(key: string): string {
+  // No servidor, usa process.env
+  if (typeof window === "undefined") {
+    return process.env[key] || ""
+  }
+
+  // No cliente, usa window.__RUNTIME_ENV__ se disponível, senão usa process.env
+  const runtimeEnv = (window as any).__RUNTIME_ENV__
+  if (runtimeEnv && runtimeEnv[key]) {
+    return runtimeEnv[key]
+  }
+
+  // Fallback para process.env (valores do build)
+  return (process.env as any)[key] || ""
+}
+
 // Configurações centralizadas do Supabase
 export const supabaseConfig = {
   get url() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    if (!url && typeof window === "undefined") {
-      // Durante o build, retorna um valor padrão para evitar erro
+    const url = getRuntimeEnv("NEXT_PUBLIC_SUPABASE_URL")
+    if (!url || url.includes("placeholder")) {
+      console.warn("⚠️ NEXT_PUBLIC_SUPABASE_URL não está configurada corretamente")
       return "https://placeholder.supabase.co"
-    }
-    if (!url) {
-      throw new Error("NEXT_PUBLIC_SUPABASE_URL não está definida")
     }
     return url
   },
 
   get anonKey() {
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (!key && typeof window === "undefined") {
-      // Durante o build, retorna um valor padrão para evitar erro
+    const key = getRuntimeEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+    if (!key || key.includes("placeholder")) {
+      console.warn("⚠️ NEXT_PUBLIC_SUPABASE_ANON_KEY não está configurada corretamente")
       return "placeholder-anon-key"
-    }
-    if (!key) {
-      throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY não está definida")
     }
     return key
   },
