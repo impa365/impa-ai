@@ -12,14 +12,12 @@ const nextConfig = {
   
   // Configurações de imagem
   images: {
-    domains: ['localhost'],
+    domains: ['localhost', 'supa.impa365.com'],
     unoptimized: true
   },
   
-  // Configurações experimentais
-  experimental: {
-    serverComponentsExternalPackages: ['@supabase/supabase-js']
-  },
+  // Configurações experimentais - corrigido para Next.js 15
+  serverExternalPackages: ['@supabase/supabase-js'],
   
   // Configurações de webpack para compatibilidade
   webpack: (config, { isServer }) => {
