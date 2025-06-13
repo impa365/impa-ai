@@ -1,5 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
+// ⚠️ DEPRECATED: Este arquivo usa variáveis embutidas no build (placeholders)
+// Use lib/supabase-runtime.ts para configuração runtime real
+console.warn("⚠️ DEPRECATED: lib/supabase.ts is deprecated. Use lib/supabase-runtime.ts instead")
+
 // Variável para armazenar a instância do cliente
 let supabaseInstance: SupabaseClient | null = null
 
@@ -13,8 +17,9 @@ function getSupabaseClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  // LOGS DE DEPURAÇÃO TEMPORÁRIOS
+  // LOGS DE DEPURAÇÃO
   console.log("--- DEBUG Supabase Client Initialization (lib/supabase.ts) ---")
+  console.log("⚠️ WARNING: Using DEPRECATED lib/supabase.ts with build-time variables")
   console.log("Attempting to read NEXT_PUBLIC_SUPABASE_URL:", supabaseUrl)
   console.log(
     "Attempting to read NEXT_PUBLIC_SUPABASE_ANON_KEY:",
@@ -25,30 +30,25 @@ function getSupabaseClient(): SupabaseClient {
   // Detectar se estamos em build time ou runtime
   const isBuildTime =
     process.env.NEXT_PUBLIC_BUILD_TIME === "true" ||
-    // Durante o build do Next.js, estas variáveis estão presentes
     process.env.NEXT_PHASE === "phase-production-build" ||
-    // Outra heurística: se estamos em produção mas com placeholders, provavelmente é build time
     (process.env.NODE_ENV === "production" &&
       (supabaseUrl?.includes("placeholder-build") || supabaseAnonKey?.includes("placeholder-build")))
 
   if (process.env.NODE_ENV === "production" && !isBuildTime) {
-    // Verificações rigorosas APENAS para runtime em produção, não para build time
-    if (!supabaseUrl || supabaseUrl.includes("placeholder-build") || supabaseUrl.includes("localhost")) {
-      const errorMsg = `CRITICAL RUNTIME ERROR (lib/supabase.ts): NEXT_PUBLIC_SUPABASE_URL is invalid or a placeholder in production runtime. Value: '${supabaseUrl}'. Application will not start.`
-      console.error(errorMsg)
-      throw new Error(errorMsg)
-    }
-    if (!supabaseAnonKey || supabaseAnonKey.includes("placeholder-build")) {
-      const errorMsg = `CRITICAL RUNTIME ERROR (lib/supabase.ts): NEXT_PUBLIC_SUPABASE_ANON_KEY is invalid or a placeholder in production runtime. Application will not start.`
-      console.error(errorMsg)
-      throw new Error(errorMsg)
-    }
-    console.log("[lib/supabase.ts] Production runtime: Supabase URL and Key appear valid (not placeholders).")
-  } else if (isBuildTime) {
-    // Em build time, apenas logar um aviso
-    console.log("[lib/supabase.ts] Build time detected. Using placeholder values for Supabase URL and Key is allowed.")
+    // Em produção runtime, avisar sobre o uso do arquivo deprecated
+    console.error("❌ CRITICAL: lib/supabase.ts is being used in production runtime!")
+    console.error("❌ This file contains build-time placeholders, not runtime values!")
+    console.error("❌ Use lib/supabase-runtime.ts instead for runtime configuration!")
+
     if (supabaseUrl?.includes("placeholder-build") || supabaseAnonKey?.includes("placeholder-build")) {
-      console.log("[lib/supabase.ts] Using placeholder values for Supabase during build. This is expected.")
+      throw new Error(
+        "CRITICAL: lib/supabase.ts contains placeholders in production runtime. Use lib/supabase-runtime.ts instead!",
+      )
+    }
+  } else if (isBuildTime) {
+    console.log("[lib/supabase.ts] Build time detected. Using placeholder values is allowed.")
+    if (supabaseUrl?.includes("placeholder-build") || supabaseAnonKey?.includes("placeholder-build")) {
+      console.log("[lib/supabase.ts] Using placeholder values during build. This is expected.")
     }
   }
 
@@ -60,9 +60,7 @@ function getSupabaseClient(): SupabaseClient {
       db: { schema: "impaai" },
       global: { headers: { "Accept-Profile": "impaai", "Content-Profile": "impaai" } },
     })
-    console.log(
-      `[lib/supabase.ts] Supabase client successfully initialized for URL (domain only for security): ${new URL(supabaseUrl).hostname}`,
-    )
+    console.log(`[lib/supabase.ts] Supabase client initialized for: ${new URL(supabaseUrl).hostname}`)
   } catch (e: any) {
     console.error("[lib/supabase.ts] Failed to create Supabase client instance:", e.message)
     throw new Error(`[lib/supabase.ts] Failed to create Supabase client instance: ${e.message}`)
@@ -71,10 +69,10 @@ function getSupabaseClient(): SupabaseClient {
   return supabaseInstance
 }
 
-// Exporta o cliente
+// Exporta o cliente (DEPRECATED)
 export const supabase = getSupabaseClient()
 
-// Objeto db para facilitar o uso
+// Objeto db (DEPRECATED)
 export const db = {
   users: () => supabase.from("user_profiles"),
   agents: () => supabase.from("ai_agents"),
@@ -92,7 +90,7 @@ export const db = {
   rpc: (functionName: string, params?: any) => supabase.rpc(functionName, params),
 }
 
-// Tipos (permanecem os mesmos)
+// Tipos permanecem os mesmos...
 export interface UserProfile {
   id: string
   full_name: string | null

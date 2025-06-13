@@ -9,21 +9,33 @@ export async function GET() {
     nodeEnv: process.env.NODE_ENV,
   }
 
-  // Log para debug (remover depois)
-  console.log("[/api/config] Serving runtime config:", {
-    supabaseUrl: config.supabaseUrl,
-    supabaseAnonKey: config.supabaseAnonKey ? "***HIDDEN***" : "NOT SET",
-    nextAuthUrl: config.nextAuthUrl,
-    nodeEnv: config.nodeEnv,
-  })
+  // Log para debug
+  console.log("[/api/config] 🔍 Runtime environment variables from server:")
+  console.log(`[/api/config] NEXT_PUBLIC_SUPABASE_URL: ${config.supabaseUrl}`)
+  console.log(`[/api/config] NEXT_PUBLIC_SUPABASE_ANON_KEY: ${config.supabaseAnonKey ? "***HIDDEN***" : "NOT SET"}`)
+  console.log(`[/api/config] NODE_ENV: ${config.nodeEnv}`)
 
   // Verificar se ainda são placeholders
   if (config.supabaseUrl?.includes("placeholder-build")) {
-    console.error("[/api/config] ERROR: Still serving placeholder URL!")
+    console.error("[/api/config] ❌ ERROR: Still serving placeholder URL!")
+    return NextResponse.json(
+      { error: "Server configuration error: Supabase URL is still a placeholder" },
+      { status: 500 },
+    )
   }
   if (config.supabaseAnonKey?.includes("placeholder-build")) {
-    console.error("[/api/config] ERROR: Still serving placeholder key!")
+    console.error("[/api/config] ❌ ERROR: Still serving placeholder key!")
+    return NextResponse.json(
+      { error: "Server configuration error: Supabase key is still a placeholder" },
+      { status: 500 },
+    )
   }
 
+  if (!config.supabaseUrl || !config.supabaseAnonKey) {
+    console.error("[/api/config] ❌ ERROR: Missing required configuration")
+    return NextResponse.json({ error: "Server configuration error: Missing Supabase credentials" }, { status: 500 })
+  }
+
+  console.log("[/api/config] ✅ Serving valid runtime configuration")
   return NextResponse.json(config)
 }
