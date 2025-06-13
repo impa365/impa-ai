@@ -1,91 +1,19 @@
-// Sistema de logs para debug das variáveis
-function logEnvDebug(context: string, key: string, value: string | undefined) {
-  const isPlaceholder = value?.includes("placeholder") || value === "placeholder-anon-key"
-  const status = !value ? "❌ UNDEFINED" : isPlaceholder ? "⚠️ PLACEHOLDER" : "✅ VALID"
+/**
+ * Configuração do Supabase - Versão Simplificada
+ *
+ * Esta versão não faz validações complexas que podem causar
+ * problemas de hidratação entre servidor e cliente
+ */
 
-  console.log(`[${context}] ${status} ${key}: ${value ? (key.includes("KEY") ? "***HIDDEN***" : value) : "undefined"}`)
-
-  return { value, isValid: !isPlaceholder && !!value }
-}
-
-// Função auxiliar para obter a configuração correta
-function getConfigValue(key: string, placeholder: string): string {
-  const context = typeof window === "undefined" ? "SERVER" : "CLIENT"
-
-  // No lado do servidor, sempre usa process.env
-  if (typeof window === "undefined") {
-    const serverValue = process.env[key]
-    const debug = logEnvDebug("SERVER", key, serverValue)
-
-    if (!debug.isValid) {
-      console.error(`🚨 ERRO CRÍTICO [SERVER]: ${key} não está configurada corretamente!`)
-      console.error(`   Valor recebido: "${serverValue}"`)
-      console.error(`   Esperado: URL válida do Supabase (não placeholder)`)
-
-      if (process.env.NODE_ENV === "production") {
-        throw new Error(`${key} não está configurada corretamente no ambiente de produção`)
-      }
-    }
-
-    return serverValue || placeholder
-  }
-
-  // No lado do cliente, tenta window.__RUNTIME_CONFIG__ primeiro
-  // @ts-ignore A propriedade __RUNTIME_CONFIG__ é injetada via script
-  if (window.__RUNTIME_CONFIG__ && window.__RUNTIME_CONFIG__[key]) {
-    // @ts-ignore
-    const runtimeValue = window.__RUNTIME_CONFIG__[key]
-    const debug = logEnvDebug("CLIENT-RUNTIME", key, runtimeValue)
-
-    if (debug.isValid) {
-      return runtimeValue
-    }
-  }
-
-  // Fallback para process.env (valores do build)
-  const buildValue = process.env[key]
-  const debug = logEnvDebug("CLIENT-BUILD", key, buildValue)
-
-  if (!debug.isValid) {
-    console.error(`🚨 ERRO CRÍTICO [CLIENT]: ${key} não foi carregada corretamente!`)
-    console.error(`   Runtime config: ${window.__RUNTIME_CONFIG__ ? "Existe" : "Não existe"}`)
-    console.error(`   Build value: "${buildValue}"`)
-    console.error(`   Isso indica que as variáveis do Portainer não estão chegando ao cliente`)
-  }
-
-  return buildValue || placeholder
-}
-
+// Configuração básica do Supabase
 export const supabaseConfig = {
-  get url() {
-    return getConfigValue("NEXT_PUBLIC_SUPABASE_URL", "https://placeholder.supabase.co")
-  },
-
-  get anonKey() {
-    return getConfigValue("NEXT_PUBLIC_SUPABASE_ANON_KEY", "placeholder-anon-key")
-  },
-
-  get serviceRoleKey() {
-    return process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-  },
-
+  url: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   schema: "impaai",
-
-  defaultConfig: {
-    db: { schema: "impaai" },
-    auth: {
-      persistSession: typeof window !== "undefined",
-      autoRefreshToken: typeof window !== "undefined",
-    },
-    global: {
-      headers: {
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-    },
-  },
 }
 
+// Tabelas do banco de dados
 export const TABLES = {
   USER_PROFILES: "user_profiles",
   AGENTS: "agents",
@@ -104,39 +32,21 @@ export const TABLES = {
   SYSTEM_LOGS: "system_logs",
 } as const
 
+// URLs da API REST do Supabase
 export const restApiUrls = {
-  get base() {
-    return `${supabaseConfig.url}/rest/v1`
-  },
-  get users() {
-    return `${supabaseConfig.url}/rest/v1/${TABLES.USER_PROFILES}`
-  },
-  get agents() {
-    return `${supabaseConfig.url}/rest/v1/${TABLES.AGENTS}`
-  },
-  get whatsappConnections() {
-    return `${supabaseConfig.url}/rest/v1/${TABLES.WHATSAPP_CONNECTIONS}`
-  },
-  get activityLogs() {
-    return `${supabaseConfig.url}/rest/v1/${TABLES.ACTIVITY_LOGS}`
-  },
-  get userSettings() {
-    return `${supabaseConfig.url}/rest/v1/${TABLES.USER_SETTINGS}`
-  },
-  get systemSettings() {
-    return `${supabaseConfig.url}/rest/v1/${TABLES.SYSTEM_SETTINGS}`
-  },
-  get themes() {
-    return `${supabaseConfig.url}/rest/v1/${TABLES.THEMES}`
-  },
-  get integrations() {
-    return `${supabaseConfig.url}/rest/v1/${TABLES.INTEGRATIONS}`
-  },
-  get apiKeys() {
-    return `${supabaseConfig.url}/rest/v1/${TABLES.USER_API_KEYS}`
-  },
+  base: `${supabaseConfig.url}/rest/v1`,
+  users: `${supabaseConfig.url}/rest/v1/${TABLES.USER_PROFILES}`,
+  agents: `${supabaseConfig.url}/rest/v1/${TABLES.AGENTS}`,
+  whatsappConnections: `${supabaseConfig.url}/rest/v1/${TABLES.WHATSAPP_CONNECTIONS}`,
+  activityLogs: `${supabaseConfig.url}/rest/v1/${TABLES.ACTIVITY_LOGS}`,
+  userSettings: `${supabaseConfig.url}/rest/v1/${TABLES.USER_SETTINGS}`,
+  systemSettings: `${supabaseConfig.url}/rest/v1/${TABLES.SYSTEM_SETTINGS}`,
+  themes: `${supabaseConfig.url}/rest/v1/${TABLES.THEMES}`,
+  integrations: `${supabaseConfig.url}/rest/v1/${TABLES.INTEGRATIONS}`,
+  apiKeys: `${supabaseConfig.url}/rest/v1/${TABLES.USER_API_KEYS}`,
 }
 
+// Headers padrão para requisições
 export const getDefaultHeaders = () => ({
   Accept: "application/json",
   "Content-Type": "application/json",
@@ -145,21 +55,19 @@ export const getDefaultHeaders = () => ({
   apikey: supabaseConfig.anonKey,
 })
 
+// Função para validar conexão com Supabase
 export async function validateSupabaseConnection() {
   try {
     console.log("🔍 Validando conexão com Supabase...")
 
-    const url = supabaseConfig.url
-    const anonKey = supabaseConfig.anonKey
-
-    if (url.includes("placeholder") || anonKey.includes("placeholder")) {
-      throw new Error(`Conexão falhou: URL ou Anon Key são placeholders. URL: ${url}`)
+    if (!supabaseConfig.url || !supabaseConfig.anonKey) {
+      throw new Error("Configurações do Supabase não encontradas")
     }
 
-    const response = await fetch(`${url}/rest/v1/`, {
+    const response = await fetch(`${supabaseConfig.url}/rest/v1/`, {
       headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
+        apikey: supabaseConfig.anonKey,
+        Authorization: `Bearer ${supabaseConfig.anonKey}`,
         "Accept-Profile": supabaseConfig.schema,
         "Content-Profile": supabaseConfig.schema,
       },
@@ -177,6 +85,7 @@ export async function validateSupabaseConnection() {
   }
 }
 
+// Função para validar tabelas do banco
 export async function validateSupabaseTables() {
   try {
     console.log("🔍 Validando tabelas do banco...")
@@ -217,21 +126,6 @@ export async function validateSupabaseTables() {
   }
 }
 
-export function validateSupabaseConfig() {
-  try {
-    const url = supabaseConfig.url
-    const anonKey = supabaseConfig.anonKey
-
-    console.log("✅ Configuração do Supabase validada com sucesso")
-    console.log(`📍 URL: ${new URL(url).hostname}`)
-    console.log(`🔑 Anon Key: ${anonKey ? "***definida***" : "Não definida"}`)
-
-    return true
-  } catch (error) {
-    console.error("❌ Erro na validação da configuração do Supabase:", error)
-    return false
-  }
-}
-
+// Tipos TypeScript
 export type TableName = keyof typeof TABLES
 export type TableValue = (typeof TABLES)[TableName]

@@ -16,30 +16,20 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# IMPORTANTE: Usar placeholders apenas para o build
-# Essas variáveis serão sobrescritas pelo Portainer em runtime
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
-ENV NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder-anon-key
-
-# Build da aplicação
+# Build da aplicação SEM definir variáveis de ambiente
 RUN npm run build
 
 # Imagem de produção
 FROM base AS runner
 WORKDIR /app
 
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-
 # Criar usuário não-root
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copiar scripts de validação
-COPY --chown=nextjs:nodejs scripts/ ./scripts/
-RUN chmod +x ./scripts/start.sh ./scripts/health-check.js
+# Copiar script de inicialização
+COPY --chown=nextjs:nodejs scripts/start.js ./scripts/
+RUN chmod +x ./scripts/start.js
 
 # Copiar arquivos necessários
 COPY --from=builder /app/public ./public
@@ -54,11 +44,5 @@ USER nextjs
 
 EXPOSE 3000
 
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
-
-# IMPORTANTE: As variáveis NEXT_PUBLIC_* serão injetadas pelo Portainer
-# e sobrescreverão os placeholders do build
-
-# Usar script de inicialização que valida antes de iniciar
-CMD ["./scripts/start.sh"]
+# Usar script de inicialização que não interfere com hidratação
+CMD ["node", "scripts/start.js"]

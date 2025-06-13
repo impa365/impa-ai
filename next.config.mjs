@@ -2,7 +2,8 @@
 const nextConfig = {
   // Habilitar output standalone para Docker
   output: 'standalone',
-
+  
+  // Ignorar erros durante o build
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -16,10 +17,10 @@ const nextConfig = {
     unoptimized: true
   },
   
-  // Configurações experimentais - corrigido para Next.js 15
+  // Configurações experimentais
   serverExternalPackages: ['@supabase/supabase-js'],
   
-  // IMPORTANTE: Forçar uso das variáveis de ambiente externas
+  // Repassar variáveis de ambiente sem valores padrão
   env: {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
