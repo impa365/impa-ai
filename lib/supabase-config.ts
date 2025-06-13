@@ -1,16 +1,40 @@
 /**
- * Configuração do Supabase - Versão Simplificada
+ * Configuração do Supabase - Foco em Variáveis de Ambiente
  *
- * Esta versão não faz validações complexas que podem causar
- * problemas de hidratação entre servidor e cliente
+ * Remove todos os valores padrão e placeholders.
+ * A aplicação dependerá exclusivamente das variáveis de ambiente.
  */
 
-// Configuração básica do Supabase
+// Função para obter variáveis de ambiente obrigatórias
+function getRequiredEnvVar(key: string): string {
+  const value = process.env[key]
+  if (!value) {
+    console.error(`🚨 ERRO CRÍTICO: Variável de ambiente ${key} não definida!`)
+    console.error("   A aplicação não pode iniciar sem esta variável.")
+    console.error("   Verifique a configuração do seu ambiente (ex: stack do Portainer).")
+    // Em um ambiente de produção real, você pode querer lançar um erro aqui
+    // ou ter um mecanismo de fallback mais robusto se apropriado,
+    // mas para o objetivo de depender 100% do env, vamos retornar string vazia
+    // e deixar as validações posteriores pegarem isso.
+    // No entanto, o console.error acima já alerta sobre o problema crítico.
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(`Variável de ambiente obrigatória ${key} não definida.`)
+    }
+    return "" // Retorna string vazia para evitar quebrar a tipagem, mas o erro já foi logado.
+  }
+  if (typeof window === "undefined") {
+    // Log apenas no servidor
+    console.log(`[ENV] ✅ ${key}: ${key.includes("KEY") ? "***OCULTO***" : value}`)
+  }
+  return value
+}
+
+// Configuração básica do Supabase usando variáveis de ambiente
 export const supabaseConfig = {
-  url: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
-  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
-  schema: "impaai",
+  url: getRequiredEnvVar("NEXT_PUBLIC_SUPABASE_URL"),
+  anonKey: getRequiredEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "", // Pode ser opcional dependendo do uso
+  schema: "impaai", // Esquema é fixo
 }
 
 // Tabelas do banco de dados
@@ -33,37 +57,67 @@ export const TABLES = {
 } as const
 
 // URLs da API REST do Supabase
+// Usam getters para garantir que supabaseConfig.url seja avaliado em runtime
 export const restApiUrls = {
-  base: `${supabaseConfig.url}/rest/v1`,
-  users: `${supabaseConfig.url}/rest/v1/${TABLES.USER_PROFILES}`,
-  agents: `${supabaseConfig.url}/rest/v1/${TABLES.AGENTS}`,
-  whatsappConnections: `${supabaseConfig.url}/rest/v1/${TABLES.WHATSAPP_CONNECTIONS}`,
-  activityLogs: `${supabaseConfig.url}/rest/v1/${TABLES.ACTIVITY_LOGS}`,
-  userSettings: `${supabaseConfig.url}/rest/v1/${TABLES.USER_SETTINGS}`,
-  systemSettings: `${supabaseConfig.url}/rest/v1/${TABLES.SYSTEM_SETTINGS}`,
-  themes: `${supabaseConfig.url}/rest/v1/${TABLES.THEMES}`,
-  integrations: `${supabaseConfig.url}/rest/v1/${TABLES.INTEGRATIONS}`,
-  apiKeys: `${supabaseConfig.url}/rest/v1/${TABLES.USER_API_KEYS}`,
+  get base() {
+    return `${supabaseConfig.url}/rest/v1`
+  },
+  get users() {
+    return `${supabaseConfig.url}/rest/v1/${TABLES.USER_PROFILES}`
+  },
+  get agents() {
+    return `${supabaseConfig.url}/rest/v1/${TABLES.AGENTS}`
+  },
+  get whatsappConnections() {
+    return `${supabaseConfig.url}/rest/v1/${TABLES.WHATSAPP_CONNECTIONS}`
+  },
+  get activityLogs() {
+    return `${supabaseConfig.url}/rest/v1/${TABLES.ACTIVITY_LOGS}`
+  },
+  get userSettings() {
+    return `${supabaseConfig.url}/rest/v1/${TABLES.USER_SETTINGS}`
+  },
+  get systemSettings() {
+    return `${supabaseConfig.url}/rest/v1/${TABLES.SYSTEM_SETTINGS}`
+  },
+  get themes() {
+    return `${supabaseConfig.url}/rest/v1/${TABLES.THEMES}`
+  },
+  get integrations() {
+    return `${supabaseConfig.url}/rest/v1/${TABLES.INTEGRATIONS}`
+  },
+  get apiKeys() {
+    return `${supabaseConfig.url}/rest/v1/${TABLES.USER_API_KEYS}`
+  },
 }
 
 // Headers padrão para requisições
-export const getDefaultHeaders = () => ({
-  Accept: "application/json",
-  "Content-Type": "application/json",
-  "Accept-Profile": supabaseConfig.schema,
-  "Content-Profile": supabaseConfig.schema,
-  apikey: supabaseConfig.anonKey,
-})
+export const getDefaultHeaders = () => {
+  if (!supabaseConfig.url || !supabaseConfig.anonKey) {
+    console.error("🚨 ERRO: Tentando gerar headers sem URL ou Anon Key do Supabase configurados.")
+    // Retorna headers vazios ou lança erro, dependendo da estratégia de erro.
+    // Lançar erro é mais seguro para pegar o problema cedo.
+    throw new Error("Supabase URL ou Anon Key não configurados ao tentar gerar headers.")
+  }
+  return {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    "Accept-Profile": supabaseConfig.schema,
+    "Content-Profile": supabaseConfig.schema,
+    apikey: supabaseConfig.anonKey,
+  }
+}
 
 // Função para validar conexão com Supabase
 export async function validateSupabaseConnection() {
+  console.log("🔍 Validando conexão com Supabase...")
+  if (!supabaseConfig.url || !supabaseConfig.anonKey) {
+    const errorMsg = "❌ Configurações do Supabase (URL ou Anon Key) não definidas. Impossível validar conexão."
+    console.error(errorMsg)
+    throw new Error(errorMsg)
+  }
+
   try {
-    console.log("🔍 Validando conexão com Supabase...")
-
-    if (!supabaseConfig.url || !supabaseConfig.anonKey) {
-      throw new Error("Configurações do Supabase não encontradas")
-    }
-
     const response = await fetch(`${supabaseConfig.url}/rest/v1/`, {
       headers: {
         apikey: supabaseConfig.anonKey,
@@ -74,7 +128,7 @@ export async function validateSupabaseConnection() {
     })
 
     if (!response.ok) {
-      throw new Error(`Erro na conexão: ${response.status} ${response.statusText}`)
+      throw new Error(`Erro na conexão: ${response.status} ${response.statusText}. URL: ${supabaseConfig.url}`)
     }
 
     console.log("✅ Conexão com Supabase estabelecida com sucesso!")
@@ -87,43 +141,44 @@ export async function validateSupabaseConnection() {
 
 // Função para validar tabelas do banco
 export async function validateSupabaseTables() {
-  try {
-    console.log("🔍 Validando tabelas do banco...")
-
-    const tablesToCheck = [TABLES.USER_PROFILES, TABLES.AGENTS, TABLES.SYSTEM_SETTINGS]
-    const results = []
-
-    for (const table of tablesToCheck) {
-      try {
-        const response = await fetch(`${restApiUrls.base}/${table}?limit=1`, {
-          headers: getDefaultHeaders(),
-        })
-
-        if (response.ok) {
-          console.log(`✅ Tabela ${table}: OK`)
-          results.push({ table, status: "ok" })
-        } else {
-          console.log(`❌ Tabela ${table}: Erro ${response.status}`)
-          results.push({ table, status: "error", error: response.status })
-        }
-      } catch (error) {
-        console.log(`❌ Tabela ${table}: Erro de conexão`)
-        results.push({ table, status: "error", error: error.message })
-      }
-    }
-
-    const successCount = results.filter((r) => r.status === "ok").length
-    console.log(`📊 Tabelas validadas: ${successCount}/${tablesToCheck.length}`)
-
-    if (successCount === 0) {
-      throw new Error("Nenhuma tabela foi encontrada ou está acessível")
-    }
-
-    return results
-  } catch (error) {
-    console.error("❌ Erro na validação das tabelas:", error)
-    throw error
+  console.log("🔍 Validando tabelas do banco...")
+  if (!supabaseConfig.url || !supabaseConfig.anonKey) {
+    const errorMsg = "❌ Configurações do Supabase (URL ou Anon Key) não definidas. Impossível validar tabelas."
+    console.error(errorMsg)
+    throw new Error(errorMsg)
   }
+
+  const tablesToCheck = [TABLES.USER_PROFILES, TABLES.AGENTS, TABLES.SYSTEM_SETTINGS]
+  const results = []
+
+  for (const table of tablesToCheck) {
+    try {
+      const response = await fetch(`${restApiUrls.base}/${table}?limit=1`, {
+        // Usa o getter
+        headers: getDefaultHeaders(),
+      })
+
+      if (response.ok) {
+        console.log(`✅ Tabela ${table}: OK`)
+        results.push({ table, status: "ok" })
+      } else {
+        console.log(`❌ Tabela ${table}: Erro ${response.status}`)
+        results.push({ table, status: "error", error: response.status })
+      }
+    } catch (error) {
+      console.log(`❌ Tabela ${table}: Erro de conexão`, error.message)
+      results.push({ table, status: "error", error: error.message })
+    }
+  }
+
+  const successCount = results.filter((r) => r.status === "ok").length
+  console.log(`📊 Tabelas validadas: ${successCount}/${tablesToCheck.length}`)
+
+  if (successCount === 0 && tablesToCheck.length > 0) {
+    throw new Error("Nenhuma tabela principal foi encontrada ou está acessível.")
+  }
+
+  return results
 }
 
 // Tipos TypeScript

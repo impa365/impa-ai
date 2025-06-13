@@ -13,8 +13,10 @@ const nextConfig = {
   
   // Configurações de imagem
   images: {
-    domains: ['localhost', 'supa.impa365.com'],
-    unoptimized: true
+    // Removido 'localhost' daqui. Adicione domínios de imagem de produção se necessário.
+    // Ex: domains: ['cdn.example.com', 'supa.impa365.com'],
+    domains: ['supa.impa365.com'], // Manter apenas domínios de produção ou CDN
+    unoptimized: true // Mantido, pode ser útil em alguns cenários de Docker
   },
   
   // Configurações experimentais
