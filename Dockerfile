@@ -50,9 +50,10 @@ ENV HOSTNAME="0.0.0.0"
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copiar script de inicialização
+# Copiar script de inicialização e diagnóstico
 COPY --chown=nextjs:nodejs scripts/start.js ./scripts/
-RUN chmod +x ./scripts/start.js
+COPY --chown=nextjs:nodejs scripts/check-env.js ./scripts/
+RUN chmod +x ./scripts/start.js ./scripts/check-env.js
 
 # Copiar arquivos necessários da etapa de build
 COPY --from=builder /app/public ./public
