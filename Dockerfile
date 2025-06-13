@@ -37,18 +37,17 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Copiar scripts de validação
-COPY scripts/health-check.js ./scripts/
-COPY scripts/start.sh ./scripts/
-RUN chmod +x ./scripts/start.sh
+COPY --chown=nextjs:nodejs scripts/ ./scripts/
+RUN chmod +x ./scripts/start.sh ./scripts/health-check.js
 
 # Copiar arquivos necessários
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Health check que valida conexão com Supabase
+# Health check simples
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD node scripts/health-check.js || exit 1
+  CMD curl -f http://localhost:3000/api/health || exit 1
 
 USER nextjs
 
