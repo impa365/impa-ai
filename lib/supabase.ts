@@ -1,97 +1,79 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+import { createClient } from "@supabase/supabase-js"
 
-// ⚠️ DEPRECATED: Este arquivo usa variáveis embutidas no build (placeholders)
-// Use lib/supabase-runtime.ts para configuração runtime real
-console.warn("⚠️ DEPRECATED: lib/supabase.ts is deprecated. Use lib/supabase-runtime.ts instead")
+// Verificar se as variáveis de ambiente estão definidas
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// Variável para armazenar a instância do cliente
-let supabaseInstance: SupabaseClient | null = null
-
-// Função que cria o cliente apenas quando necessário
-function getSupabaseClient(): SupabaseClient {
-  // Se já existe uma instância, retorna ela
-  if (supabaseInstance) {
-    return supabaseInstance
+if (typeof window !== "undefined") {
+  // Executa apenas no cliente
+  if (!supabaseUrl) {
+    console.error(
+      "CLIENT-SIDE ERROR: NEXT_PUBLIC_SUPABASE_URL is not defined in the environment. The application will attempt to connect to localhost:54321. Please check your Docker/Portainer environment variable configuration for the Next.js build process.",
+    )
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  // LOGS DE DEPURAÇÃO
-  console.log("--- DEBUG Supabase Client Initialization (lib/supabase.ts) ---")
-  console.log("⚠️ WARNING: Using DEPRECATED lib/supabase.ts with build-time variables")
-  console.log("Attempting to read NEXT_PUBLIC_SUPABASE_URL:", supabaseUrl)
-  console.log(
-    "Attempting to read NEXT_PUBLIC_SUPABASE_ANON_KEY:",
-    supabaseAnonKey ? "Exists (key hidden)" : "MISSING or EMPTY",
-  )
-  console.log("Current NODE_ENV:", process.env.NODE_ENV)
-
-  // Verificar se são placeholders mas NÃO falhar - apenas alertar
-  if (supabaseUrl?.includes("placeholder-build") || supabaseAnonKey?.includes("placeholder-build")) {
-    console.warn("⚠️ WARNING: lib/supabase.ts is using placeholder values!")
-    console.warn("⚠️ This means the application is using build-time values instead of runtime values.")
-    console.warn("⚠️ For production, use lib/supabase-runtime.ts to get real values from Portainer.")
-    console.warn("⚠️ The application will continue to work but may not connect to the correct Supabase instance.")
-  } else {
-    console.log("[lib/supabase.ts] Using non-placeholder values:", {
-      url: supabaseUrl,
-      keyExists: !!supabaseAnonKey,
-    })
+  if (!supabaseAnonKey) {
+    console.error(
+      "CLIENT-SIDE ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is not defined in the environment. The application will use a dummy key. Please check your Docker/Portainer environment variable configuration for the Next.js build process.",
+    )
   }
-
-  // Verificação básica apenas para valores completamente ausentes
-  if (!supabaseUrl || !supabaseAnonKey) {
-    const errorMsg = `CRITICAL ERROR: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is missing completely`
-    console.error(errorMsg)
-    throw new Error(errorMsg)
+} else {
+  // Executa apenas no servidor
+  if (!supabaseUrl) {
+    console.warn(
+      "SERVER-SIDE WARNING: NEXT_PUBLIC_SUPABASE_URL is not defined. This might be an issue if server-side code relies on it directly, though typically client-side Supabase uses this.",
+    )
   }
-
-  console.log("-----------------------------------------------------------")
-
-  // Cria a instância (sempre, mesmo com placeholders - para não quebrar a aplicação)
-  try {
-    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-      global: { headers: { "Accept-Profile": "impaai", "Content-Profile": "impaai" } },
-    })
-
-    if (supabaseUrl.includes("placeholder-build")) {
-      console.warn(`[lib/supabase.ts] ⚠️ Supabase client initialized with PLACEHOLDER URL: ${supabaseUrl}`)
-      console.warn(`[lib/supabase.ts] ⚠️ This client will NOT work for real operations!`)
-    } else {
-      console.log(`[lib/supabase.ts] Supabase client initialized for: ${new URL(supabaseUrl).hostname}`)
-    }
-  } catch (e: any) {
-    console.error("[lib/supabase.ts] Failed to create Supabase client instance:", e.message)
-    throw new Error(`[lib/supabase.ts] Failed to create Supabase client instance: ${e.message}`)
+  if (!supabaseAnonKey) {
+    console.warn(
+      "SERVER-SIDE WARNING: NEXT_PUBLIC_SUPABASE_ANON_KEY is not defined. This might be an issue if server-side code relies on it directly.",
+    )
   }
-
-  return supabaseInstance
 }
 
-// Exporta o cliente (DEPRECATED)
-export const supabase = getSupabaseClient()
+// Criar cliente com valores padrão se as variáveis não estiverem definidas (para evitar erro de build)
+export const supabase = createClient(
+  supabaseUrl || "http://localhost:54321", // << AQUI ESTÁ O FALLBACK
+  supabaseAnonKey || "dummy-key", // << AQUI ESTÁ O FALLBACK
+  {
+    db: {
+      schema: "impaai",
+    },
+    global: {
+      headers: {
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
+      },
+    },
+  },
+)
 
-// Objeto db (DEPRECATED)
+// Função para acessar qualquer tabela no schema correto
+export function getTable(tableName: string) {
+  return supabase.from(tableName)
+}
+
+// Funções específicas para cada tabela - USANDO A NOVA ESTRUTURA
 export const db = {
-  users: () => supabase.from("user_profiles"),
-  agents: () => supabase.from("ai_agents"),
-  whatsappConnections: () => supabase.from("whatsapp_connections"),
-  activityLogs: () => supabase.from("agent_activity_logs"),
-  userSettings: () => supabase.from("user_settings"),
-  systemSettings: () => supabase.from("system_settings"),
-  themes: () => supabase.from("system_themes"),
-  integrations: () => supabase.from("integrations"),
-  vectorStores: () => supabase.from("vector_stores"),
-  vectorDocuments: () => supabase.from("vector_documents"),
-  apiKeys: () => supabase.from("user_api_keys"),
-  organizations: () => supabase.from("organizations"),
-  dailyMetrics: () => supabase.from("daily_metrics"),
+  users: () => getTable("user_profiles"),
+  agents: () => getTable("ai_agents"),
+  whatsappConnections: () => getTable("whatsapp_connections"),
+  activityLogs: () => getTable("agent_activity_logs"),
+  userSettings: () => getTable("user_settings"),
+  systemSettings: () => getTable("system_settings"),
+  themes: () => getTable("system_themes"),
+  integrations: () => getTable("integrations"),
+  vectorStores: () => getTable("vector_stores"),
+  vectorDocuments: () => getTable("vector_documents"),
+  apiKeys: () => getTable("user_api_keys"),
+  organizations: () => getTable("organizations"),
+  dailyMetrics: () => getTable("daily_metrics"),
+
+  // Função para executar queries SQL diretas
   rpc: (functionName: string, params?: any) => supabase.rpc(functionName, params),
 }
 
-// Tipos permanecem os mesmos...
+// Tipos para o banco de dados - NOVA ESTRUTURA
 export interface UserProfile {
   id: string
   full_name: string | null

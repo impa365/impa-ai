@@ -3,13 +3,12 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { RuntimeConfigProvider } from "@/components/runtime-config-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
+// Metadata mínima - será sobrescrita pelo DynamicTitle
 export const metadata: Metadata = {
-  title: "Impa AI - Plataforma de Construção de Agentes",
-  description: "Plataforma completa para criação e gerenciamento de agentes de IA",
+  description: "Sistema de gestão",
   generator: "v0.dev",
 }
 
@@ -19,11 +18,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <RuntimeConfigProvider>{children}</RuntimeConfigProvider>
-        </ThemeProvider>
+    <html lang="pt-BR">
+      <body className={inter.className}>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   )

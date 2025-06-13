@@ -2,8 +2,7 @@
 const nextConfig = {
   // Habilitar output standalone para Docker
   output: 'standalone',
-  
-  // Ignorar erros durante o build
+
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -13,19 +12,13 @@ const nextConfig = {
   
   // Configurações de imagem
   images: {
-    // Removido 'localhost' daqui. Adicione domínios de imagem de produção se necessário.
-    // Ex: domains: ['cdn.example.com', 'supa.impa365.com'],
-    domains: ['supa.impa365.com'], // Manter apenas domínios de produção ou CDN
-    unoptimized: true // Mantido, pode ser útil em alguns cenários de Docker
+    domains: ['localhost'],
+    unoptimized: true
   },
   
   // Configurações experimentais
-  serverExternalPackages: ['@supabase/supabase-js'],
-  
-  // Repassar variáveis de ambiente sem valores padrão
-  env: {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  experimental: {
+    serverComponentsExternalPackages: ['@supabase/supabase-js']
   },
   
   // Configurações de webpack para compatibilidade

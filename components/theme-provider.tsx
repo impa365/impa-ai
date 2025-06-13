@@ -2,12 +2,10 @@
 
 import { createContext, useContext, useEffect, useState } from "react"
 import { ThemeProvider as NextThemesProvider } from "next-themes"
-import type { ThemeProviderProps as NextThemesProviderProps } from "next-themes" // Renomeado para evitar conflito
+import type { ThemeProviderProps } from "next-themes"
 import { supabase } from "@/lib/supabase"
-import { checkDatabaseHealth } from "@/lib/system-check" // Importa o novo verificador
-import { AlertTriangle, Loader2 } from "lucide-react" // Ícones para feedback
 
-// Definição do tipo ThemeConfig (permanece a mesma)
+// Definição do tipo ThemeConfig
 export interface ThemeConfig {
   systemName: string
   description?: string
@@ -22,17 +20,17 @@ export interface ThemeConfig {
   customCss?: string
 }
 
-// Context para o tema (permanece o mesmo)
+// Context para o tema
 interface ThemeContextType {
   theme: ThemeConfig | null
   updateTheme: (updates: Partial<ThemeConfig>) => Promise<void>
-  loadTheme: () => Promise<void> // Renomeado para initializeAppAndLoadTheme para clareza
+  loadTheme: () => Promise<void>
   isLoading: boolean
 }
 
 export const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
-// Hook para usar o contexto do tema (permanece o mesmo)
+// Hook para usar o contexto do tema
 export function useTheme() {
   const context = useContext(ThemeContext)
   if (context === undefined) {
@@ -41,7 +39,7 @@ export function useTheme() {
   return context
 }
 
-// Temas predefinidos (permanecem os mesmos)
+// Temas predefinidos - usando nomes genéricos para white label
 export const themePresets: Record<string, ThemeConfig> = {
   blue: {
     systemName: "Sistema",
@@ -86,12 +84,13 @@ export const themePresets: Record<string, ThemeConfig> = {
     textColor: "#f8fafc",
   },
 }
-// Cache global (permanece o mesmo)
+
+// Cache global para evitar múltiplas consultas
 let themeCache: ThemeConfig | null = null
 let themeCacheTime = 0
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutos
 
-// Tema padrão genérico (permanece o mesmo)
+// Tema padrão genérico
 export const defaultTheme: ThemeConfig = {
   systemName: "Sistema",
   description: "Plataforma de gestão",
@@ -176,27 +175,32 @@ export function applyThemeColors(theme: ThemeConfig): void {
 // Função para verificar se a tabela system_themes tem a estrutura correta
 async function checkSystemThemesStructure(): Promise<boolean> {
   try {
-    const { error } = await supabase.from("system_themes").select("logo_icon").limit(1)
+    const { data, error } = await supabase.from("system_themes").select("logo_icon").limit(1)
+
     if (error) {
-      console.warn("Tabela system_themes pode não existir ou ter problemas de estrutura:", error.message)
+      console.log("Tabela system_themes não existe ou tem problemas de estrutura:", error.message)
       return false
     }
+
     return true
   } catch (error) {
-    console.error("Erro ao verificar estrutura da tabela system_themes:", error)
+    console.log("Erro ao verificar estrutura da tabela system_themes:", error)
     return false
   }
 }
 
 // Função otimizada para carregar tema com cache
 export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
+  // Verificar cache primeiro
   const now = Date.now()
   if (themeCache && now - themeCacheTime < CACHE_DURATION) {
     return themeCache
   }
 
   try {
+    // Verificar se a estrutura da tabela está correta
     const hasCorrectStructure = await checkSystemThemesStructure()
+
     if (!hasCorrectStructure) {
       const fallbackTheme = await loadThemeFromSystemSettings()
       if (fallbackTheme) {
@@ -206,27 +210,39 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
       return fallbackTheme
     }
 
+    // Tentar carregar da tabela system_themes
     const { data, error } = await supabase.from("system_themes").select("*").eq("is_active", true).single()
-    if (error && error.code === "PGRST116") {
-      /* No rows found */
-    } else if (error) {
-      console.log("Erro ao carregar tema de system_themes:", error.message)
-      // Não retorna fallback aqui diretamente, deixa o initializeAppAndLoadTheme decidir
-      return null
-    }
 
-    if (!data) {
-      // Tenta carregar das configurações do sistema como fallback se nada for encontrado em system_themes
+    if (error && error.code === "PGRST116") {
       const fallbackTheme = await loadThemeFromSystemSettings()
       if (fallbackTheme) {
         themeCache = fallbackTheme
         themeCacheTime = now
-        return fallbackTheme
       }
-      return null
+      return fallbackTheme
     }
 
-    const themeConfig: ThemeConfig = {
+    if (error) {
+      console.log("Erro ao carregar tema de system_themes:", error.message)
+      const fallbackTheme = await loadThemeFromSystemSettings()
+      if (fallbackTheme) {
+        themeCache = fallbackTheme
+        themeCacheTime = now
+      }
+      return fallbackTheme
+    }
+
+    if (!data) {
+      const fallbackTheme = await loadThemeFromSystemSettings()
+      if (fallbackTheme) {
+        themeCache = fallbackTheme
+        themeCacheTime = now
+      }
+      return fallbackTheme
+    }
+
+    // Mapear os dados do banco para o formato ThemeConfig
+    const theme: ThemeConfig = {
       systemName: data.display_name || data.name || "Sistema",
       description: data.description || "Sistema de gestão",
       logoIcon: data.logo_icon || "🔧",
@@ -239,9 +255,12 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
       borderRadius: data.borders?.radius,
       customCss: data.custom_css,
     }
-    themeCache = themeConfig
+
+    // Atualizar cache
+    themeCache = theme
     themeCacheTime = now
-    return themeConfig
+
+    return theme
   } catch (error) {
     console.log("Erro ao carregar tema do banco, usando fallback:", error)
     const fallbackTheme = await loadThemeFromSystemSettings()
@@ -263,17 +282,20 @@ async function loadThemeFromSystemSettings(): Promise<ThemeConfig | null> {
       .single()
 
     if (!settingsError && settingsData?.setting_value) {
+      // Se encontrar configuração de tema como JSON, usar diretamente
       if (typeof settingsData.setting_value === "object") {
         return settingsData.setting_value as ThemeConfig
       }
+      // Se for string, tentar usar como preset
       const presetName = settingsData.setting_value as string
       if (themePresets[presetName]) {
         return themePresets[presetName]
       }
     }
+
     return null
   } catch (error) {
-    console.log("Erro ao carregar tema das configurações do sistema:", error)
+    console.log("Erro ao carregar tema das configurações:", error)
     return null
   }
 }
@@ -286,14 +308,22 @@ export function invalidateThemeCache(): void {
 
 // Função para salvar o tema no banco de dados
 export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
-  invalidateThemeCache()
   try {
-    const hasCorrectStructure = await checkSystemThemesStructure()
-    if (!hasCorrectStructure) return await saveThemeAsSystemSetting(theme)
+    // Invalidar cache ao salvar
+    invalidateThemeCache()
 
+    // Verificar se a estrutura da tabela está correta
+    const hasCorrectStructure = await checkSystemThemesStructure()
+
+    if (!hasCorrectStructure) {
+      return await saveThemeAsSystemSetting(theme)
+    }
+
+    // Verificar se já existe um tema ativo
     const { data: existingTheme } = await supabase.from("system_themes").select("id").eq("is_active", true).single()
+
+    // Preparar os dados para salvar
     const themeData = {
-      /* ... seu objeto themeData ... */
       name: theme.systemName.toLowerCase().replace(/\s+/g, "_"),
       display_name: theme.systemName,
       description: theme.description || "Tema personalizado",
@@ -304,8 +334,12 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
         text: theme.textColor,
         background: theme.backgroundColor,
       },
-      fonts: { primary: theme.fontFamily },
-      borders: { radius: theme.borderRadius },
+      fonts: {
+        primary: theme.fontFamily,
+      },
+      borders: {
+        radius: theme.borderRadius,
+      },
       custom_css: theme.customCss,
       is_default: false,
       is_active: true,
@@ -313,18 +347,23 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
     }
 
     if (existingTheme) {
+      // Atualizar tema existente
       const { error } = await supabase.from("system_themes").update(themeData).eq("id", existingTheme.id)
+
       if (error) {
         console.error("Erro ao atualizar tema:", error)
         return await saveThemeAsSystemSetting(theme)
       }
     } else {
+      // Criar novo tema
       const { error } = await supabase.from("system_themes").insert(themeData)
+
       if (error) {
         console.error("Erro ao criar tema:", error)
         return await saveThemeAsSystemSetting(theme)
       }
     }
+
     return true
   } catch (error) {
     console.error("Erro ao salvar tema no banco:", error)
@@ -335,34 +374,41 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
 // Função fallback para salvar tema nas configurações do sistema
 async function saveThemeAsSystemSetting(theme: ThemeConfig): Promise<boolean> {
   try {
+    // Verificar se já existe uma configuração de tema
     const { data: existingSetting } = await supabase
       .from("system_settings")
       .select("id")
       .eq("setting_key", "current_theme")
       .single()
+
     const settingData = {
-      /* ... seu objeto settingData ... */
       setting_key: "current_theme",
-      setting_value: theme, // Salva o objeto de tema inteiro
+      setting_value: theme,
       category: "appearance",
-      description: "Configurações do tema atual da plataforma",
-      is_public: true, // Permite que seja lido pelo cliente se necessário
+      description: "Configurações do tema atual",
+      is_public: true,
     }
+
     if (existingSetting) {
+      // Atualizar configuração existente
       const { error } = await supabase.from("system_settings").update(settingData).eq("id", existingSetting.id)
+
       if (error) {
         console.error("Erro ao atualizar tema nas configurações:", error)
         saveThemeToLocalStorage(theme)
         return false
       }
     } else {
+      // Criar nova configuração
       const { error } = await supabase.from("system_settings").insert(settingData)
+
       if (error) {
         console.error("Erro ao inserir tema nas configurações:", error)
         saveThemeToLocalStorage(theme)
         return false
       }
     }
+
     return true
   } catch (error) {
     console.error("Erro ao salvar tema nas configurações:", error)
@@ -374,9 +420,13 @@ async function saveThemeAsSystemSetting(theme: ThemeConfig): Promise<boolean> {
 // Função para carregar o tema do localStorage
 export function loadThemeFromLocalStorage(): ThemeConfig | null {
   if (typeof window === "undefined") return null
+
   try {
     const savedTheme = localStorage.getItem("theme")
-    return savedTheme ? JSON.parse(savedTheme) : null
+    if (!savedTheme) return null
+
+    const parsedTheme = JSON.parse(savedTheme)
+    return parsedTheme
   } catch (error) {
     console.error("Erro ao carregar tema do localStorage:", error)
     return null
@@ -386,6 +436,7 @@ export function loadThemeFromLocalStorage(): ThemeConfig | null {
 // Função para salvar o tema no localStorage
 export function saveThemeToLocalStorage(theme: ThemeConfig): void {
   if (typeof window === "undefined") return
+
   try {
     localStorage.setItem("theme", JSON.stringify(theme))
   } catch (error) {
@@ -393,146 +444,78 @@ export function saveThemeToLocalStorage(theme: ThemeConfig): void {
   }
 }
 
-export function ThemeProvider({ children, ...props }: NextThemesProviderProps) {
-  // Props renomeado
+export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   const [theme, setTheme] = useState<ThemeConfig | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [initializationError, setInitializationError] = useState<string | null>(null)
 
-  const initializeAppAndLoadTheme = async () => {
-    console.log("ThemeProvider: Starting initialization...")
-    setIsLoading(true)
-    setInitializationError(null)
-
+  const loadTheme = async () => {
     try {
-      const health = await checkDatabaseHealth()
-      console.log("ThemeProvider: Database health check result:", health)
+      setIsLoading(true)
 
-      if (!health.canConnect || !health.essentialTablesExist) {
-        setInitializationError(health.message)
-        setIsLoading(false)
-        console.error("ThemeProvider: Initialization failed due to database health check.", health.message)
-        return
-      }
-
-      // Se a saúde do banco está OK, prossiga para carregar o tema
+      // Tentar carregar do banco primeiro
       let loadedTheme = await loadThemeFromDatabase()
+
+      // Se não conseguir do banco, tentar localStorage
       if (!loadedTheme) {
         loadedTheme = loadThemeFromLocalStorage()
       }
 
+      // IMPORTANTE: Só definir tema se conseguir carregar do banco/localStorage
       if (loadedTheme) {
         setTheme(loadedTheme)
         applyThemeColors(loadedTheme)
-        console.log("ThemeProvider: Theme loaded successfully.", loadedTheme)
-      } else {
-        console.warn("ThemeProvider: No theme loaded from database or localStorage. Applying default theme.")
-        setTheme(defaultTheme)
-        applyThemeColors(defaultTheme)
       }
-    } catch (error: any) {
-      console.error("ThemeProvider: Critical error during app initialization and theme loading.", error)
-      setInitializationError(
-        `An unexpected error occurred during initialization: ${error.message}. Check console for details.`,
-      )
+    } catch (error) {
+      console.error("Error loading theme:", error)
     } finally {
       setIsLoading(false)
-      console.log("ThemeProvider: Initialization finished.")
     }
   }
 
   const updateTheme = async (updates: Partial<ThemeConfig>) => {
     try {
-      if (!theme) {
-        console.warn("ThemeProvider: updateTheme called but no current theme exists.")
-        return
-      }
+      if (!theme) return
+
       const newTheme = { ...theme, ...updates }
+
       setTheme(newTheme)
       applyThemeColors(newTheme)
+
+      // Tentar salvar no banco, se falhar salva no localStorage
       const saved = await saveThemeToDatabase(newTheme)
       if (!saved) {
         saveThemeToLocalStorage(newTheme)
       }
-      console.log("ThemeProvider: Theme updated.", newTheme)
-    } catch (error: any) {
-      console.error("ThemeProvider: Error updating theme.", error)
+    } catch (error) {
+      console.error("Error updating theme:", error)
       if (theme) {
-        saveThemeToLocalStorage({ ...theme, ...updates }) // Fallback
+        saveThemeToLocalStorage({ ...theme, ...updates })
       }
     }
   }
 
   useEffect(() => {
-    initializeAppAndLoadTheme()
+    loadTheme()
   }, [])
 
+  // Apply theme colors whenever theme changes
   useEffect(() => {
-    if (theme && !isLoading && !initializationError) {
+    if (theme && !isLoading) {
       applyThemeColors(theme)
     }
-  }, [theme, isLoading, initializationError])
+  }, [theme, isLoading])
 
-  if (isLoading) {
+  // NÃO RENDERIZAR NADA até ter o tema do banco de dados
+  if (isLoading || !theme) {
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 text-center">
-        <Loader2 className="animate-spin h-10 w-10 text-blue-600 mb-4" />
-        <p className="text-lg font-medium text-gray-700">Inicializando Aplicação...</p>
-        <p className="text-sm text-gray-500">Verificando configurações e conexão com o banco de dados.</p>
-      </div>
-    )
-  }
-
-  if (initializationError) {
-    return (
-      <div className="min-h-screen bg-red-50 flex flex-col items-center justify-center p-6 text-center">
-        <AlertTriangle className="h-16 w-16 text-red-500 mb-6" />
-        <h1 className="text-3xl font-bold text-red-700 mb-3">Falha na Inicialização da Aplicação</h1>
-        <p className="text-md text-red-600 mb-4">Não foi possível iniciar a aplicação devido ao seguinte erro:</p>
-        <pre className="text-sm text-red-700 bg-red-100 p-4 rounded-md shadow w-full max-w-2xl overflow-x-auto text-left whitespace-pre-wrap break-words">
-          {initializationError}
-        </pre>
-        <div className="mt-6 text-gray-700 text-sm text-left max-w-2xl w-full space-y-2">
-          <p>
-            <strong>Possíveis causas e soluções:</strong>
-          </p>
-          <ul className="list-disc list-inside pl-4">
-            <li>
-              Verifique se as variáveis de ambiente <code>NEXT_PUBLIC_SUPABASE_URL</code> e{" "}
-              <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> estão corretamente configuradas no seu ambiente de deploy
-              (Portainer).
-            </li>
-            <li>Confirme se a URL do Supabase está correta e acessível pela sua aplicação.</li>
-            <li>
-              Certifique-se de que o banco de dados Supabase possui todas as tabelas e o esquema necessário (
-              <code>impaai</code>). Execute os scripts SQL de setup se necessário.
-            </li>
-            <li>
-              Verifique os logs do container da aplicação no Portainer para mensagens de erro detalhadas (procure por
-              "DEBUG Supabase" ou "CRITICAL ERROR").
-            </li>
-          </ul>
-        </div>
-      </div>
-    )
-  }
-
-  if (!theme) {
-    // Este estado não deveria ser alcançado se a lógica acima estiver correta e o defaultTheme for aplicado.
-    // Mas é um fallback para o caso de `theme` ser `null` sem `initializationError`.
-    return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 text-center">
-        <Loader2 className="animate-spin h-10 w-10 text-gray-400 mb-4" />
-        <p className="text-lg font-medium text-gray-600">Carregando configuração de tema...</p>
-        <p className="text-sm text-gray-500">
-          Se esta mensagem persistir, pode haver um problema na configuração do tema padrão.
-        </p>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
       </div>
     )
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, updateTheme, loadTheme: initializeAppAndLoadTheme, isLoading }}>
+    <ThemeContext.Provider value={{ theme, updateTheme, loadTheme, isLoading }}>
       <NextThemesProvider {...props}>{children}</NextThemesProvider>
     </ThemeContext.Provider>
   )
