@@ -2,40 +2,44 @@
 function getConfigValue(key: string, placeholder: string): string {
   // No lado do servidor, sempre usa process.env
   if (typeof window === "undefined") {
-    return process.env[key] || placeholder
+    const value = process.env[key]
+    if (!value || value === placeholder) {
+      console.error(`❌ ERRO CRÍTICO: ${key} não está configurada ou está usando placeholder!`)
+      console.error(`Valor recebido: "${value}"`)
+      console.error(`Placeholder: "${placeholder}"`)
+      throw new Error(`${key} não está configurada corretamente`)
+    }
+    return value
   }
 
   // No lado do cliente, tenta window.__RUNTIME_CONFIG__ primeiro
   // @ts-ignore A propriedade __RUNTIME_CONFIG__ é injetada via script
   if (window.__RUNTIME_CONFIG__ && window.__RUNTIME_CONFIG__[key]) {
     // @ts-ignore
-    return window.__RUNTIME_CONFIG__[key]
+    const value = window.__RUNTIME_CONFIG__[key]
+    if (value && value !== placeholder) {
+      return value
+    }
   }
 
-  // Fallback para process.env (valores do build) se window.__RUNTIME_CONFIG__ não estiver disponível
-  // Isso é útil para desenvolvimento local fora do Docker
-  return process.env[key] || placeholder
+  // Fallback para process.env (valores do build)
+  const fallbackValue = process.env[key] || placeholder
+  if (fallbackValue === placeholder) {
+    console.warn(`⚠️ ${key} está usando placeholder no cliente`)
+  }
+  return fallbackValue
 }
 
 export const supabaseConfig = {
   get url() {
-    const url = getConfigValue("NEXT_PUBLIC_SUPABASE_URL", "https://placeholder.supabase.co")
-    if (url === "https://placeholder.supabase.co" && typeof window !== "undefined") {
-      console.warn("⚠️ Supabase URL está usando placeholder no cliente. Verifique a injeção de runtime config.")
-    }
-    return url
+    return getConfigValue("NEXT_PUBLIC_SUPABASE_URL", "https://placeholder.supabase.co")
   },
 
   get anonKey() {
-    const key = getConfigValue("NEXT_PUBLIC_SUPABASE_ANON_KEY", "placeholder-anon-key")
-    if (key === "placeholder-anon-key" && typeof window !== "undefined") {
-      console.warn("⚠️ Supabase Anon Key está usando placeholder no cliente. Verifique a injeção de runtime config.")
-    }
-    return key
+    return getConfigValue("NEXT_PUBLIC_SUPABASE_ANON_KEY", "placeholder-anon-key")
   },
 
   get serviceRoleKey() {
-    // Service role key é usada apenas no servidor, então process.env é seguro
     return process.env.SUPABASE_SERVICE_ROLE_KEY || ""
   },
 
@@ -115,24 +119,89 @@ export const getDefaultHeaders = () => ({
   apikey: supabaseConfig.anonKey,
 })
 
+// Função para validar conexão com Supabase
+export async function validateSupabaseConnection() {
+  try {
+    console.log("🔍 Validando conexão com Supabase...")
+
+    const url = supabaseConfig.url
+    const anonKey = supabaseConfig.anonKey
+
+    console.log(`📍 URL: ${url}`)
+    console.log(`🔑 Anon Key: ${anonKey ? "***definida***" : "❌ NÃO DEFINIDA"}`)
+
+    // Testa conexão básica
+    const response = await fetch(`${url}/rest/v1/`, {
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+        "Accept-Profile": supabaseConfig.schema,
+        "Content-Profile": supabaseConfig.schema,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Erro na conexão: ${response.status} ${response.statusText}`)
+    }
+
+    console.log("✅ Conexão com Supabase estabelecida com sucesso!")
+    return true
+  } catch (error) {
+    console.error("❌ Erro na conexão com Supabase:", error)
+    throw error
+  }
+}
+
+// Função para validar tabelas específicas
+export async function validateSupabaseTables() {
+  try {
+    console.log("🔍 Validando tabelas do banco...")
+
+    const tablesToCheck = [TABLES.USER_PROFILES, TABLES.AGENTS, TABLES.SYSTEM_SETTINGS]
+    const results = []
+
+    for (const table of tablesToCheck) {
+      try {
+        const response = await fetch(`${restApiUrls.base}/${table}?limit=1`, {
+          headers: getDefaultHeaders(),
+        })
+
+        if (response.ok) {
+          console.log(`✅ Tabela ${table}: OK`)
+          results.push({ table, status: "ok" })
+        } else {
+          console.log(`❌ Tabela ${table}: Erro ${response.status}`)
+          results.push({ table, status: "error", error: response.status })
+        }
+      } catch (error) {
+        console.log(`❌ Tabela ${table}: Erro de conexão`)
+        results.push({ table, status: "error", error: error.message })
+      }
+    }
+
+    const successCount = results.filter((r) => r.status === "ok").length
+    console.log(`📊 Tabelas validadas: ${successCount}/${tablesToCheck.length}`)
+
+    if (successCount === 0) {
+      throw new Error("Nenhuma tabela foi encontrada ou está acessível")
+    }
+
+    return results
+  } catch (error) {
+    console.error("❌ Erro na validação das tabelas:", error)
+    throw error
+  }
+}
+
 export function validateSupabaseConfig() {
   try {
     const url = supabaseConfig.url
     const anonKey = supabaseConfig.anonKey
 
-    if (url.includes("placeholder") || anonKey.includes("placeholder")) {
-      // Não lançar erro, apenas logar, pois pode ser build time ou cliente ainda não carregou
-      console.warn("⚠️ Configuração do Supabase está usando valores placeholder.")
-      if (typeof window !== "undefined") {
-        // @ts-ignore
-        console.log("Cliente: window.__RUNTIME_CONFIG__:", window.__RUNTIME_CONFIG__)
-      }
-      return false // Indica que a validação falhou ou está incompleta
-    }
-
-    console.log("✅ Configuração do Supabase validada com sucesso (runtime)")
+    console.log("✅ Configuração do Supabase validada com sucesso")
     console.log(`📍 URL: ${new URL(url).hostname}`)
     console.log(`🔑 Anon Key: ${anonKey ? "***definida***" : "Não definida"}`)
+
     return true
   } catch (error) {
     console.error("❌ Erro na validação da configuração do Supabase:", error)

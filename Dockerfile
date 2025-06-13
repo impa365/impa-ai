@@ -2,7 +2,7 @@
 FROM node:18-alpine AS base
 
 # Instalar dependências necessárias
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat bash curl
 WORKDIR /app
 
 # Instalar dependências
@@ -36,10 +36,19 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
+# Copiar scripts de validação
+COPY scripts/health-check.js ./scripts/
+COPY scripts/start.sh ./scripts/
+RUN chmod +x ./scripts/start.sh
+
 # Copiar arquivos necessários
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Health check que valida conexão com Supabase
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD node scripts/health-check.js || exit 1
 
 USER nextjs
 
@@ -48,5 +57,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Comando para iniciar a aplicação
-CMD ["node", "server.js"]
+# Usar script de inicialização que valida antes de iniciar
+CMD ["./scripts/start.sh"]
