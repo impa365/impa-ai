@@ -1,41 +1,83 @@
 /**
- * Configuração do Supabase - Foco em Variáveis de Ambiente
- *
- * Remove todos os valores padrão e placeholders.
- * A aplicação dependerá exclusivamente das variáveis de ambiente.
+ * Configuração do Supabase
+ * Prioriza variáveis de ambiente de runtime.
+ * Alerta se estiver usando placeholders do build.
  */
 
-// Função para obter variáveis de ambiente obrigatórias
-function getRequiredEnvVar(key: string): string {
-  const value = process.env[key]
-  if (!value) {
-    console.error(`🚨 ERRO CRÍTICO: Variável de ambiente ${key} não definida!`)
-    console.error("   A aplicação não pode iniciar sem esta variável.")
-    console.error("   Verifique a configuração do seu ambiente (ex: stack do Portainer).")
-    // Em um ambiente de produção real, você pode querer lançar um erro aqui
-    // ou ter um mecanismo de fallback mais robusto se apropriado,
-    // mas para o objetivo de depender 100% do env, vamos retornar string vazia
-    // e deixar as validações posteriores pegarem isso.
-    // No entanto, o console.error acima já alerta sobre o problema crítico.
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(`Variável de ambiente obrigatória ${key} não definida.`)
-    }
-    return "" // Retorna string vazia para evitar quebrar a tipagem, mas o erro já foi logado.
-  }
+const PLACEHOLDER_URL = "http://placeholder-build.supabase.co"
+const PLACEHOLDER_KEY = "placeholder-build-anon-key"
+
+function getSupabaseEnvVar(envVarName: string, buildTimePlaceholder: string): string {
+  const runtimeValue = process.env[envVarName]
+
   if (typeof window === "undefined") {
-    // Log apenas no servidor
-    console.log(`[ENV] ✅ ${key}: ${key.includes("KEY") ? "***OCULTO***" : value}`)
+    // Lógica do lado do servidor / build / startup
+    if (runtimeValue && runtimeValue !== buildTimePlaceholder) {
+      console.log(
+        `[ENV_CONFIG] ✅ Usando ${envVarName} de runtime: ${envVarName.includes("KEY") ? "***OCULTO***" : runtimeValue}`,
+      )
+      return runtimeValue
+    } else if (runtimeValue === buildTimePlaceholder) {
+      // Isso pode acontecer se o Portainer não injetar a variável, e o valor do build "vazar" para o runtime.
+      console.warn(
+        `[ENV_CONFIG] ⚠️ ATENÇÃO: ${envVarName} está usando o valor placeholder do BUILD ('${buildTimePlaceholder}').`,
+      )
+      console.warn(`   Verifique se a variável está corretamente definida no seu ambiente de runtime (Portainer).`)
+      // Em produção, você pode querer falhar aqui se a variável real não for fornecida.
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(
+          `ERRO CRÍTICO: ${envVarName} não foi fornecida pelo ambiente de runtime e está usando placeholder do build.`,
+        )
+      }
+      return runtimeValue // Retorna o placeholder do build, mas com aviso.
+    } else {
+      // Variável não definida nem em runtime nem como placeholder (não deveria acontecer com o Dockerfile atual)
+      console.error(`[ENV_CONFIG] 🚨 ERRO: ${envVarName} não está definida!`)
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(`ERRO CRÍTICO: ${envVarName} não definida no ambiente.`)
+      }
+      return "" // Fallback de emergência, mas o erro já foi logado.
+    }
+  } else {
+    // Lógica do lado do cliente
+    // No cliente, process.env.NEXT_PUBLIC_* já terá o valor embutido pelo Next.js durante o build.
+    // Se o valor embutido for o placeholder, isso significa que as variáveis de runtime não foram passadas corretamente
+    // para o cliente (o que é um cenário mais complexo de resolver sem recarregar a página ou usar APIs).
+    // A estratégia principal é garantir que o SERVIDOR tenha as variáveis corretas.
+    if (runtimeValue === buildTimePlaceholder) {
+      console.warn(
+        `[CLIENT_ENV_CONFIG] ⚠️ Cliente está vendo placeholder do build para ${envVarName}. Isso pode indicar problemas na passagem de variáveis de runtime para o cliente.`,
+      )
+    }
+    return runtimeValue || "" // Retorna o que foi embutido no build.
   }
-  return value
 }
 
-// Configuração básica do Supabase usando variáveis de ambiente
 export const supabaseConfig = {
-  url: getRequiredEnvVar("NEXT_PUBLIC_SUPABASE_URL"),
-  anonKey: getRequiredEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
-  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "", // Pode ser opcional dependendo do uso
-  schema: "impaai", // Esquema é fixo
+  get url(): string {
+    return getSupabaseEnvVar("NEXT_PUBLIC_SUPABASE_URL", PLACEHOLDER_URL)
+  },
+  get anonKey(): string {
+    return getSupabaseEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY", PLACEHOLDER_KEY)
+  },
+  get serviceRoleKey(): string {
+    // SUPABASE_SERVICE_ROLE_KEY não é prefixado com NEXT_PUBLIC_, então é apenas de servidor
+    // e não precisa de placeholder de build.
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!key && typeof window === "undefined" && process.env.NODE_ENV === "production") {
+      // Opcional: pode ser necessário apenas para algumas operações de admin.
+      // console.warn("[ENV_CONFIG] SUPABASE_SERVICE_ROLE_KEY não definida.")
+    }
+    return key || ""
+  },
+  schema: "impaai",
 }
+
+// O restante do arquivo (TABLES, restApiUrls, getDefaultHeaders, validações) permanece o mesmo,
+// pois eles dependerão dos getters de supabaseConfig.url e supabaseConfig.anonKey.
+
+// ... (TABLES, restApiUrls, getDefaultHeaders, validateSupabaseConnection, validateSupabaseTables, TableName, TableValue)
+// Copie o restante do arquivo da resposta anterior, pois não precisa de alteração.
 
 // Tabelas do banco de dados
 export const TABLES = {
@@ -57,14 +99,16 @@ export const TABLES = {
 } as const
 
 // URLs da API REST do Supabase
-// Usam getters para garantir que supabaseConfig.url seja avaliado em runtime
 export const restApiUrls = {
   get base() {
+    if (!supabaseConfig.url) throw new Error("Supabase URL não configurada para restApiUrls.base")
     return `${supabaseConfig.url}/rest/v1`
   },
   get users() {
+    if (!supabaseConfig.url) throw new Error("Supabase URL não configurada para restApiUrls.users")
     return `${supabaseConfig.url}/rest/v1/${TABLES.USER_PROFILES}`
   },
+  // ... adicione verificações para todas as URLs se desejar ser extra seguro
   get agents() {
     return `${supabaseConfig.url}/rest/v1/${TABLES.AGENTS}`
   },
@@ -94,9 +138,6 @@ export const restApiUrls = {
 // Headers padrão para requisições
 export const getDefaultHeaders = () => {
   if (!supabaseConfig.url || !supabaseConfig.anonKey) {
-    console.error("🚨 ERRO: Tentando gerar headers sem URL ou Anon Key do Supabase configurados.")
-    // Retorna headers vazios ou lança erro, dependendo da estratégia de erro.
-    // Lançar erro é mais seguro para pegar o problema cedo.
     throw new Error("Supabase URL ou Anon Key não configurados ao tentar gerar headers.")
   }
   return {
@@ -111,24 +152,27 @@ export const getDefaultHeaders = () => {
 // Função para validar conexão com Supabase
 export async function validateSupabaseConnection() {
   console.log("🔍 Validando conexão com Supabase...")
-  if (!supabaseConfig.url || !supabaseConfig.anonKey) {
-    const errorMsg = "❌ Configurações do Supabase (URL ou Anon Key) não definidas. Impossível validar conexão."
+  const url = supabaseConfig.url // Usa o getter
+  const anonKey = supabaseConfig.anonKey // Usa o getter
+
+  if (!url || url === PLACEHOLDER_URL || !anonKey || anonKey === PLACEHOLDER_KEY) {
+    const errorMsg = `❌ Configurações do Supabase inválidas ou placeholders. URL: '${url}', Key: '${anonKey ? "definida" : "NÃO DEFINIDA"}'. Impossível validar conexão.`
     console.error(errorMsg)
     throw new Error(errorMsg)
   }
 
   try {
-    const response = await fetch(`${supabaseConfig.url}/rest/v1/`, {
+    const response = await fetch(`${url}/rest/v1/`, {
       headers: {
-        apikey: supabaseConfig.anonKey,
-        Authorization: `Bearer ${supabaseConfig.anonKey}`,
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
         "Accept-Profile": supabaseConfig.schema,
         "Content-Profile": supabaseConfig.schema,
       },
     })
 
     if (!response.ok) {
-      throw new Error(`Erro na conexão: ${response.status} ${response.statusText}. URL: ${supabaseConfig.url}`)
+      throw new Error(`Erro na conexão: ${response.status} ${response.statusText}. URL: ${url}`)
     }
 
     console.log("✅ Conexão com Supabase estabelecida com sucesso!")
@@ -139,11 +183,13 @@ export async function validateSupabaseConnection() {
   }
 }
 
-// Função para validar tabelas do banco
 export async function validateSupabaseTables() {
   console.log("🔍 Validando tabelas do banco...")
-  if (!supabaseConfig.url || !supabaseConfig.anonKey) {
-    const errorMsg = "❌ Configurações do Supabase (URL ou Anon Key) não definidas. Impossível validar tabelas."
+  const url = supabaseConfig.url
+  const anonKey = supabaseConfig.anonKey
+
+  if (!url || url === PLACEHOLDER_URL || !anonKey || anonKey === PLACEHOLDER_KEY) {
+    const errorMsg = `❌ Configurações do Supabase inválidas ou placeholders para validar tabelas. URL: '${url}'`
     console.error(errorMsg)
     throw new Error(errorMsg)
   }
@@ -154,7 +200,6 @@ export async function validateSupabaseTables() {
   for (const table of tablesToCheck) {
     try {
       const response = await fetch(`${restApiUrls.base}/${table}?limit=1`, {
-        // Usa o getter
         headers: getDefaultHeaders(),
       })
 
@@ -177,10 +222,8 @@ export async function validateSupabaseTables() {
   if (successCount === 0 && tablesToCheck.length > 0) {
     throw new Error("Nenhuma tabela principal foi encontrada ou está acessível.")
   }
-
   return results
 }
 
-// Tipos TypeScript
 export type TableName = keyof typeof TABLES
 export type TableValue = (typeof TABLES)[TableName]
