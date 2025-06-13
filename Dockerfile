@@ -16,7 +16,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Variáveis de ambiente para o build (valores placeholder)
+# IMPORTANTE: Usar placeholders apenas para o build
+# Essas variáveis serão sobrescritas pelo Portainer em runtime
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co
@@ -55,6 +56,9 @@ EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+
+# IMPORTANTE: As variáveis NEXT_PUBLIC_* serão injetadas pelo Portainer
+# e sobrescreverão os placeholders do build
 
 # Usar script de inicialização que valida antes de iniciar
 CMD ["./scripts/start.sh"]

@@ -1,18 +1,31 @@
 /** @type {import('next').NextConfig} */
-
 const nextConfig = {
+  // Habilitar output standalone para Docker
   output: 'standalone',
+
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
   },
+  
+  // Configurações de imagem
   images: {
     domains: ['localhost', 'supa.impa365.com'],
-    unoptimized: true,
+    unoptimized: true
   },
+  
+  // Configurações experimentais - corrigido para Next.js 15
   serverExternalPackages: ['@supabase/supabase-js'],
+  
+  // IMPORTANTE: Forçar uso das variáveis de ambiente externas
+  env: {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  },
+  
+  // Configurações de webpack para compatibilidade
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -20,18 +33,10 @@ const nextConfig = {
         fs: false,
         net: false,
         tls: false,
-      };
+      }
     }
-    return config;
-  },
-  // Garantir que o Next.js use as variáveis de ambiente do processo
-  // para NEXT_PUBLIC_ prefixed vars durante o build e no servidor.
-  // No cliente, confiaremos na injeção via window.__RUNTIME_CONFIG__.
-  env: {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    // Adicione outras NEXT_PUBLIC_ vars aqui se necessário
-  },
-};
+    return config
+  }
+}
 
-export default nextConfig;
+export default nextConfig
