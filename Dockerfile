@@ -23,6 +23,7 @@ ENV NEXT_PUBLIC_SUPABASE_URL=http://placeholder-build.supabase.co
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder-build-anon-key
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PUBLIC_BUILD_TIME=true
 
 # Log para verificar se as variáveis de build estão presentes
 RUN echo "--- Building with build-time Supabase placeholders ---" && \

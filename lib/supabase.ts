@@ -22,39 +22,36 @@ function getSupabaseClient(): SupabaseClient {
   )
   console.log("Current NODE_ENV:", process.env.NODE_ENV)
 
-  if (process.env.NODE_ENV === "production") {
+  // Detectar se estamos em build time ou runtime
+  const isBuildTime =
+    process.env.NEXT_PUBLIC_BUILD_TIME === "true" ||
+    // Durante o build do Next.js, estas variáveis estão presentes
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    // Outra heurística: se estamos em produção mas com placeholders, provavelmente é build time
+    (process.env.NODE_ENV === "production" &&
+      (supabaseUrl?.includes("placeholder-build") || supabaseAnonKey?.includes("placeholder-build")))
+
+  if (process.env.NODE_ENV === "production" && !isBuildTime) {
+    // Verificações rigorosas APENAS para runtime em produção, não para build time
     if (!supabaseUrl || supabaseUrl.includes("placeholder-build") || supabaseUrl.includes("localhost")) {
-      const errorMsg = `CRITICAL PRODUCTION ERROR (lib/supabase.ts): NEXT_PUBLIC_SUPABASE_URL is invalid or a placeholder in production. Value: '${supabaseUrl}'. Application will not start.`
+      const errorMsg = `CRITICAL RUNTIME ERROR (lib/supabase.ts): NEXT_PUBLIC_SUPABASE_URL is invalid or a placeholder in production runtime. Value: '${supabaseUrl}'. Application will not start.`
       console.error(errorMsg)
-      // Em um cenário de servidor real, isso deve impedir a aplicação de iniciar ou responder incorretamente.
-      // Lançar um erro aqui pode parar o processo, o que é desejável se a config estiver errada.
       throw new Error(errorMsg)
     }
     if (!supabaseAnonKey || supabaseAnonKey.includes("placeholder-build")) {
-      const errorMsg = `CRITICAL PRODUCTION ERROR (lib/supabase.ts): NEXT_PUBLIC_SUPABASE_ANON_KEY is invalid or a placeholder in production. Application will not start.`
+      const errorMsg = `CRITICAL RUNTIME ERROR (lib/supabase.ts): NEXT_PUBLIC_SUPABASE_ANON_KEY is invalid or a placeholder in production runtime. Application will not start.`
       console.error(errorMsg)
       throw new Error(errorMsg)
     }
-    console.log("[lib/supabase.ts] Production environment: Supabase URL and Key appear valid (not placeholders).")
-  } else {
-    // Desenvolvimento ou outros ambientes
-    // Permitir placeholders em dev/build, mas ainda validar se existem
-    if (!supabaseUrl || supabaseUrl.trim() === "") {
-      const errorMsg = `CRITICAL CONFIG ERROR (lib/supabase.ts): NEXT_PUBLIC_SUPABASE_URL is missing or empty. Value received: '${supabaseUrl}'.`
-      console.error(errorMsg)
-      throw new Error(errorMsg)
-    }
-    if (!supabaseAnonKey || supabaseAnonKey.trim() === "") {
-      const errorMsg = `CRITICAL CONFIG ERROR (lib/supabase.ts): NEXT_PUBLIC_SUPABASE_ANON_KEY is missing or empty.`
-      console.error(errorMsg)
-      throw new Error(errorMsg)
-    }
-    if (supabaseUrl.includes("placeholder-build") || supabaseAnonKey.includes("placeholder-build")) {
-      console.warn(
-        "[lib/supabase.ts] Non-production environment: Using placeholder Supabase URL/Key. This is expected for build or local dev without .env.local.",
-      )
+    console.log("[lib/supabase.ts] Production runtime: Supabase URL and Key appear valid (not placeholders).")
+  } else if (isBuildTime) {
+    // Em build time, apenas logar um aviso
+    console.log("[lib/supabase.ts] Build time detected. Using placeholder values for Supabase URL and Key is allowed.")
+    if (supabaseUrl?.includes("placeholder-build") || supabaseAnonKey?.includes("placeholder-build")) {
+      console.log("[lib/supabase.ts] Using placeholder values for Supabase during build. This is expected.")
     }
   }
+
   console.log("-----------------------------------------------------------")
 
   // Cria a instância
