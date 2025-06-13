@@ -1,78 +1,60 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
-// Variável para armazenar a instância do cliente
-let supabaseInstance: SupabaseClient | null = null
+// Create a server-side only Supabase client
+const createServerSupabaseClient = (): SupabaseClient | null => {
+  const supabaseUrl = process.env.SUPABASE_URL
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY
 
-// Função que cria o cliente apenas quando necessário
-function getSupabaseClient(): SupabaseClient {
-  // Se já existe uma instância, retorna ela
-  if (supabaseInstance) {
-    return supabaseInstance
+  // Em ambiente de desenvolvimento/preview, podemos não ter as variáveis de ambiente
+  // Nesse caso, retornamos null em vez de lançar um erro
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn(
+      "⚠️ Variáveis de ambiente do Supabase não encontradas no servidor. O cliente do servidor não será inicializado.",
+    )
+    return null
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  // LOGS DE DEPURAÇÃO TEMPORÁRIOS - REMOVA APÓS VERIFICAR NO PORTAINER
-  console.log("--- DEBUG Supabase Client Initialization ---")
-  console.log("Attempting to read NEXT_PUBLIC_SUPABASE_URL:", supabaseUrl)
-  console.log(
-    "Attempting to read NEXT_PUBLIC_SUPABASE_ANON_KEY:",
-    supabaseAnonKey ? "Exists (key hidden)" : "MISSING or EMPTY",
-  )
-  console.log("------------------------------------------")
-
-  if (!supabaseUrl || supabaseUrl.trim() === "" || supabaseUrl.includes("localhost")) {
-    const errorMsg = `CRITICAL ERROR: NEXT_PUBLIC_SUPABASE_URL is not correctly configured. Value received: '${supabaseUrl}'. It must be a valid URL and not 'localhost'.`
-    console.error(errorMsg)
-    throw new Error(errorMsg)
-  }
-
-  if (!supabaseAnonKey || supabaseAnonKey.trim() === "") {
-    const errorMsg = `CRITICAL ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is not correctly configured. It's missing or empty.`
-    console.error(errorMsg)
-    throw new Error(errorMsg)
-  }
-
-  // Cria a instância
   try {
-    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    return createClient(supabaseUrl, supabaseAnonKey, {
       db: { schema: "impaai" },
       global: { headers: { "Accept-Profile": "impaai", "Content-Profile": "impaai" } },
     })
-    console.log(
-      `Supabase client successfully initialized for URL (domain only for security): ${new URL(supabaseUrl).hostname}`,
-    )
-  } catch (e: any) {
-    console.error("Failed to create Supabase client instance:", e.message)
-    throw new Error(`Failed to create Supabase client instance: ${e.message}`)
+  } catch (e) {
+    console.error("❌ Falha ao criar cliente Supabase do servidor:", e)
+    return null
   }
-
-  return supabaseInstance
 }
 
-// Exporta o cliente
-export const supabase = getSupabaseClient()
+// Export the server-side client (pode ser null em ambiente de desenvolvimento)
+export const db = createServerSupabaseClient()
 
-// Objeto db para facilitar o uso
-export const db = {
-  users: () => supabase.from("user_profiles"),
-  agents: () => supabase.from("ai_agents"),
-  whatsappConnections: () => supabase.from("whatsapp_connections"),
-  activityLogs: () => supabase.from("agent_activity_logs"),
-  userSettings: () => supabase.from("user_settings"),
-  systemSettings: () => supabase.from("system_settings"),
-  themes: () => supabase.from("system_themes"),
-  integrations: () => supabase.from("integrations"),
-  vectorStores: () => supabase.from("vector_stores"),
-  vectorDocuments: () => supabase.from("vector_documents"),
-  apiKeys: () => supabase.from("user_api_keys"),
-  organizations: () => supabase.from("organizations"),
-  dailyMetrics: () => supabase.from("daily_metrics"),
-  rpc: (functionName: string, params?: any) => supabase.rpc(functionName, params),
+// TEMPORARY FIX: Export a dummy supabase client that will be replaced at runtime
+// This prevents the "module does not provide an export named 'supabase'" error
+// while we transition to the new RuntimeConfigProvider approach
+let dummyClient: SupabaseClient | null = null
+
+if (typeof window !== "undefined") {
+  // Only create this in the browser
+  try {
+    // Use environment variables if available (for development)
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder-url.supabase.co"
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-key"
+
+    dummyClient = createClient(url, key, {
+      db: { schema: "impaai" },
+      global: { headers: { "Accept-Profile": "impaai", "Content-Profile": "impaai" } },
+    })
+
+    console.warn("⚠️ Usando cliente Supabase temporário. Será substituído pelo RuntimeConfigProvider.")
+  } catch (e) {
+    console.error("❌ Falha ao criar cliente Supabase temporário:", e)
+  }
 }
 
-// Tipos (permanecem os mesmos)
+// Export the dummy client - this will be replaced by RuntimeConfigProvider
+export const supabase = dummyClient
+
+// Type definitions
 export interface UserProfile {
   id: string
   full_name: string | null
@@ -209,5 +191,3 @@ export interface Integration {
   created_at: string
   updated_at: string
 }
-
-export default supabase

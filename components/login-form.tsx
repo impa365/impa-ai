@@ -12,7 +12,7 @@ import { Eye, EyeOff } from "lucide-react"
 import { signIn } from "@/lib/auth" // Importa a função signIn manual
 import { useTheme } from "@/components/theme-provider"
 import RegisterForm from "./register-form"
-import { supabase } from "@/lib/supabase"
+import { useRuntimeConfig } from "@/components/runtime-config-provider"
 
 function LoginForm() {
   const [email, setEmail] = useState("")
@@ -25,6 +25,7 @@ function LoginForm() {
   const [checkingRegistration, setCheckingRegistration] = useState(true)
   const router = useRouter()
   const { theme } = useTheme()
+  const { supabase, isLoading: isConfigLoading } = useRuntimeConfig()
 
   useEffect(() => {
     // Verificar se o cadastro público está habilitado
@@ -82,7 +83,7 @@ function LoginForm() {
     setError("")
 
     try {
-      const { user, error: authError } = await signIn(email, password) // Chama a função signIn manual
+      const { user, error: authError } = await signIn(supabase!, email, password) // Added supabase!
 
       if (authError) {
         setError(authError.message)
@@ -109,6 +110,18 @@ function LoginForm() {
 
   if (showRegister) {
     return <RegisterForm onBackToLogin={() => setShowRegister(false)} />
+  }
+
+  if (isConfigLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Carregando configuração...</div>
+  }
+
+  if (!supabase) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Erro: Cliente Supabase não disponível. Verifique a configuração.
+      </div>
+    )
   }
 
   return (
@@ -175,7 +188,7 @@ function LoginForm() {
               type="submit"
               className="w-full text-white"
               style={{ backgroundColor: theme.primaryColor }}
-              disabled={loading}
+              disabled={loading || !supabase}
             >
               {loading ? "Entrando..." : "Entrar"}
             </Button>

@@ -5,16 +5,18 @@ import { useRouter } from "next/navigation"
 import { useTheme } from "@/components/theme-provider"
 import LoginForm from "@/components/login-form"
 import DynamicTitle from "@/components/dynamic-title"
+import { useRuntimeConfig } from "@/components/runtime-config-provider"
 
 export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   const { theme, isLoading: themeLoading } = useTheme()
+  const { supabase, isLoading: configLoading } = useRuntimeConfig()
   const router = useRouter()
 
   useEffect(() => {
     // Verificar se há usuário logado
-    const checkUser = () => {
+    const checkUser = async () => {
       try {
         const userData = localStorage.getItem("user")
         if (userData) {
@@ -39,13 +41,13 @@ export default function HomePage() {
     }
 
     // Só verificar usuário após o tema estar carregado
-    if (!themeLoading) {
+    if (!themeLoading && !configLoading) {
       checkUser()
     }
-  }, [themeLoading, router])
+  }, [themeLoading, configLoading, router])
 
   // Mostrar loading enquanto carrega tema ou verifica usuário
-  if (themeLoading || isLoading) {
+  if (themeLoading || configLoading || isLoading) {
     return (
       <>
         <DynamicTitle />
