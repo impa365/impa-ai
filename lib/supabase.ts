@@ -27,40 +27,41 @@ function getSupabaseClient(): SupabaseClient {
   )
   console.log("Current NODE_ENV:", process.env.NODE_ENV)
 
-  // Detectar se estamos em build time ou runtime
-  const isBuildTime =
-    process.env.NEXT_PUBLIC_BUILD_TIME === "true" ||
-    process.env.NEXT_PHASE === "phase-production-build" ||
-    (process.env.NODE_ENV === "production" &&
-      (supabaseUrl?.includes("placeholder-build") || supabaseAnonKey?.includes("placeholder-build")))
+  // Verificar se são placeholders mas NÃO falhar - apenas alertar
+  if (supabaseUrl?.includes("placeholder-build") || supabaseAnonKey?.includes("placeholder-build")) {
+    console.warn("⚠️ WARNING: lib/supabase.ts is using placeholder values!")
+    console.warn("⚠️ This means the application is using build-time values instead of runtime values.")
+    console.warn("⚠️ For production, use lib/supabase-runtime.ts to get real values from Portainer.")
+    console.warn("⚠️ The application will continue to work but may not connect to the correct Supabase instance.")
+  } else {
+    console.log("[lib/supabase.ts] Using non-placeholder values:", {
+      url: supabaseUrl,
+      keyExists: !!supabaseAnonKey,
+    })
+  }
 
-  if (process.env.NODE_ENV === "production" && !isBuildTime) {
-    // Em produção runtime, avisar sobre o uso do arquivo deprecated
-    console.error("❌ CRITICAL: lib/supabase.ts is being used in production runtime!")
-    console.error("❌ This file contains build-time placeholders, not runtime values!")
-    console.error("❌ Use lib/supabase-runtime.ts instead for runtime configuration!")
-
-    if (supabaseUrl?.includes("placeholder-build") || supabaseAnonKey?.includes("placeholder-build")) {
-      throw new Error(
-        "CRITICAL: lib/supabase.ts contains placeholders in production runtime. Use lib/supabase-runtime.ts instead!",
-      )
-    }
-  } else if (isBuildTime) {
-    console.log("[lib/supabase.ts] Build time detected. Using placeholder values is allowed.")
-    if (supabaseUrl?.includes("placeholder-build") || supabaseAnonKey?.includes("placeholder-build")) {
-      console.log("[lib/supabase.ts] Using placeholder values during build. This is expected.")
-    }
+  // Verificação básica apenas para valores completamente ausentes
+  if (!supabaseUrl || !supabaseAnonKey) {
+    const errorMsg = `CRITICAL ERROR: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is missing completely`
+    console.error(errorMsg)
+    throw new Error(errorMsg)
   }
 
   console.log("-----------------------------------------------------------")
 
-  // Cria a instância
+  // Cria a instância (sempre, mesmo com placeholders - para não quebrar a aplicação)
   try {
     supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
       db: { schema: "impaai" },
       global: { headers: { "Accept-Profile": "impaai", "Content-Profile": "impaai" } },
     })
-    console.log(`[lib/supabase.ts] Supabase client initialized for: ${new URL(supabaseUrl).hostname}`)
+
+    if (supabaseUrl.includes("placeholder-build")) {
+      console.warn(`[lib/supabase.ts] ⚠️ Supabase client initialized with PLACEHOLDER URL: ${supabaseUrl}`)
+      console.warn(`[lib/supabase.ts] ⚠️ This client will NOT work for real operations!`)
+    } else {
+      console.log(`[lib/supabase.ts] Supabase client initialized for: ${new URL(supabaseUrl).hostname}`)
+    }
   } catch (e: any) {
     console.error("[lib/supabase.ts] Failed to create Supabase client instance:", e.message)
     throw new Error(`[lib/supabase.ts] Failed to create Supabase client instance: ${e.message}`)
