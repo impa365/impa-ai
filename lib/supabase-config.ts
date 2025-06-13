@@ -1,33 +1,44 @@
 // Função auxiliar para obter a configuração correta
 function getConfigValue(key: string, placeholder: string): string {
-  // No lado do servidor, sempre usa process.env
+  // LADO DO SERVIDOR: Sempre usa process.env
   if (typeof window === "undefined") {
-    const value = process.env[key]
-    if (!value || value === placeholder) {
-      console.error(`❌ ERRO CRÍTICO: ${key} não está configurada ou está usando placeholder!`)
-      console.error(`Valor recebido: "${value}"`)
-      console.error(`Placeholder: "${placeholder}"`)
-      throw new Error(`${key} não está configurada corretamente`)
+    const serverValue = process.env[key]
+    if (!serverValue || serverValue === placeholder) {
+      // Durante o build, é normal ter placeholders. Em runtime no servidor, não.
+      if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build") {
+        console.warn(
+          `[Servidor] ⚠️ ${key} está usando placeholder ou não definida: "${serverValue}". Esperado valor de runtime.`,
+        )
+      }
     }
-    return value
+    return serverValue || placeholder
   }
 
-  // No lado do cliente, tenta window.__RUNTIME_CONFIG__ primeiro
-  // @ts-ignore A propriedade __RUNTIME_CONFIG__ é injetada via script
-  if (window.__RUNTIME_CONFIG__ && window.__RUNTIME_CONFIG__[key]) {
-    // @ts-ignore
-    const value = window.__RUNTIME_CONFIG__[key]
-    if (value && value !== placeholder) {
-      return value
+  // LADO DO CLIENTE:
+  // @ts-ignore
+  const runtimeConfig = window.__RUNTIME_CONFIG__
+  if (runtimeConfig && typeof runtimeConfig === "object" && runtimeConfig[key]) {
+    const clientRuntimeValue = runtimeConfig[key]
+    if (clientRuntimeValue && clientRuntimeValue !== placeholder) {
+      // console.log(`[Cliente] ✅ ${key} carregada de window.__RUNTIME_CONFIG__: "${clientRuntimeValue}"`);
+      return clientRuntimeValue
+    } else {
+      console.warn(`[Cliente] ⚠️ ${key} em window.__RUNTIME_CONFIG__ é placeholder ou inválida: "${clientRuntimeValue}"`)
     }
+  } else {
+    // console.warn(`[Cliente] ℹ️ window.__RUNTIME_CONFIG__ ou ${key} não encontrado. Tentando fallback.`);
   }
 
-  // Fallback para process.env (valores do build)
-  const fallbackValue = process.env[key] || placeholder
-  if (fallbackValue === placeholder) {
-    console.warn(`⚠️ ${key} está usando placeholder no cliente`)
+  // Fallback para process.env (valores congelados do build) no cliente
+  const buildTimeValue = process.env[key]
+  if (!buildTimeValue || buildTimeValue === placeholder) {
+    console.error(
+      `[Cliente] ❌ ${key} está usando placeholder do build: "${buildTimeValue}". A injeção de runtime falhou ou não foi configurada corretamente na stack.`,
+    )
+  } else {
+    // console.log(`[Cliente] ℹ️ ${key} usando valor do build (process.env): "${buildTimeValue}"`);
   }
-  return fallbackValue
+  return buildTimeValue || placeholder
 }
 
 export const supabaseConfig = {
@@ -119,35 +130,26 @@ export const getDefaultHeaders = () => ({
   apikey: supabaseConfig.anonKey,
 })
 
-// Função para validar conexão com Supabase
 export async function validateSupabaseConnection() {
   try {
-    console.log("🔍 Validando conexão com Supabase...")
-
-    const url = supabaseConfig.url
+    // console.log("🔍 Validando conexão com Supabase (validateSupabaseConnection)...");
+    const url = supabaseConfig.url // Isso vai triggar os getters com os logs
     const anonKey = supabaseConfig.anonKey
 
-    console.log(`📍 URL: ${url}`)
-    console.log(`🔑 Anon Key: ${anonKey ? "***definida***" : "❌ NÃO DEFINIDA"}`)
-
-    // Testa conexão básica
-    const response = await fetch(`${url}/rest/v1/`, {
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-        "Accept-Profile": supabaseConfig.schema,
-        "Content-Profile": supabaseConfig.schema,
-      },
-    })
-
-    if (!response.ok) {
-      throw new Error(`Erro na conexão: ${response.status} ${response.statusText}`)
+    if (url.includes("placeholder") || anonKey.includes("placeholder")) {
+      throw new Error(`Conexão falhou: URL ou Anon Key são placeholders. URL: ${url}`)
     }
 
-    console.log("✅ Conexão com Supabase estabelecida com sucesso!")
+    const response = await fetch(`${url}/rest/v1/`, {
+      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+    })
+    if (!response.ok) {
+      throw new Error(`Erro na conexão HTTP: ${response.status} ${response.statusText}`)
+    }
+    // console.log("✅ Conexão com Supabase (validateSupabaseConnection) estabelecida com sucesso!");
     return true
   } catch (error) {
-    console.error("❌ Erro na conexão com Supabase:", error)
+    console.error("❌ Erro em validateSupabaseConnection:", error)
     throw error
   }
 }
