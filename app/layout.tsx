@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { RuntimeConfigProvider } from "@/components/runtime-config-provider" // Já importado
+import { RuntimeConfigProvider } from "@/components/runtime-config-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -22,7 +22,7 @@ export default function RootLayout({
     <html lang="pt-BR" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <RuntimeConfigProvider>{children}</RuntimeConfigProvider> {/* Já em uso */}
+          <RuntimeConfigProvider>{children}</RuntimeConfigProvider>
         </ThemeProvider>
       </body>
     </html>

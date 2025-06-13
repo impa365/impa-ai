@@ -1,111 +1,73 @@
 "use client"
 
-import type React from "react"
-import { createContext, useContext, useState, useEffect, useMemo } from "react"
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 
 interface RuntimeConfig {
-  supabaseUrl: string | null
-  supabaseAnonKey: string | null
-  loading: boolean
-  error: Error | null
+  supabaseUrl: string
+  supabaseAnonKey: string
+  nextAuthUrl?: string
+  nodeEnv?: string
 }
 
-const RuntimeConfigContext = createContext<RuntimeConfig | undefined>(undefined)
+interface RuntimeConfigContextType {
+  config: RuntimeConfig | null
+  loading: boolean
+  error: string | null
+}
 
-export function RuntimeConfigProvider({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const [config, setConfig] = useState<RuntimeConfig>({
-    supabaseUrl: null, // Inicializa como nulo, será preenchido pela API
-    supabaseAnonKey: null, // Inicializa como nulo
-    loading: true,
-    error: null,
-  })
+const RuntimeConfigContext = createContext<RuntimeConfigContextType>({
+  config: null,
+  loading: true,
+  error: null,
+})
+
+export function RuntimeConfigProvider({ children }: { children: ReactNode }) {
+  const [config, setConfig] = useState<RuntimeConfig | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let isMounted = true
     async function fetchConfig() {
-      // console.log("RuntimeConfigProvider: Fetching /api/config...")
       try {
+        console.log("[RuntimeConfigProvider] Fetching runtime config...")
         const response = await fetch("/api/config")
+
         if (!response.ok) {
-          let errorBody = `Failed to fetch runtime config: ${response.status} ${response.statusText}`
-          try {
-            const errorData = await response.json()
-            if (errorData && errorData.error) {
-              errorBody = `Failed to fetch runtime config: ${errorData.error}`
-            }
-          } catch (jsonError) {
-            /* Ignora */
-          }
-          throw new Error(errorBody)
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
-        const data = await response.json()
 
-        if (isMounted) {
-          // console.log("RuntimeConfigProvider: Config fetched:", data)
-          if (!data.supabaseUrl || !data.supabaseAnonKey) {
-            // console.warn("RuntimeConfigProvider: /api/config retornou dados incompletos.");
-            setConfig({
-              supabaseUrl: data.supabaseUrl || null,
-              supabaseAnonKey: data.supabaseAnonKey || null,
-              loading: false,
-              error: new Error("/api/config did not return complete Supabase credentials."),
-            })
-          } else {
-            setConfig({
-              supabaseUrl: data.supabaseUrl,
-              supabaseAnonKey: data.supabaseAnonKey,
-              loading: false,
-              error: null,
-            })
-          }
+        const configData = await response.json()
+
+        // Validar se não são placeholders
+        if (configData.supabaseUrl?.includes("placeholder-build")) {
+          throw new Error("Config contains placeholder URL")
         }
-      } catch (error) {
-        if (isMounted) {
-          console.error("RuntimeConfigProvider: Error fetching config:", error)
-          setConfig({
-            supabaseUrl: null,
-            supabaseAnonKey: null,
-            loading: false,
-            error: error instanceof Error ? error : new Error(String(error)),
-          })
+        if (configData.supabaseAnonKey?.includes("placeholder-build")) {
+          throw new Error("Config contains placeholder key")
         }
+
+        console.log("[RuntimeConfigProvider] ✅ Valid config loaded")
+        setConfig(configData)
+        setError(null)
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : "Unknown error"
+        console.error("[RuntimeConfigProvider] ❌ Failed to load config:", errorMsg)
+        setError(errorMsg)
+      } finally {
+        setLoading(false)
       }
     }
 
-    // Executa apenas no cliente
-    if (typeof window !== "undefined") {
-      fetchConfig()
-    } else {
-      // No SSR, não temos como buscar a config do cliente ainda.
-      // O estado inicial será loading: true.
-      // Se você precisar de SSR com config, a estratégia precisaria ser diferente (ex: passar via pageProps).
-      if (isMounted) {
-        setConfig((prev) => ({
-          ...prev,
-          loading: true,
-          error: new Error("Config not available on server for client provider."),
-        }))
-      }
-    }
-
-    return () => {
-      isMounted = false
-    }
+    fetchConfig()
   }, [])
 
-  const value = useMemo(() => config, [config])
-
-  return <RuntimeConfigContext.Provider value={value}>{children}</RuntimeConfigContext.Provider>
+  return <RuntimeConfigContext.Provider value={{ config, loading, error }}>{children}</RuntimeConfigContext.Provider>
 }
 
-export function useRuntimeConfig(): RuntimeConfig {
+export function useRuntimeConfig() {
   const context = useContext(RuntimeConfigContext)
-  if (context === undefined) {
-    throw new Error("useRuntimeConfig must be used within a RuntimeConfigProvider")
+  if (!context) {
+    throw new Error("useRuntimeConfig must be used within RuntimeConfigProvider")
   }
   return context
 }
