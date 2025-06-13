@@ -13,26 +13,49 @@ function getSupabaseClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  // LOGS DE DEPURAÇÃO TEMPORÁRIOS - REMOVA APÓS VERIFICAR NO PORTAINER
-  console.log("--- DEBUG Supabase Client Initialization ---")
+  // LOGS DE DEPURAÇÃO TEMPORÁRIOS
+  console.log("--- DEBUG Supabase Client Initialization (lib/supabase.ts) ---")
   console.log("Attempting to read NEXT_PUBLIC_SUPABASE_URL:", supabaseUrl)
   console.log(
     "Attempting to read NEXT_PUBLIC_SUPABASE_ANON_KEY:",
     supabaseAnonKey ? "Exists (key hidden)" : "MISSING or EMPTY",
   )
-  console.log("------------------------------------------")
+  console.log("Current NODE_ENV:", process.env.NODE_ENV)
 
-  if (!supabaseUrl || supabaseUrl.trim() === "" || supabaseUrl.includes("localhost")) {
-    const errorMsg = `CRITICAL ERROR: NEXT_PUBLIC_SUPABASE_URL is not correctly configured. Value received: '${supabaseUrl}'. It must be a valid URL and not 'localhost'.`
-    console.error(errorMsg)
-    throw new Error(errorMsg)
+  if (process.env.NODE_ENV === "production") {
+    if (!supabaseUrl || supabaseUrl.includes("placeholder-build") || supabaseUrl.includes("localhost")) {
+      const errorMsg = `CRITICAL PRODUCTION ERROR (lib/supabase.ts): NEXT_PUBLIC_SUPABASE_URL is invalid or a placeholder in production. Value: '${supabaseUrl}'. Application will not start.`
+      console.error(errorMsg)
+      // Em um cenário de servidor real, isso deve impedir a aplicação de iniciar ou responder incorretamente.
+      // Lançar um erro aqui pode parar o processo, o que é desejável se a config estiver errada.
+      throw new Error(errorMsg)
+    }
+    if (!supabaseAnonKey || supabaseAnonKey.includes("placeholder-build")) {
+      const errorMsg = `CRITICAL PRODUCTION ERROR (lib/supabase.ts): NEXT_PUBLIC_SUPABASE_ANON_KEY is invalid or a placeholder in production. Application will not start.`
+      console.error(errorMsg)
+      throw new Error(errorMsg)
+    }
+    console.log("[lib/supabase.ts] Production environment: Supabase URL and Key appear valid (not placeholders).")
+  } else {
+    // Desenvolvimento ou outros ambientes
+    // Permitir placeholders em dev/build, mas ainda validar se existem
+    if (!supabaseUrl || supabaseUrl.trim() === "") {
+      const errorMsg = `CRITICAL CONFIG ERROR (lib/supabase.ts): NEXT_PUBLIC_SUPABASE_URL is missing or empty. Value received: '${supabaseUrl}'.`
+      console.error(errorMsg)
+      throw new Error(errorMsg)
+    }
+    if (!supabaseAnonKey || supabaseAnonKey.trim() === "") {
+      const errorMsg = `CRITICAL CONFIG ERROR (lib/supabase.ts): NEXT_PUBLIC_SUPABASE_ANON_KEY is missing or empty.`
+      console.error(errorMsg)
+      throw new Error(errorMsg)
+    }
+    if (supabaseUrl.includes("placeholder-build") || supabaseAnonKey.includes("placeholder-build")) {
+      console.warn(
+        "[lib/supabase.ts] Non-production environment: Using placeholder Supabase URL/Key. This is expected for build or local dev without .env.local.",
+      )
+    }
   }
-
-  if (!supabaseAnonKey || supabaseAnonKey.trim() === "") {
-    const errorMsg = `CRITICAL ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is not correctly configured. It's missing or empty.`
-    console.error(errorMsg)
-    throw new Error(errorMsg)
-  }
+  console.log("-----------------------------------------------------------")
 
   // Cria a instância
   try {
@@ -41,11 +64,11 @@ function getSupabaseClient(): SupabaseClient {
       global: { headers: { "Accept-Profile": "impaai", "Content-Profile": "impaai" } },
     })
     console.log(
-      `Supabase client successfully initialized for URL (domain only for security): ${new URL(supabaseUrl).hostname}`,
+      `[lib/supabase.ts] Supabase client successfully initialized for URL (domain only for security): ${new URL(supabaseUrl).hostname}`,
     )
   } catch (e: any) {
-    console.error("Failed to create Supabase client instance:", e.message)
-    throw new Error(`Failed to create Supabase client instance: ${e.message}`)
+    console.error("[lib/supabase.ts] Failed to create Supabase client instance:", e.message)
+    throw new Error(`[lib/supabase.ts] Failed to create Supabase client instance: ${e.message}`)
   }
 
   return supabaseInstance
