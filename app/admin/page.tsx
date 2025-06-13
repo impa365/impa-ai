@@ -40,14 +40,13 @@ import {
   Activity,
 } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
-import { useRuntimeConfig } from "@/components/runtime-config-provider"
+import { db } from "@/lib/supabase"
 import { useTheme } from "@/components/theme-provider"
 import { themePresets, type ThemeConfig } from "@/lib/theme"
 import Image from "next/image"
 import { disconnectInstance } from "@/lib/whatsapp-settings-api"
 
 export default function AdminDashboard() {
-  const { supabase: db, isLoading: isConfigLoading } = useRuntimeConfig()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(false) // Mudado para false - não mostra loading inicial
   const router = useRouter()
@@ -111,8 +110,6 @@ export default function AdminDashboard() {
   const [selectedWhatsAppConnection, setSelectedWhatsAppConnection] = useState<any>(null)
 
   const fetchWhatsAppConnections = async () => {
-    if (!db) return
-
     const { data } = await db
       .whatsappConnections()
       .select(`
@@ -125,8 +122,6 @@ export default function AdminDashboard() {
   }
 
   const fetchSystemSettings = async () => {
-    if (!db) return
-
     const { data } = await db
       .systemSettings()
       .select("setting_value")
@@ -183,22 +178,18 @@ export default function AdminDashboard() {
     }
 
     loadData()
-  }, [router, db])
+  }, [router])
 
   const handleLogout = async () => {
     router.push("/")
   }
 
   const fetchUsers = async () => {
-    if (!db) return
-
     const { data, error } = await db.users().select("*").order("created_at", { ascending: false })
     if (data) setUsers(data)
   }
 
   const fetchAgents = async () => {
-    if (!db) return
-
     const { data, error } = await db
       .agents()
       .select(`
@@ -211,8 +202,6 @@ export default function AdminDashboard() {
   }
 
   const fetchMetrics = async () => {
-    if (!db) return
-
     const { count: userCount } = await db.users().select("*", { count: "exact", head: true })
     const { count: agentCount } = await db.agents().select("*", { count: "exact", head: true }).eq("status", "active")
 
@@ -225,14 +214,12 @@ export default function AdminDashboard() {
   }
 
   const fetchIntegrations = async () => {
-    if (!db) return
-
     const { data, error } = await db.integrations().select("*").order("created_at", { ascending: false })
     if (data) setIntegrations(data)
   }
 
   const handleDeleteUser = async () => {
-    if (!userToDelete || !db) return
+    if (!userToDelete) return
 
     setSaving(true)
     try {
@@ -257,8 +244,6 @@ export default function AdminDashboard() {
   }
 
   const handleUpdateAdminProfile = async () => {
-    if (!db) return
-
     setSavingAdminProfile(true)
     setAdminProfileMessage("")
 
@@ -583,8 +568,6 @@ export default function AdminDashboard() {
             <div className="flex items-end">
               <Button
                 onClick={async () => {
-                  if (!db) return
-
                   await db.systemSettings().upsert({
                     setting_key: "default_whatsapp_connections_limit",
                     setting_value: systemLimits.defaultLimit,
@@ -737,8 +720,6 @@ export default function AdminDashboard() {
 
       if (result.success) {
         // Atualizar status no banco
-        if (!db) return
-
         await db.whatsappConnections().update({ status: "disconnected" }).eq("id", connection.id)
 
         await fetchWhatsAppConnections()
@@ -838,8 +819,6 @@ export default function AdminDashboard() {
   )
 
   const handleIntegrationSave = async (type: string) => {
-    if (!db) return
-
     setSaving(true)
     try {
       let config = {}

@@ -10,7 +10,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, ArrowLeft } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
 import { registerUser } from "@/lib/auth" // Importa a função registerUser manual
-import { useRuntimeConfig } from "@/components/runtime-config-provider"
 
 interface RegisterFormProps {
   onBackToLogin: () => void
@@ -29,7 +28,6 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const { theme } = useTheme()
-  const { supabase, isLoading: isConfigLoading } = useRuntimeConfig()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -70,8 +68,7 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
       console.log("📡 Enviando dados para API...")
 
       // Chama a função registerUser manual
-      const result = await registerUser(supabase!, {
-        // Added supabase!
+      const result = await registerUser({
         full_name: formData.fullName.trim(),
         email: formData.email.trim(),
         password: formData.password,
@@ -95,17 +92,6 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
     } finally {
       setLoading(false)
     }
-  }
-
-  if (isConfigLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Carregando configuração...</div>
-  }
-  if (!supabase) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        Erro: Cliente Supabase não disponível. Verifique a configuração.
-      </div>
-    )
   }
 
   if (success) {
@@ -163,7 +149,7 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
                 onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                 placeholder="Seu nome completo"
                 required
-                disabled={loading || !supabase}
+                disabled={loading}
               />
             </div>
 
@@ -176,7 +162,7 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="seu@email.com"
                 required
-                disabled={loading || !supabase}
+                disabled={loading}
               />
             </div>
 
@@ -190,7 +176,7 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="••••••••"
                   required
-                  disabled={loading || !supabase}
+                  disabled={loading}
                   minLength={6}
                 />
                 <Button
@@ -199,7 +185,7 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowPassword(!showPassword)}
-                  disabled={loading || !supabase}
+                  disabled={loading}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
@@ -216,7 +202,7 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                   placeholder="••••••••"
                   required
-                  disabled={loading || !supabase}
+                  disabled={loading}
                   minLength={6}
                 />
                 <Button
@@ -225,7 +211,7 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  disabled={loading || !supabase}
+                  disabled={loading}
                 >
                   {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
@@ -236,7 +222,7 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
               type="submit"
               className="w-full text-white"
               style={{ backgroundColor: theme.primaryColor }}
-              disabled={loading || !supabase}
+              disabled={loading}
             >
               {loading ? "Criando conta..." : "Criar Conta"}
             </Button>
@@ -246,7 +232,7 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
             <Button
               variant="ghost"
               onClick={onBackToLogin}
-              disabled={loading || !supabase}
+              disabled={loading}
               className="gap-2 text-gray-600 hover:text-gray-800"
             >
               <ArrowLeft className="w-4 h-4" />

@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { supabase } from "./supabase"
 
 export interface UserProfile {
   id: string
@@ -6,8 +6,8 @@ export interface UserProfile {
   full_name: string
   role: "admin" | "user"
   status: "active" | "inactive"
-  created_at?: string
-  updated_at?: string
+  created_at: string
+  updated_at: string
   last_login_at?: string
 }
 
@@ -23,12 +23,12 @@ export interface RegisterData {
 }
 
 // Função de login simples, sem hash
-export async function signIn(client: SupabaseClient, email: string, password: string) {
+export async function signIn(email: string, password: string) {
   try {
     console.log("🔐 Iniciando processo de login para:", email)
 
     // 1. Buscar o usuário na tabela impaai.user_profiles
-    const { data: users, error: fetchError } = await client
+    const { data: users, error: fetchError } = await supabase
       .from("user_profiles")
       .select("*")
       .eq("email", email.trim().toLowerCase())
@@ -73,7 +73,7 @@ export async function signIn(client: SupabaseClient, email: string, password: st
     }
 
     // 4. Atualizar último login e contador
-    await client
+    await supabase
       .from("user_profiles")
       .update({
         last_login_at: new Date().toISOString(),
@@ -92,10 +92,7 @@ export async function signIn(client: SupabaseClient, email: string, password: st
 }
 
 // Função de registro simples, sem hash
-export async function registerUser(
-  client: SupabaseClient,
-  userData: RegisterData,
-): Promise<{ success: boolean; user?: any; error?: string }> {
+export async function registerUser(userData: RegisterData): Promise<{ success: boolean; user?: any; error?: string }> {
   try {
     const { email, password, full_name } = userData
 
@@ -112,7 +109,7 @@ export async function registerUser(
     }
 
     // 1. Verificar se o email já existe
-    const { data: existingUsers, error: checkError } = await client
+    const { data: existingUsers, error: checkError } = await supabase
       .from("user_profiles")
       .select("id")
       .eq("email", email.toLowerCase())
@@ -126,7 +123,7 @@ export async function registerUser(
     }
 
     // 2. Inserir o novo usuário (senha em texto plano)
-    const { data: newUserProfile, error: insertError } = await client
+    const { data: newUserProfile, error: insertError } = await supabase
       .from("user_profiles")
       .insert([
         {
@@ -147,7 +144,7 @@ export async function registerUser(
     console.log("✅ Usuário criado:", newUserProfile.email)
 
     // 3. Criar configurações padrão do usuário
-    const { error: settingsError } = await client.from("user_agent_settings").insert([
+    const { error: settingsError } = await supabase.from("user_agent_settings").insert([
       {
         user_id: newUserProfile.id,
         agents_limit: 5,
@@ -205,7 +202,7 @@ export function clearCurrentUser(): void {
 }
 
 // Função de logout
-export async function signOut(client: SupabaseClient) {
+export async function signOut() {
   console.log("🚪 Realizando logout.")
   clearCurrentUser()
   return { success: true, error: null }
@@ -213,12 +210,11 @@ export async function signOut(client: SupabaseClient) {
 
 // Função de atualização de perfil
 export async function updateUserProfile(
-  client: SupabaseClient,
   userId: string,
   updates: Partial<UserProfile>,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await client.from("user_profiles").update(updates).eq("id", userId)
+    const { error } = await supabase.from("user_profiles").update(updates).eq("id", userId)
     if (error) {
       console.error("Erro ao atualizar perfil:", error)
       return { success: false, error: "Erro ao atualizar perfil" }
@@ -232,7 +228,6 @@ export async function updateUserProfile(
 
 // Função para trocar a senha (simples, sem hash)
 export async function changePassword(
-  client: SupabaseClient,
   userId: string,
   oldPassword: string,
   newPassword: string,
@@ -241,7 +236,7 @@ export async function changePassword(
     console.log("🔐 Iniciando troca de senha para usuário:", userId)
 
     // 1. Buscar o usuário para verificar a senha antiga
-    const { data: userProfile, error: fetchError } = await client
+    const { data: userProfile, error: fetchError } = await supabase
       .from("user_profiles")
       .select("password")
       .eq("id", userId)
@@ -262,8 +257,8 @@ export async function changePassword(
 
     console.log("✅ Senha antiga verificada, atualizando para nova senha...")
 
-    // 3. Atualizar a senha (texto plano)
-    const { data, error: updateError } = await client
+    // 3. Atualizar a senha (texto plano) - CORREÇÃO AQUI
+    const { data, error: updateError } = await supabase
       .from("user_profiles")
       .update({ password: newPassword })
       .eq("id", userId)

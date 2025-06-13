@@ -5,12 +5,10 @@ import { useRouter } from "next/navigation"
 import LoginForm from "@/components/login-form"
 import DynamicTitle from "@/components/dynamic-title"
 import { getCurrentUser } from "@/lib/auth"
-import { useRuntimeConfig } from "@/components/runtime-config-provider"
 
 export default function HomePage() {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const { isLoading: configLoading } = useRuntimeConfig()
 
   useEffect(() => {
     const checkUser = async () => {
@@ -31,12 +29,10 @@ export default function HomePage() {
       }
     }
 
-    if (!configLoading) {
-      checkUser()
-    }
-  }, [router, configLoading])
+    checkUser()
+  }, [router])
 
-  if (configLoading || loading) {
+  if (loading) {
     return (
       <>
         <DynamicTitle />
