@@ -16,14 +16,20 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# NÃO definir placeholders aqui. A configuração virá em runtime.
+# IMPORTANTE: Definir placeholders APENAS para a etapa de BUILD
+# Estas variáveis permitem que o `next build` funcione corretamente.
+# Elas NÃO serão usadas em runtime se o Portainer injetar as variáveis corretas.
+ENV NEXT_PUBLIC_SUPABASE_URL=http://placeholder-build.supabase.co
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder-build-anon-key
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Log para indicar que não estamos usando variáveis de build para Supabase
-RUN echo "--- Building without build-time Supabase env vars ---" && \
-    echo "   Supabase config will be fetched at runtime by the client." && \
-    echo "-------------------------------------------------------"
+# Log para verificar se as variáveis de build estão presentes
+RUN echo "--- Building with build-time Supabase placeholders ---" && \
+    echo "NEXT_PUBLIC_SUPABASE_URL (build-time): $NEXT_PUBLIC_SUPABASE_URL" && \
+    echo "NEXT_PUBLIC_SUPABASE_ANON_KEY (build-time): $NEXT_PUBLIC_SUPABASE_ANON_KEY" && \
+    echo "   Runtime values will be injected by Portainer / fetched via /api/config." && \
+    echo "--------------------------------------------------------------------------"
 
 RUN npm run build
 
