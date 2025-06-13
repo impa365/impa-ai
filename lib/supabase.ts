@@ -11,29 +11,21 @@ if (process.env.NODE_ENV === "development") {
   console.log("Key:", supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : "❌ Missing")
 }
 
-// Validação das variáveis
+// Validação das variáveis - mais permissiva para evitar erros de build
 if (!supabaseUrl || !supabaseAnonKey) {
-  const errorMessage = `
-    ❌ ERRO DE CONFIGURAÇÃO DO SUPABASE:
-    - URL: ${supabaseUrl || "NÃO DEFINIDA"}
-    - Key: ${supabaseAnonKey ? "DEFINIDA" : "NÃO DEFINIDA"}
-    
-    Verifique:
-    1. Variáveis no Portainer Stack
-    2. Script de substituição no Docker
-    3. Build da imagem
-  `
-
-  console.error(errorMessage)
-
-  // Em produção, usar fallback com aviso
-  if (process.env.NODE_ENV === "production") {
-    console.warn("⚠️ Usando configuração de fallback - verifique as variáveis de ambiente!")
+  if (process.env.NODE_ENV === "development") {
+    console.warn("⚠️ Supabase variables not configured - using fallback for development")
   }
 }
 
-// Criar cliente Supabase
-export const supabase = createClient(supabaseUrl || "http://localhost:54321", supabaseAnonKey || "dummy-key", {
+// Criar cliente Supabase com fallbacks seguros
+const finalUrl =
+  supabaseUrl && supabaseUrl !== "https://placeholder-supabase-url.supabase.co" ? supabaseUrl : "http://localhost:54321"
+
+const finalKey =
+  supabaseAnonKey && !supabaseAnonKey.includes("placeholder-key-for-build-only") ? supabaseAnonKey : "dummy-key"
+
+export const supabase = createClient(finalUrl, finalKey, {
   db: {
     schema: "impaai",
   },

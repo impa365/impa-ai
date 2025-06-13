@@ -16,11 +16,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Variáveis temporárias GENÉRICAS para o build (serão substituídas no runtime)
-ENV NEXT_PUBLIC_SUPABASE_URL=__RUNTIME_SUPABASE_URL__
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=__RUNTIME_SUPABASE_ANON_KEY__
-ENV NEXTAUTH_SECRET=temporary-secret-for-build
-ENV NEXTAUTH_URL=__RUNTIME_NEXTAUTH_URL__
+# Variáveis temporárias VÁLIDAS para o build (serão substituídas no runtime)
+ENV NEXT_PUBLIC_SUPABASE_URL=https://placeholder-supabase-url.supabase.co
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxMjM0NTYsImV4cCI6MTk2MDY5OTQ1Nn0.placeholder-key-for-build-only
+ENV NEXTAUTH_SECRET=temporary-secret-for-build-only
+ENV NEXTAUTH_URL=https://placeholder-app-url.com
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build da aplicação
@@ -47,11 +47,22 @@ COPY --chown=nextjs:nodejs <<'EOF' /app/replace-env.sh
 #!/bin/sh
 echo "🔧 Replacing runtime environment variables..."
 
+# Verificar se as variáveis estão definidas
+if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+  echo "❌ ERROR: NEXT_PUBLIC_SUPABASE_URL not defined"
+  exit 1
+fi
+
+if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
+  echo "❌ ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY not defined"
+  exit 1
+fi
+
 # Substituir placeholders nos arquivos JavaScript buildados
 find /app/.next -name "*.js" -type f -exec sed -i \
-  -e "s|__RUNTIME_SUPABASE_URL__|${NEXT_PUBLIC_SUPABASE_URL}|g" \
-  -e "s|__RUNTIME_SUPABASE_ANON_KEY__|${NEXT_PUBLIC_SUPABASE_ANON_KEY}|g" \
-  -e "s|__RUNTIME_NEXTAUTH_URL__|${NEXTAUTH_URL}|g" \
+  -e "s|https://placeholder-supabase-url.supabase.co|${NEXT_PUBLIC_SUPABASE_URL}|g" \
+  -e "s|eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxMjM0NTYsImV4cCI6MTk2MDY5OTQ1Nn0.placeholder-key-for-build-only|${NEXT_PUBLIC_SUPABASE_ANON_KEY}|g" \
+  -e "s|https://placeholder-app-url.com|${NEXTAUTH_URL}|g" \
   {} +
 
 echo "✅ Environment variables replaced successfully"

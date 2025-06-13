@@ -16,11 +16,6 @@ const nextConfig = {
     unoptimized: true
   },
   
-  // Configurações experimentais
-  experimental: {
-    serverComponentsExternalPackages: ['@supabase/supabase-js']
-  },
-  
   // Configurações de webpack para compatibilidade
   webpack: (config, { isServer }) => {
     if (!isServer) {
@@ -32,7 +27,10 @@ const nextConfig = {
       }
     }
     return config
-  }
+  },
+
+  // Configurações para external packages
+  serverExternalPackages: ['@supabase/supabase-js']
 }
 
 export default nextConfig
