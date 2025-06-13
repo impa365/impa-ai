@@ -3,28 +3,21 @@ services:
 
 ## --------------------------- IMPA AI --------------------------- ##
   impa-ai:
-    image: impa365/impa-ai:0.60.0 # Exemplo: seuusuario/impa-ai-app:latest
-    ports:
-      # A porta 3000 é exposta internamente para o Traefik, não diretamente para o host.
-      # O Traefik cuidará do acesso externo nas portas 80/443.
-      # - "{{APP_PORT}}:3000" # Esta linha pode ser removida se o Traefik for o único ponto de entrada.
-                               # Ou mantida para acesso direto durante a depuração, se necessário, 
-                               # mas garanta que APP_PORT seja diferente das portas do Traefik.
-                               # Para uma configuração típica do Traefik, o mapeamento direto de portas é frequentemente omitido.
+    image: impa365/impa-ai:latest # Exemplo: seuusuario/impa-ai-app:latest
+    
     networks:
-      - ImpaServer
+      - ServerIpa
     environment:
       # Configuração do Supabase
-      - NEXT_PUBLIC_SUPABASE_URL={{SUPABASE_URL}} # Exemplo: https://seu-projeto-ref.supabase.co
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY={{SUPABASE_ANON_KEY}} # Exemplo: sua-chave-anon-supabase
-      
+      - NEXT_PUBLIC_SUPABASE_URL=https://supa.impa365.com # Exemplo: https://seu-projeto-ref.supabase.co
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.cVmHXTXMMB09PuXEMevVuGxV5_ZR4yJly6pF0uab7fA # Exemplo: sua-chave-anon-supabase  
       # Configuração do NextAuth
       # IMPORTANTE: NEXTAUTH_URL deve ser a URL pública gerenciada pelo Traefik
-      - NEXTAUTH_URL=https://{{APP_DOMAIN}} # Exemplo: https://app.seusite.com
-      - NEXTAUTH_SECRET={{NEXTAUTH_SECRET}} # Um segredo forte para o NextAuth
+      - NEXTAUTH_URL=https://ia.impa365.com # Exemplo: https://app.seusite.com
+      - NEXTAUTH_SECRET=dfdghoiuAHSIASDA9859aHNUH # Um segredo forte para o NextAuth
       
       # Chaves de Aplicação Personalizadas
-      - CUSTOM_KEY={{CUSTOM_KEY}} # Valor da sua chave personalizada
+      - CUSTOM_KEY=DJD233@CFKKJID897fSF8F # Valor da sua chave personalizada
 
       # Ambiente da Aplicação
       - NODE_ENV=production
@@ -46,7 +39,7 @@ services:
       labels:
         - "traefik.enable=true"
         # Define o roteador HTTP para o impa-ai
-        - "traefik.http.routers.impa_ai_router.rule=Host(`{{APP_DOMAIN}}`)" # Exemplo: app.seusite.com
+        - "traefik.http.routers.impa_ai_router.rule=Host(`ia.impa365.com`)" # Exemplo: app.seusite.com
         - "traefik.http.routers.impa_ai_router.entrypoints=websecure"
         - "traefik.http.routers.impa_ai_router.tls=true"
         - "traefik.http.routers.impa_ai_router.tls.certresolver=letsencryptresolver"
@@ -56,12 +49,12 @@ services:
         # Vincula o roteador ao serviço
         - "traefik.http.routers.impa_ai_router.service=impa_ai_service"
         # Especifica a rede Docker que o Traefik deve usar para se conectar a este serviço
-        - "traefik.docker.network=ImpaServer"
+        - "traefik.docker.network=ServerIpa"
 
 ## --------------------------- Networks --------------------------- ##
 # Garanta que esta rede seja criada no Portainer ou Docker Swarm antecipadamente
-# Exemplo: docker network create --driver overlay ImpaServer
+# Exemplo: docker network create --driver overlay ServerIpa
 networks:
-  ImpaServer:
+  ServerIpa:
     external: true
-    name: ImpaServer
+    name: ServerIpa

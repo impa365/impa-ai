@@ -4,37 +4,35 @@ import { createClient } from "@supabase/supabase-js"
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-if (typeof window !== "undefined") {
-  // Executa apenas no cliente
-  if (!supabaseUrl) {
-    console.error(
-      "CLIENT-SIDE ERROR: NEXT_PUBLIC_SUPABASE_URL is not defined in the environment. The application will attempt to connect to localhost:54321. Please check your Docker/Portainer environment variable configuration for the Next.js build process.",
-    )
+// Validação mais rigorosa - não permitir fallbacks em produção
+if (!supabaseUrl || !supabaseAnonKey) {
+  const errorMessage = `
+    ERRO DE CONFIGURAÇÃO CRÍTICO:
+    - NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? "✅ Definida" : "❌ Não definida"}
+    - NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? "✅ Definida" : "❌ Não definida"}
+    
+    Verifique se as variáveis estão configuradas corretamente no:
+    1. Dockerfile (build args)
+    2. GitHub Actions (build-args)
+    3. Portainer Stack (environment)
+  `
+
+  if (typeof window !== "undefined") {
+    console.error(errorMessage)
+  } else {
+    console.error(errorMessage)
   }
 
-  if (!supabaseAnonKey) {
-    console.error(
-      "CLIENT-SIDE ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is not defined in the environment. The application will use a dummy key. Please check your Docker/Portainer environment variable configuration for the Next.js build process.",
-    )
-  }
-} else {
-  // Executa apenas no servidor
-  if (!supabaseUrl) {
-    console.warn(
-      "SERVER-SIDE WARNING: NEXT_PUBLIC_SUPABASE_URL is not defined. This might be an issue if server-side code relies on it directly, though typically client-side Supabase uses this.",
-    )
-  }
-  if (!supabaseAnonKey) {
-    console.warn(
-      "SERVER-SIDE WARNING: NEXT_PUBLIC_SUPABASE_ANON_KEY is not defined. This might be an issue if server-side code relies on it directly.",
-    )
+  // Em produção, não usar fallbacks - falhar explicitamente
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Variáveis de ambiente do Supabase não configuradas corretamente")
   }
 }
 
-// Criar cliente com valores padrão se as variáveis não estiverem definidas (para evitar erro de build)
+// Criar cliente Supabase
 export const supabase = createClient(
-  supabaseUrl || "http://localhost:54321", // << AQUI ESTÁ O FALLBACK
-  supabaseAnonKey || "dummy-key", // << AQUI ESTÁ O FALLBACK
+  supabaseUrl || "http://localhost:54321", // Fallback apenas para desenvolvimento
+  supabaseAnonKey || "dummy-key",
   {
     db: {
       schema: "impaai",

@@ -16,11 +16,15 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Variáveis temporárias para o build (serão substituídas no runtime)
-ENV NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=temporary-key-for-build
+# Argumentos de build para variáveis NEXT_PUBLIC_*
+ARG NEXT_PUBLIC_SUPABASE_URL=https://supa.impa365.com
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.cVmHXTXMMB09PuXEMevVuGxV5_ZR4yJly6pF0uab7fA
+
+# Definir as variáveis de ambiente para o build
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXTAUTH_SECRET=temporary-secret-for-build
-ENV NEXTAUTH_URL=http://localhost:3000
+ENV NEXTAUTH_URL=https://ia.impa365.com
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build da aplicação
