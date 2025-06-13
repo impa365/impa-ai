@@ -1,65 +1,78 @@
 import { createClient } from "@supabase/supabase-js"
+import { getConfig } from "./config"
 
-// Verificar se as variáveis de ambiente estão definidas
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// Função para criar cliente Supabase dinamicamente
+async function createSupabaseClient() {
+  const config = await getConfig()
 
-// Log para debug (apenas no desenvolvimento)
-if (process.env.NODE_ENV === "development") {
-  console.log("🔧 Supabase Configuration Debug:")
-  console.log("URL:", supabaseUrl)
-  console.log("Key:", supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : "❌ Missing")
-}
+  console.log("🔧 Creating Supabase client with config:")
+  console.log("URL:", config.supabaseUrl)
+  console.log("Key:", config.supabaseAnonKey ? `${config.supabaseAnonKey.substring(0, 20)}...` : "❌ Missing")
 
-// Validação das variáveis - mais permissiva para evitar erros de build
-if (!supabaseUrl || !supabaseAnonKey) {
-  if (process.env.NODE_ENV === "development") {
-    console.warn("⚠️ Supabase variables not configured - using fallback for development")
-  }
-}
-
-// Criar cliente Supabase com fallbacks seguros
-const finalUrl =
-  supabaseUrl && supabaseUrl !== "https://placeholder-supabase-url.supabase.co" ? supabaseUrl : "http://localhost:54321"
-
-const finalKey =
-  supabaseAnonKey && !supabaseAnonKey.includes("placeholder-key-for-build-only") ? supabaseAnonKey : "dummy-key"
-
-export const supabase = createClient(finalUrl, finalKey, {
-  db: {
-    schema: "impaai",
-  },
-  global: {
-    headers: {
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
+  return createClient(config.supabaseUrl, config.supabaseAnonKey, {
+    db: {
+      schema: "impaai",
     },
-  },
+    global: {
+      headers: {
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
+      },
+    },
+  })
+}
+
+// Cliente Supabase lazy-loaded
+let supabaseClient: any = null
+
+export const getSupabase = async () => {
+  if (!supabaseClient) {
+    supabaseClient = await createSupabaseClient()
+  }
+  return supabaseClient
+}
+
+// Para compatibilidade com código existente, criar um proxy
+export const supabase = new Proxy({} as any, {
+  get:
+    (target, prop) =>
+    async (...args: any[]) => {
+      const client = await getSupabase()
+      const method = client[prop]
+      if (typeof method === "function") {
+        return method.apply(client, args)
+      }
+      return method
+    },
 })
 
 // Função para acessar qualquer tabela no schema correto
-export function getTable(tableName: string) {
-  return supabase.from(tableName)
+export async function getTable(tableName: string) {
+  const client = await getSupabase()
+  return client.from(tableName)
 }
 
 // Funções específicas para cada tabela - USANDO A NOVA ESTRUTURA
 export const db = {
-  users: () => getTable("user_profiles"),
-  agents: () => getTable("ai_agents"),
-  whatsappConnections: () => getTable("whatsapp_connections"),
-  activityLogs: () => getTable("agent_activity_logs"),
-  userSettings: () => getTable("user_settings"),
-  systemSettings: () => getTable("system_settings"),
-  themes: () => getTable("system_themes"),
-  integrations: () => getTable("integrations"),
-  vectorStores: () => getTable("vector_stores"),
-  vectorDocuments: () => getTable("vector_documents"),
-  apiKeys: () => getTable("user_api_keys"),
-  organizations: () => getTable("organizations"),
-  dailyMetrics: () => getTable("daily_metrics"),
+  users: async () => await getTable("user_profiles"),
+  agents: async () => await getTable("ai_agents"),
+  whatsappConnections: async () => await getTable("whatsapp_connections"),
+  activityLogs: async () => await getTable("agent_activity_logs"),
+  userSettings: async () => await getTable("user_settings"),
+  systemSettings: async () => await getTable("system_settings"),
+  themes: async () => await getTable("system_themes"),
+  integrations: async () => await getTable("integrations"),
+  vectorStores: async () => await getTable("vector_stores"),
+  vectorDocuments: async () => await getTable("vector_documents"),
+  apiKeys: async () => await getTable("user_api_keys"),
+  organizations: async () => await getTable("organizations"),
+  dailyMetrics: async () => await getTable("daily_metrics"),
 
   // Função para executar queries SQL diretas
-  rpc: (functionName: string, params?: any) => supabase.rpc(functionName, params),
+  rpc: async (functionName: string, params?: any) => {
+    const client = await getSupabase()
+    return client.rpc(functionName, params)
+  },
 }
 
 // Tipos para o banco de dados - NOVA ESTRUTURA

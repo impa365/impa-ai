@@ -16,7 +16,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Variáveis temporárias VÁLIDAS para o build (serão substituídas no runtime)
+# Variáveis temporárias VÁLIDAS para o build (não serão usadas no runtime)
 ENV NEXT_PUBLIC_SUPABASE_URL=https://placeholder-supabase-url.supabase.co
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxMjM0NTYsImV4cCI6MTk2MDY5OTQ1Nn0.placeholder-key-for-build-only
 ENV NEXTAUTH_SECRET=temporary-secret-for-build-only
@@ -42,10 +42,10 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Script para substituir variáveis no runtime
-COPY --chown=nextjs:nodejs <<'EOF' /app/replace-env.sh
+# Script simplificado para mostrar as variáveis (sem substituição)
+COPY --chown=nextjs:nodejs <<'EOF' /app/show-env.sh
 #!/bin/sh
-echo "🔧 Replacing runtime environment variables..."
+echo "🔧 Runtime environment variables loaded:"
 
 # Verificar se as variáveis estão definidas
 if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
@@ -58,22 +58,16 @@ if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
   exit 1
 fi
 
-# Substituir placeholders nos arquivos JavaScript buildados
-find /app/.next -name "*.js" -type f -exec sed -i \
-  -e "s|https://placeholder-supabase-url.supabase.co|${NEXT_PUBLIC_SUPABASE_URL}|g" \
-  -e "s|eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxMjM0NTYsImV4cCI6MTk2MDY5OTQ1Nn0.placeholder-key-for-build-only|${NEXT_PUBLIC_SUPABASE_ANON_KEY}|g" \
-  -e "s|https://placeholder-app-url.com|${NEXTAUTH_URL}|g" \
-  {} +
-
-echo "✅ Environment variables replaced successfully"
+echo "✅ Environment variables loaded successfully"
 echo "🌐 SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}"
 echo "🔑 SUPABASE_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:0:20}..."
 echo "🔗 NEXTAUTH_URL: ${NEXTAUTH_URL}"
+echo "🚀 Starting application with dynamic configuration..."
 
 exec "$@"
 EOF
 
-RUN chmod +x /app/replace-env.sh
+RUN chmod +x /app/show-env.sh
 
 USER nextjs
 
@@ -82,6 +76,6 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Usar o script de substituição como entrypoint
-ENTRYPOINT ["/app/replace-env.sh"]
+# Usar o script de verificação como entrypoint
+ENTRYPOINT ["/app/show-env.sh"]
 CMD ["node", "server.js"]
