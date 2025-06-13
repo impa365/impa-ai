@@ -18,8 +18,8 @@ export function RuntimeConfigProvider({
   children: React.ReactNode
 }) {
   const [config, setConfig] = useState<RuntimeConfig>({
-    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || null, // Fallback inicial para valor de build
-    supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || null, // Fallback inicial
+    supabaseUrl: null, // Inicializa como nulo, será preenchido pela API
+    supabaseAnonKey: null, // Inicializa como nulo
     loading: true,
     error: null,
   })
@@ -31,7 +31,6 @@ export function RuntimeConfigProvider({
       try {
         const response = await fetch("/api/config")
         if (!response.ok) {
-          // Tenta ler o corpo do erro se for JSON, caso contrário usa o statusText
           let errorBody = `Failed to fetch runtime config: ${response.status} ${response.statusText}`
           try {
             const errorData = await response.json()
@@ -39,7 +38,7 @@ export function RuntimeConfigProvider({
               errorBody = `Failed to fetch runtime config: ${errorData.error}`
             }
           } catch (jsonError) {
-            // Ignora se o corpo do erro não for JSON
+            /* Ignora */
           }
           throw new Error(errorBody)
         }
@@ -48,17 +47,13 @@ export function RuntimeConfigProvider({
         if (isMounted) {
           // console.log("RuntimeConfigProvider: Config fetched:", data)
           if (!data.supabaseUrl || !data.supabaseAnonKey) {
-            // console.warn("RuntimeConfigProvider: /api/config retornou dados incompletos. Usando fallbacks se disponíveis.");
-            setConfig((prevConfig) => ({
-              ...prevConfig, // Mantém fallbacks de build se a API não retornar tudo
-              supabaseUrl: data.supabaseUrl || prevConfig.supabaseUrl,
-              supabaseAnonKey: data.supabaseAnonKey || prevConfig.supabaseAnonKey,
+            // console.warn("RuntimeConfigProvider: /api/config retornou dados incompletos.");
+            setConfig({
+              supabaseUrl: data.supabaseUrl || null,
+              supabaseAnonKey: data.supabaseAnonKey || null,
               loading: false,
-              error:
-                !data.supabaseUrl || !data.supabaseAnonKey
-                  ? new Error("/api/config did not return complete Supabase credentials.")
-                  : null,
-            }))
+              error: new Error("/api/config did not return complete Supabase credentials."),
+            })
           } else {
             setConfig({
               supabaseUrl: data.supabaseUrl,
@@ -71,23 +66,29 @@ export function RuntimeConfigProvider({
       } catch (error) {
         if (isMounted) {
           console.error("RuntimeConfigProvider: Error fetching config:", error)
-          setConfig((prevConfig) => ({
-            ...prevConfig,
+          setConfig({
+            supabaseUrl: null,
+            supabaseAnonKey: null,
             loading: false,
             error: error instanceof Error ? error : new Error(String(error)),
-          }))
+          })
         }
       }
     }
 
+    // Executa apenas no cliente
     if (typeof window !== "undefined") {
-      // Executa apenas no cliente
       fetchConfig()
     } else {
-      // No SSR, os valores de process.env já foram usados no estado inicial.
-      // Marcamos como não carregando.
+      // No SSR, não temos como buscar a config do cliente ainda.
+      // O estado inicial será loading: true.
+      // Se você precisar de SSR com config, a estratégia precisaria ser diferente (ex: passar via pageProps).
       if (isMounted) {
-        setConfig((prev) => ({ ...prev, loading: false }))
+        setConfig((prev) => ({
+          ...prev,
+          loading: true,
+          error: new Error("Config not available on server for client provider."),
+        }))
       }
     }
 
