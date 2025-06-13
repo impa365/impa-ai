@@ -9,11 +9,11 @@ services:
       - ServerIpa
     environment:
       # Configuração do Supabase
-      - NEXT_PUBLIC_SUPABASE_URL=https://supa.impa365.com # Exemplo: https://seu-projeto-ref.supabase.co
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.cVmHXTXMMB09PuXEMevVuGxV5_ZR4yJly6pF0uab7fA # Exemplo: sua-chave-anon-supabase  
+      - NEXT_PUBLIC_SUPABASE_URL=https://supabaseteste.impa365.com # Exemplo: https://seu-projeto-ref.supabase.co
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.0w0daMEG_Z8srUfzUgH5uEixdjJYp0Xyh_12su0L07Q # Exemplo: sua-chave-anon-supabase  
       # Configuração do NextAuth
       # IMPORTANTE: NEXTAUTH_URL deve ser a URL pública gerenciada pelo Traefik
-      - NEXTAUTH_URL=https://ia.impa365.com # Exemplo: https://app.seusite.com
+      - NEXTAUTH_URL=https://aiteste.impa365.com # Exemplo: https://app.seusite.com
       - NEXTAUTH_SECRET=dfdghoiuAHSIASDA9859aHNUH # Um segredo forte para o NextAuth
       
       # Chaves de Aplicação Personalizadas
@@ -39,7 +39,7 @@ services:
       labels:
         - "traefik.enable=true"
         # Define o roteador HTTP para o impa-ai
-        - "traefik.http.routers.impa_ai_router.rule=Host(`ia.impa365.com`)" # Exemplo: app.seusite.com
+        - "traefik.http.routers.impa_ai_router.rule=Host(`aiteste.impa365.com`)" # Exemplo: app.seusite.com
         - "traefik.http.routers.impa_ai_router.entrypoints=websecure"
         - "traefik.http.routers.impa_ai_router.tls=true"
         - "traefik.http.routers.impa_ai_router.tls.certresolver=letsencryptresolver"

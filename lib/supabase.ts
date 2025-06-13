@@ -4,47 +4,46 @@ import { createClient } from "@supabase/supabase-js"
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// Validação mais rigorosa - não permitir fallbacks em produção
+// Log para debug (apenas no desenvolvimento)
+if (process.env.NODE_ENV === "development") {
+  console.log("🔧 Supabase Configuration Debug:")
+  console.log("URL:", supabaseUrl)
+  console.log("Key:", supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : "❌ Missing")
+}
+
+// Validação das variáveis
 if (!supabaseUrl || !supabaseAnonKey) {
   const errorMessage = `
-    ERRO DE CONFIGURAÇÃO CRÍTICO:
-    - NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? "✅ Definida" : "❌ Não definida"}
-    - NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? "✅ Definida" : "❌ Não definida"}
+    ❌ ERRO DE CONFIGURAÇÃO DO SUPABASE:
+    - URL: ${supabaseUrl || "NÃO DEFINIDA"}
+    - Key: ${supabaseAnonKey ? "DEFINIDA" : "NÃO DEFINIDA"}
     
-    Verifique se as variáveis estão configuradas corretamente no:
-    1. Dockerfile (build args)
-    2. GitHub Actions (build-args)
-    3. Portainer Stack (environment)
+    Verifique:
+    1. Variáveis no Portainer Stack
+    2. Script de substituição no Docker
+    3. Build da imagem
   `
 
-  if (typeof window !== "undefined") {
-    console.error(errorMessage)
-  } else {
-    console.error(errorMessage)
-  }
+  console.error(errorMessage)
 
-  // Em produção, não usar fallbacks - falhar explicitamente
+  // Em produção, usar fallback com aviso
   if (process.env.NODE_ENV === "production") {
-    throw new Error("Variáveis de ambiente do Supabase não configuradas corretamente")
+    console.warn("⚠️ Usando configuração de fallback - verifique as variáveis de ambiente!")
   }
 }
 
 // Criar cliente Supabase
-export const supabase = createClient(
-  supabaseUrl || "http://localhost:54321", // Fallback apenas para desenvolvimento
-  supabaseAnonKey || "dummy-key",
-  {
-    db: {
-      schema: "impaai",
-    },
-    global: {
-      headers: {
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
+export const supabase = createClient(supabaseUrl || "http://localhost:54321", supabaseAnonKey || "dummy-key", {
+  db: {
+    schema: "impaai",
+  },
+  global: {
+    headers: {
+      "Accept-Profile": "impaai",
+      "Content-Profile": "impaai",
     },
   },
-)
+})
 
 // Função para acessar qualquer tabela no schema correto
 export function getTable(tableName: string) {

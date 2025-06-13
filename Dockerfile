@@ -16,15 +16,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Argumentos de build para variáveis NEXT_PUBLIC_*
-ARG NEXT_PUBLIC_SUPABASE_URL=https://supa.impa365.com
-ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.cVmHXTXMMB09PuXEMevVuGxV5_ZR4yJly6pF0uab7fA
-
-# Definir as variáveis de ambiente para o build
-ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+# Variáveis temporárias GENÉRICAS para o build (serão substituídas no runtime)
+ENV NEXT_PUBLIC_SUPABASE_URL=__RUNTIME_SUPABASE_URL__
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=__RUNTIME_SUPABASE_ANON_KEY__
 ENV NEXTAUTH_SECRET=temporary-secret-for-build
-ENV NEXTAUTH_URL=https://ia.impa365.com
+ENV NEXTAUTH_URL=__RUNTIME_NEXTAUTH_URL__
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build da aplicação
@@ -46,6 +42,28 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Script para substituir variáveis no runtime
+COPY --chown=nextjs:nodejs <<'EOF' /app/replace-env.sh
+#!/bin/sh
+echo "🔧 Replacing runtime environment variables..."
+
+# Substituir placeholders nos arquivos JavaScript buildados
+find /app/.next -name "*.js" -type f -exec sed -i \
+  -e "s|__RUNTIME_SUPABASE_URL__|${NEXT_PUBLIC_SUPABASE_URL}|g" \
+  -e "s|__RUNTIME_SUPABASE_ANON_KEY__|${NEXT_PUBLIC_SUPABASE_ANON_KEY}|g" \
+  -e "s|__RUNTIME_NEXTAUTH_URL__|${NEXTAUTH_URL}|g" \
+  {} +
+
+echo "✅ Environment variables replaced successfully"
+echo "🌐 SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}"
+echo "🔑 SUPABASE_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:0:20}..."
+echo "🔗 NEXTAUTH_URL: ${NEXTAUTH_URL}"
+
+exec "$@"
+EOF
+
+RUN chmod +x /app/replace-env.sh
+
 USER nextjs
 
 EXPOSE 3000
@@ -53,5 +71,6 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Comando para iniciar a aplicação
+# Usar o script de substituição como entrypoint
+ENTRYPOINT ["/app/replace-env.sh"]
 CMD ["node", "server.js"]
