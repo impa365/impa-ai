@@ -1,0 +1,59 @@
+# Use Node.js 18 Alpine como base
+FROM node:18-alpine AS base
+
+# Instalar dependências necessárias
+RUN apk add --no-cache libc6-compat bash curl
+WORKDIR /app
+
+# Instalar dependências
+FROM base AS deps
+COPY package.json package-lock.json* ./
+RUN npm install --legacy-peer-deps
+
+# Build da aplicação
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Definir build args que podem ser passados durante o build
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+# Usar os build args como variáveis de ambiente para o build
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Validar se as variáveis foram fornecidas
+RUN if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then echo "ERROR: NEXT_PUBLIC_SUPABASE_URL build arg is required" && exit 1; fi
+RUN if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then echo "ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY build arg is required" && exit 1; fi
+
+RUN echo "Building with real Supabase URL: $NEXT_PUBLIC_SUPABASE_URL"
+
+RUN npm run build
+
+# Imagem de produção (runner)
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# Criar usuário não-root
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copiar arquivos necessários da etapa de build
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+EXPOSE 3000
+
+# Iniciar diretamente o servidor Next.js
+CMD ["node", "server.js"]

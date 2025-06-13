@@ -26,10 +26,13 @@ for (const varName of REQUIRED_ENV_VARS) {
     console.error(`🚨 ERRO DE RUNTIME: Variável de ambiente ${varName} não definida!`)
     allVarsPresent = false
   } else {
-    // Não precisamos mais verificar por "placeholder-build" aqui,
-    // pois não há mais placeholders no Dockerfile.
-    // Apenas verificamos se existe.
-    console.log(`[RUNTIME_ENV] ✅ ${varName}: ${varName.includes("KEY") ? "***OCULTO***" : value}`)
+    // Verificar se ainda são placeholders (não deveria acontecer mais)
+    if (value.includes("placeholder-build")) {
+      console.error(`🚨 ERRO DE RUNTIME: Variável ${varName} ainda contém placeholder: ${value}`)
+      allVarsPresent = false
+    } else {
+      console.log(`[RUNTIME_ENV] ✅ ${varName}: ${varName.includes("KEY") ? "***OCULTO***" : value}`)
+    }
   }
 }
 
@@ -40,8 +43,9 @@ if (!allVarsPresent) {
 }
 
 console.log("✅ Todas as variáveis de ambiente de runtime necessárias foram validadas.")
-console.log("🚀 Iniciando servidor Next.js (node server.js)...")
+console.log("🚀 Iniciando servidor Next.js standalone (node server.js)...")
 
+// Para build standalone, usamos server.js, não 'next start'
 const server = spawn("node", ["server.js"], {
   stdio: "inherit",
   env: process.env,
