@@ -1,15 +1,27 @@
 import { createClient } from "@supabase/supabase-js"
 import { getConfig } from "./config"
 
-// Função para criar cliente Supabase dinamicamente
-async function createSupabaseClient() {
-  const config = await getConfig()
+// Cliente Supabase singleton
+let supabaseClient: any = null
+let configPromise: Promise<any> | null = null
+
+// Função para obter o cliente Supabase configurado
+export async function getSupabase() {
+  if (supabaseClient) {
+    return supabaseClient
+  }
+
+  if (!configPromise) {
+    configPromise = getConfig()
+  }
+
+  const config = await configPromise
 
   console.log("🔧 Creating Supabase client with config:")
   console.log("URL:", config.supabaseUrl)
   console.log("Key:", config.supabaseAnonKey ? `${config.supabaseAnonKey.substring(0, 20)}...` : "❌ Missing")
 
-  return createClient(config.supabaseUrl, config.supabaseAnonKey, {
+  supabaseClient = createClient(config.supabaseUrl, config.supabaseAnonKey, {
     db: {
       schema: "impaai",
     },
@@ -20,31 +32,39 @@ async function createSupabaseClient() {
       },
     },
   })
-}
 
-// Cliente Supabase lazy-loaded
-let supabaseClient: any = null
-
-export const getSupabase = async () => {
-  if (!supabaseClient) {
-    supabaseClient = await createSupabaseClient()
-  }
   return supabaseClient
 }
 
-// Para compatibilidade com código existente, criar um proxy
-export const supabase = new Proxy({} as any, {
-  get:
-    (target, prop) =>
-    async (...args: any[]) => {
+// Para compatibilidade com código existente - VERSÃO SIMPLIFICADA
+export const supabase = {
+  from: async (table: string) => {
+    const client = await getSupabase()
+    return client.from(table)
+  },
+  rpc: async (functionName: string, params?: any) => {
+    const client = await getSupabase()
+    return client.rpc(functionName, params)
+  },
+  auth: {
+    getUser: async () => {
       const client = await getSupabase()
-      const method = client[prop]
-      if (typeof method === "function") {
-        return method.apply(client, args)
-      }
-      return method
+      return client.auth.getUser()
     },
-})
+    signInWithPassword: async (credentials: any) => {
+      const client = await getSupabase()
+      return client.auth.signInWithPassword(credentials)
+    },
+    signUp: async (credentials: any) => {
+      const client = await getSupabase()
+      return client.auth.signUp(credentials)
+    },
+    signOut: async () => {
+      const client = await getSupabase()
+      return client.auth.signOut()
+    },
+  },
+}
 
 // Função para acessar qualquer tabela no schema correto
 export async function getTable(tableName: string) {
