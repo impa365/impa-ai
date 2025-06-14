@@ -4,12 +4,12 @@ import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, ImageIcon, Eye, EyeOff, Plus, Copy, Trash2, Badge, ShieldCheck } from "lucide-react"
+import { Upload, ImageIcon, Eye, EyeOff, Plus } from "lucide-react"
 import { useTheme, themePresets, type ThemeConfig } from "@/components/theme-provider"
 import Image from "next/image"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -29,18 +29,6 @@ import { useToast } from "@/components/ui/use-toast"
 import { getSystemSettings, updateSystemSettings } from "@/lib/system-settings"
 import { DynamicTitle } from "@/components/dynamic-title"
 import { getSupabase } from "@/lib/supabase"
-
-interface ApiKey {
-  id: string
-  api_key: string
-  name: string
-  description: string
-  created_at: string
-  last_used_at: string | null
-  is_active: boolean
-  is_admin_key: boolean
-  access_scope: string
-}
 
 export default function AdminSettingsPage() {
   const [settingsSubTab, setSettingsSubTab] = useState("profile")
@@ -127,13 +115,6 @@ export default function AdminSettingsPage() {
   const [loadingSettings, setLoadingSettings] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
 
-  // Estados para API Keys
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
-  const [loadingApiKeys, setLoadingApiKeys] = useState(false)
-  const [creatingApiKey, setCreatingApiKey] = useState(false)
-  const [newKeyName, setNewKeyName] = useState("")
-  const [showNewKeyForm, setShowNewKeyForm] = useState(false)
-
   useEffect(() => {
     const currentUser = getCurrentUser()
     if (!currentUser || currentUser.role !== "admin") {
@@ -149,7 +130,6 @@ export default function AdminSettingsPage() {
       confirmPassword: "",
     })
     loadSystemSettings()
-    loadApiKeys(currentUser.id)
     setLoading(false)
   }, [router])
 
@@ -262,92 +242,6 @@ export default function AdminSettingsPage() {
       setSavingProfile(false)
       setTimeout(() => setProfileMessage(""), 3000)
     }
-  }
-
-  // FUNÇÃO PROBLEMÁTICA ATUAL:
-  const loadApiKeys = async (userId: string) => {
-    if (!userId) return
-    setLoadingApiKeys(true)
-    try {
-      console.log("🔍 [CLIENT] Fazendo requisição para /api/user/api-keys")
-      const response = await fetch(`/api/user/api-keys?user_id=${userId}`)
-      console.log("🔍 [CLIENT] Response status:", response.status)
-      console.log("🔍 [CLIENT] Response headers:", Object.fromEntries(response.headers.entries()))
-
-      // PROBLEMA: Não verifica se response.ok antes de tentar fazer parse
-      const data = await response.json() // ERRO ACONTECE AQUI
-
-      if (response.ok) {
-        setApiKeys(data.apiKeys || [])
-      } else {
-        throw new Error(data.error)
-      }
-    } catch (error) {
-      console.error("Erro ao carregar API keys:", error)
-      toast({
-        title: "Erro ao carregar API Keys",
-        description: (error as Error).message,
-        variant: "destructive",
-      })
-    } finally {
-      setLoadingApiKeys(false)
-    }
-  }
-
-  const createApiKey = async (isAdminKey = false) => {
-    if (!user?.id) return
-    setCreatingApiKey(true)
-    try {
-      const response = await fetch("/api/user/api-keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newKeyName || (isAdminKey ? "API Key de Administrador" : "API Key Padrão"),
-          description: isAdminKey
-            ? "API Key com acesso global a todos os bots do sistema"
-            : "API Key para integração com sistemas externos (acesso próprio)",
-          user_id: user.id,
-          is_admin_key: isAdminKey,
-        }),
-      })
-
-      const data = await response.json()
-      if (response.ok) {
-        toast({
-          title: `API Key ${isAdminKey ? "de Administrador" : "Padrão"} criada!`,
-          description: `Sua nova API key ${isAdminKey ? "com acesso global" : ""} foi gerada.`,
-        })
-        setNewKeyName("")
-        setShowNewKeyForm(false)
-        loadApiKeys(user.id)
-      } else {
-        throw new Error(data.error)
-      }
-    } catch (error) {
-      toast({
-        title: "Erro ao criar API Key",
-        description: (error as Error).message,
-        variant: "destructive",
-      })
-    } finally {
-      setCreatingApiKey(false)
-    }
-  }
-
-  const deleteApiKey = async (id: string) => {
-    if (!user?.id) return
-    try {
-      await fetch(`/api/user/api-keys?id=${id}&user_id=${user.id}`, { method: "DELETE" })
-      toast({ title: "API Key removida", description: "A API key foi removida com sucesso." })
-      loadApiKeys(user.id)
-    } catch (error) {
-      toast({ title: "Erro ao remover API Key", variant: "destructive" })
-    }
-  }
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-    toast({ title: "Copiado!", description: "API Key copiada para a área de transferência." })
   }
 
   useEffect(() => {
@@ -1510,7 +1404,6 @@ export default function AdminSettingsPage() {
           <TabsList>
             <TabsTrigger value="profile">Perfil</TabsTrigger>
             <TabsTrigger value="system">Sistema</TabsTrigger>
-            <TabsTrigger value="apiKeys">API Keys</TabsTrigger>
             <TabsTrigger value="integrations">Integrações</TabsTrigger>
             <TabsTrigger value="branding">Branding</TabsTrigger>
           </TabsList>
@@ -1658,105 +1551,6 @@ export default function AdminSettingsPage() {
 
           <TabsContent value="system" className="mt-4">
             {renderSystemSettings()}
-          </TabsContent>
-
-          <TabsContent value="apiKeys" className="mt-4">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Gerenciamento de API Keys</CardTitle>
-                    <CardDescription>Crie e gerencie chaves de API para você.</CardDescription>
-                  </div>
-                  {!showNewKeyForm ? (
-                    <Button onClick={() => setShowNewKeyForm(true)} className="gap-2">
-                      <Plus className="h-4 w-4" /> Nova API Key
-                    </Button>
-                  ) : (
-                    <Button onClick={() => setShowNewKeyForm(false)} variant="outline">
-                      Cancelar
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {showNewKeyForm && (
-                  <div className="mb-6 p-4 border rounded-lg space-y-4">
-                    <h4 className="font-medium">Criar Nova API Key</h4>
-                    <div>
-                      <Label htmlFor="keyName">Nome da API Key (Opcional)</Label>
-                      <Input
-                        id="keyName"
-                        value={newKeyName}
-                        onChange={(e) => setNewKeyName(e.target.value)}
-                        placeholder="Ex: Integração N8N Pessoal"
-                      />
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <Button
-                        onClick={() => createApiKey(false)}
-                        className="w-full"
-                        disabled={creatingApiKey}
-                        variant="outline"
-                      >
-                        {creatingApiKey ? "Criando..." : "Criar Chave Padrão (Acesso Próprio)"}
-                      </Button>
-                      <Button
-                        onClick={() => createApiKey(true)}
-                        className="w-full gap-2 bg-red-600 hover:bg-red-700 text-white"
-                        disabled={creatingApiKey}
-                      >
-                        <ShieldCheck className="h-4 w-4" />
-                        {creatingApiKey ? "Criando..." : "Criar Chave de Admin (Acesso Global)"}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {loadingApiKeys ? (
-                  <p>Carregando API keys...</p>
-                ) : apiKeys.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">Nenhuma API key encontrada.</p>
-                ) : (
-                  <div className="space-y-4">
-                    {apiKeys.map((apiKey) => (
-                      <div key={apiKey.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="font-medium">{apiKey.name}</h4>
-                              {apiKey.is_admin_key ? (
-                                <Badge className="bg-red-100 text-red-700">ADMIN</Badge>
-                              ) : (
-                                <Badge variant="secondary">PADRÃO</Badge>
-                              )}
-                              <Badge variant="outline">
-                                {apiKey.access_scope === "admin" ? "Acesso Global" : "Acesso Próprio"}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-gray-600 mt-1">{apiKey.description}</p>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteApiKey(apiKey.id)}
-                            className="text-red-600 hover:bg-red-100"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                          <Input value={apiKey.api_key} readOnly className="font-mono text-sm" />
-                          <Button variant="outline" size="sm" onClick={() => copyToClipboard(apiKey.api_key)}>
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="integrations" className="mt-4">

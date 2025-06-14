@@ -72,43 +72,50 @@ export default function WhatsAppPage() {
 
     setLoadingConnections(true)
     try {
-      // Corrigir chamada do Supabase - aguardar from() assíncrono
+      // Buscar conexões WhatsApp do banco - corrigir chamada assíncrona
       const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
-      const { data: connections } = await whatsappConnectionsTable
+      const { data: connections, error: connectionsError } = await whatsappConnectionsTable
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
 
-      setWhatsappConnections(connections || [])
+      if (connectionsError) {
+        console.error("Erro ao buscar conexões:", connectionsError)
+        setWhatsappConnections([])
+      } else {
+        setWhatsappConnections(connections || [])
+      }
 
-      // Buscar limite de conexões do usuário
+      // Buscar limite de conexões do usuário - corrigir chamada assíncrona
       const userSettingsTable = await supabase.from("user_settings")
-      const { data: userSettings } = await userSettingsTable
+      const { data: userSettingsData, error: userSettingsError } = await userSettingsTable
         .select("whatsapp_connections_limit")
         .eq("user_id", user.id)
-        .single()
 
-      if (userSettings) {
-        setConnectionLimit(userSettings.whatsapp_connections_limit)
+      if (!userSettingsError && userSettingsData && userSettingsData.length > 0) {
+        setConnectionLimit(userSettingsData[0].whatsapp_connections_limit)
       } else {
-        // Buscar limite padrão do sistema
+        // Buscar limite padrão do sistema - corrigir chamada assíncrona
         const systemSettingsTable = await supabase.from("system_settings")
-        const { data: systemSettings } = await systemSettingsTable
+        const { data: systemSettingsData, error: systemSettingsError } = await systemSettingsTable
           .select("setting_value")
           .eq("setting_key", "default_whatsapp_connections_limit")
-          .single()
 
-        const defaultLimit = systemSettings?.setting_value || 2
-        setConnectionLimit(defaultLimit)
+        if (!systemSettingsError && systemSettingsData && systemSettingsData.length > 0) {
+          const defaultLimit = Number.parseInt(systemSettingsData[0].setting_value) || 2
+          setConnectionLimit(defaultLimit)
 
-        // Criar configuração para o usuário
-        const userSettingsInsertTable = await supabase.from("user_settings")
-        await userSettingsInsertTable.insert([
-          {
-            user_id: user.id,
-            whatsapp_connections_limit: defaultLimit,
-          },
-        ])
+          // Criar configuração para o usuário - corrigir chamada assíncrona
+          const userSettingsInsertTable = await supabase.from("user_settings")
+          await userSettingsInsertTable.insert([
+            {
+              user_id: user.id,
+              whatsapp_connections_limit: defaultLimit,
+            },
+          ])
+        } else {
+          setConnectionLimit(2) // Fallback para 2 conexões
+        }
       }
     } catch (error) {
       console.error("Erro ao buscar conexões:", error)
@@ -160,7 +167,12 @@ export default function WhatsAppPage() {
       const syncSilently = async () => {
         try {
           for (const connection of whatsappConnections) {
-            await syncInstanceStatus(connection.id)
+            try {
+              await syncInstanceStatus(connection.id)
+            } catch (syncError) {
+              console.error(`Erro ao sincronizar conexão ${connection.id}:`, syncError)
+              // Continua com as outras conexões mesmo se uma falhar
+            }
           }
           // Recarregar conexões após sincronização
           await fetchWhatsAppConnections()
@@ -171,7 +183,7 @@ export default function WhatsAppPage() {
 
       syncSilently()
     }
-  }, [user, whatsappConnections])
+  }, [user]) // Remover whatsappConnections da dependência para evitar loop infinito
 
   const handleDeleteConnection = async (connection: any) => {
     setConnectionToDelete(connection)
@@ -185,7 +197,7 @@ export default function WhatsAppPage() {
       // Deletar da Evolution API
       await deleteEvolutionInstance(connectionToDelete.instance_name)
 
-      // Deletar do banco - corrigir chamada do Supabase
+      // Deletar do banco - corrigir chamada assíncrona do Supabase
       const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
       const { error } = await whatsappConnectionsTable.delete().eq("id", connectionToDelete.id)
 
@@ -538,7 +550,7 @@ export default function WhatsAppPage() {
         connection={selectedConnection}
         onStatusChange={(status) => {
           if (selectedConnection) {
-            // Atualizar status no banco e sincronizar - corrigir chamada do Supabase
+            // Atualizar status no banco e sincronizar - corrigir chamada assíncrona do Supabase
             const updateConnection = async () => {
               const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
               await whatsappConnectionsTable
@@ -568,7 +580,7 @@ export default function WhatsAppPage() {
         connection={selectedConnection}
         onStatusChange={(status) => {
           if (selectedConnection) {
-            // Atualizar status no banco e sincronizar - corrigir chamada do Supabase
+            // Atualizar status no banco e sincronizar - corrigir chamada assíncrona do Supabase
             const updateConnection = async () => {
               const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
               await whatsappConnectionsTable

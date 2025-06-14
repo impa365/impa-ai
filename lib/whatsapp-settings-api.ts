@@ -143,15 +143,22 @@ export async function syncInstanceStatus(connectionId: string) {
 
     // Buscar informações da conexão - corrigir chamada do Supabase
     const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
-    const { data: connection, error: connectionError } = await whatsappConnectionsTable
+    const { data: connections, error: connectionError } = await whatsappConnectionsTable
       .select("instance_name, status")
       .eq("id", connectionId)
-      .single()
 
-    if (connectionError || !connection) {
-      console.error("Conexão não encontrada:", connectionError) // Este log é no servidor, ok.
+    if (connectionError) {
+      console.error("Erro ao buscar conexão:", connectionError)
+      return { success: false, error: "Erro ao buscar conexão" }
+    }
+
+    if (!connections || connections.length === 0) {
+      console.error("Conexão não encontrada para ID:", connectionId)
       return { success: false, error: "Conexão não encontrada" }
     }
+
+    const connection = connections[0] // Pegar a primeira conexão encontrada
+
     if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
       console.log(`[SYNC SERVER LOG] Conexão encontrada: ${connection.instance_name}`)
     }
@@ -281,18 +288,26 @@ export async function getInstanceSettings(instanceName: string) {
   try {
     // Buscar configurações da instância no banco - corrigir chamada do Supabase
     const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
-    const { data: connection, error } = await whatsappConnectionsTable
-      .select("*")
-      .eq("instance_name", instanceName)
-      .single()
+    const { data: connections, error } = await whatsappConnectionsTable.select("*").eq("instance_name", instanceName)
 
-    if (error || !connection) {
+    if (error) {
+      console.error("Erro ao buscar instância:", error)
+      return {
+        success: false,
+        error: "Erro ao buscar instância",
+        settings: null,
+      }
+    }
+
+    if (!connections || connections.length === 0) {
       return {
         success: false,
         error: "Instância não encontrada",
         settings: null,
       }
     }
+
+    const connection = connections[0] // Pegar a primeira conexão encontrada
 
     // Retornar configurações padrão (você pode expandir isso)
     const settings = {

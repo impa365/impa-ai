@@ -6,14 +6,19 @@ import { randomBytes } from "crypto"
 export async function GET() {
   try {
     const user = getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    if (!user || user.role !== "admin") {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
     }
 
     const userApiKeysTable = await supabase.from("user_api_keys")
     const { data: apiKeys, error } = await userApiKeysTable
-      .select("*")
-      .eq("user_id", user.id)
+      .select(`
+        *,
+        user_profiles!inner(
+          full_name,
+          email
+        )
+      `)
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -31,31 +36,36 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const user = getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    if (!user || user.role !== "admin") {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
     }
 
-    const { name, description } = await request.json()
+    const { name, description, userId, isAdminKey, rateLimit } = await request.json()
 
-    if (!name) {
-      return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 })
+    if (!name || !userId) {
+      return NextResponse.json({ error: "Nome e usuário são obrigatórios" }, { status: 400 })
     }
 
     // Gerar API key única
-    const apiKey = `impa_${randomBytes(16).toString("hex")}`
+    const prefix = isAdminKey ? "impa_admin_" : "impa_"
+    const apiKey = `${prefix}${randomBytes(16).toString("hex")}`
 
     const userApiKeysTable = await supabase.from("user_api_keys")
     const { data, error } = await userApiKeysTable
       .insert({
-        user_id: user.id,
+        user_id: userId,
         api_key: apiKey,
         name,
-        description: description || "API Key para integração com sistemas externos (acesso próprio)",
-        permissions: ["read"],
-        rate_limit: 100,
+        description:
+          description ||
+          (isAdminKey
+            ? "API Key com acesso global a todos os bots do sistema"
+            : "API Key para integração com sistemas externos"),
+        permissions: isAdminKey ? ["read", "write", "admin"] : ["read"],
+        rate_limit: rateLimit || (isAdminKey ? 1000 : 100),
         is_active: true,
-        is_admin_key: false,
-        access_scope: "user",
+        is_admin_key: isAdminKey || false,
+        access_scope: isAdminKey ? "admin" : "user",
       })
       .select()
       .single()
@@ -75,8 +85,8 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const user = getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    if (!user || user.role !== "admin") {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -87,11 +97,39 @@ export async function DELETE(request: NextRequest) {
     }
 
     const userApiKeysTable = await supabase.from("user_api_keys")
-    const { error } = await userApiKeysTable.delete().eq("id", apiKeyId).eq("user_id", user.id) // Garantir que só pode deletar suas próprias keys
+    const { error } = await userApiKeysTable.delete().eq("id", apiKeyId)
 
     if (error) {
       console.error("Erro ao deletar API key:", error)
       return NextResponse.json({ error: "Erro ao deletar API key" }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Erro interno:", error)
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = getCurrentUser()
+    if (!user || user.role !== "admin") {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
+    }
+
+    const { id, isActive } = await request.json()
+
+    if (!id || typeof isActive !== "boolean") {
+      return NextResponse.json({ error: "ID e status são obrigatórios" }, { status: 400 })
+    }
+
+    const userApiKeysTable = await supabase.from("user_api_keys")
+    const { error } = await userApiKeysTable.update({ is_active: isActive }).eq("id", id)
+
+    if (error) {
+      console.error("Erro ao atualizar API key:", error)
+      return NextResponse.json({ error: "Erro ao atualizar API key" }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
