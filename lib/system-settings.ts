@@ -1,4 +1,39 @@
-import { supabase } from "@/lib/supabase"
+// lib/system-settings.ts
+
+import { supabase } from "./supabaseClient"
+
+export async function getSetting(key: string): Promise<string | null> {
+  const { data, error } = await supabase.from("system_settings").select("value").eq("key", key).single()
+
+  if (error) {
+    console.error("Error fetching setting:", error)
+    return null
+  }
+
+  return data ? data.value : null
+}
+
+export async function setSetting(key: string, value: string): Promise<boolean> {
+  const { error } = await supabase.from("system_settings").upsert({ key: key, value: value }, { onConflict: "key" })
+
+  if (error) {
+    console.error("Error setting setting:", error)
+    return false
+  }
+
+  return true
+}
+
+export async function getAllSettings(): Promise<{ key: string; value: string }[] | null> {
+  const { data, error } = await supabase.from("system_settings").select("key, value")
+
+  if (error) {
+    console.error("Error fetching all settings:", error)
+    return null
+  }
+
+  return data
+}
 
 // Cache para evitar múltiplas consultas ao banco
 let settingsCache: Record<string, any> = {}
@@ -18,11 +53,10 @@ export async function getSystemSetting(key: string, defaultValue: any = null): P
 
 export async function refreshSettingsCache(): Promise<void> {
   try {
-    const { data, error } = await supabase.from("system_settings").select("setting_key, setting_value")
+    const { data, error } = await supabase.from("system_settings").select("key, value")
 
     if (error) {
       console.error("Erro ao buscar configurações do sistema:", error)
-      // Limpar cache em caso de erro para forçar nova tentativa
       settingsCache = {}
       lastFetchTime = 0
       return
@@ -31,7 +65,7 @@ export async function refreshSettingsCache(): Promise<void> {
     // Atualizar o cache
     const newCache: Record<string, any> = {}
     data?.forEach((item) => {
-      newCache[item.setting_key] = item.setting_value
+      newCache[item.key] = item.value
     })
 
     settingsCache = newCache
@@ -55,20 +89,15 @@ export async function getSystemSettings(): Promise<Record<string, any>> {
 
 export async function updateSystemSettings(settingsToUpdate: Record<string, any>): Promise<void> {
   const upsertPromises = Object.entries(settingsToUpdate).map(([key, value]) => {
-    // Tenta encontrar uma descrição padrão, se não existir, usa uma genérica
-    const description = settingsCache[key]?.description || `Configuração do sistema para a chave ${key}`
-    const category = settingsCache[key]?.category || "general" // Categoria padrão
-
     return supabase.from("system_settings").upsert(
       {
-        setting_key: key,
-        setting_value: value,
-        description: description, // Adiciona descrição
-        category: category, // Adiciona categoria
-        is_public: settingsCache[key]?.is_public || false, // Mantém is_public se existir, senão false
-        requires_restart: settingsCache[key]?.requires_restart || false, // Mantém se existir, senão false
+        key: key,
+        value: value,
+        category: "general",
+        is_public: false,
+        is_active: true,
       },
-      { onConflict: "setting_key" },
+      { onConflict: "key" },
     )
   })
 
@@ -77,7 +106,6 @@ export async function updateSystemSettings(settingsToUpdate: Record<string, any>
   results.forEach((result, index) => {
     if (result.status === "rejected") {
       console.error(`Erro ao salvar configuração ${Object.keys(settingsToUpdate)[index]}:`, result.reason)
-      // Considerar lançar um erro aqui ou retornar um status de falha
     }
   })
 
@@ -85,7 +113,7 @@ export async function updateSystemSettings(settingsToUpdate: Record<string, any>
   await refreshSettingsCache()
 }
 
-// Valores padrão para limites (mantidos para compatibilidade, mas getSystemSettings é preferível)
+// Valores padrão para limites
 export async function getDefaultWhatsAppLimit(): Promise<number> {
   const limit = await getSystemSetting("default_whatsapp_connections_limit", 1)
   return typeof limit === "number" ? limit : Number(limit) || 1
