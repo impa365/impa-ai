@@ -1,76 +1,39 @@
-// lib/theme.ts
+"use client"
 
-// This file will define the theme for the application.
-// It will likely include color palettes, typography settings,
-// spacing values, and other design-related configurations.
+import { createContext, useContext } from "react"
+import { db } from "@/lib/supabase"
 
-// Example structure (to be expanded upon):
-
-interface Theme {
-  colors: {
-    primary: string
-    secondary: string
-    background: string
-    text: string
-  }
-  typography: {
-    fontFamily: string
-    fontSize: string
-    fontWeight: string
-  }
-  spacing: {
-    small: string
-    medium: string
-    large: string
-  }
+// Definição do tipo ThemeConfig
+export interface ThemeConfig {
+  systemName: string
+  description?: string
+  logoIcon: string
+  primaryColor: string
+  secondaryColor: string
+  accentColor: string
+  textColor?: string
+  backgroundColor?: string
+  fontFamily?: string
+  borderRadius?: string
+  customCss?: string
 }
 
-const defaultTheme: Theme = {
-  colors: {
-    primary: "#007bff",
-    secondary: "#6c757d",
-    background: "#f8f9fa",
-    text: "#212529",
-  },
-  typography: {
-    fontFamily: "sans-serif",
-    fontSize: "16px",
-    fontWeight: "400",
-  },
-  spacing: {
-    small: "8px",
-    medium: "16px",
-    large: "24px",
-  },
+// Context para o tema
+interface ThemeContextType {
+  theme: ThemeConfig
+  updateTheme: (updates: Partial<ThemeConfig>) => Promise<void>
+  loadTheme: () => Promise<void>
 }
 
-export default defaultTheme
+export const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
-// You can also create a function to generate themes based on user preferences:
-
-export const createTheme = (options: { [key: string]: any }): Theme => {
-  let newTheme = { ...defaultTheme }
-
-  for (const key in options) {
-    if (options.hasOwnProperty(key)) {
-      const value = options[key]
-
-      // Example: Override primary color if provided
-      if (key === "primaryColor") {
-        newTheme = {
-          ...newTheme,
-          colors: {
-            ...newTheme.colors,
-            primary: value,
-          },
-        }
-      }
-
-      // Add more theme customization logic here based on the 'key' and 'value'
-    }
+// Hook para usar o contexto do tema
+export function useTheme() {
+  const context = useContext(ThemeContext)
+  if (context === undefined) {
+    throw new Error("useTheme must be used within a ThemeProvider")
   }
-
-  return newTheme
+  return context
 }
 
 // Temas predefinidos
@@ -119,17 +82,197 @@ export const themePresets: Record<string, ThemeConfig> = {
   },
 }
 
-// Definição do tipo ThemeConfig
-export interface ThemeConfig {
-  systemName: string
-  description?: string
-  logoIcon: string
-  primaryColor: string
-  secondaryColor: string
-  accentColor: string
-  textColor?: string
-  backgroundColor?: string
-  fontFamily?: string
-  borderRadius?: string
-  customCss?: string
+// Tema padrão
+export const defaultTheme: ThemeConfig = themePresets.blue
+
+// Função para validar se uma cor é um código hexadecimal válido
+export function isValidHexColor(color: string): boolean {
+  return /^#([A-Fa-f0-9]{3}){1,2}$/.test(color)
+}
+
+// Função para ajustar o brilho de uma cor
+export function adjustColorBrightness(color: string, percent: number): string {
+  if (!isValidHexColor(color)) return color
+
+  const num = Number.parseInt(color.replace("#", ""), 16)
+  const amt = Math.round(2.55 * percent)
+  const R = (num >> 16) + amt
+  const G = ((num >> 8) & 0x00ff) + amt
+  const B = (num & 0x0000ff) + amt
+
+  return (
+    "#" +
+    (
+      0x1000000 +
+      (R < 255 ? (R < 0 ? 0 : R) : 255) * 0x10000 +
+      (G < 255 ? (G < 0 ? 0 : G) : 255) * 0x100 +
+      (B < 255 ? (B < 0 ? 0 : B) : 255)
+    )
+      .toString(16)
+      .slice(1)
+  )
+}
+
+// Função para aplicar um preset de tema
+export function applyThemePreset(presetName: string): ThemeConfig {
+  return themePresets[presetName] || defaultTheme
+}
+
+// Função para aplicar as cores do tema no CSS
+export function applyThemeColors(theme: ThemeConfig): void {
+  if (typeof document === "undefined") return
+
+  const root = document.documentElement
+
+  // Aplicar cores CSS customizadas
+  root.style.setProperty("--primary-color", theme.primaryColor)
+  root.style.setProperty("--secondary-color", theme.secondaryColor)
+  root.style.setProperty("--accent-color", theme.accentColor)
+
+  if (theme.textColor) {
+    root.style.setProperty("--text-color", theme.textColor)
+  }
+
+  if (theme.backgroundColor) {
+    root.style.setProperty("--background-color", theme.backgroundColor)
+  }
+
+  if (theme.fontFamily) {
+    root.style.setProperty("--font-family", theme.fontFamily)
+  }
+
+  if (theme.borderRadius) {
+    root.style.setProperty("--border-radius", theme.borderRadius)
+  }
+
+  // Aplicar CSS customizado se existir
+  if (theme.customCss) {
+    let customStyleElement = document.getElementById("custom-theme-css")
+    if (!customStyleElement) {
+      customStyleElement = document.createElement("style")
+      customStyleElement.id = "custom-theme-css"
+      document.head.appendChild(customStyleElement)
+    }
+    customStyleElement.textContent = theme.customCss
+  }
+}
+
+// Função para carregar o tema do banco de dados
+export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
+  try {
+    // Tenta carregar o tema ativo usando nossa nova função db
+    const { data, error } = await db.themes().select("*").eq("is_active", true).single()
+
+    if (error) {
+      console.error("Erro ao carregar tema:", error)
+      return null
+    }
+
+    if (!data) {
+      console.log("Nenhum tema ativo encontrado, usando tema padrão")
+      return null
+    }
+
+    // Mapear os dados do banco para o formato ThemeConfig
+    const theme: ThemeConfig = {
+      systemName: data.display_name || defaultTheme.systemName,
+      description: data.description || defaultTheme.description,
+      logoIcon: data.logo_icon || defaultTheme.logoIcon,
+      primaryColor: data.colors?.primary || defaultTheme.primaryColor,
+      secondaryColor: data.colors?.secondary || defaultTheme.secondaryColor,
+      accentColor: data.colors?.accent || defaultTheme.accentColor,
+      textColor: data.colors?.text,
+      backgroundColor: data.colors?.background,
+      fontFamily: data.fonts?.primary,
+      borderRadius: data.borders?.radius,
+      customCss: data.custom_css,
+    }
+
+    return theme
+  } catch (error) {
+    console.error("Erro ao carregar tema do banco:", error)
+    return null
+  }
+}
+
+// Função para salvar o tema no banco de dados
+export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
+  try {
+    // Verificar se já existe um tema ativo
+    const { data: existingTheme } = await db.themes().select("id").eq("is_active", true).single()
+
+    // Preparar os dados para salvar
+    const themeData = {
+      name: theme.systemName.toLowerCase().replace(/\s+/g, "_"),
+      display_name: theme.systemName,
+      description: theme.description || "Tema personalizado",
+      colors: {
+        primary: theme.primaryColor,
+        secondary: theme.secondaryColor,
+        accent: theme.accentColor,
+        text: theme.textColor,
+        background: theme.backgroundColor,
+      },
+      fonts: {
+        primary: theme.fontFamily,
+      },
+      borders: {
+        radius: theme.borderRadius,
+      },
+      custom_css: theme.customCss,
+      is_default: false,
+      is_active: true,
+      logo_icon: theme.logoIcon,
+    }
+
+    if (existingTheme) {
+      // Atualizar tema existente
+      const { error } = await db.themes().update(themeData).eq("id", existingTheme.id)
+
+      if (error) {
+        console.error("Erro ao atualizar tema:", error)
+        return false
+      }
+    } else {
+      // Criar novo tema
+      const { error } = await db.themes().insert(themeData)
+
+      if (error) {
+        console.error("Erro ao criar tema:", error)
+        return false
+      }
+    }
+
+    return true
+  } catch (error) {
+    console.error("Erro ao salvar tema no banco:", error)
+    return false
+  }
+}
+
+// Função para carregar o tema do localStorage
+export function loadThemeFromLocalStorage(): ThemeConfig | null {
+  if (typeof window === "undefined") return null
+
+  try {
+    const savedTheme = localStorage.getItem("theme")
+    if (!savedTheme) return null
+
+    const parsedTheme = JSON.parse(savedTheme)
+    return parsedTheme
+  } catch (error) {
+    console.error("Erro ao carregar tema do localStorage:", error)
+    return null
+  }
+}
+
+// Função para salvar o tema no localStorage
+export function saveThemeToLocalStorage(theme: ThemeConfig): void {
+  if (typeof window === "undefined") return
+
+  try {
+    localStorage.setItem("theme", JSON.stringify(theme))
+  } catch (error) {
+    console.error("Erro ao salvar tema no localStorage:", error)
+  }
 }
