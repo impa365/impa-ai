@@ -17,6 +17,13 @@ export async function getSupabase() {
 
   const config = await configPromise
 
+  // Add a check for valid configuration
+  if (!config || !config.supabaseUrl || !config.supabaseAnonKey) {
+    console.error("Supabase configuration is invalid. URL or Anon Key is missing.", config)
+    // Throw an error to make the failure explicit and prevent creating a faulty client
+    throw new Error("Supabase configuration is invalid. Cannot create client.")
+  }
+
   console.log("🔧 Creating Supabase client with config:")
   console.log("URL:", config.supabaseUrl)
   console.log("Key:", config.supabaseAnonKey ? `${config.supabaseAnonKey.substring(0, 20)}...` : "❌ Missing")

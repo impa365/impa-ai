@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 
 // Cache para evitar múltiplas consultas ao banco
 let settingsCache: Record<string, any> = {}
@@ -18,7 +18,8 @@ export async function getSystemSetting(key: string, defaultValue: any = null): P
 
 export async function refreshSettingsCache(): Promise<void> {
   try {
-    const { data, error } = await supabase.from("system_settings").select("setting_key, setting_value")
+    const client = await getSupabase()
+    const { data, error } = await client.from("system_settings").select("setting_key, setting_value")
 
     if (error) {
       console.error("Erro ao buscar configurações do sistema:", error)
@@ -54,19 +55,21 @@ export async function getSystemSettings(): Promise<Record<string, any>> {
 }
 
 export async function updateSystemSettings(settingsToUpdate: Record<string, any>): Promise<void> {
-  const upsertPromises = Object.entries(settingsToUpdate).map(([key, value]) => {
-    // Tenta encontrar uma descrição padrão, se não existir, usa uma genérica
-    const description = settingsCache[key]?.description || `Configuração do sistema para a chave ${key}`
-    const category = settingsCache[key]?.category || "general" // Categoria padrão
+  const client = await getSupabase() // Get client once
 
-    return supabase.from("system_settings").upsert(
+  const upsertPromises = Object.entries(settingsToUpdate).map(([key, value]) => {
+    const description = settingsCache[key]?.description || `Configuração do sistema para a chave ${key}`
+    const category = settingsCache[key]?.category || "general"
+
+    return client.from("system_settings").upsert(
+      // Use client here
       {
         setting_key: key,
         setting_value: value,
-        description: description, // Adiciona descrição
-        category: category, // Adiciona categoria
-        is_public: settingsCache[key]?.is_public || false, // Mantém is_public se existir, senão false
-        requires_restart: settingsCache[key]?.requires_restart || false, // Mantém se existir, senão false
+        description: description,
+        category: category,
+        is_public: settingsCache[key]?.is_public || false,
+        requires_restart: settingsCache[key]?.requires_restart || false,
       },
       { onConflict: "setting_key" },
     )

@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react"
 import { ThemeProvider as NextThemesProvider } from "next-themes"
 import type { ThemeProviderProps } from "next-themes"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 
 // Definição do tipo ThemeConfig
 export interface ThemeConfig {
@@ -175,7 +175,8 @@ export function applyThemeColors(theme: ThemeConfig): void {
 // Função para verificar se a tabela system_themes tem a estrutura correta
 async function checkSystemThemesStructure(): Promise<boolean> {
   try {
-    const { data, error } = await supabase.from("system_themes").select("logo_icon").limit(1)
+    const client = await getSupabase()
+    const { data, error } = await client.from("system_themes").select("logo_icon").limit(1)
 
     if (error) {
       console.log("Tabela system_themes não existe ou tem problemas de estrutura:", error.message)
@@ -211,7 +212,8 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
     }
 
     // Tentar carregar da tabela system_themes
-    const { data, error } = await supabase.from("system_themes").select("*").eq("is_active", true).single()
+    const client = await getSupabase()
+    const { data, error } = await client.from("system_themes").select("*").eq("is_active", true).single()
 
     if (error && error.code === "PGRST116") {
       const fallbackTheme = await loadThemeFromSystemSettings()
@@ -275,7 +277,8 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
 // Função fallback para carregar tema das configurações do sistema
 async function loadThemeFromSystemSettings(): Promise<ThemeConfig | null> {
   try {
-    const { data: settingsData, error: settingsError } = await supabase
+    const client = await getSupabase()
+    const { data: settingsData, error: settingsError } = await client
       .from("system_settings")
       .select("setting_value")
       .eq("setting_key", "current_theme")
@@ -319,8 +322,10 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
       return await saveThemeAsSystemSetting(theme)
     }
 
+    const client = await getSupabase()
+
     // Verificar se já existe um tema ativo
-    const { data: existingTheme } = await supabase.from("system_themes").select("id").eq("is_active", true).single()
+    const { data: existingTheme } = await client.from("system_themes").select("id").eq("is_active", true).single()
 
     // Preparar os dados para salvar
     const themeData = {
@@ -348,7 +353,7 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
 
     if (existingTheme) {
       // Atualizar tema existente
-      const { error } = await supabase.from("system_themes").update(themeData).eq("id", existingTheme.id)
+      const { error } = await client.from("system_themes").update(themeData).eq("id", existingTheme.id)
 
       if (error) {
         console.error("Erro ao atualizar tema:", error)
@@ -356,7 +361,7 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
       }
     } else {
       // Criar novo tema
-      const { error } = await supabase.from("system_themes").insert(themeData)
+      const { error } = await client.from("system_themes").insert(themeData)
 
       if (error) {
         console.error("Erro ao criar tema:", error)
@@ -374,8 +379,8 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
 // Função fallback para salvar tema nas configurações do sistema
 async function saveThemeAsSystemSetting(theme: ThemeConfig): Promise<boolean> {
   try {
-    // Verificar se já existe uma configuração de tema
-    const { data: existingSetting } = await supabase
+    const client = await getSupabase()
+    const { data: existingSetting } = await client
       .from("system_settings")
       .select("id")
       .eq("setting_key", "current_theme")
@@ -391,7 +396,7 @@ async function saveThemeAsSystemSetting(theme: ThemeConfig): Promise<boolean> {
 
     if (existingSetting) {
       // Atualizar configuração existente
-      const { error } = await supabase.from("system_settings").update(settingData).eq("id", existingSetting.id)
+      const { error } = await client.from("system_settings").update(settingData).eq("id", existingSetting.id)
 
       if (error) {
         console.error("Erro ao atualizar tema nas configurações:", error)
@@ -400,7 +405,7 @@ async function saveThemeAsSystemSetting(theme: ThemeConfig): Promise<boolean> {
       }
     } else {
       // Criar nova configuração
-      const { error } = await supabase.from("system_settings").insert(settingData)
+      const { error } = await client.from("system_settings").insert(settingData)
 
       if (error) {
         console.error("Erro ao inserir tema nas configurações:", error)
