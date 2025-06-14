@@ -1,46 +1,114 @@
 import { createClient } from "@supabase/supabase-js"
-import { getConfig } from "./config"
+
+// Função para obter configuração do servidor
+async function getServerConfig() {
+  if (typeof window === "undefined") {
+    // No servidor, usar variáveis de ambiente diretamente
+    return {
+      supabaseUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321",
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-key",
+    }
+  } else {
+    // No cliente, fazer fetch para a API
+    try {
+      const response = await fetch("/api/config")
+      const config = await response.json()
+      return {
+        supabaseUrl: config.supabaseUrl,
+        supabaseAnonKey: config.supabaseAnonKey,
+      }
+    } catch (error) {
+      console.error("Erro ao carregar configuração:", error)
+      return {
+        supabaseUrl: "http://localhost:54321",
+        supabaseAnonKey: "dummy-key",
+      }
+    }
+  }
+}
 
 // Cliente Supabase singleton
 let supabaseClient: any = null
-let configPromise: Promise<any> | null = null
+let isInitializing = false
+let initPromise: Promise<any> | null = null
 
-// Função para obter o cliente Supabase configurado
-export async function getSupabase() {
-  if (supabaseClient) {
-    return supabaseClient
+// Função para inicializar o cliente Supabase
+async function initializeSupabase() {
+  if (supabaseClient) return supabaseClient
+
+  if (isInitializing && initPromise) {
+    return await initPromise
   }
 
-  if (!configPromise) {
-    configPromise = getConfig()
-  }
+  isInitializing = true
+  initPromise = (async () => {
+    const config = await getServerConfig()
 
-  const config = await configPromise
+    console.log("🔧 Creating Supabase client with config:")
+    console.log("URL:", config.supabaseUrl)
+    console.log("Key:", config.supabaseAnonKey ? `${config.supabaseAnonKey.substring(0, 20)}...` : "❌ Missing")
 
-  console.log("🔧 Creating Supabase client with config:")
-  console.log("URL:", config.supabaseUrl)
-  console.log("Key:", config.supabaseAnonKey ? `${config.supabaseAnonKey.substring(0, 20)}...` : "❌ Missing")
-
-  supabaseClient = createClient(config.supabaseUrl, config.supabaseAnonKey, {
-    db: {
-      schema: "impaai",
-    },
-    global: {
-      headers: {
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
+    supabaseClient = createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      db: {
+        schema: "impaai",
       },
-    },
-  })
+      global: {
+        headers: {
+          "Accept-Profile": "impaai",
+          "Content-Profile": "impaai",
+        },
+      },
+    })
 
-  return supabaseClient
+    isInitializing = false
+    return supabaseClient
+  })()
+
+  return await initPromise
 }
 
-// Para compatibilidade com código existente - VERSÃO SIMPLIFICADA
+// Função principal para obter o cliente
+export async function getSupabase() {
+  return await initializeSupabase()
+}
+
+// Cliente Supabase com inicialização lazy - VERSÃO DIRETA
 export const supabase = {
-  from: async (table: string) => {
-    const client = await getSupabase()
-    return client.from(table)
+  from: (table: string) => {
+    return {
+      select: async (columns?: string) => {
+        const client = await getSupabase()
+        return client.from(table).select(columns)
+      },
+      insert: async (data: any) => {
+        const client = await getSupabase()
+        return client.from(table).insert(data)
+      },
+      update: async (data: any) => {
+        const client = await getSupabase()
+        return client.from(table).update(data)
+      },
+      delete: async () => {
+        const client = await getSupabase()
+        return client.from(table).delete()
+      },
+      eq: (column: string, value: any) => {
+        return {
+          select: async (columns?: string) => {
+            const client = await getSupabase()
+            return client.from(table).select(columns).eq(column, value)
+          },
+          update: async (data: any) => {
+            const client = await getSupabase()
+            return client.from(table).update(data).eq(column, value)
+          },
+          delete: async () => {
+            const client = await getSupabase()
+            return client.from(table).delete().eq(column, value)
+          },
+        }
+      },
+    }
   },
   rpc: async (functionName: string, params?: any) => {
     const client = await getSupabase()
