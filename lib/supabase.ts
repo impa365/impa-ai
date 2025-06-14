@@ -72,44 +72,224 @@ export async function getSupabase() {
   return await initializeSupabase()
 }
 
-// Cliente Supabase com inicialização lazy - VERSÃO DIRETA
-export const supabase = {
-  from: (table: string) => {
-    return {
-      select: async (columns?: string) => {
-        const client = await getSupabase()
-        return client.from(table).select(columns)
-      },
-      insert: async (data: any) => {
-        const client = await getSupabase()
-        return client.from(table).insert(data)
-      },
-      update: async (data: any) => {
-        const client = await getSupabase()
-        return client.from(table).update(data)
-      },
-      delete: async () => {
-        const client = await getSupabase()
-        return client.from(table).delete()
-      },
-      eq: (column: string, value: any) => {
-        return {
-          select: async (columns?: string) => {
-            const client = await getSupabase()
-            return client.from(table).select(columns).eq(column, value)
-          },
-          update: async (data: any) => {
-            const client = await getSupabase()
-            return client.from(table).update(data).eq(column, value)
-          },
-          delete: async () => {
-            const client = await getSupabase()
-            return client.from(table).delete().eq(column, value)
-          },
-        }
-      },
+// Classe para encadeamento de queries
+class SupabaseQueryBuilder {
+  private tableName: string
+  private queryChain: any[] = []
+
+  constructor(tableName: string) {
+    this.tableName = tableName
+  }
+
+  select(columns?: string) {
+    this.queryChain.push({ method: "select", args: [columns] })
+    return this
+  }
+
+  insert(data: any) {
+    this.queryChain.push({ method: "insert", args: [data] })
+    return this
+  }
+
+  update(data: any) {
+    this.queryChain.push({ method: "update", args: [data] })
+    return this
+  }
+
+  delete() {
+    this.queryChain.push({ method: "delete", args: [] })
+    return this
+  }
+
+  eq(column: string, value: any) {
+    this.queryChain.push({ method: "eq", args: [column, value] })
+    return this
+  }
+
+  neq(column: string, value: any) {
+    this.queryChain.push({ method: "neq", args: [column, value] })
+    return this
+  }
+
+  gt(column: string, value: any) {
+    this.queryChain.push({ method: "gt", args: [column, value] })
+    return this
+  }
+
+  gte(column: string, value: any) {
+    this.queryChain.push({ method: "gte", args: [column, value] })
+    return this
+  }
+
+  lt(column: string, value: any) {
+    this.queryChain.push({ method: "lt", args: [column, value] })
+    return this
+  }
+
+  lte(column: string, value: any) {
+    this.queryChain.push({ method: "lte", args: [column, value] })
+    return this
+  }
+
+  like(column: string, pattern: string) {
+    this.queryChain.push({ method: "like", args: [column, pattern] })
+    return this
+  }
+
+  ilike(column: string, pattern: string) {
+    this.queryChain.push({ method: "ilike", args: [column, pattern] })
+    return this
+  }
+
+  is(column: string, value: any) {
+    this.queryChain.push({ method: "is", args: [column, value] })
+    return this
+  }
+
+  in(column: string, values: any[]) {
+    this.queryChain.push({ method: "in", args: [column, values] })
+    return this
+  }
+
+  contains(column: string, value: any) {
+    this.queryChain.push({ method: "contains", args: [column, value] })
+    return this
+  }
+
+  containedBy(column: string, value: any) {
+    this.queryChain.push({ method: "containedBy", args: [column, value] })
+    return this
+  }
+
+  rangeGt(column: string, range: string) {
+    this.queryChain.push({ method: "rangeGt", args: [column, range] })
+    return this
+  }
+
+  rangeGte(column: string, range: string) {
+    this.queryChain.push({ method: "rangeGte", args: [column, range] })
+    return this
+  }
+
+  rangeLt(column: string, range: string) {
+    this.queryChain.push({ method: "rangeLt", args: [column, range] })
+    return this
+  }
+
+  rangeLte(column: string, range: string) {
+    this.queryChain.push({ method: "rangeLte", args: [column, range] })
+    return this
+  }
+
+  rangeAdjacent(column: string, range: string) {
+    this.queryChain.push({ method: "rangeAdjacent", args: [column, range] })
+    return this
+  }
+
+  overlaps(column: string, value: any) {
+    this.queryChain.push({ method: "overlaps", args: [column, value] })
+    return this
+  }
+
+  textSearch(column: string, query: string, options?: any) {
+    this.queryChain.push({ method: "textSearch", args: [column, query, options] })
+    return this
+  }
+
+  match(query: any) {
+    this.queryChain.push({ method: "match", args: [query] })
+    return this
+  }
+
+  not(column: string, operator: string, value: any) {
+    this.queryChain.push({ method: "not", args: [column, operator, value] })
+    return this
+  }
+
+  or(filters: string) {
+    this.queryChain.push({ method: "or", args: [filters] })
+    return this
+  }
+
+  filter(column: string, operator: string, value: any) {
+    this.queryChain.push({ method: "filter", args: [column, operator, value] })
+    return this
+  }
+
+  order(column: string, options?: { ascending?: boolean; nullsFirst?: boolean }) {
+    this.queryChain.push({ method: "order", args: [column, options] })
+    return this
+  }
+
+  limit(count: number) {
+    this.queryChain.push({ method: "limit", args: [count] })
+    return this
+  }
+
+  range(from: number, to: number) {
+    this.queryChain.push({ method: "range", args: [from, to] })
+    return this
+  }
+
+  single() {
+    this.queryChain.push({ method: "single", args: [] })
+    return this
+  }
+
+  maybeSingle() {
+    this.queryChain.push({ method: "maybeSingle", args: [] })
+    return this
+  }
+
+  csv() {
+    this.queryChain.push({ method: "csv", args: [] })
+    return this
+  }
+
+  geojson() {
+    this.queryChain.push({ method: "geojson", args: [] })
+    return this
+  }
+
+  explain(options?: any) {
+    this.queryChain.push({ method: "explain", args: [options] })
+    return this
+  }
+
+  rollback() {
+    this.queryChain.push({ method: "rollback", args: [] })
+    return this
+  }
+
+  returns() {
+    this.queryChain.push({ method: "returns", args: [] })
+    return this
+  }
+
+  // Método para executar a query
+  async then(resolve?: any, reject?: any) {
+    try {
+      const client = await getSupabase()
+      let query = client.from(this.tableName)
+
+      // Aplicar todos os métodos da cadeia
+      for (const { method, args } of this.queryChain) {
+        query = query[method](...args)
+      }
+
+      const result = await query
+      if (resolve) return resolve(result)
+      return result
+    } catch (error) {
+      if (reject) return reject(error)
+      throw error
     }
-  },
+  }
+}
+
+// Cliente Supabase com query builder
+export const supabase = {
+  from: (table: string) => new SupabaseQueryBuilder(table),
   rpc: async (functionName: string, params?: any) => {
     const client = await getSupabase()
     return client.rpc(functionName, params)
