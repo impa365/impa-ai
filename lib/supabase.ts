@@ -32,12 +32,7 @@ export async function getSupabase() {
     db: {
       schema: "impaai",
     },
-    global: {
-      headers: {
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-    },
+    // global headers removed
   })
 
   return supabaseClient
