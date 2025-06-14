@@ -549,7 +549,7 @@ SELECT
         WHEN tablename = 'system_themes' THEN (SELECT COUNT(*) FROM impaai.system_themes)::text || ' temas'
         ELSE 'Criada'
     END as status
-FROM pg_stat_user_tables 
+FROM pg_tables 
 WHERE schemaname = 'impaai'
 ORDER BY tablename;
 
