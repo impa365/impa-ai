@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, Copy, Plus, Trash2, Code, BadgeIcon as UIBadge } from "lucide-react" // Renomeado para evitar conflito
+import { Eye, EyeOff, Copy, Plus, Trash2, Code, Badge, Clock, Shield, AlertTriangle, RefreshCw } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/components/ui/use-toast"
@@ -20,9 +20,12 @@ interface ApiKey {
   description: string
   created_at: string
   last_used_at: string | null
+  expires_at: string | null
   is_active: boolean
   is_admin_key: boolean
   access_scope: string
+  permissions: any
+  rate_limit: number
 }
 
 export default function UserSettings() {
@@ -54,6 +57,7 @@ export default function UserSettings() {
   const [showApiExample, setShowApiExample] = useState(false)
   const [newKeyName, setNewKeyName] = useState("")
   const [showNewKeyForm, setShowNewKeyForm] = useState(false)
+  const [apiKeysError, setApiKeysError] = useState<string | null>(null)
 
   useEffect(() => {
     const currentUser = getCurrentUser()
@@ -74,40 +78,101 @@ export default function UserSettings() {
       confirmPassword: "",
     })
     setLoading(false)
-    // loadApiKeys é chamado no useEffect abaixo quando 'user' é setado
   }, [router])
 
   const loadApiKeys = async () => {
-    if (!user?.id) return
+    if (!user?.id) {
+      console.warn("⚠️ Usuário não identificado")
+      return
+    }
 
     setLoadingApiKeys(true)
+    setApiKeysError(null)
+
     try {
-      const response = await fetch(`/api/user/api-keys?user_id=${user.id}`) // Assegura que user.id existe
-      const data = await response.json()
-      if (response.ok) {
-        setApiKeys(data.apiKeys || [])
-      } else {
-        if (process.env.NODE_ENV === "development") {
-          console.error("Erro ao carregar API keys:", data.error)
+      console.log("🔍 Carregando API keys para usuário:", user.id)
+
+      const url = `/api/user/api-keys?user_id=${encodeURIComponent(user.id)}`
+      console.log("🔍 URL da requisição:", url)
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        cache: "no-cache",
+      })
+
+      console.log("🔍 Status da resposta:", response.status)
+      console.log("🔍 Headers da resposta:", Object.fromEntries(response.headers.entries()))
+
+      const responseText = await response.text()
+      console.log("🔍 Texto da resposta:", responseText)
+
+      if (!response.ok) {
+        console.error("❌ Resposta não OK:", response.status, responseText)
+
+        let errorData
+        try {
+          errorData = JSON.parse(responseText)
+        } catch {
+          errorData = { error: `HTTP ${response.status}: ${responseText}` }
         }
+
+        setApiKeysError(errorData.error || `Erro HTTP ${response.status}`)
+        return
       }
-    } catch (error) {
-      if (process.env.NODE_ENV === "development") {
-        console.error("Erro ao carregar API keys:", error)
+
+      let data
+      try {
+        data = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("❌ Erro ao fazer parse do JSON:", parseError)
+        setApiKeysError("Resposta inválida do servidor")
+        return
       }
+
+      console.log("✅ Dados recebidos:", data)
+
+      if (data.success && Array.isArray(data.apiKeys)) {
+        setApiKeys(data.apiKeys)
+        setApiKeysError(null)
+        console.log("✅ API keys carregadas:", data.apiKeys.length)
+      } else {
+        console.warn("⚠️ Estrutura de resposta inesperada:", data)
+        setApiKeys([])
+        setApiKeysError("Estrutura de resposta inválida")
+      }
+    } catch (error: any) {
+      console.error("💥 Erro ao carregar API keys:", error)
+      setApiKeysError(`Erro de rede: ${error.message}`)
+      setApiKeys([])
     } finally {
       setLoadingApiKeys(false)
     }
   }
 
   const createApiKey = async (isAdminKey = false) => {
-    if (!user?.id) return
+    if (!user?.id) {
+      toast({
+        title: "Erro",
+        description: "Usuário não identificado. Faça login novamente.",
+        variant: "destructive",
+      })
+      return
+    }
 
     setCreatingApiKey(true)
     try {
+      console.log("🔑 Criando API key...", { isAdminKey, userId: user.id, keyName: newKeyName })
+
       const response = await fetch("/api/user/api-keys", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         body: JSON.stringify({
           name: newKeyName || (isAdminKey ? "API Key de Administrador" : "API Key para integração N8N"),
           description: isAdminKey
@@ -118,8 +183,23 @@ export default function UserSettings() {
         }),
       })
 
-      const data = await response.json()
-      if (response.ok) {
+      const responseText = await response.text()
+      console.log("🔑 Resposta da criação:", response.status, responseText)
+
+      if (!response.ok) {
+        let errorData
+        try {
+          errorData = JSON.parse(responseText)
+        } catch {
+          errorData = { error: responseText }
+        }
+        throw new Error(errorData.error || `Erro HTTP ${response.status}`)
+      }
+
+      const data = JSON.parse(responseText)
+      console.log("🔑 API key criada:", data)
+
+      if (data.success) {
         toast({
           title: `API Key ${isAdminKey ? "de Administrador" : ""} criada com sucesso!`,
           description: `Sua nova API key ${isAdminKey ? "com acesso global" : ""} foi gerada.`,
@@ -128,9 +208,10 @@ export default function UserSettings() {
         setShowNewKeyForm(false)
         loadApiKeys()
       } else {
-        throw new Error(data.error)
+        throw new Error(data.error || "Resposta inválida do servidor")
       }
     } catch (error: any) {
+      console.error("🔑 Erro ao criar API key:", error)
       toast({
         title: "Erro ao criar API Key",
         description: error.message || "Não foi possível criar a API key.",
@@ -146,8 +227,10 @@ export default function UserSettings() {
 
     try {
       const response = await fetch(`/api/user/api-keys?id=${id}&user_id=${user.id}`, {
-        // Assegura user.id
         method: "DELETE",
+        headers: {
+          Accept: "application/json",
+        },
       })
 
       if (response.ok) {
@@ -156,11 +239,20 @@ export default function UserSettings() {
           description: "A API key foi removida com sucesso.",
         })
         loadApiKeys()
+      } else {
+        const errorText = await response.text()
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          errorData = { error: errorText }
+        }
+        throw new Error(errorData.error || "Erro ao remover API key")
       }
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Erro ao remover API Key",
-        description: "Não foi possível remover a API key.",
+        description: error.message || "Não foi possível remover a API key.",
         variant: "destructive",
       })
     }
@@ -170,8 +262,23 @@ export default function UserSettings() {
     navigator.clipboard.writeText(text)
     toast({
       title: "Copiado!",
-      description: "Comando copiado para a área de transferência.",
+      description: "Texto copiado para a área de transferência.",
     })
+  }
+
+  const formatPermissions = (permissions: any) => {
+    try {
+      if (Array.isArray(permissions)) {
+        return permissions.join(", ")
+      }
+      if (typeof permissions === "string") {
+        const parsed = JSON.parse(permissions)
+        return Array.isArray(parsed) ? parsed.join(", ") : "read"
+      }
+      return "read"
+    } catch {
+      return "read"
+    }
   }
 
   const handleUpdateProfile = async () => {
@@ -221,24 +328,13 @@ export default function UserSettings() {
         .eq("id", user.id)
 
       if (error) {
-        if (process.env.NODE_ENV === "development") {
-          console.error("Erro ao atualizar perfil:", error)
-        }
+        console.error("Erro ao atualizar perfil:", error)
         throw error
       }
 
       // Se há nova senha, trocar a senha
       if (profileForm.newPassword) {
-        if (process.env.NODE_ENV === "development") {
-          console.log("Alterando senha do usuário:", user.id)
-        }
-
         const passwordResult = await changePassword(user.id, profileForm.currentPassword, profileForm.newPassword)
-
-        if (process.env.NODE_ENV === "development") {
-          // Não logar passwordResult inteiro se contiver dados sensíveis.
-          console.log("Resultado da alteração de senha (sucesso/erro):", passwordResult.success, passwordResult.error)
-        }
 
         if (!passwordResult.success) {
           setProfileMessage(passwordResult.error || "Erro ao alterar senha")
@@ -264,9 +360,7 @@ export default function UserSettings() {
         confirmPassword: "",
       })
     } catch (error: any) {
-      if (process.env.NODE_ENV === "development") {
-        console.error("Erro ao atualizar perfil:", error)
-      }
+      console.error("Erro ao atualizar perfil:", error)
       setProfileMessage("Erro ao atualizar perfil: " + error.message)
     } finally {
       setSavingProfile(false)
@@ -436,23 +530,48 @@ export default function UserSettings() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Suas API Keys</CardTitle>
-                {!showNewKeyForm ? (
-                  <Button
-                    onClick={() => setShowNewKeyForm(true)}
-                    className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Nova API Key
+                <div className="flex gap-2">
+                  <Button onClick={loadApiKeys} variant="outline" size="sm" disabled={loadingApiKeys} className="gap-2">
+                    <RefreshCw className={`h-4 w-4 ${loadingApiKeys ? "animate-spin" : ""}`} />
+                    Atualizar
                   </Button>
-                ) : (
-                  <Button onClick={() => setShowNewKeyForm(false)} variant="outline">
-                    Cancelar
-                  </Button>
-                )}
+                  {!showNewKeyForm && !apiKeysError ? (
+                    <Button
+                      onClick={() => setShowNewKeyForm(true)}
+                      className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Nova API Key
+                    </Button>
+                  ) : showNewKeyForm ? (
+                    <Button onClick={() => setShowNewKeyForm(false)} variant="outline">
+                      Cancelar
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             </CardHeader>
             <CardContent>
-              {showNewKeyForm && (
+              {apiKeysError && (
+                <Alert variant="destructive" className="mb-6">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Erro ao carregar API Keys:</strong> {apiKeysError}
+                    <br />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={loadApiKeys}
+                      className="mt-2"
+                      disabled={loadingApiKeys}
+                    >
+                      {loadingApiKeys ? "Tentando novamente..." : "Tentar novamente"}
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {showNewKeyForm && !apiKeysError && (
                 <div className="mb-6 p-4 border rounded-lg">
                   <h4 className="font-medium mb-3">Criar Nova API Key</h4>
                   <div className="space-y-4">
@@ -467,7 +586,7 @@ export default function UserSettings() {
                       />
                     </div>
                     <Button
-                      onClick={() => createApiKey(false)} // isAdminKey = false
+                      onClick={() => createApiKey(false)}
                       className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white"
                       disabled={creatingApiKey}
                     >
@@ -477,7 +596,7 @@ export default function UserSettings() {
                 </div>
               )}
 
-              {user?.role === "admin" && ( // Somente admin pode criar chave de admin
+              {user?.role === "admin" && !apiKeysError && (
                 <div className="mb-4 p-4 border rounded-lg bg-red-50">
                   <h4 className="font-medium mb-3 text-red-800">Criar API Key de Administrador</h4>
                   <p className="text-sm text-red-600 mb-3">
@@ -485,8 +604,8 @@ export default function UserSettings() {
                   </p>
                   <Button
                     onClick={() => {
-                      setNewKeyName("API Key de Administrador") // Nome padrão para chave de admin
-                      createApiKey(true) // true para is_admin_key
+                      setNewKeyName("API Key de Administrador")
+                      createApiKey(true)
                     }}
                     className="w-full gap-2 bg-red-600 hover:bg-red-700 text-white"
                     disabled={creatingApiKey}
@@ -497,7 +616,16 @@ export default function UserSettings() {
               )}
 
               {loadingApiKeys ? (
-                <div className="text-center py-4">Carregando API keys...</div>
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  Carregando API keys...
+                </div>
+              ) : apiKeysError ? (
+                <div className="text-center py-8 text-gray-500">
+                  <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+                  <p>Não foi possível carregar as API keys.</p>
+                  <p className="text-sm">Verifique os logs do console para mais detalhes.</p>
+                </div>
               ) : apiKeys.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <p>Nenhuma API key encontrada.</p>
@@ -507,28 +635,49 @@ export default function UserSettings() {
                 <div className="space-y-4">
                   {apiKeys.map((apiKey) => (
                     <div key={apiKey.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <div className="flex items-center gap-2">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
                             <h4 className="font-medium">{apiKey.name}</h4>
                             {apiKey.is_admin_key && (
-                              <UIBadge className="bg-red-100 text-red-700 text-xs">ADMIN</UIBadge>
+                              <Badge variant="destructive" className="text-xs">
+                                <Shield className="h-3 w-3 mr-1" />
+                                ADMIN
+                              </Badge>
                             )}
-                            <UIBadge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-xs">
                               {apiKey.access_scope === "admin" ? "Acesso Global" : "Acesso Próprio"}
-                            </UIBadge>
+                            </Badge>
+                            {!apiKey.is_active && (
+                              <Badge variant="secondary" className="text-xs">
+                                Inativa
+                              </Badge>
+                            )}
                           </div>
-                          {apiKey.description && <p className="text-sm text-gray-600">{apiKey.description}</p>}
-                          <p className="text-sm text-gray-500">
-                            Criada em {new Date(apiKey.created_at).toLocaleDateString()}
-                          </p>
-                          {apiKey.last_used_at && (
-                            <p className="text-sm text-gray-500">
-                              Último uso: {new Date(apiKey.last_used_at).toLocaleDateString()}
-                            </p>
-                          )}
-                          {apiKey.is_active === false && <p className="text-sm text-red-500 font-medium">Inativa</p>}
+
+                          {apiKey.description && <p className="text-sm text-gray-600 mb-2">{apiKey.description}</p>}
+
+                          <div className="flex items-center gap-4 text-sm text-gray-500">
+                            <span>Criada em {new Date(apiKey.created_at).toLocaleDateString()}</span>
+                            {apiKey.last_used_at && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                Último uso: {new Date(apiKey.last_used_at).toLocaleDateString()}
+                              </span>
+                            )}
+                            {apiKey.expires_at && (
+                              <span className="text-orange-600">
+                                Expira: {new Date(apiKey.expires_at).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                            <span>Permissões: {formatPermissions(apiKey.permissions)}</span>
+                            <span>Rate Limit: {apiKey.rate_limit}/min</span>
+                          </div>
                         </div>
+
                         <Button
                           variant="outline"
                           size="sm"
@@ -538,6 +687,7 @@ export default function UserSettings() {
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
+
                       <div className="flex gap-2">
                         <Input value={apiKey.api_key} readOnly className="font-mono text-sm" />
                         <Button variant="outline" size="sm" onClick={() => copyToClipboard(apiKey.api_key)}>

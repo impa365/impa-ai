@@ -66,8 +66,8 @@ export default function UserAgentsPage() {
       console.log("🔍 Carregando limites do usuário:", userId)
 
       // Primeiro, tentar buscar com as colunas de limite
-      const { data, error } = await supabase
-        .from("user_profiles")
+      const userProfilesTable = await supabase.from("user_profiles")
+      const { data, error } = await userProfilesTable
         .select("max_agents, max_whatsapp_connections, max_integrations, role")
         .eq("id", userId)
         .single()
@@ -76,11 +76,8 @@ export default function UserAgentsPage() {
         console.warn("⚠️ Erro ao carregar limites do usuário:", error.message)
 
         // Se der erro, usar limites padrão baseados no role do usuário
-        const { data: userData, error: userError } = await supabase
-          .from("user_profiles")
-          .select("role")
-          .eq("id", userId)
-          .single()
+        const userProfilesTable2 = await supabase.from("user_profiles")
+        const { data: userData, error: userError } = await userProfilesTable2.select("role").eq("id", userId).single()
 
         if (!userError && userData) {
           const limits =
@@ -118,8 +115,8 @@ export default function UserAgentsPage() {
     try {
       console.log("🤖 Carregando agentes do usuário:", userId)
 
-      const { data, error } = await supabase
-        .from("ai_agents")
+      const agentsTable = await supabase.from("ai_agents")
+      const { data, error } = await agentsTable
         .select(`
           *,
           whatsapp_connections!inner(
@@ -195,8 +192,8 @@ export default function UserAgentsPage() {
 
       // Se o agente tem um bot na Evolution API, deletar primeiro
       if (agent.evolution_bot_id && agent.whatsapp_connection_id) {
-        const { data: connection } = await supabase
-          .from("whatsapp_connections")
+        const whatsappTable = await supabase.from("whatsapp_connections")
+        const { data: connection } = await whatsappTable
           .select("instance_name")
           .eq("id", agent.whatsapp_connection_id)
           .single()
@@ -212,7 +209,8 @@ export default function UserAgentsPage() {
       }
 
       // Deletar agente do banco de dados
-      const { error } = await supabase.from("ai_agents").delete().eq("id", agent.id).eq("user_id", currentUser.id) // Garantir que só pode deletar seus próprios agentes
+      const agentsTable = await supabase.from("ai_agents")
+      const { error } = await agentsTable.delete().eq("id", agent.id).eq("user_id", currentUser.id) // Garantir que só pode deletar seus próprios agentes
 
       if (error) {
         console.error("❌ Erro ao deletar agente:", error)

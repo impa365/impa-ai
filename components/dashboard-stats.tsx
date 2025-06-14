@@ -18,17 +18,15 @@ export default function DashboardStats() {
         const user = getCurrentUser()
         if (!user) return
 
-        // Buscar quantidade real de agentes
-        const { data: agents, error: agentsError } = await supabase
-          .from("ai_agents")
-          .select("id")
-          .eq("user_id", user.id)
+        // Buscar quantidade real de agentes - CORRIGIDO: aguardar o from()
+        const agentsTable = await supabase.from("ai_agents")
+        const { data: agents, error: agentsError } = await agentsTable.select("id").eq("user_id", user.id)
 
         if (agentsError) throw agentsError
 
-        // Buscar quantidade real de conexões WhatsApp
-        const { data: connections, error: connectionsError } = await supabase
-          .from("whatsapp_connections")
+        // Buscar quantidade real de conexões WhatsApp - CORRIGIDO: aguardar o from()
+        const connectionsTable = await supabase.from("whatsapp_connections")
+        const { data: connections, error: connectionsError } = await connectionsTable
           .select("id")
           .eq("user_id", user.id)
 

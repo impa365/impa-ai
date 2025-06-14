@@ -72,8 +72,9 @@ export default function WhatsAppPage() {
 
     setLoadingConnections(true)
     try {
-      const { data: connections } = await supabase
-        .from("whatsapp_connections")
+      // Corrigir chamada do Supabase - aguardar from() assíncrono
+      const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
+      const { data: connections } = await whatsappConnectionsTable
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
@@ -81,8 +82,8 @@ export default function WhatsAppPage() {
       setWhatsappConnections(connections || [])
 
       // Buscar limite de conexões do usuário
-      const { data: userSettings } = await supabase
-        .from("user_settings")
+      const userSettingsTable = await supabase.from("user_settings")
+      const { data: userSettings } = await userSettingsTable
         .select("whatsapp_connections_limit")
         .eq("user_id", user.id)
         .single()
@@ -91,8 +92,8 @@ export default function WhatsAppPage() {
         setConnectionLimit(userSettings.whatsapp_connections_limit)
       } else {
         // Buscar limite padrão do sistema
-        const { data: systemSettings } = await supabase
-          .from("system_settings")
+        const systemSettingsTable = await supabase.from("system_settings")
+        const { data: systemSettings } = await systemSettingsTable
           .select("setting_value")
           .eq("setting_key", "default_whatsapp_connections_limit")
           .single()
@@ -101,7 +102,8 @@ export default function WhatsAppPage() {
         setConnectionLimit(defaultLimit)
 
         // Criar configuração para o usuário
-        await supabase.from("user_settings").insert([
+        const userSettingsInsertTable = await supabase.from("user_settings")
+        await userSettingsInsertTable.insert([
           {
             user_id: user.id,
             whatsapp_connections_limit: defaultLimit,
@@ -183,8 +185,9 @@ export default function WhatsAppPage() {
       // Deletar da Evolution API
       await deleteEvolutionInstance(connectionToDelete.instance_name)
 
-      // Deletar do banco
-      const { error } = await supabase.from("whatsapp_connections").delete().eq("id", connectionToDelete.id)
+      // Deletar do banco - corrigir chamada do Supabase
+      const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
+      const { error } = await whatsappConnectionsTable.delete().eq("id", connectionToDelete.id)
 
       if (error) throw error
 
@@ -535,14 +538,17 @@ export default function WhatsAppPage() {
         connection={selectedConnection}
         onStatusChange={(status) => {
           if (selectedConnection) {
-            // Atualizar status no banco e sincronizar
-            supabase
-              .from("whatsapp_connections")
-              .update({ status })
-              .eq("id", selectedConnection.id)
-              .then(() => {
-                fetchWhatsAppConnections()
-              })
+            // Atualizar status no banco e sincronizar - corrigir chamada do Supabase
+            const updateConnection = async () => {
+              const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
+              await whatsappConnectionsTable
+                .update({ status })
+                .eq("id", selectedConnection.id)
+                .then(() => {
+                  fetchWhatsAppConnections()
+                })
+            }
+            updateConnection()
           }
         }}
       />
@@ -562,14 +568,17 @@ export default function WhatsAppPage() {
         connection={selectedConnection}
         onStatusChange={(status) => {
           if (selectedConnection) {
-            // Atualizar status no banco e sincronizar
-            supabase
-              .from("whatsapp_connections")
-              .update({ status })
-              .eq("id", selectedConnection.id)
-              .then(() => {
-                fetchWhatsAppConnections()
-              })
+            // Atualizar status no banco e sincronizar - corrigir chamada do Supabase
+            const updateConnection = async () => {
+              const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
+              await whatsappConnectionsTable
+                .update({ status })
+                .eq("id", selectedConnection.id)
+                .then(() => {
+                  fetchWhatsAppConnections()
+                })
+            }
+            updateConnection()
           }
         }}
       />
