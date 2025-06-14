@@ -53,7 +53,7 @@ export async function getSystemSetting(key: string, defaultValue: any = null): P
 
 export async function refreshSettingsCache(): Promise<void> {
   try {
-    const { data, error } = await supabase.from("system_settings").select("key, value")
+    const { data, error } = await supabase.from("system_settings").select("key, value").eq("is_active", true)
 
     if (error) {
       console.error("Erro ao buscar configurações do sistema:", error)
