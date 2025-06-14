@@ -36,8 +36,20 @@ const initializeSupabase = async () => {
   const config = await getServerConfig()
   const supabaseUrl = config.supabaseUrl
   const supabaseAnonKey = config.supabaseAnonKey
-  db = createClient(supabaseUrl, supabaseAnonKey)
-  return db // Or return the initialized db object
+
+  db = createClient(supabaseUrl, supabaseAnonKey, {
+    db: {
+      schema: "impaai",
+    },
+    global: {
+      headers: {
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
+      },
+    },
+  })
+
+  return db
 }
 
 export const supabase = await initializeSupabase()
