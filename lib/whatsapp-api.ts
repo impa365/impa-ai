@@ -1,4 +1,4 @@
-import { supabase } from "./supabase"
+import { supabase } from "./supabase" // Import db as well for potential future refactor
 
 // Função para gerar token único
 function generateInstanceToken(): string {
@@ -19,8 +19,8 @@ function generateInstanceName(platformName: string, connectionName: string): str
 
 // Função para verificar se nome/token já existe
 async function checkInstanceExists(instanceName: string, token: string): Promise<boolean> {
-  const { data } = await supabase
-    .from("whatsapp_connections")
+  const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
+  const { data } = await whatsappConnectionsTable
     .select("id")
     .or(`instance_name.eq.${instanceName},instance_token.eq.${token}`)
     .limit(1)
@@ -39,13 +39,17 @@ export async function createEvolutionInstance(
 }> {
   try {
     // Buscar configurações da Evolution API
-    const { data: integrationData } = await supabase
-      .from("integrations")
+    const integrationsTable = await supabase.from("integrations")
+    const { data: integrationData, error: integrationError } = await integrationsTable
       .select("config")
       .eq("type", "evolution_api")
       .eq("is_active", true)
       .single()
 
+    if (integrationError) {
+      console.error("Erro ao buscar configuração da Evolution API:", integrationError)
+      return { success: false, error: "Erro ao buscar configuração da Evolution API." }
+    }
     if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
       return {
         success: false,
@@ -54,13 +58,17 @@ export async function createEvolutionInstance(
     }
 
     // Buscar nome da plataforma
-    const { data: themeData } = await supabase
-      .from("global_theme_config")
+    // Note: "global_theme_config" might be better accessed via db.systemSettings or db.themes if it's one of those
+    const globalThemeConfigTable = await supabase.from("global_theme_config")
+    const { data: themeData, error: themeError } = await globalThemeConfigTable
       .select("system_name")
       .order("created_at", { ascending: false })
       .limit(1)
       .single()
 
+    if (themeError) {
+      console.warn("Aviso: Não foi possível buscar nome da plataforma de global_theme_config:", themeError.message)
+    }
     const platformName = themeData?.system_name || "impaai"
 
     // Gerar nome e token únicos
@@ -91,12 +99,13 @@ export async function createEvolutionInstance(
       body: JSON.stringify({
         instanceName,
         token,
-        integration: "WHATSAPP-BAILEYS",
+        integration: "WHATSAPP-BAILEYS", // Consider making this configurable if other integrations are planned
       }),
     })
 
     if (!response.ok) {
       const errorText = await response.text()
+      console.error(`Erro na Evolution API ao criar instância: ${response.status} - ${errorText}`)
       return {
         success: false,
         error: `Erro na Evolution API: ${response.status} - ${errorText}`,
@@ -106,8 +115,8 @@ export async function createEvolutionInstance(
     const evolutionResponse = await response.json()
 
     // Salvar no banco de dados
-    const { data: connectionData, error: dbError } = await supabase
-      .from("whatsapp_connections")
+    const whatsappConnectionsTableInsert = await supabase.from("whatsapp_connections")
+    const { data: connectionData, error: dbError } = await whatsappConnectionsTableInsert
       .insert([
         {
           user_id: userId,
@@ -115,13 +124,14 @@ export async function createEvolutionInstance(
           instance_name: instanceName,
           instance_id: evolutionResponse[0]?.instance?.instanceId || null,
           instance_token: token,
-          status: "disconnected",
+          status: "disconnected", // Initial status
         },
       ])
       .select()
       .single()
 
     if (dbError) {
+      console.error("Erro ao salvar conexão no banco de dados:", dbError)
       return {
         success: false,
         error: "Erro ao salvar conexão no banco de dados.",
@@ -135,11 +145,11 @@ export async function createEvolutionInstance(
         evolutionResponse: evolutionResponse[0],
       },
     }
-  } catch (error) {
-    console.error("Erro ao criar instância:", error)
+  } catch (error: any) {
+    console.error("Erro interno ao criar instância:", error)
     return {
       success: false,
-      error: "Erro interno do servidor.",
+      error: `Erro interno do servidor: ${error.message || error}`,
     }
   }
 }
@@ -152,13 +162,17 @@ export async function fetchInstanceDetails(instanceName: string): Promise<{
 }> {
   try {
     // Buscar configurações da Evolution API
-    const { data: integrationData } = await supabase
-      .from("integrations")
+    const integrationsTable = await supabase.from("integrations")
+    const { data: integrationData, error: integrationError } = await integrationsTable
       .select("config")
       .eq("type", "evolution_api")
       .eq("is_active", true)
       .single()
 
+    if (integrationError) {
+      console.error("Erro ao buscar config da Evolution API (fetchInstanceDetails):", integrationError)
+      return { success: false, error: "Erro ao buscar configuração da Evolution API." }
+    }
     if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
       return {
         success: false,
@@ -174,6 +188,8 @@ export async function fetchInstanceDetails(instanceName: string): Promise<{
     })
 
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`Erro ao buscar detalhes da instância da Evolution API: ${response.status} - ${errorText}`)
       return {
         success: false,
         error: `Erro ao buscar detalhes: ${response.status}`,
@@ -196,11 +212,11 @@ export async function fetchInstanceDetails(instanceName: string): Promise<{
       success: true,
       data: instanceDetails,
     }
-  } catch (error) {
-    console.error("Erro ao buscar detalhes da instância:", error)
+  } catch (error: any) {
+    console.error("Erro interno ao buscar detalhes da instância:", error)
     return {
       success: false,
-      error: "Erro interno do servidor.",
+      error: `Erro interno do servidor: ${error.message || error}`,
     }
   }
 }
@@ -212,13 +228,17 @@ export async function getInstanceQRCode(instanceName: string): Promise<{
   error?: string
 }> {
   try {
-    const { data: integrationData } = await supabase
-      .from("integrations")
+    const integrationsTable = await supabase.from("integrations")
+    const { data: integrationData, error: integrationError } = await integrationsTable
       .select("config")
       .eq("type", "evolution_api")
       .eq("is_active", true)
       .single()
 
+    if (integrationError) {
+      console.error("Erro ao buscar config da Evolution API (getInstanceQRCode):", integrationError)
+      return { success: false, error: "Erro ao buscar configuração da Evolution API." }
+    }
     if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
       return {
         success: false,
@@ -234,6 +254,8 @@ export async function getInstanceQRCode(instanceName: string): Promise<{
     })
 
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`Erro ao buscar QR Code da Evolution API: ${response.status} - ${errorText}`)
       return {
         success: false,
         error: `Erro ao buscar QR Code: ${response.status}`,
@@ -244,13 +266,13 @@ export async function getInstanceQRCode(instanceName: string): Promise<{
 
     return {
       success: true,
-      qrCode: data.base64, // Usar data.base64 em vez de data.base64 || data.code
+      qrCode: data.base64,
     }
-  } catch (error) {
-    console.error("Erro ao buscar QR Code:", error)
+  } catch (error: any) {
+    console.error("Erro interno ao buscar QR Code:", error)
     return {
       success: false,
-      error: "Erro interno do servidor.",
+      error: `Erro interno do servidor: ${error.message || error}`,
     }
   }
 }
@@ -261,13 +283,17 @@ export async function deleteEvolutionInstance(instanceName: string): Promise<{
   error?: string
 }> {
   try {
-    const { data: integrationData } = await supabase
-      .from("integrations")
+    const integrationsTable = await supabase.from("integrations")
+    const { data: integrationData, error: integrationError } = await integrationsTable
       .select("config")
       .eq("type", "evolution_api")
       .eq("is_active", true)
       .single()
 
+    if (integrationError) {
+      console.error("Erro ao buscar config da Evolution API (deleteEvolutionInstance):", integrationError)
+      return { success: false, error: "Erro ao buscar configuração da Evolution API." }
+    }
     if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
       return {
         success: false,
@@ -283,6 +309,8 @@ export async function deleteEvolutionInstance(instanceName: string): Promise<{
     })
 
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`Erro ao deletar instância na Evolution API: ${response.status} - ${errorText}`)
       return {
         success: false,
         error: `Erro ao deletar instância: ${response.status}`,
@@ -290,11 +318,11 @@ export async function deleteEvolutionInstance(instanceName: string): Promise<{
     }
 
     return { success: true }
-  } catch (error) {
-    console.error("Erro ao deletar instância:", error)
+  } catch (error: any) {
+    console.error("Erro interno ao deletar instância:", error)
     return {
       success: false,
-      error: "Erro interno do servidor.",
+      error: `Erro interno do servidor: ${error.message || error}`,
     }
   }
 }

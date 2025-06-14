@@ -19,7 +19,7 @@ import {
   RefreshCw,
   Info,
 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
 import WhatsAppInfoModal from "@/components/whatsapp-info-modal"
@@ -75,7 +75,8 @@ export default function AdminWhatsAppPage() {
 
   const fetchConnections = async () => {
     try {
-      const { data } = await supabase
+      const client = await getSupabase()
+      const { data } = await client
         .from("whatsapp_connections")
         .select(`
           *,
@@ -220,7 +221,8 @@ export default function AdminWhatsAppPage() {
       await deleteEvolutionInstance(connectionToDelete.instance_name)
 
       // Deletar do banco
-      const { error } = await supabase.from("whatsapp_connections").delete().eq("id", connectionToDelete.id)
+      const client = await getSupabase()
+      const { error } = await client.from("whatsapp_connections").delete().eq("id", connectionToDelete.id)
 
       if (error) throw error
 
@@ -257,6 +259,30 @@ export default function AdminWhatsAppPage() {
         </div>
       </div>
     )
+  }
+
+  const handleQRStatusChange = async (status: string) => {
+    if (selectedConnection) {
+      try {
+        const client = await getSupabase()
+        await client.from("whatsapp_connections").update({ status }).eq("id", selectedConnection.id)
+        fetchConnections() // Re-fetch after update
+      } catch (err) {
+        console.error("Error updating connection status:", err)
+      }
+    }
+  }
+
+  const handleInfoStatusChange = async (status: string) => {
+    if (selectedConnection) {
+      try {
+        const client = await getSupabase()
+        await client.from("whatsapp_connections").update({ status }).eq("id", selectedConnection.id)
+        fetchConnections() // Re-fetch after update
+      } catch (err) {
+        console.error("Error updating connection status:", err)
+      }
+    }
   }
 
   return (
@@ -517,15 +543,7 @@ export default function AdminWhatsAppPage() {
         open={qrModalOpen}
         onOpenChange={setQrModalOpen}
         connection={selectedConnection}
-        onStatusChange={(status) => {
-          if (selectedConnection) {
-            supabase
-              .from("whatsapp_connections")
-              .update({ status })
-              .eq("id", selectedConnection.id)
-              .then(() => fetchConnections())
-          }
-        }}
+        onStatusChange={handleQRStatusChange}
       />
 
       <WhatsAppSettingsModal
@@ -542,15 +560,7 @@ export default function AdminWhatsAppPage() {
         open={infoModalOpen}
         onOpenChange={setInfoModalOpen}
         connection={selectedConnection}
-        onStatusChange={(status) => {
-          if (selectedConnection) {
-            supabase
-              .from("whatsapp_connections")
-              .update({ status })
-              .eq("id", selectedConnection.id)
-              .then(() => fetchConnections())
-          }
-        }}
+        onStatusChange={handleInfoStatusChange}
       />
 
       <AdminWhatsAppConnectionModal

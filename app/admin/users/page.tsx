@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Edit, Trash2, Users, Key } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 import UserModal from "@/components/user-modal"
 import ChangePasswordModal from "@/components/change-password-modal"
 import {
@@ -36,7 +36,8 @@ export default function AdminUsersPage() {
   const fetchUsers = async () => {
     try {
       // Buscar usuários com suas configurações diretamente de user_profiles
-      const { data: usersData, error } = await supabase
+      const client = await getSupabase()
+      const { data: usersData, error } = await client
         .from("user_profiles")
         .select(`
     id,
@@ -81,9 +82,10 @@ export default function AdminUsersPage() {
 
     setSaving(true)
     try {
-      await supabase.from("whatsapp_connections").delete().eq("user_id", userToDelete.id)
-      await supabase.from("user_agent_settings").delete().eq("user_id", userToDelete.id)
-      const { error } = await supabase.from("user_profiles").delete().eq("id", userToDelete.id)
+      const client = await getSupabase()
+      await client.from("whatsapp_connections").delete().eq("user_id", userToDelete.id)
+      await client.from("user_agent_settings").delete().eq("user_id", userToDelete.id)
+      const { error } = await client.from("user_profiles").delete().eq("id", userToDelete.id)
 
       if (error) throw error
 

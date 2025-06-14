@@ -1,9 +1,9 @@
-// Content from attached file: lib__whatsapp-connections-zlSSYqM5qMw4z1G8QUqxbSXmBGcmn0.ts
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 
 export async function fetchWhatsAppConnections(userId?: string, isAdmin = false) {
   try {
-    let query = supabase.from("whatsapp_connections").select("*")
+    const client = await getSupabase()
+    let query = client.from("whatsapp_connections").select("*")
 
     // Se for admin e não especificou userId, buscar todas as conexões
     if (isAdmin && !userId) {
@@ -44,7 +44,8 @@ export async function fetchWhatsAppConnections(userId?: string, isAdmin = false)
 
 export async function fetchUsers() {
   try {
-    const { data, error } = await supabase
+    const client = await getSupabase()
+    const { data, error } = await client
       .from("user_profiles")
       .select("id, full_name, email, status, role") // Added role as per agent-modal usage
       .eq("status", "active") // Fetches only active users
@@ -69,7 +70,8 @@ export async function createWhatsAppConnection(connectionData: {
   instance_token: string // This field was not in the previous ai_agents table schema for whatsapp_connections
 }) {
   try {
-    const { data, error } = await supabase.from("whatsapp_connections").insert([connectionData]).select().single()
+    const client = await getSupabase()
+    const { data, error } = await client.from("whatsapp_connections").insert([connectionData]).select().single()
 
     if (error) {
       console.error("Erro ao criar conexão WhatsApp:", error)
@@ -85,7 +87,8 @@ export async function createWhatsAppConnection(connectionData: {
 
 export async function updateWhatsAppConnection(connectionId: string, updates: any) {
   try {
-    const { data, error } = await supabase
+    const client = await getSupabase()
+    const { data, error } = await client
       .from("whatsapp_connections")
       .update(updates)
       .eq("id", connectionId)
@@ -106,7 +109,8 @@ export async function updateWhatsAppConnection(connectionId: string, updates: an
 
 export async function deleteWhatsAppConnection(connectionId: string) {
   try {
-    const { error } = await supabase.from("whatsapp_connections").delete().eq("id", connectionId)
+    const client = await getSupabase()
+    const { error } = await client.from("whatsapp_connections").delete().eq("id", connectionId)
 
     if (error) {
       console.error("Erro ao deletar conexão WhatsApp:", error)

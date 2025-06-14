@@ -14,7 +14,7 @@ import { useTheme, themePresets, type ThemeConfig } from "@/components/theme-pro
 import Image from "next/image"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getCurrentUser, changePassword } from "@/lib/auth"
-import { db, supabase } from "@/lib/supabase"
+import { db } from "@/lib/supabase"
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { getSystemSettings, updateSystemSettings } from "@/lib/system-settings"
 import { DynamicTitle } from "@/components/dynamic-title"
+import { getSupabase } from "@/lib/supabase"
 
 interface ApiKey {
   id: string
@@ -230,7 +231,8 @@ export default function AdminSettingsPage() {
         }
       }
 
-      const { data, error } = await supabase.from("users").update(updateData).eq("id", user.id).select().single()
+      const client = await getSupabase()
+      const { data, error } = await client.from("users").update(updateData).eq("id", user.id).select().single()
 
       if (error) throw error
 
@@ -365,20 +367,17 @@ export default function AdminSettingsPage() {
   const fetchSystemSettings2 = async () => {
     try {
       // Buscar configurações específicas usando a nova estrutura
-      const { data: limitData, error: limitError } = await db
-        .systemSettings()
+      const { data: limitData, error: limitError } = await (await db.systemSettings())
         .select("setting_value")
         .eq("setting_key", "default_whatsapp_connections_limit")
         .single()
 
-      const { data: agentsLimitData, error: agentsError } = await db
-        .systemSettings()
+      const { data: agentsLimitData, error: agentsError } = await (await db.systemSettings())
         .select("setting_value")
         .eq("setting_key", "default_agents_limit")
         .single()
 
-      const { data: registrationData, error: regError } = await db
-        .systemSettings()
+      const { data: registrationData, error: regError } = await (await db.systemSettings())
         .select("setting_value")
         .eq("setting_key", "allow_public_registration")
         .single()
@@ -437,7 +436,7 @@ export default function AdminSettingsPage() {
       ]
 
       for (const setting of settingsToUpsert) {
-        const { error } = await db.systemSettings().upsert(setting, { onConflict: "setting_key" })
+        const { error } = await (await db.systemSettings()).upsert(setting, { onConflict: "setting_key" })
 
         if (error) {
           console.error(`Erro ao salvar ${setting.setting_key}:`, error)
@@ -493,7 +492,7 @@ export default function AdminSettingsPage() {
         updateData.password = adminProfileForm.newPassword
       }
 
-      const { error } = await db.users().update(updateData).eq("id", user.id)
+      const { error } = await (await db.users()).update(updateData).eq("id", user.id)
 
       if (error) throw error
 
@@ -561,8 +560,7 @@ export default function AdminSettingsPage() {
 
       if (existing) {
         // Atualizar integração existente
-        const { data, error } = await db
-          .integrations()
+        const { data, error } = await (await db.integrations())
           .update({
             config,
             is_active: true,
@@ -579,8 +577,7 @@ export default function AdminSettingsPage() {
         console.log("Integração atualizada:", data)
       } else {
         // Criar nova integração
-        const { data, error } = await db
-          .integrations()
+        const { data, error } = await (await db.integrations())
           .insert([
             {
               name: type === "evolution_api" ? "Evolution API" : "n8n",
@@ -617,7 +614,7 @@ export default function AdminSettingsPage() {
 
   const fetchIntegrations = async () => {
     try {
-      const { data, error } = await db.integrations().select("*").order("created_at", { ascending: false })
+      const { data, error } = await (await db.integrations()).select("*").order("created_at", { ascending: false })
 
       if (error) {
         // Se a tabela não existir, mostrar mensagem específica

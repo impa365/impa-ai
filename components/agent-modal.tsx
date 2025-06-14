@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Bot, Sparkles, Eye, EyeOff, Settings, MessageSquare, Volume2, Database, Brain, Users } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
 import { fetchWhatsAppConnections, fetchUsers } from "@/lib/whatsapp-connections"
@@ -198,10 +198,15 @@ export function AgentModal({
     }
   }
 
-  const loadN8nConfig = async () => {
-    const { data } = await supabase.from("integrations").select("config").eq("type", "n8n").single()
-    if (data && data.config) setN8nIntegrationConfig(data.config)
-    else console.warn("Configuração da integração n8n não encontrada.")
+  async function loadN8nConfig() {
+    try {
+      const client = await getSupabase()
+      const { data } = await client.from("integrations").select("config").eq("type", "n8n").single()
+      if (data && data.config) setN8nIntegrationConfig(data.config)
+      else console.warn("Configuração da integração n8n não encontrada.")
+    } catch (err) {
+      console.error("Erro ao carregar configuração N8N:", err)
+    }
   }
 
   const loadWhatsAppConnections = async (userId: string, userIsAdmin: boolean) => {
@@ -238,7 +243,8 @@ export function AgentModal({
 
     setEvolutionSyncStatus("Sincronizando com Evolution API...")
     try {
-      const { data: connection } = await supabase
+      const client = await getSupabase()
+      const { data: connection } = await client
         .from("whatsapp_connections")
         .select("instance_name")
         .eq("id", agent.whatsapp_connection_id)
@@ -354,6 +360,7 @@ export function AgentModal({
     let currentEvolutionBotId = formData.evolution_bot_id
 
     try {
+      const client = await getSupabase()
       const agentPayloadForDb = {
         name: formData.name,
         type: formData.type,
@@ -386,13 +393,13 @@ export function AgentModal({
       }
 
       if (isEditing && currentAgentIdInDb) {
-        const { error: updateDbError } = await supabase
+        const { error: updateDbError } = await client
           .from("ai_agents")
           .update(agentPayloadForDb)
           .eq("id", currentAgentIdInDb)
         if (updateDbError) throw updateDbError
       } else {
-        const { data: newAgent, error: insertDbError } = await supabase
+        const { data: newAgent, error: insertDbError } = await client
           .from("ai_agents")
           .insert(agentPayloadForDb)
           .select()
@@ -401,7 +408,7 @@ export function AgentModal({
         currentAgentIdInDb = newAgent.id
       }
 
-      const { data: connection, error: connectionError } = await supabase
+      const { data: connection, error: connectionError } = await client
         .from("whatsapp_connections")
         .select("instance_name")
         .eq("id", formData.whatsapp_connection_id)
@@ -421,7 +428,8 @@ export function AgentModal({
         apiUrl: webhookUrl,
         apiKey: n8nIntegrationConfig.apiKey || "",
         triggerType: formData.is_default ? "all" : "keyword",
-        triggerValue: formData.is_default ? "" : formData.model_config?.activation_keyword || "",
+        triggerOperator: formData.is_default ? "contains" : "equals", // Add missing triggerOperator
+        triggerValue: formData.is_default ? "" : formData.model_config?.activation_keyword || "", // Ensure triggerValue is always a string
         expire: formData.model_config?.expire_message_bot || 0,
         keywordFinish: formData.model_config?.keyword_finish || "#sair",
         delayMessage: formData.model_config?.delay_message || 1000,
@@ -445,7 +453,7 @@ export function AgentModal({
           throw new Error(createResult.error || "Falha ao criar bot na Evolution API.")
         }
         currentEvolutionBotId = createResult.botId
-        const { error: updateEvoIdError } = await supabase
+        const { error: updateEvoIdError } = await client
           .from("ai_agents")
           .update({ evolution_bot_id: currentEvolutionBotId })
           .eq("id", currentAgentIdInDb)
@@ -454,14 +462,14 @@ export function AgentModal({
       }
 
       if (formData.is_default && currentEvolutionBotId) {
-        const { error: uncheckError } = await supabase
+        const { error: uncheckError } = await client
           .from("ai_agents")
           .update({ is_default: false })
           .eq("whatsapp_connection_id", formData.whatsapp_connection_id)
           .not("id", "eq", currentAgentIdInDb)
         if (uncheckError) console.error("Erro ao desmarcar outros bots padrão no DB:", uncheckError.message)
 
-        const { error: setDefaultError } = await supabase
+        const { error: setDefaultError } = await client
           .from("ai_agents")
           .update({ is_default: true })
           .eq("id", currentAgentIdInDb)
@@ -476,7 +484,7 @@ export function AgentModal({
           listeningFromMe:
             formData.model_config?.listening_from_me === undefined ? false : formData.model_config.listeningFromMe,
           stopBotFromMe:
-            formData.model_config?.stop_bot_from_me === undefined ? false : formData.model_config.stop_bot_from_me,
+            formData.model_config?.stop_bot_from_me === undefined ? false : formData.model_config.stopBotFromMe,
           keepOpen: formData.model_config?.keep_open === undefined ? false : formData.model_config.keepOpen,
           splitMessages:
             formData.model_config?.split_messages === undefined ? true : formData.model_config.splitMessages,

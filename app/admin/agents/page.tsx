@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Edit, Trash2, Power, PowerOff, Bot, Search, Filter, Plus, Users } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 import { AgentModal } from "@/components/agent-modal"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -36,8 +36,9 @@ export default function AdminAgentsPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
+      const client = await getSupabase()
       // Buscar agentes com informações do usuário
-      const { data: agentsData, error: agentsError } = await supabase
+      const { data: agentsData, error: agentsError } = await client
         .from("ai_agents")
         .select(`
           *,
@@ -50,7 +51,7 @@ export default function AdminAgentsPage() {
       setAgents(agentsData || [])
 
       // Buscar usuários para o filtro
-      const { data: usersData, error: usersError } = await supabase
+      const { data: usersData, error: usersError } = await client
         .from("user_profiles")
         .select("id, email, full_name")
         .order("full_name")
@@ -59,7 +60,7 @@ export default function AdminAgentsPage() {
       setUsers(usersData || [])
 
       // Buscar conexões WhatsApp para o modal
-      const { data: connectionsData, error: connectionsError } = await supabase
+      const { data: connectionsData, error: connectionsError } = await client
         .from("whatsapp_connections")
         .select("*")
         .order("connection_name")
@@ -115,8 +116,9 @@ export default function AdminAgentsPage() {
     if (!confirm("Tem certeza que deseja excluir este agente?")) return
 
     try {
+      const client = await getSupabase()
       // Buscar informações do agente antes de excluir
-      const { data: agentData, error: fetchError } = await supabase
+      const { data: agentData, error: fetchError } = await client
         .from("ai_agents")
         .select("evolution_bot_id, whatsapp_connection_id")
         .eq("id", agentId)
@@ -126,7 +128,7 @@ export default function AdminAgentsPage() {
         console.error("Erro ao buscar dados do agente:", fetchError)
       } else if (agentData?.evolution_bot_id) {
         // Buscar o instance_name da conexão WhatsApp
-        const { data: whatsappConnection, error: whatsappError } = await supabase
+        const { data: whatsappConnection, error: whatsappError } = await client
           .from("whatsapp_connections")
           .select("instance_name")
           .eq("id", agentData.whatsapp_connection_id)
@@ -146,7 +148,7 @@ export default function AdminAgentsPage() {
       }
 
       // Excluir o agente do banco de dados
-      const { error } = await supabase.from("ai_agents").delete().eq("id", agentId)
+      const { error } = await client.from("ai_agents").delete().eq("id", agentId)
 
       if (error) throw error
 
@@ -171,7 +173,8 @@ export default function AdminAgentsPage() {
     try {
       const newStatus = agent.status === "active" ? "inactive" : "active"
 
-      const { error } = await supabase.from("ai_agents").update({ status: newStatus }).eq("id", agent.id)
+      const client = await getSupabase()
+      const { error } = await client.from("ai_agents").update({ status: newStatus }).eq("id", agent.id)
 
       if (error) throw error
 

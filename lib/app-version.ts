@@ -1,4 +1,5 @@
-import { supabase } from "@/lib/supabase"
+// import { supabase } from "@/lib/supabase" // Remove this
+import { getSupabase } from "@/lib/supabase" // Import getSupabase directly
 
 // Cache para a versão da aplicação
 let versionCache: string | null = null
@@ -14,8 +15,9 @@ export async function getAppVersion(): Promise<string> {
   }
 
   try {
+    const client = await getSupabase() // Get client directly
     // Buscar versão do banco de dados
-    const { data, error } = await supabase
+    const { data, error } = await client // Use client directly
       .from("system_settings")
       .select("setting_value")
       .eq("setting_key", "app_version")
@@ -34,19 +36,29 @@ export async function getAppVersion(): Promise<string> {
 
     return version
   } catch (error) {
-    console.error("Erro ao buscar versão da aplicação:", error)
+    // This catch block will now primarily catch errors from getSupabase() itself
+    // or unexpected errors not caught by the inner if(error)
+    console.error("Erro crítico ao buscar versão da aplicação:", error)
     return "1.0.0" // Versão padrão
   }
 }
 
 export async function updateAppVersion(newVersion: string): Promise<boolean> {
   try {
+    const client = await getSupabase() // Get client directly
+
     // Verificar se já existe uma configuração de versão
-    const { data: existingSetting } = await supabase
+    const { data: existingSetting, error: fetchError } = await client // Use client directly
       .from("system_settings")
       .select("id")
       .eq("setting_key", "app_version")
       .single()
+
+    if (fetchError && fetchError.code !== "PGRST116") {
+      // PGRST116: 'single' row not found, which is fine if creating new
+      console.error("Erro ao verificar configuração de versão existente:", fetchError)
+      // Potentially return false or throw, depending on desired behavior for non-PGRST116 errors
+    }
 
     const settingData = {
       setting_key: "app_version",
@@ -59,7 +71,7 @@ export async function updateAppVersion(newVersion: string): Promise<boolean> {
 
     if (existingSetting) {
       // Atualizar configuração existente
-      const { error } = await supabase
+      const { error: updateError } = await client // Use client directly
         .from("system_settings")
         .update({
           setting_value: newVersion,
@@ -67,16 +79,16 @@ export async function updateAppVersion(newVersion: string): Promise<boolean> {
         })
         .eq("id", existingSetting.id)
 
-      if (error) {
-        console.error("Erro ao atualizar versão da aplicação:", error)
+      if (updateError) {
+        console.error("Erro ao atualizar versão da aplicação:", updateError)
         return false
       }
     } else {
       // Criar nova configuração
-      const { error } = await supabase.from("system_settings").insert(settingData)
+      const { error: insertError } = await client.from("system_settings").insert(settingData) // Use client directly
 
-      if (error) {
-        console.error("Erro ao inserir versão da aplicação:", error)
+      if (insertError) {
+        console.error("Erro ao inserir versão da aplicação:", insertError)
         return false
       }
     }
@@ -88,7 +100,7 @@ export async function updateAppVersion(newVersion: string): Promise<boolean> {
     console.log(`Versão da aplicação atualizada para: ${newVersion}`)
     return true
   } catch (error) {
-    console.error("Erro ao atualizar versão da aplicação:", error)
+    console.error("Erro crítico ao atualizar versão da aplicação:", error)
     return false
   }
 }

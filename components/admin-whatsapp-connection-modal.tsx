@@ -46,10 +46,8 @@ export default function AdminWhatsAppConnectionModal({
   const fetchUsers = async () => {
     setLoadingUsers(true)
     try {
-      const { data } = await supabase
-        .from("user_profiles")
-        .select("id, email, full_name")
-        .order("full_name", { ascending: true })
+      const userProfilesTable = await supabase.from("user_profiles")
+      const { data } = await userProfilesTable.select("id, email, full_name").order("full_name", { ascending: true })
 
       if (data) {
         setUsers(data)
