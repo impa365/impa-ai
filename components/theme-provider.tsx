@@ -456,22 +456,25 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   const loadTheme = async () => {
     try {
       setIsLoading(true)
-
-      // Tentar carregar do banco primeiro
       let loadedTheme = await loadThemeFromDatabase()
 
-      // Se não conseguir do banco, tentar localStorage
       if (!loadedTheme) {
         loadedTheme = loadThemeFromLocalStorage()
       }
 
-      // IMPORTANTE: Só definir tema se conseguir carregar do banco/localStorage
-      if (loadedTheme) {
-        setTheme(loadedTheme)
-        applyThemeColors(loadedTheme)
+      // Fallback to default theme if all else fails
+      if (!loadedTheme) {
+        console.warn("Failed to load theme from database and localStorage. Falling back to default theme.")
+        loadedTheme = defaultTheme
       }
+
+      setTheme(loadedTheme)
+      applyThemeColors(loadedTheme)
     } catch (error) {
-      console.error("Error loading theme:", error)
+      console.error("Error loading theme, falling back to default:", error)
+      // Ensure fallback on any catastrophic error
+      setTheme(defaultTheme)
+      applyThemeColors(defaultTheme)
     } finally {
       setIsLoading(false)
     }
@@ -511,7 +514,7 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   }, [theme, isLoading])
 
   // NÃO RENDERIZAR NADA até ter o tema do banco de dados
-  if (isLoading || !theme) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>

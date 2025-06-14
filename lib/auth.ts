@@ -1,4 +1,6 @@
 import { supabase } from "./supabase"
+import { getSupabase } from "@/lib/supabase"
+import type { User } from "@supabase/supabase-js"
 
 export interface UserProfile {
   id: string
@@ -274,5 +276,57 @@ export async function changePassword(
   } catch (error: any) {
     console.error("💥 Erro inesperado ao trocar senha:", error.message)
     return { success: false, error: "Erro interno do servidor: " + error.message }
+  }
+}
+
+export async function getUser(): Promise<User | null> {
+  try {
+    const client = await getSupabase()
+    const {
+      data: { user },
+    } = await client.auth.getUser()
+    return user
+  } catch (error) {
+    console.error("Error getting user:", error)
+    return null
+  }
+}
+
+export async function isUserAdmin(): Promise<boolean> {
+  try {
+    const client = await getSupabase()
+    const { data, error } = await client.rpc("is_admin")
+    if (error) {
+      console.error("Error checking admin status:", error)
+      return false
+    }
+    return data
+  } catch (error) {
+    console.error("Error in isUserAdmin rpc call:", error)
+    return false
+  }
+}
+
+export async function isPublicRegistrationEnabled(): Promise<boolean> {
+  console.log("Verificando configuração de registro público...")
+  try {
+    const client = await getSupabase()
+    const { data, error } = await client
+      .from("system_settings")
+      .select("setting_value")
+      .eq("setting_key", "allow_public_registration")
+      .single()
+
+    if (error) {
+      // It's okay if no row is found, just means it's not explicitly set.
+      if (error.code !== "PGRST116") {
+        console.error("Erro ao verificar configuração de registro:", error)
+      }
+      return false // Default to false if not found or on error
+    }
+    return data?.setting_value === true
+  } catch (e) {
+    console.error("Erro inesperado ao verificar configuração:", e)
+    return false
   }
 }
