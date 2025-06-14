@@ -12,7 +12,7 @@ import { Eye, EyeOff } from "lucide-react"
 import { signIn } from "@/lib/auth" // Importa a função signIn manual
 import { useTheme } from "@/components/theme-provider"
 import RegisterForm from "./register-form"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 
 function LoginForm() {
   const [email, setEmail] = useState("")
@@ -34,7 +34,8 @@ function LoginForm() {
         console.log("🔍 Verificando configuração de registro público...")
 
         // Buscar a configuração específica da tabela system_settings
-        const { data, error } = await supabase
+        const client = await getSupabase()
+        const { data, error } = await client
           .from("system_settings")
           .select("setting_value")
           .eq("setting_key", "allow_public_registration")
@@ -66,7 +67,7 @@ function LoginForm() {
           setAllowRegistration(false)
         }
       } catch (error) {
-        console.error("💥 Erro inesperado ao verificar configuração:", error)
+        console.error("💥 Erro inesperado ao verificar configuração:", error.message)
         setAllowRegistration(false)
       } finally {
         setCheckingRegistration(false)

@@ -1,5 +1,4 @@
-import { supabase } from "./supabase"
-import { getSupabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase" // Ensure this is the primary way to get the client
 import type { User } from "@supabase/supabase-js"
 
 export interface UserProfile {
@@ -11,6 +10,14 @@ export interface UserProfile {
   created_at: string
   updated_at: string
   last_login_at?: string
+  // Added from existing user_profiles table structure in lib/supabase.ts
+  password?: string
+  organization_id?: string | null
+  api_key?: string
+  avatar_url?: string
+  theme_settings?: any
+  preferences?: any
+  login_count?: number // Assuming this might exist based on signIn logic
 }
 
 export interface LoginCredentials {
@@ -28,23 +35,23 @@ export interface RegisterData {
 export async function signIn(email: string, password: string) {
   try {
     console.log("🔐 Iniciando processo de login para:", email)
+    const client = await getSupabase()
 
     // 1. Buscar o usuário na tabela impaai.user_profiles
-    const { data: users, error: fetchError } = await supabase
+    const { data: userProfile, error: fetchError } = await client
       .from("user_profiles")
-      .select("*")
+      .select<"*", UserProfile>("*") // Specify UserProfile type for better type safety
       .eq("email", email.trim().toLowerCase())
       .single()
 
-    if (fetchError || !users) {
-      console.error("❌ Usuário não encontrado:", fetchError?.message)
+    if (fetchError || !userProfile) {
+      console.error("❌ Usuário não encontrado ou erro ao buscar:", fetchError?.message)
       return {
         user: null,
         error: { message: "Credenciais inválidas." },
       }
     }
 
-    const userProfile = users
     console.log("👤 Usuário encontrado:", userProfile.email)
 
     // 2. Comparar a senha diretamente (sem hash)
@@ -66,7 +73,8 @@ export async function signIn(email: string, password: string) {
 
     console.log("✅ Login bem-sucedido!")
 
-    const user = {
+    const userToReturn = {
+      // Construct a minimal user object to return/store
       id: userProfile.id,
       email: userProfile.email,
       full_name: userProfile.full_name,
@@ -75,7 +83,7 @@ export async function signIn(email: string, password: string) {
     }
 
     // 4. Atualizar último login e contador
-    await supabase
+    await client
       .from("user_profiles")
       .update({
         last_login_at: new Date().toISOString(),
@@ -83,7 +91,7 @@ export async function signIn(email: string, password: string) {
       })
       .eq("id", userProfile.id)
 
-    return { user, error: null }
+    return { user: userToReturn, error: null }
   } catch (error: any) {
     console.error("💥 Erro no login:", error.message)
     return {
@@ -97,6 +105,7 @@ export async function signIn(email: string, password: string) {
 export async function registerUser(userData: RegisterData): Promise<{ success: boolean; user?: any; error?: string }> {
   try {
     const { email, password, full_name } = userData
+    const client = await getSupabase()
 
     // Validações básicas
     if (!full_name || !email || !password) {
@@ -111,7 +120,7 @@ export async function registerUser(userData: RegisterData): Promise<{ success: b
     }
 
     // 1. Verificar se o email já existe
-    const { data: existingUsers, error: checkError } = await supabase
+    const { data: existingUsers, error: checkError } = await client
       .from("user_profiles")
       .select("id")
       .eq("email", email.toLowerCase())
@@ -125,31 +134,32 @@ export async function registerUser(userData: RegisterData): Promise<{ success: b
     }
 
     // 2. Inserir o novo usuário (senha em texto plano)
-    const { data: newUserProfile, error: insertError } = await supabase
+    const { data: newUserProfile, error: insertError } = await client
       .from("user_profiles")
       .insert([
         {
           full_name: full_name,
           email: email.toLowerCase(),
           password: password, // Senha em texto plano
-          role: "user",
-          status: "active",
+          role: "user", // Default role
+          status: "active", // Default status
         },
       ])
       .select()
       .single()
 
-    if (insertError) {
+    if (insertError || !newUserProfile) {
       console.error("Erro ao criar usuário:", insertError)
       return { success: false, error: "Erro ao criar conta. Tente novamente." }
     }
     console.log("✅ Usuário criado:", newUserProfile.email)
 
-    // 3. Criar configurações padrão do usuário
-    const { error: settingsError } = await supabase.from("user_agent_settings").insert([
+    // 3. Criar configurações padrão do usuário (user_agent_settings)
+    // Ensure this table and columns exist
+    const { error: settingsError } = await client.from("user_agent_settings").insert([
       {
         user_id: newUserProfile.id,
-        agents_limit: 5,
+        agents_limit: 5, // Default limit
         transcribe_audio_enabled: true,
         understand_images_enabled: true,
         voice_response_enabled: true,
@@ -159,7 +169,8 @@ export async function registerUser(userData: RegisterData): Promise<{ success: b
     ])
 
     if (settingsError) {
-      console.error("Erro ao criar configurações:", settingsError.message)
+      // Log but don't fail registration for this
+      console.error("Erro ao criar configurações padrão do usuário:", settingsError.message)
     }
 
     // Remover a senha do objeto retornado por segurança
@@ -178,7 +189,7 @@ export function getCurrentUser(): UserProfile | null {
   try {
     const userStr = localStorage.getItem("user")
     if (!userStr) return null
-    return JSON.parse(userStr)
+    return JSON.parse(userStr) as UserProfile
   } catch (error) {
     console.error("Erro ao obter usuário:", error)
     return null
@@ -207,23 +218,27 @@ export function clearCurrentUser(): void {
 export async function signOut() {
   console.log("🚪 Realizando logout.")
   clearCurrentUser()
+  // If using Supabase Auth, you might also call:
+  // const client = await getSupabase();
+  // await client.auth.signOut();
   return { success: true, error: null }
 }
 
 // Função de atualização de perfil
 export async function updateUserProfile(
   userId: string,
-  updates: Partial<UserProfile>,
+  updates: Partial<Omit<UserProfile, "id" | "email" | "created_at" | "role">>, // Be more specific about updatable fields
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase.from("user_profiles").update(updates).eq("id", userId)
+    const client = await getSupabase()
+    const { error } = await client.from("user_profiles").update(updates).eq("id", userId)
     if (error) {
       console.error("Erro ao atualizar perfil:", error)
       return { success: false, error: "Erro ao atualizar perfil" }
     }
     return { success: true }
-  } catch (error) {
-    console.error("Erro ao atualizar perfil:", error)
+  } catch (error: any) {
+    console.error("💥 Erro inesperado ao atualizar perfil:", error.message)
     return { success: false, error: "Erro interno do servidor" }
   }
 }
@@ -236,16 +251,17 @@ export async function changePassword(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     console.log("🔐 Iniciando troca de senha para usuário:", userId)
+    const client = await getSupabase()
 
     // 1. Buscar o usuário para verificar a senha antiga
-    const { data: userProfile, error: fetchError } = await supabase
+    const { data: userProfile, error: fetchError } = await client
       .from("user_profiles")
       .select("password")
       .eq("id", userId)
       .single()
 
     if (fetchError || !userProfile) {
-      console.error("Erro ao buscar usuário:", fetchError)
+      console.error("Erro ao buscar usuário para troca de senha:", fetchError)
       return { success: false, error: "Usuário não encontrado." }
     }
 
@@ -259,12 +275,12 @@ export async function changePassword(
 
     console.log("✅ Senha antiga verificada, atualizando para nova senha...")
 
-    // 3. Atualizar a senha (texto plano) - CORREÇÃO AQUI
-    const { data, error: updateError } = await supabase
+    // 3. Atualizar a senha (texto plano)
+    const { data, error: updateError } = await client
       .from("user_profiles")
       .update({ password: newPassword })
       .eq("id", userId)
-      .select()
+      .select() // Optional: select to confirm update
 
     if (updateError) {
       console.error("Erro ao atualizar senha:", updateError)
@@ -279,12 +295,13 @@ export async function changePassword(
   }
 }
 
+// These functions were already updated in a previous step
 export async function getUser(): Promise<User | null> {
   try {
     const client = await getSupabase()
     const {
       data: { user },
-    } = await client.auth.getUser()
+    } = await client.auth.getUser() // Assumes you are using Supabase Auth
     return user
   } catch (error) {
     console.error("Error getting user:", error)
@@ -295,6 +312,7 @@ export async function getUser(): Promise<User | null> {
 export async function isUserAdmin(): Promise<boolean> {
   try {
     const client = await getSupabase()
+    // Ensure 'is_admin' is a valid RPC function in your Supabase project
     const { data, error } = await client.rpc("is_admin")
     if (error) {
       console.error("Error checking admin status:", error)
@@ -318,15 +336,15 @@ export async function isPublicRegistrationEnabled(): Promise<boolean> {
       .single()
 
     if (error) {
-      // It's okay if no row is found, just means it's not explicitly set.
       if (error.code !== "PGRST116") {
+        // PGRST116: "Searched for a single row, but found no rows" - this is okay
         console.error("Erro ao verificar configuração de registro:", error)
       }
-      return false // Default to false if not found or on error
+      return false
     }
-    return data?.setting_value === true
-  } catch (e) {
-    console.error("Erro inesperado ao verificar configuração:", e)
+    return data?.setting_value === true || data?.setting_value === "true" || data?.setting_value === 1
+  } catch (e: any) {
+    console.error("Erro inesperado ao verificar configuração:", e.message)
     return false
   }
 }

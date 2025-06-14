@@ -5,6 +5,7 @@ let configCache: any = null
 export async function getConfig() {
   // Se já temos cache e estamos no cliente, usar cache
   if (configCache && typeof window !== "undefined") {
+    console.log("🔧 Using cached client config:", configCache)
     return configCache
   }
 
@@ -28,27 +29,31 @@ export async function getConfig() {
     console.log("🌐 Client fetching config from /api/config...")
     const response = await fetch("/api/config")
     if (!response.ok) {
-      throw new Error(`Failed to fetch config: ${response.status}`)
+      // Log the status and statusText for more details on HTTP errors
+      console.error(`❌ Failed to fetch config from /api/config: ${response.status} ${response.statusText}`)
+      throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`)
     }
 
     const config = await response.json()
     configCache = config // Cache no cliente
 
-    console.log("🔧 Client config loaded:")
+    console.log("🔧 Client config loaded from /api/config:")
     console.log("Supabase URL:", config.supabaseUrl)
 
     return config
   } catch (error) {
-    console.error("❌ Failed to load config, using fallback:", error)
+    // This catch block handles network errors from fetch (like TypeError: Failed to fetch)
+    // or the error thrown above if response.ok is false.
+    console.error("❌ Failed to load config from /api/config, using fallback. Error details:", error)
 
     // Fallback para desenvolvimento
     const fallbackConfig = {
       supabaseUrl: "http://localhost:54321",
-      supabaseAnonKey: "dummy-key",
+      supabaseAnonKey: "dummy-key", // Ensure fallback has a key, even if dummy
       nextAuthUrl: "http://localhost:3000",
     }
-
-    configCache = fallbackConfig
+    console.log("🔧 Using fallback config:", fallbackConfig)
+    configCache = fallbackConfig // Cache the fallback to prevent repeated failed fetches
     return fallbackConfig
   }
 }
@@ -56,4 +61,5 @@ export async function getConfig() {
 // Função para limpar cache (útil para testes)
 export function clearConfigCache() {
   configCache = null
+  console.log("🧹 Config cache cleared.")
 }
