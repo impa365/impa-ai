@@ -8,11 +8,11 @@ export async function getConfig() {
     return configCache
   }
 
-  // No servidor, ler diretamente das variáveis de ambiente
+  // No servidor, ler diretamente das variáveis de ambiente (SEM NEXT_PUBLIC_)
   if (typeof window === "undefined") {
     const config = {
-      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321",
-      supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-key",
+      supabaseUrl: process.env.SUPABASE_URL || "http://localhost:54321",
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "dummy-key",
       nextAuthUrl: process.env.NEXTAUTH_URL || "http://localhost:3000",
     }
 
@@ -25,6 +25,7 @@ export async function getConfig() {
 
   // No cliente, buscar da API
   try {
+    console.log("🌐 Client fetching config from /api/config...")
     const response = await fetch("/api/config")
     if (!response.ok) {
       throw new Error(`Failed to fetch config: ${response.status}`)

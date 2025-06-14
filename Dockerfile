@@ -16,7 +16,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Variáveis temporárias VÁLIDAS para o build (não serão usadas no runtime)
+# Variáveis temporárias VÁLIDAS para o build (apenas para que o build passe)
 ENV NEXT_PUBLIC_SUPABASE_URL=https://placeholder-supabase-url.supabase.co
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxMjM0NTYsImV4cCI6MTk2MDY5OTQ1Nn0.placeholder-key-for-build-only
 ENV NEXTAUTH_SECRET=temporary-secret-for-build-only
@@ -42,26 +42,16 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Script simplificado para mostrar as variáveis (sem substituição)
+# Script para mostrar as variáveis de runtime
 COPY --chown=nextjs:nodejs <<'EOF' /app/show-env.sh
 #!/bin/sh
-echo "🔧 Runtime environment variables loaded:"
+echo "🔧 Runtime environment variables:"
 
-# Verificar se as variáveis estão definidas
-if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
-  echo "❌ ERROR: NEXT_PUBLIC_SUPABASE_URL not defined"
-  exit 1
-fi
+echo "📊 Runtime Variables (used by API):"
+echo "SUPABASE_URL: ${SUPABASE_URL:-❌ NOT DEFINED}"
+echo "SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:+✅ Defined}${SUPABASE_ANON_KEY:-❌ NOT DEFINED}"
+echo "NEXTAUTH_URL: ${NEXTAUTH_URL:-❌ NOT DEFINED}"
 
-if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
-  echo "❌ ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY not defined"
-  exit 1
-fi
-
-echo "✅ Environment variables loaded successfully"
-echo "🌐 SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}"
-echo "🔑 SUPABASE_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:0:20}..."
-echo "🔗 NEXTAUTH_URL: ${NEXTAUTH_URL}"
 echo "🚀 Starting application with dynamic configuration..."
 
 exec "$@"

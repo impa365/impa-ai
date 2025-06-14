@@ -8,16 +8,16 @@ services:
     networks:
       - ServerIpa
     environment:
-      # Configuração do Supabase
-      - NEXT_PUBLIC_SUPABASE_URL=https://supabaseteste.impa365.com # Exemplo: https://seu-projeto-ref.supabase.co
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.0w0daMEG_Z8srUfzUgH5uEixdjJYp0Xyh_12su0L07Q # Exemplo: sua-chave-anon-supabase  
+      # Configuração do Supabase (SEM NEXT_PUBLIC_ - apenas para runtime)
+      - SUPABASE_URL=https://supabaseteste.impa365.com
+      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.0w0daMEG_Z8srUfzUgH5uEixdjJYp0Xyh_12su0L07Q
+      
       # Configuração do NextAuth
-      # IMPORTANTE: NEXTAUTH_URL deve ser a URL pública gerenciada pelo Traefik
-      - NEXTAUTH_URL=https://aiteste.impa365.com # Exemplo: https://app.seusite.com
-      - NEXTAUTH_SECRET=dfdghoiuAHSIASDA9859aHNUH # Um segredo forte para o NextAuth
+      - NEXTAUTH_URL=https://aiteste.impa365.com
+      - NEXTAUTH_SECRET=dfdghoiuAHSIASDA9859aHNUH
       
       # Chaves de Aplicação Personalizadas
-      - CUSTOM_KEY=DJD233@CFKKJID897fSF8F # Valor da sua chave personalizada
+      - CUSTOM_KEY=DJD233@CFKKJID897fSF8F
 
       # Ambiente da Aplicação
       - NODE_ENV=production
