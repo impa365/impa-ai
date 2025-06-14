@@ -4,17 +4,25 @@ import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, Eye, EyeOff, Plus, Copy, Trash2, Badge, ShieldCheck, AlertTriangle } from "lucide-react"
-import { useTheme, type ThemeConfig } from "@/components/theme-provider"
+import { Upload, ImageIcon, Eye, EyeOff, Plus, Copy, Trash2, Badge, ShieldCheck } from "lucide-react"
+import { useTheme, themePresets, type ThemeConfig } from "@/components/theme-provider"
 import Image from "next/image"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getCurrentUser, changePassword } from "@/lib/auth"
 import { db } from "@/lib/supabase"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
@@ -35,7 +43,7 @@ interface ApiKey {
 }
 
 export default function AdminSettingsPage() {
-  const [settingsSubTab, setSettingsSubTab] = useState("api-keys") // ⭐ Começar direto na aba API Keys
+  const [settingsSubTab, setSettingsSubTab] = useState("profile")
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState("")
   const { theme, updateTheme } = useTheme()
@@ -125,8 +133,6 @@ export default function AdminSettingsPage() {
   const [creatingApiKey, setCreatingApiKey] = useState(false)
   const [newKeyName, setNewKeyName] = useState("")
   const [showNewKeyForm, setShowNewKeyForm] = useState(false)
-  const [apiKeysError, setApiKeysError] = useState<string | null>(null)
-  const [needsSetup, setNeedsSetup] = useState(false)
 
   useEffect(() => {
     const currentUser = getCurrentUser()
@@ -258,196 +264,33 @@ export default function AdminSettingsPage() {
     }
   }
 
-  // Melhorar a função loadApiKeys para capturar mais detalhes do erro
+  // FUNÇÃO PROBLEMÁTICA ATUAL:
   const loadApiKeys = async (userId: string) => {
-    const requestId = Math.random().toString(36).substring(7)
-    console.log(`🎯 [${requestId}] === INICIANDO LOAD API KEYS (CLIENT) ===`)
-    console.log(`🎯 [${requestId}] User ID: "${userId}"`)
-    console.log(`🎯 [${requestId}] Timestamp: ${new Date().toISOString()}`)
-
-    if (!userId) {
-      console.error(`🎯 [${requestId}] ❌ ERRO: userId está vazio ou undefined`)
-      setApiKeysError("User ID não fornecido")
-      return
-    }
-
+    if (!userId) return
     setLoadingApiKeys(true)
-    setApiKeysError(null)
-    setNeedsSetup(false)
-
     try {
-      const url = `/api/user/api-keys?user_id=${encodeURIComponent(userId)}`
-      console.log(`🎯 [${requestId}] URL da requisição: ${url}`)
+      console.log("🔍 [CLIENT] Fazendo requisição para /api/user/api-keys")
+      const response = await fetch(`/api/user/api-keys?user_id=${userId}`)
+      console.log("🔍 [CLIENT] Response status:", response.status)
+      console.log("🔍 [CLIENT] Response headers:", Object.fromEntries(response.headers.entries()))
 
-      console.log(`🎯 [${requestId}] Fazendo fetch...`)
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-        },
-      })
+      // PROBLEMA: Não verifica se response.ok antes de tentar fazer parse
+      const data = await response.json() // ERRO ACONTECE AQUI
 
-      console.log(`🎯 [${requestId}] === RESPOSTA RECEBIDA ===`)
-      console.log(`🎯 [${requestId}] Status: ${response.status} ${response.statusText}`)
-      console.log(`🎯 [${requestId}] Headers:`, Object.fromEntries(response.headers.entries()))
-      console.log(`🎯 [${requestId}] OK: ${response.ok}`)
-
-      // ⭐ CAPTURAR O TEXTO DA RESPOSTA PRIMEIRO
-      let responseText = ""
-      try {
-        responseText = await response.text()
-        console.log(`🎯 [${requestId}] Texto completo da resposta:`, responseText)
-      } catch (textError) {
-        console.error(`🎯 [${requestId}] ❌ Erro ao ler texto da resposta:`, textError)
-        responseText = `Erro ao ler resposta: ${textError}`
-      }
-
-      if (!response.ok) {
-        console.error(`🎯 [${requestId}] ❌ RESPOSTA NÃO OK - STATUS ${response.status}`)
-
-        let errorData: any = {}
-
-        // Tentar fazer parse como JSON
-        try {
-          if (responseText.trim()) {
-            errorData = JSON.parse(responseText)
-            console.log(`🎯 [${requestId}] Dados de erro parseados:`, errorData)
-          } else {
-            console.log(`🎯 [${requestId}] Resposta vazia`)
-            errorData = { error: "Resposta vazia do servidor" }
-          }
-        } catch (parseError) {
-          console.log(`🎯 [${requestId}] Não foi possível fazer parse do JSON:`, parseError)
-          errorData = {
-            error: responseText || `HTTP ${response.status}: ${response.statusText}`,
-            rawResponse: responseText,
-          }
-        }
-
-        const errorMessage = errorData.error || errorData.details || `HTTP ${response.status}: ${response.statusText}`
-        console.error(`🎯 [${requestId}] Mensagem de erro final:`, errorMessage)
-
-        // ⭐ MOSTRAR ERRO DETALHADO NA UI
-        setApiKeysError(`Status ${response.status}: ${errorMessage}`)
-
-        throw new Error(`Status ${response.status}: ${errorMessage}`)
-      }
-
-      // Verificar content-type
-      const contentType = response.headers.get("content-type")
-      console.log(`🎯 [${requestId}] Content-Type: ${contentType}`)
-
-      if (!contentType?.includes("application/json")) {
-        console.error(`🎯 [${requestId}] ❌ Resposta não é JSON:`, responseText)
-        setApiKeysError(`Resposta inválida. Content-Type: ${contentType}`)
-        throw new Error(`Resposta inválida do servidor. Content-Type: ${contentType}. Conteúdo: ${responseText}`)
-      }
-
-      console.log(`🎯 [${requestId}] Fazendo parse do JSON...`)
-      let data
-      try {
-        data = JSON.parse(responseText)
-        console.log(`🎯 [${requestId}] === DADOS RECEBIDOS ===`)
-        console.log(`🎯 [${requestId}] Dados completos:`, data)
-      } catch (jsonError) {
-        console.error(`🎯 [${requestId}] ❌ Erro no parse JSON:`, jsonError)
-        setApiKeysError(`Erro ao processar resposta JSON: ${jsonError}`)
-        throw new Error(`Erro ao processar resposta JSON: ${jsonError}`)
-      }
-
-      if (data.needsSetup) {
-        console.warn(`🎯 [${requestId}] ⚠️ Setup necessário:`, data.error)
-        setNeedsSetup(true)
-        setApiKeysError(data.error)
-        setApiKeys([])
-        return
-      }
-
-      if (data.apiKeys) {
-        console.log(`🎯 [${requestId}] ✅ ${data.apiKeys.length} API keys carregadas`)
-        if (data.apiKeys.length > 0) {
-          console.log(`🎯 [${requestId}] Primeira API key:`, data.apiKeys[0])
-        }
-        setApiKeys(data.apiKeys)
+      if (response.ok) {
+        setApiKeys(data.apiKeys || [])
       } else {
-        console.warn(`🎯 [${requestId}] ⚠️ Nenhuma API key retornada`)
-        setApiKeys([])
-      }
-
-      if (data.debug) {
-        console.log(`🎯 [${requestId}] Debug info:`, data.debug)
+        throw new Error(data.error)
       }
     } catch (error) {
-      console.error(`🎯 [${requestId}] === ERRO CRÍTICO ===`)
-      console.error(`🎯 [${requestId}] Tipo do erro:`, typeof error)
-      console.error(`🎯 [${requestId}] Erro completo:`, error)
-
-      let errorMessage = "Erro desconhecido"
-      if (error instanceof Error) {
-        errorMessage = error.message
-        console.error(`🎯 [${requestId}] Error.message:`, errorMessage)
-        console.error(`🎯 [${requestId}] Error.stack:`, error.stack)
-      } else if (typeof error === "string") {
-        errorMessage = error
-        console.error(`🎯 [${requestId}] String error:`, errorMessage)
-      }
-
-      setApiKeysError(errorMessage)
+      console.error("Erro ao carregar API keys:", error)
       toast({
-        title: "❌ Erro ao carregar API Keys",
-        description: errorMessage,
+        title: "Erro ao carregar API Keys",
+        description: (error as Error).message,
         variant: "destructive",
       })
     } finally {
       setLoadingApiKeys(false)
-      console.log(`🎯 [${requestId}] === FINALIZANDO LOAD API KEYS ===`)
-    }
-  }
-
-  // ⭐ ADICIONAR FUNÇÃO DE TESTE DIRETO
-  const testApiConnection = async () => {
-    if (!user?.id) return
-
-    console.log("🧪 === TESTE DIRETO DA API ===")
-    console.log("🧪 User ID:", user.id)
-
-    try {
-      const response = await fetch(`/api/user/api-keys?user_id=${user.id}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-
-      console.log("🧪 Response Status:", response.status)
-      console.log("🧪 Response Headers:", Object.fromEntries(response.headers.entries()))
-
-      const text = await response.text()
-      console.log("🧪 Response Text:", text)
-
-      if (response.ok) {
-        const data = JSON.parse(text)
-        console.log("🧪 Response Data:", data)
-        toast({
-          title: "✅ Teste bem-sucedido!",
-          description: `API retornou ${data.apiKeys?.length || 0} API keys`,
-        })
-      } else {
-        console.error("🧪 Erro na resposta:", text)
-        toast({
-          title: "❌ Teste falhou",
-          description: `Status ${response.status}: ${text}`,
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("🧪 Erro no teste:", error)
-      toast({
-        title: "❌ Teste falhou",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
-        variant: "destructive",
-      })
     }
   }
 
@@ -892,632 +735,1039 @@ export default function AdminSettingsPage() {
     }
   }
 
-  // Atualizar o renderApiKeysSettings para incluir o botão de teste
-  const renderApiKeysSettings = () => (
-    <div className="space-y-6">
+  const renderAdminProfileSettings = () => (
+    <div>
       <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">🔑 API Keys</h3>
-        <p className="text-gray-600 dark:text-gray-400">
-          Gerencie suas chaves de API para integração com sistemas externos
-        </p>
-        <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-          <p className="text-sm text-blue-700 dark:text-blue-300">
-            ⚠️ <strong>Schema:</strong> impaai | <strong>Logs detalhados:</strong> Abra o console (F12) para ver logs
-            completos
-          </p>
-        </div>
+        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Perfil do Administrador</h3>
+        <p className="text-gray-600 dark:text-gray-400">Gerencie suas informações pessoais e senha</p>
       </div>
 
-      {/* ⭐ SEÇÃO DE DEBUG */}
-      <Card className="border-orange-200 bg-orange-50 dark:bg-orange-900/20">
-        <CardHeader>
-          <CardTitle className="text-orange-800 dark:text-orange-200 flex items-center gap-2">
-            🧪 Debug & Teste
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <strong>User ID:</strong> {user?.id || "N/A"}
-            </div>
-            <div>
-              <strong>Status:</strong> {loadingApiKeys ? "Carregando..." : apiKeysError ? "Erro" : "OK"}
-            </div>
-            <div>
-              <strong>API Keys:</strong> {apiKeys.length}
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={testApiConnection} variant="outline" size="sm" className="gap-2" disabled={!user?.id}>
-              🧪 Testar API Diretamente
-            </Button>
-            <Button
-              onClick={() => user?.id && loadApiKeys(user.id)}
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              disabled={loadingApiKeys || !user?.id}
-            >
-              🔄 Recarregar
-            </Button>
-          </div>
-          {apiKeysError && (
-            <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/20 rounded text-sm text-red-800 dark:text-red-200">
-              <strong>Erro:</strong> {apiKeysError}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {needsSetup && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            <div className="space-y-2">
-              <p>{apiKeysError}</p>
-              <p className="text-sm">
-                Execute o script SQL para criar a estrutura necessária das API Keys no schema <strong>impaai</strong>.
-              </p>
-            </div>
-          </AlertDescription>
+      {adminProfileMessage && (
+        <Alert variant={adminProfileMessage.includes("sucesso") ? "default" : "destructive"} className="mb-6">
+          <AlertDescription>{adminProfileMessage}</AlertDescription>
         </Alert>
       )}
 
-      {apiKeysError && !needsSetup && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            <div className="space-y-2">
-              <p>
-                <strong>Erro:</strong> {apiKeysError}
-              </p>
-              <p className="text-sm">Verifique o console (F12) para logs detalhados do erro.</p>
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <div className="flex justify-between items-center">
-        <div>
-          <h4 className="text-md font-medium text-gray-900 dark:text-gray-100">Suas API Keys</h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400">{apiKeys.length} de 10 API keys criadas</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={() => setShowNewKeyForm(!showNewKeyForm)}
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            disabled={loadingApiKeys || needsSetup}
-          >
-            <Plus className="h-4 w-4" />
-            Nova API Key
-          </Button>
-        </div>
-      </div>
-
-      {showNewKeyForm && (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-gray-900 dark:text-gray-100">Criar Nova API Key</CardTitle>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Informações Pessoais</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="newKeyName" className="text-gray-900 dark:text-gray-100">
-                Nome da API Key
+              <Label htmlFor="adminFullName" className="text-gray-900 dark:text-gray-100">
+                Nome Completo
               </Label>
               <Input
-                id="newKeyName"
-                value={newKeyName}
-                onChange={(e) => setNewKeyName(e.target.value)}
-                placeholder="Ex: Integração WhatsApp"
+                id="adminFullName"
+                value={adminProfileForm.full_name}
+                onChange={(e) => setAdminProfileForm({ ...adminProfileForm, full_name: e.target.value })}
+                placeholder="Seu nome completo"
                 className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
               />
             </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => createApiKey(false)}
-                disabled={creatingApiKey}
-                className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
-              >
-                {creatingApiKey ? "Criando..." : "Criar API Key Padrão"}
-              </Button>
-              <Button onClick={() => createApiKey(true)} disabled={creatingApiKey} variant="outline" className="gap-2">
-                <ShieldCheck className="h-4 w-4" />
-                {creatingApiKey ? "Criando..." : "Criar API Key Admin"}
-              </Button>
-              <Button
-                onClick={() => {
-                  setShowNewKeyForm(false)
-                  setNewKeyName("")
-                }}
-                variant="ghost"
-              >
-                Cancelar
-              </Button>
+            <div>
+              <Label htmlFor="adminEmail" className="text-gray-900 dark:text-gray-100">
+                Email
+              </Label>
+              <Input
+                id="adminEmail"
+                type="email"
+                value={adminProfileForm.email}
+                onChange={(e) => setAdminProfileForm({ ...adminProfileForm, email: e.target.value })}
+                placeholder="seu@email.com"
+                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+              />
             </div>
           </CardContent>
         </Card>
-      )}
 
-      {loadingApiKeys ? (
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">🔄 Carregando API keys...</p>
-          <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Verifique o console para logs detalhados</p>
-        </div>
-      ) : apiKeys.length === 0 && !needsSetup ? (
-        <div className="text-center py-8">
-          <p className="text-gray-600 dark:text-gray-400">📭 Nenhuma API key encontrada</p>
-          <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-            Crie sua primeira API key para começar a integrar
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {apiKeys.map((apiKey) => (
-            <Card key={apiKey.id}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h4 className="font-medium text-gray-900 dark:text-gray-100">{apiKey.name}</h4>
-                      {apiKey.is_admin_key && (
-                        <Badge variant="destructive" className="text-xs">
-                          <ShieldCheck className="h-3 w-3 mr-1" />
-                          Admin
-                        </Badge>
-                      )}
-                      {!apiKey.is_active && (
-                        <Badge variant="secondary" className="text-xs">
-                          Inativa
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{apiKey.description}</p>
-                    <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500">
-                      <span>Criada: {new Date(apiKey.created_at).toLocaleDateString("pt-BR")}</span>
-                      {apiKey.last_used_at && (
-                        <span>Último uso: {new Date(apiKey.last_used_at).toLocaleDateString("pt-BR")}</span>
-                      )}
-                      <span>Escopo: {apiKey.access_scope}</span>
-                    </div>
-                    <div className="mt-3 flex items-center gap-2">
-                      <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-xs font-mono">
-                        {apiKey.api_key.substring(0, 20)}...
-                      </code>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => copyToClipboard(apiKey.api_key)}
-                        className="h-6 w-6 p-0"
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deleteApiKey(apiKey.id)}
-                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-
-  const renderAdminProfileSettings = () => (
-    <div className="space-y-6">
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">👤 Perfil do Administrador</h3>
-        <p className="text-gray-600 dark:text-gray-400">
-          Atualize suas informações de perfil e senha para manter a segurança da sua conta.
-        </p>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Alterar Senha</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="adminCurrentPassword" className="text-gray-900 dark:text-gray-100">
+                Senha Atual (opcional para admin)
+              </Label>
+              <div className="relative">
+                <Input
+                  id="adminCurrentPassword"
+                  type={showAdminPasswords.current ? "text" : "password"}
+                  value={adminProfileForm.currentPassword}
+                  onChange={(e) => setAdminProfileForm({ ...adminProfileForm, currentPassword: e.target.value })}
+                  placeholder="Senha atual (não obrigatória para admin)"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowAdminPasswords({ ...showAdminPasswords, current: !showAdminPasswords.current })}
+                >
+                  {showAdminPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Como administrador, você pode alterar sua senha sem informar a atual
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="adminNewPassword" className="text-gray-900 dark:text-gray-100">
+                Nova Senha
+              </Label>
+              <div className="relative">
+                <Input
+                  id="adminNewPassword"
+                  type={showAdminPasswords.new ? "text" : "password"}
+                  value={adminProfileForm.newPassword}
+                  onChange={(e) => setAdminProfileForm({ ...adminProfileForm, newPassword: e.target.value })}
+                  placeholder="Nova senha"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowAdminPasswords({ ...showAdminPasswords, new: !showAdminPasswords.new })}
+                >
+                  {showAdminPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="adminConfirmPassword" className="text-gray-900 dark:text-gray-100">
+                Confirmar Nova Senha
+              </Label>
+              <div className="relative">
+                <Input
+                  id="adminConfirmPassword"
+                  type={showAdminPasswords.confirm ? "text" : "password"}
+                  value={adminProfileForm.confirmPassword}
+                  onChange={(e) => setAdminProfileForm({ ...adminProfileForm, confirmPassword: e.target.value })}
+                  placeholder="Confirme a nova senha"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowAdminPasswords({ ...showAdminPasswords, confirm: !showAdminPasswords.confirm })}
+                >
+                  {showAdminPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-gray-900 dark:text-gray-100">Informações do Perfil</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {adminProfileMessage && (
-            <Alert variant={adminProfileMessage.includes("sucesso") ? "default" : "destructive"}>
-              <AlertDescription>{adminProfileMessage}</AlertDescription>
-            </Alert>
-          )}
-          <div>
-            <Label htmlFor="full_name" className="text-gray-900 dark:text-gray-100">
-              Nome Completo
-            </Label>
-            <Input
-              id="full_name"
-              value={adminProfileForm.full_name}
-              onChange={(e) => setAdminProfileForm({ ...adminProfileForm, full_name: e.target.value })}
-              placeholder="Seu nome completo"
-              className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-            />
-          </div>
-          <div>
-            <Label htmlFor="email" className="text-gray-900 dark:text-gray-100">
-              Email
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              value={adminProfileForm.email}
-              onChange={(e) => setAdminProfileForm({ ...adminProfileForm, email: e.target.value })}
-              placeholder="Seu email"
-              className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-gray-900 dark:text-gray-100">Alterar Senha</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="currentPassword" className="text-gray-900 dark:text-gray-100">
-              Senha Atual
-            </Label>
-            <div className="relative">
-              <Input
-                id="currentPassword"
-                type={showAdminPasswords.current ? "text" : "password"}
-                value={adminProfileForm.currentPassword}
-                onChange={(e) => setAdminProfileForm({ ...adminProfileForm, currentPassword: e.target.value })}
-                placeholder="Sua senha atual"
-                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 pr-10"
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowAdminPasswords({ ...showAdminPasswords, current: !showAdminPasswords.current })}
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
-              >
-                {showAdminPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                <span className="sr-only">Mostrar senha</span>
-              </Button>
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="newPassword" className="text-gray-900 dark:text-gray-100">
-              Nova Senha
-            </Label>
-            <div className="relative">
-              <Input
-                id="newPassword"
-                type={showAdminPasswords.new ? "text" : "password"}
-                value={adminProfileForm.newPassword}
-                onChange={(e) => setAdminProfileForm({ ...adminProfileForm, newPassword: e.target.value })}
-                placeholder="Sua nova senha"
-                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 pr-10"
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowAdminPasswords({ ...showAdminPasswords, new: !showAdminPasswords.new })}
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
-              >
-                {showAdminPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                <span className="sr-only">Mostrar senha</span>
-              </Button>
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="confirmPassword" className="text-gray-900 dark:text-gray-100">
-              Confirmar Nova Senha
-            </Label>
-            <div className="relative">
-              <Input
-                id="confirmPassword"
-                type={showAdminPasswords.confirm ? "text" : "password"}
-                value={adminProfileForm.confirmPassword}
-                onChange={(e) => setAdminProfileForm({ ...adminProfileForm, confirmPassword: e.target.value })}
-                placeholder="Confirme sua nova senha"
-                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 pr-10"
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowAdminPasswords({ ...showAdminPasswords, confirm: !showAdminPasswords.confirm })}
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
-              >
-                {showAdminPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                <span className="sr-only">Mostrar senha</span>
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-        <div className="p-4">
-          <Button onClick={handleUpdateAdminProfile} disabled={savingAdminProfile}>
-            {savingAdminProfile ? "Salvando..." : "Salvar Alterações"}
-          </Button>
-        </div>
-      </Card>
+      <div className="flex justify-end mt-6">
+        <Button
+          onClick={handleUpdateAdminProfile}
+          disabled={savingAdminProfile}
+          className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+        >
+          {savingAdminProfile ? "Salvando..." : "Salvar Alterações"}
+        </Button>
+      </div>
     </div>
   )
 
   const renderSystemSettings = () => (
-    <div className="space-y-6">
+    <div>
       <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">⚙️ Configurações do Sistema</h3>
-        <p className="text-gray-600 dark:text-gray-400">
-          Gerencie as configurações globais do sistema, como limites de usuários e permissões.
-        </p>
+        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Configurações do Sistema</h3>
+        <p className="text-gray-600 dark:text-gray-400">Configure parâmetros globais da plataforma</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-gray-900 dark:text-gray-100">Limites Padrão</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="defaultWhatsAppLimit" className="text-gray-900 dark:text-gray-100">
-              Limite Padrão de Conexões WhatsApp
-            </Label>
-            <Input
-              id="defaultWhatsAppLimit"
-              type="number"
-              value={systemSettings.defaultWhatsAppLimit}
-              onChange={(e) =>
-                setSystemSettings({ ...systemSettings, defaultWhatsAppLimit: Number.parseInt(e.target.value) })
-              }
-              placeholder="Limite padrão de conexões WhatsApp"
-              className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-            />
-          </div>
-          <div>
-            <Label htmlFor="defaultAgentsLimit" className="text-gray-900 dark:text-gray-100">
-              Limite Padrão de Agentes IA
-            </Label>
-            <Input
-              id="defaultAgentsLimit"
-              type="number"
-              value={systemSettings.defaultAgentsLimit}
-              onChange={(e) =>
-                setSystemSettings({ ...systemSettings, defaultAgentsLimit: Number.parseInt(e.target.value) })
-              }
-              placeholder="Limite padrão de agentes IA"
-              className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Limites e Restrições</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="defaultWhatsAppLimit" className="text-gray-900 dark:text-gray-100">
+                Limite Padrão de Conexões WhatsApp
+              </Label>
+              <Input
+                id="defaultWhatsAppLimit"
+                type="number"
+                value={systemSettings2.default_whatsapp_connections_limit || 2}
+                onChange={(e) =>
+                  setSystemSettings2({
+                    ...systemSettings2,
+                    default_whatsapp_connections_limit: Number.parseInt(e.target.value) || 2,
+                  })
+                }
+                min="1"
+                max="50"
+                className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Número máximo de conexões WhatsApp que novos usuários podem criar
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="defaultAgentsLimit" className="text-gray-900 dark:text-gray-100">
+                Limite Padrão de Agentes IA
+              </Label>
+              <Input
+                id="defaultAgentsLimit"
+                type="number"
+                value={systemSettings2.default_agents_limit || 5}
+                onChange={(e) =>
+                  setSystemSettings2({
+                    ...systemSettings2,
+                    default_agents_limit: Number.parseInt(e.target.value) || 5,
+                  })
+                }
+                min="1"
+                max="100"
+                className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Número máximo de agentes IA que novos usuários podem criar
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-gray-900 dark:text-gray-100">Autenticação</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="allowPublicRegistration" className="text-gray-900 dark:text-gray-100">
-              Permitir Cadastro Público
-            </Label>
-            <Switch
-              id="allowPublicRegistration"
-              checked={systemSettings.allowPublicRegistration}
-              onCheckedChange={(checked) => setSystemSettings({ ...systemSettings, allowPublicRegistration: checked })}
-            />
-          </div>
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Cadastro de Usuários</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="allowRegistration" className="text-gray-900 dark:text-gray-100">
+                  Permitir Cadastro Público
+                </Label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Permite que novos usuários se cadastrem na tela de login
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="allowRegistration"
+                  checked={systemSettings2.allow_public_registration === true}
+                  onCheckedChange={(checked) =>
+                    setSystemSettings2({
+                      ...systemSettings2,
+                      allow_public_registration: checked,
+                    })
+                  }
+                />
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {systemSettings2.allow_public_registration ? "Habilitado" : "Desabilitado"}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-      <div className="mt-4">
-        <Button onClick={saveSystemSettings2} disabled={saving}>
-          {saving ? "Salvando..." : "Salvar Configurações"}
-        </Button>
+        <div className="flex justify-end">
+          <Button
+            onClick={handleUpdateSystemSettings}
+            disabled={savingSettings}
+            className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+          >
+            {savingSettings ? "Salvando..." : "Salvar Configurações"}
+          </Button>
+        </div>
       </div>
     </div>
   )
 
-  const renderBrandingSettings = () => (
-    <div className="space-y-6">
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">🎨 Branding</h3>
-        <p className="text-gray-600 dark:text-gray-400">
-          Personalize a aparência da sua plataforma para combinar com a sua marca.
-        </p>
-      </div>
+  const renderBrandingSettings = () => {
+    const handleBrandingChange = (updates: Partial<ThemeConfig>) => {
+      setBrandingForm((prev) => ({ ...prev, ...updates }))
+      setBrandingChanged(true)
+    }
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-gray-900 dark:text-gray-100">Informações da Marca</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="systemName" className="text-gray-900 dark:text-gray-100">
-              Nome do Sistema
-            </Label>
-            <Input
-              id="systemName"
-              value={brandingForm.systemName}
-              onChange={(e) => setBrandingForm({ ...brandingForm, systemName: e.target.value })}
-              placeholder="Nome da sua plataforma"
-              className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-            />
-          </div>
-          <div>
-            <Label htmlFor="description" className="text-gray-900 dark:text-gray-100">
-              Descrição
-            </Label>
-            <Textarea
-              id="description"
-              value={brandingForm.description}
-              onChange={(e) => setBrandingForm({ ...brandingForm, description: e.target.value })}
-              placeholder="Descrição da sua plataforma"
-              className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-            />
-          </div>
-        </CardContent>
-      </Card>
+    const handleSaveBranding = async () => {
+      setSaving(true)
+      setSaveMessage("")
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-gray-900 dark:text-gray-100">Logotipos e Ícones</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="logo" className="text-gray-900 dark:text-gray-100">
-              Logo
-            </Label>
-            <div className="flex items-center space-x-4">
-              <Button variant="secondary" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
-                {uploadingLogo ? "Enviando..." : "Enviar Logo"}
-                <Upload className="ml-2 h-4 w-4" />
-              </Button>
-              <Input type="file" id="logo" className="hidden" ref={logoInputRef} onChange={handleLogoUpload} />
-              {brandingForm.logoUrl && (
-                <Image
-                  src={brandingForm.logoUrl || "/placeholder.svg"}
-                  alt="Logo"
-                  width={40}
-                  height={40}
-                  className="rounded-md"
-                />
-              )}
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="favicon" className="text-gray-900 dark:text-gray-100">
-              Favicon
-            </Label>
-            <div className="flex items-center space-x-4">
-              <Button variant="secondary" onClick={() => faviconInputRef.current?.click()} disabled={uploadingFavicon}>
-                {uploadingFavicon ? "Enviando..." : "Enviar Favicon"}
-                <Upload className="ml-2 h-4 w-4" />
-              </Button>
-              <Input type="file" id="favicon" className="hidden" ref={faviconInputRef} onChange={handleFaviconUpload} />
-              {brandingForm.faviconUrl && (
-                <Image
-                  src={brandingForm.faviconUrl || "/placeholder.svg"}
-                  alt="Favicon"
-                  width={32}
-                  height={32}
-                  className="rounded-sm"
-                />
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      try {
+        await updateTheme(brandingForm)
+        setBrandingChanged(false)
+        setSaveMessage("Configurações de branding salvas com sucesso!")
+        setTimeout(() => setSaveMessage(""), 3000)
+      } catch (error) {
+        setSaveMessage("Erro ao salvar configurações de branding")
+        setTimeout(() => setSaveMessage(""), 3000)
+      } finally {
+        setSaving(false)
+      }
+    }
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-gray-900 dark:text-gray-100">Cores</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="primaryColor" className="text-gray-900 dark:text-gray-100">
-              Cor Primária
-            </Label>
-            <Input
-              type="color"
-              id="primaryColor"
-              value={brandingForm.primaryColor}
-              onChange={(e) => setBrandingForm({ ...brandingForm, primaryColor: e.target.value })}
-              className="h-10 w-full"
-            />
-          </div>
-          <div>
-            <Label htmlFor="secondaryColor" className="text-gray-900 dark:text-gray-100">
-              Cor Secundária
-            </Label>
-            <Input
-              type="color"
-              id="secondaryColor"
-              value={brandingForm.secondaryColor}
-              onChange={(e) => setBrandingForm({ ...brandingForm, secondaryColor: e.target.value })}
-              className="h-10 w-full"
-            />
-          </div>
-          <div>
-            <Label htmlFor="accentColor" className="text-gray-900 dark:text-gray-100">
-              Cor de Destaque
-            </Label>
-            <Input
-              type="color"
-              id="accentColor"
-              value={brandingForm.accentColor}
-              onChange={(e) => setBrandingForm({ ...brandingForm, accentColor: e.target.value })}
-              className="h-10 w-full"
-            />
-          </div>
-        </CardContent>
-      </Card>
+    const handleResetBranding = () => {
+      setBrandingForm(theme)
+      setBrandingChanged(false)
+    }
 
-      <div className="mt-4">
-        <Button
-          onClick={() => {
-            updateTheme(brandingForm)
-            setBrandingChanged(true)
-          }}
-          disabled={!brandingChanged}
-        >
-          Salvar Branding
-        </Button>
-      </div>
-    </div>
-  )
-
-  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Carregando configurações...</p>
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-gray-900 dark:text-gray-100">Branding e Identidade</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="systemName" className="text-gray-900 dark:text-gray-100">
+                  Nome do Sistema
+                </Label>
+                <Input
+                  id="systemName"
+                  value={brandingForm.systemName}
+                  onChange={(e) => handleBrandingChange({ systemName: e.target.value })}
+                  placeholder="Nome da sua plataforma"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="description" className="text-gray-900 dark:text-gray-100">
+                  Descrição
+                </Label>
+                <Textarea
+                  id="description"
+                  value={brandingForm.description || ""}
+                  onChange={(e) => handleBrandingChange({ description: e.target.value })}
+                  placeholder="Descrição da sua plataforma"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="logoIcon" className="text-gray-900 dark:text-gray-100">
+                  Ícone/Emoji do Logo
+                </Label>
+                <Input
+                  id="logoIcon"
+                  value={brandingForm.logoIcon}
+                  onChange={(e) => handleBrandingChange({ logoIcon: e.target.value })}
+                  placeholder="🤖"
+                  maxLength={2}
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="logoUpload" className="text-gray-900 dark:text-gray-100">
+                  Upload de Logo
+                </Label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      disabled={saving || uploadingLogo}
+                      onClick={() => logoInputRef.current?.click()}
+                    >
+                      <Upload className="w-4 h-4" />
+                      {uploadingLogo ? "Enviando..." : "Escolher Logo"}
+                    </Button>
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg"
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                    />
+                  </div>
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <p>• Formatos: PNG, JPG</p>
+                    <p>• Tamanho: 100x100 até 500x500 pixels</p>
+                    <p>• Máximo: 2MB</p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="faviconUpload" className="text-gray-900 dark:text-gray-100">
+                  Upload de Favicon
+                </Label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      disabled={saving || uploadingFavicon}
+                      onClick={() => faviconInputRef.current?.click()}
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      {uploadingFavicon ? "Enviando..." : "Escolher Favicon"}
+                    </Button>
+                    <input
+                      ref={faviconInputRef}
+                      type="file"
+                      accept="image/x-icon,image/vnd.microsoft.icon,image/png"
+                      onChange={handleFaviconUpload}
+                      className="hidden"
+                    />
+                  </div>
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <p>• Formatos: ICO, PNG</p>
+                    <p>• Tamanho: exatamente 32x32 pixels</p>
+                    <p>• Máximo: 1MB</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-gray-900 dark:text-gray-100">Esquema de Cores</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="primaryColor" className="text-gray-900 dark:text-gray-100">
+                  Cor Primária
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="primaryColor"
+                    type="color"
+                    value={brandingForm.primaryColor}
+                    onChange={(e) => handleBrandingChange({ primaryColor: e.target.value })}
+                    className="w-16 h-10 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                  <Input
+                    value={brandingForm.primaryColor}
+                    onChange={(e) => handleBrandingChange({ primaryColor: e.target.value })}
+                    placeholder="#2563eb"
+                    className="flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="secondaryColor" className="text-gray-900 dark:text-gray-100">
+                  Cor Secundária
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="secondaryColor"
+                    type="color"
+                    value={brandingForm.secondaryColor}
+                    onChange={(e) => handleBrandingChange({ secondaryColor: e.target.value })}
+                    className="w-16 h-10 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                  <Input
+                    value={brandingForm.secondaryColor}
+                    onChange={(e) => handleBrandingChange({ secondaryColor: e.target.value })}
+                    placeholder="#10b981"
+                    className="flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="accentColor" className="text-gray-900 dark:text-gray-100">
+                  Cor de Destaque
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="accentColor"
+                    type="color"
+                    value={brandingForm.accentColor}
+                    onChange={(e) => handleBrandingChange({ accentColor: e.target.value })}
+                    className="w-16 h-10 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                  <Input
+                    value={brandingForm.accentColor}
+                    onChange={(e) => handleBrandingChange({ accentColor: e.target.value })}
+                    placeholder="#8b5cf6"
+                    className="flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-gray-900 dark:text-gray-100">Temas Predefinidos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                {Object.entries(themePresets).map(([key, preset]) => (
+                  <Button
+                    key={key}
+                    variant="outline"
+                    className="h-auto p-4 flex flex-col items-center gap-2"
+                    onClick={() => handleBrandingChange(preset)}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white"
+                      style={{ backgroundColor: preset.primaryColor }}
+                    >
+                      <span className="text-sm">{preset.logoIcon}</span>
+                    </div>
+                    <span className="text-sm font-medium capitalize">{key}</span>
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-gray-900 dark:text-gray-100">Preview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="border rounded-lg p-4 bg-gray-50">
+                <div className="flex items-center gap-2 mb-4">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
+                    style={{ backgroundColor: brandingForm.primaryColor }}
+                  >
+                    <span className="text-sm">{brandingForm.logoIcon}</span>
+                  </div>
+                  <span className="font-semibold">{brandingForm.systemName}</span>
+                </div>
+                <div className="space-y-2">
+                  <div
+                    className="h-3 rounded"
+                    style={{ backgroundColor: brandingForm.primaryColor, opacity: 0.8 }}
+                  ></div>
+                  <div
+                    className="h-3 rounded w-3/4"
+                    style={{ backgroundColor: brandingForm.secondaryColor, opacity: 0.6 }}
+                  ></div>
+                  <div
+                    className="h-3 rounded w-1/2"
+                    style={{ backgroundColor: brandingForm.accentColor, opacity: 0.4 }}
+                  ></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex justify-between items-center pt-6 border-t">
+          <div className="flex items-center gap-2">
+            {brandingChanged && (
+              <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/50 px-3 py-1 rounded-md">
+                Você tem alterações não salvas
+              </div>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={handleResetBranding}
+              disabled={!brandingChanged || saving}
+              className="text-gray-700 border-gray-300 hover:bg-gray-100"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveBranding}
+              disabled={!brandingChanged || saving}
+              className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+            >
+              {saving ? "Salvando..." : "Salvar Alterações"}
+            </Button>
+          </div>
         </div>
       </div>
     )
   }
 
-  return (
-    <div className="container mx-auto p-6 max-w-6xl">
-      <DynamicTitle title="Configurações do Sistema" />
+  const renderIntegrationsSettings = () => {
+    const getIntegrationConfig = (type: string) => {
+      const integration = integrations.find((int) => int.type === type)
+      return integration?.config || {}
+    }
 
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Configurações do Sistema</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">
-          Gerencie configurações globais, branding e integrações da plataforma
-        </p>
+    const openIntegrationModal = (type: string, name: string) => {
+      setSelectedIntegration({ type, name })
+      const config = getIntegrationConfig(type)
+
+      if (type === "evolution_api") {
+        setIntegrationForm({
+          ...integrationForm,
+          evolutionApiUrl: config.apiUrl || "",
+          evolutionApiKey: config.apiKey || "",
+        })
+      } else if (type === "n8n") {
+        setIntegrationForm({
+          ...integrationForm,
+          n8nFlowUrl: config.flowUrl || "",
+          n8nApiKey: config.apiKey || "",
+        })
+      }
+
+      setIntegrationModalOpen(true)
+    }
+
+    return (
+      <div>
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Integrações Disponíveis</h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Configure as integrações para expandir as funcionalidades da plataforma
+          </p>
+
+          {saveMessage.includes("Tabela") && (
+            <Alert className="mt-4" variant="destructive">
+              <AlertDescription>
+                {saveMessage}
+                <br />
+                <strong>Execute este script SQL no seu Supabase:</strong>
+                <code className="block mt-2 p-2 bg-gray-100 rounded text-xs">
+                  CREATE TABLE IF NOT EXISTS impaai.integrations ( id UUID DEFAULT gen_random_uuid() PRIMARY KEY, name
+                  VARCHAR(255) NOT NULL, type VARCHAR(100) NOT NULL, config JSONB DEFAULT '{}', is_active BOOLEAN
+                  DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE
+                  DEFAULT NOW() );
+                </code>
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Image
+                  src="/images/evolution-api-logo.png"
+                  alt="Evolution API"
+                  width={40}
+                  height={40}
+                  className="rounded"
+                />
+              </div>
+              <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Evolution API</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Integração com WhatsApp Business</p>
+              <Button
+                onClick={() => openIntegrationModal("evolution_api", "Evolution API")}
+                className={
+                  getIntegrationConfig("evolution_api").apiUrl
+                    ? "w-full bg-green-600 text-white hover:bg-green-700"
+                    : "w-full"
+                }
+                variant={getIntegrationConfig("evolution_api").apiUrl ? undefined : "outline"}
+                disabled={saveMessage.includes("Tabela")}
+              >
+                {getIntegrationConfig("evolution_api").apiUrl ? "Configurado" : "Configurar"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Image src="/images/n8n-logo.png" alt="n8n" width={40} height={40} className="rounded" />
+              </div>
+              <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">n8n</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Automação de fluxos de trabalho</p>
+              <Button
+                onClick={() => openIntegrationModal("n8n", "n8n")}
+                className={
+                  getIntegrationConfig("n8n").flowUrl ? "w-full bg-green-600 text-white hover:bg-green-700" : "w-full"
+                }
+                variant={getIntegrationConfig("n8n").flowUrl ? undefined : "outline"}
+                disabled={saveMessage.includes("Tabela")}
+              >
+                {getIntegrationConfig("n8n").flowUrl ? "Configurado" : "Configurar"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="opacity-50">
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Plus className="w-8 h-8 text-gray-400" />
+              </div>
+              <h4 className="font-semibold mb-2">Em Breve</h4>
+              <p className="text-sm text-gray-600 mb-4">Nova integração chegando</p>
+              <Button className="w-full" variant="outline" disabled>
+                Em Breve
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Dialog open={integrationModalOpen} onOpenChange={setIntegrationModalOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="text-gray-900 dark:text-gray-100">
+                Configurar {selectedIntegration?.name}
+              </DialogTitle>
+              <DialogDescription className="text-gray-600 dark:text-gray-400">
+                Configure as credenciais para integração com {selectedIntegration?.name}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {selectedIntegration?.type === "evolution_api" && (
+                <>
+                  <div>
+                    <Label htmlFor="evolutionApiUrl" className="text-gray-900 dark:text-gray-100">
+                      URL da API Evolution *
+                    </Label>
+                    <Input
+                      id="evolutionApiUrl"
+                      value={integrationForm.evolutionApiUrl}
+                      onChange={(e) => setIntegrationForm({ ...integrationForm, evolutionApiUrl: e.target.value })}
+                      placeholder="https://api.evolution.com"
+                      required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="evolutionApiKey" className="text-gray-900 dark:text-gray-100">
+                      API Key Global *
+                    </Label>
+                    <Input
+                      id="evolutionApiKey"
+                      type="password"
+                      value={integrationForm.evolutionApiKey}
+                      onChange={(e) => setIntegrationForm({ ...integrationForm, evolutionApiKey: e.target.value })}
+                      placeholder="Sua API Key"
+                      required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                  </div>
+                </>
+              )}
+
+              {selectedIntegration?.type === "n8n" && (
+                <>
+                  <div>
+                    <Label htmlFor="n8nFlowUrl" className="text-gray-900 dark:text-gray-100">
+                      URL do Fluxo *
+                    </Label>
+                    <Input
+                      id="n8nFlowUrl"
+                      value={integrationForm.n8nFlowUrl}
+                      onChange={(e) => setIntegrationForm({ ...integrationForm, n8nFlowUrl: e.target.value })}
+                      placeholder="https://n8n.exemplo.com/webhook/..."
+                      required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="n8nApiKey" className="text-gray-900 dark:text-gray-100">
+                      API Key do Fluxo (Opcional)
+                    </Label>
+                    <Input
+                      id="n8nApiKey"
+                      type="password"
+                      value={integrationForm.n8nApiKey}
+                      onChange={(e) => setIntegrationForm({ ...integrationForm, n8nApiKey: e.target.value })}
+                      placeholder="API Key (se necessário)"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIntegrationModalOpen(false)}
+                className="text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => handleIntegrationSave(selectedIntegration?.type)}
+                disabled={saving}
+                className="gap-2 bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+              >
+                {saving ? "Salvando..." : "Salvar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
+    )
+  }
 
-      {saveMessage && (
-        <Alert variant={saveMessage.includes("sucesso") ? "default" : "destructive"} className="mb-6">
-          <AlertDescription>{saveMessage}</AlertDescription>
-        </Alert>
-      )}
+  if (loading) {
+    return <div className="p-6">Carregando...</div>
+  }
 
-      <Tabs value={settingsSubTab} onValueChange={setSettingsSubTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="profile">Perfil</TabsTrigger>
-          <TabsTrigger value="system">Sistema</TabsTrigger>
-          <TabsTrigger value="branding">Branding</TabsTrigger>
-          <TabsTrigger value="api-keys">API Keys</TabsTrigger>
-          <TabsTrigger value="integrations">Integrações</TabsTrigger>
-        </TabsList>
+  return (
+    <>
+      <DynamicTitle suffix="Configurações" />
+      <div className="p-6">
+        <h1 className="text-2xl font-bold mb-4">Configurações - {theme.systemName}</h1>
+        <Tabs defaultValue="profile">
+          <TabsList>
+            <TabsTrigger value="profile">Perfil</TabsTrigger>
+            <TabsTrigger value="system">Sistema</TabsTrigger>
+            <TabsTrigger value="apiKeys">API Keys</TabsTrigger>
+            <TabsTrigger value="integrations">Integrações</TabsTrigger>
+            <TabsTrigger value="branding">Branding</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="profile">{renderAdminProfileSettings()}</TabsContent>
-        <TabsContent value="system">{renderSystemSettings()}</TabsContent>
-        <TabsContent value="branding">{renderBrandingSettings()}</TabsContent>
-        <TabsContent value="api-keys">{renderApiKeysSettings()}</TabsContent>
-        <TabsContent value="integrations">
-          <div className="text-center py-8">
-            <p className="text-gray-600 dark:text-gray-400">Configurações de integrações em desenvolvimento</p>
-          </div>
-        </TabsContent>
-      </Tabs>
-    </div>
+          <TabsContent value="profile" className="mt-4">
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Perfil do Administrador</h3>
+              <p className="text-gray-600 dark:text-gray-400">Gerencie suas informações pessoais e senha</p>
+            </div>
+
+            {profileMessage && (
+              <Alert variant={profileMessage.includes("sucesso") ? "default" : "destructive"} className="mb-6">
+                <AlertDescription>{profileMessage}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-gray-900 dark:text-gray-100">Informações Pessoais</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="adminFullName" className="text-gray-900 dark:text-gray-100">
+                      Nome Completo
+                    </Label>
+                    <Input
+                      id="adminFullName"
+                      value={profileForm.full_name}
+                      onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                      placeholder="Seu nome completo"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="adminEmail" className="text-gray-900 dark:text-gray-100">
+                      Email
+                    </Label>
+                    <Input
+                      id="adminEmail"
+                      type="email"
+                      value={profileForm.email}
+                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      placeholder="seu@email.com"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-gray-900 dark:text-gray-100">Alterar Senha</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="adminCurrentPassword" className="text-gray-900 dark:text-gray-100">
+                      Senha Atual (opcional para admin)
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="adminCurrentPassword"
+                        type={showPasswords.current ? "text" : "password"}
+                        value={profileForm.currentPassword}
+                        onChange={(e) => setProfileForm({ ...profileForm, currentPassword: e.target.value })}
+                        placeholder="Senha atual (não obrigatória para admin)"
+                        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                      >
+                        {showPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Como administrador, você pode alterar sua senha sem informar a atual
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="adminNewPassword" className="text-gray-900 dark:text-gray-100">
+                      Nova Senha
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="adminNewPassword"
+                        type={showPasswords.new ? "text" : "password"}
+                        value={profileForm.newPassword}
+                        onChange={(e) => setProfileForm({ ...profileForm, newPassword: e.target.value })}
+                        placeholder="Nova senha"
+                        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                      >
+                        {showPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="adminConfirmPassword" className="text-gray-900 dark:text-gray-100">
+                      Confirmar Nova Senha
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="adminConfirmPassword"
+                        type={showPasswords.confirm ? "text" : "password"}
+                        value={profileForm.confirmPassword}
+                        onChange={(e) => setProfileForm({ ...profileForm, confirmPassword: e.target.value })}
+                        placeholder="Confirme a nova senha"
+                        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                      >
+                        {showPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <Button
+                onClick={handleUpdateProfile}
+                disabled={savingProfile}
+                className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+              >
+                {savingProfile ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="system" className="mt-4">
+            {renderSystemSettings()}
+          </TabsContent>
+
+          <TabsContent value="apiKeys" className="mt-4">
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Gerenciamento de API Keys</CardTitle>
+                    <CardDescription>Crie e gerencie chaves de API para você.</CardDescription>
+                  </div>
+                  {!showNewKeyForm ? (
+                    <Button onClick={() => setShowNewKeyForm(true)} className="gap-2">
+                      <Plus className="h-4 w-4" /> Nova API Key
+                    </Button>
+                  ) : (
+                    <Button onClick={() => setShowNewKeyForm(false)} variant="outline">
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {showNewKeyForm && (
+                  <div className="mb-6 p-4 border rounded-lg space-y-4">
+                    <h4 className="font-medium">Criar Nova API Key</h4>
+                    <div>
+                      <Label htmlFor="keyName">Nome da API Key (Opcional)</Label>
+                      <Input
+                        id="keyName"
+                        value={newKeyName}
+                        onChange={(e) => setNewKeyName(e.target.value)}
+                        placeholder="Ex: Integração N8N Pessoal"
+                      />
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <Button
+                        onClick={() => createApiKey(false)}
+                        className="w-full"
+                        disabled={creatingApiKey}
+                        variant="outline"
+                      >
+                        {creatingApiKey ? "Criando..." : "Criar Chave Padrão (Acesso Próprio)"}
+                      </Button>
+                      <Button
+                        onClick={() => createApiKey(true)}
+                        className="w-full gap-2 bg-red-600 hover:bg-red-700 text-white"
+                        disabled={creatingApiKey}
+                      >
+                        <ShieldCheck className="h-4 w-4" />
+                        {creatingApiKey ? "Criando..." : "Criar Chave de Admin (Acesso Global)"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {loadingApiKeys ? (
+                  <p>Carregando API keys...</p>
+                ) : apiKeys.length === 0 ? (
+                  <p className="text-center text-gray-500 py-8">Nenhuma API key encontrada.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {apiKeys.map((apiKey) => (
+                      <div key={apiKey.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-medium">{apiKey.name}</h4>
+                              {apiKey.is_admin_key ? (
+                                <Badge className="bg-red-100 text-red-700">ADMIN</Badge>
+                              ) : (
+                                <Badge variant="secondary">PADRÃO</Badge>
+                              )}
+                              <Badge variant="outline">
+                                {apiKey.access_scope === "admin" ? "Acesso Global" : "Acesso Próprio"}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">{apiKey.description}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteApiKey(apiKey.id)}
+                            className="text-red-600 hover:bg-red-100"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <Input value={apiKey.api_key} readOnly className="font-mono text-sm" />
+                          <Button variant="outline" size="sm" onClick={() => copyToClipboard(apiKey.api_key)}>
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="integrations" className="mt-4">
+            {renderIntegrationsSettings()}
+          </TabsContent>
+
+          <TabsContent value="branding" className="mt-4">
+            {renderBrandingSettings()}
+          </TabsContent>
+        </Tabs>
+      </div>
+    </>
   )
 }
