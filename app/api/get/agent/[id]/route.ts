@@ -4,8 +4,14 @@ import { db } from "@/lib/supabase"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    // Validar API key (correção: passar request em vez de apiKey string)
-    const validation = await validateApiKey(request)
+    const apiKey = request.headers.get("apikey")
+
+    if (!apiKey) {
+      return NextResponse.json({ error: "API key é obrigatória" }, { status: 401 })
+    }
+
+    // Validar API key
+    const validation = await validateApiKey(apiKey)
     if (!validation.isValid) {
       return NextResponse.json({ error: validation.error }, { status: 401 })
     }
@@ -14,38 +20,37 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const agentId = params.id
 
     // Buscar modelo padrão do sistema
-    const { data: defaultModelData } = await (await db.systemSettings())
+    const { data: defaultModelData } = await (await db.users())
       .select("setting_value")
       .eq("setting_key", "default_model")
       .single()
 
     const defaultModel = defaultModelData?.setting_value || "gpt-4o-mini"
 
-    // Buscar agente específico (manter como estava: db.users())
-    const { data: agent, error } = await (await db.agents()).select("*").eq("id", agentId).single()
+    // Buscar agente específico
+    const { data: agent, error } = await (await db.users()).select("*").eq("id", agentId).single()
 
     if (error || !agent) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    // Verificar permissões de acesso (assumir que apiKeyData.is_admin_key existe ou ajustar)
-    const isAdminKey = user?.role === "admin" || false // Simplificação temporária
-    if (!canAccessAgent(user!.role, isAdminKey, agent.user_id, user!.id)) {
+    // Verificar permissões de acesso
+    if (!canAccessAgent(user!.role, apiKeyData!.is_admin_key, agent.user_id, user!.id)) {
       return NextResponse.json({ error: "Sem permissão para acessar este agente" }, { status: 403 })
     }
 
     // Buscar conexão WhatsApp se existir
     let whatsappConnection = null
     if (agent.whatsapp_connection_id) {
-      const { data: connectionData } = await (await db.whatsappConnections())
-        .select("instance_name, status, phone_number, name")
+      const { data: connectionData } = await (await db.users())
+        .select("instance_name, status, qr_code")
         .eq("id", agent.whatsapp_connection_id)
         .single()
 
       whatsappConnection = connectionData
     }
 
-    // Formatar resposta detalhada (mantendo a estrutura original mas melhorada)
+    // Formatar resposta detalhada
     const detailedAgent = {
       id: agent.id,
       name: agent.name,
@@ -64,25 +69,50 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       frequency_penalty: agent.frequency_penalty,
       presence_penalty: agent.presence_penalty,
 
-      // Funcionalidades (retornar booleanos diretos como pediu)
-      transcribe_audio: agent.transcribe_audio,
-      understand_images: agent.understand_images,
-      voice_response_enabled: agent.voice_response_enabled,
-      voice_provider: agent.voice_provider,
-      voice_id: agent.voice_id,
-      calendar_integration: agent.calendar_integration,
-      chatnode_integration: agent.chatnode_integration,
-      orimon_integration: agent.orimon_integration,
+      // Funcionalidades
+      features: {
+        transcribe_audio: {
+          enabled: agent.transcribe_audio,
+          description: agent.transcribe_audio ? "Transcrição de áudio ativada" : "Transcrição de áudio desativada",
+        },
+        understand_images: {
+          enabled: agent.understand_images,
+          description: agent.understand_images ? "Análise de imagens ativada" : "Análise de imagens desativada",
+        },
+        voice_response_enabled: {
+          enabled: agent.voice_response_enabled,
+          description: agent.voice_response_enabled ? "Respostas por voz ativadas" : "Respostas por voz desativadas",
+          voice_provider: agent.voice_provider,
+          voice_id: agent.voice_id,
+        },
+        calendar_integration: {
+          enabled: agent.calendar_integration,
+          description: agent.calendar_integration
+            ? "Integração com calendário ativada"
+            : "Integração com calendário desativada",
+        },
+        chatnode_integration: {
+          enabled: agent.chatnode_integration,
+          description: agent.chatnode_integration
+            ? "Integração com ChatNode ativada"
+            : "Integração com ChatNode desativada",
+        },
+        orimon_integration: {
+          enabled: agent.orimon_integration,
+          description: agent.orimon_integration ? "Integração com Orimon ativada" : "Integração com Orimon desativada",
+        },
+      },
 
       // Configurações de comportamento
-      is_default: agent.is_default,
-      listening_from_me: agent.listen_own_messages,
-      activation_keyword: agent.trigger_keyword,
-      stop_bot_by_me: agent.stop_bot_by_me,
-      keep_conversation_open: agent.keep_conversation_open,
-      split_long_messages: agent.split_long_messages,
-      character_wait_time: agent.character_wait_time,
-      trigger_type: agent.trigger_type,
+      behavior: {
+        is_default: agent.is_default,
+        listen_own_messages: agent.listen_own_messages,
+        stop_bot_by_me: agent.stop_bot_by_me,
+        keep_conversation_open: agent.keep_conversation_open,
+        split_long_messages: agent.split_long_messages,
+        character_wait_time: agent.character_wait_time,
+        trigger_type: agent.trigger_type,
+      },
 
       // Horário de funcionamento
       working_hours: agent.working_hours,
