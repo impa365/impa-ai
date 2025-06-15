@@ -42,8 +42,7 @@ async function getEvolutionConfig() {
     console.warn("⚠️ Chave da API da Evolution API (apiKey) não configurada. Algumas requisições podem falhar.")
   }
 
-  console.log("✅ Configuração da Evolution API encontrada:")
-  console.log("📍 URL:", config.apiUrl)
+  console.log("✅ Configuração da Evolution API encontrada.")
   console.log("🔑 API Key:", config.apiKey ? "Configurada" : "Não configurada (opcional para alguns endpoints)")
 
   return config
@@ -61,7 +60,7 @@ export async function createEvolutionBot(
     const config = await getEvolutionConfig() // This will now work correctly
     const url = `${config.apiUrl}/evolutionBot/create/${instanceName}`
 
-    console.log("🌐 Fazendo requisição POST para:", url)
+    console.log("🌐 Fazendo requisição POST para o endpoint da Evolution API")
 
     const response = await fetch(url, {
       method: "POST",
@@ -73,10 +72,15 @@ export async function createEvolutionBot(
     })
 
     const responseText = await response.text() // Always get text first for better error details
-    console.log(`📄 Resposta da Evolution API (Criação - Status ${response.status}):`, responseText)
+    if (process.env.NODE_ENV === "development") {
+      console.log(`📄 Resposta da Evolution API (Criação - Status ${response.status}):`, responseText)
+    } else {
+      console.log(`📄 Resposta da Evolution API (Criação - Status ${response.status})`)
+    }
 
     if (!response.ok) {
-      console.error(`❌ Erro da Evolution API (Criação - Status ${response.status}): ${responseText}`)
+      const errorDetail = process.env.NODE_ENV === "development" ? responseText : "Detalhes omitidos no cliente."
+      console.error(`❌ Erro da Evolution API (Criação - Status ${response.status}): ${errorDetail}`)
       return {
         success: false,
         error: `Erro ${response.status} da Evolution API: ${responseText || "Resposta vazia"}`,
@@ -122,7 +126,7 @@ export async function updateEvolutionBot(
     const config = await getEvolutionConfig()
     const url = `${config.apiUrl}/evolutionBot/update/${botId}/${instanceName}`
 
-    console.log("🌐 Fazendo requisição PUT para:", url)
+    console.log("🌐 Fazendo requisição PUT para o endpoint da Evolution API")
 
     const response = await fetch(url, {
       method: "PUT",
@@ -134,10 +138,15 @@ export async function updateEvolutionBot(
     })
 
     const responseText = await response.text()
-    console.log(`📄 Resposta da Evolution API (Atualização - Status ${response.status}):`, responseText)
+    if (process.env.NODE_ENV === "development") {
+      console.log(`📄 Resposta da Evolution API (Atualização - Status ${response.status}):`, responseText)
+    } else {
+      console.log(`📄 Resposta da Evolution API (Atualização - Status ${response.status})`)
+    }
 
     if (!response.ok) {
-      console.error(`❌ Erro ao atualizar bot na Evolution API (Status ${response.status}): ${responseText}`)
+      const errorDetail = process.env.NODE_ENV === "development" ? responseText : "Detalhes omitidos no cliente."
+      console.error(`❌ Erro ao atualizar bot na Evolution API (Status ${response.status}): ${errorDetail}`)
       return false
     }
 
@@ -160,7 +169,7 @@ export async function setEvolutionInstanceSettings(
     const config = await getEvolutionConfig()
     const url = `${config.apiUrl}/evolutionBot/settings/${instanceName}` // Endpoint é POST para settings
 
-    console.log("🌐 Fazendo requisição POST para:", url)
+    console.log("🌐 Fazendo requisição POST para o endpoint da Evolution API")
 
     const response = await fetch(url, {
       method: "POST",
@@ -172,11 +181,16 @@ export async function setEvolutionInstanceSettings(
     })
 
     const responseText = await response.text()
-    console.log(`📄 Resposta da Evolution API (Definições da Instância - Status ${response.status}):`, responseText)
+    if (process.env.NODE_ENV === "development") {
+      console.log(`📄 Resposta da Evolution API (Definições da Instância - Status ${response.status}):`, responseText)
+    } else {
+      console.log(`📄 Resposta da Evolution API (Definições da Instância - Status ${response.status})`)
+    }
 
     if (!response.ok) {
+      const errorDetail = process.env.NODE_ENV === "development" ? responseText : "Detalhes omitidos no cliente."
       console.error(
-        `❌ Erro ao configurar definições da instância na Evolution API (Status ${response.status}): ${responseText}`,
+        `❌ Erro ao configurar definições da instância na Evolution API (Status ${response.status}): ${errorDetail}`,
       )
       return false
     }
@@ -196,7 +210,7 @@ export async function deleteEvolutionBot(instanceName: string, botId: string): P
     const config = await getEvolutionConfig()
     const url = `${config.apiUrl}/evolutionBot/delete/${botId}/${instanceName}`
 
-    console.log("🌐 Fazendo requisição DELETE para:", url)
+    console.log("🌐 Fazendo requisição DELETE para o endpoint da Evolution API")
 
     const response = await fetch(url, {
       method: "DELETE",
@@ -206,10 +220,15 @@ export async function deleteEvolutionBot(instanceName: string, botId: string): P
     })
 
     const responseText = await response.text() // Get text even for delete for potential error messages
-    console.log(`📄 Resposta da Evolution API (Deleção - Status ${response.status}):`, responseText)
+    if (process.env.NODE_ENV === "development") {
+      console.log(`📄 Resposta da Evolution API (Deleção - Status ${response.status}):`, responseText)
+    } else {
+      console.log(`📄 Resposta da Evolution API (Deleção - Status ${response.status})`)
+    }
 
     if (!response.ok) {
-      console.error(`❌ Erro ao deletar bot na Evolution API (Status ${response.status}): ${responseText}`)
+      const errorDetail = process.env.NODE_ENV === "development" ? responseText : "Detalhes omitidos no cliente."
+      console.error(`❌ Erro ao deletar bot na Evolution API (Status ${response.status}): ${errorDetail}`)
       return false
     }
 
@@ -228,7 +247,7 @@ export async function fetchEvolutionBot(instanceName: string, botId: string): Pr
     const config = await getEvolutionConfig()
     const url = `${config.apiUrl}/evolutionBot/fetch/${botId}/${instanceName}`
 
-    console.log("🌐 Fazendo requisição GET para:", url)
+    console.log("🌐 Fazendo requisição GET para o endpoint da Evolution API")
 
     const response = await fetch(url, {
       method: "GET",
@@ -238,10 +257,15 @@ export async function fetchEvolutionBot(instanceName: string, botId: string): Pr
     })
 
     const responseText = await response.text()
-    console.log(`📄 Resposta da Evolution API (Busca de Bot - Status ${response.status}):`, responseText)
+    if (process.env.NODE_ENV === "development") {
+      console.log(`📄 Resposta da Evolution API (Busca de Bot - Status ${response.status}):`, responseText)
+    } else {
+      console.log(`📄 Resposta da Evolution API (Busca de Bot - Status ${response.status})`)
+    }
 
     if (!response.ok) {
-      console.error(`❌ Erro ao buscar bot na Evolution API (Status ${response.status}): ${responseText}`)
+      const errorDetail = process.env.NODE_ENV === "development" ? responseText : "Detalhes omitidos no cliente."
+      console.error(`❌ Erro ao buscar bot na Evolution API (Status ${response.status}): ${errorDetail}`)
       return null
     }
 
@@ -267,7 +291,7 @@ export async function fetchEvolutionBotSettings(instanceName: string): Promise<a
     const config = await getEvolutionConfig()
     const url = `${config.apiUrl}/evolutionBot/fetchSettings/${instanceName}`
 
-    console.log("🌐 Fazendo requisição GET para:", url)
+    console.log("🌐 Fazendo requisição GET para o endpoint da Evolution API")
 
     const response = await fetch(url, {
       method: "GET",
@@ -277,11 +301,16 @@ export async function fetchEvolutionBotSettings(instanceName: string): Promise<a
     })
 
     const responseText = await response.text()
-    console.log(`📄 Resposta da Evolution API (Busca de Configurações - Status ${response.status}):`, responseText)
+    if (process.env.NODE_ENV === "development") {
+      console.log(`📄 Resposta da Evolution API (Busca de Configurações - Status ${response.status}):`, responseText)
+    } else {
+      console.log(`📄 Resposta da Evolution API (Busca de Configurações - Status ${response.status})`)
+    }
 
     if (!response.ok) {
+      const errorDetail = process.env.NODE_ENV === "development" ? responseText : "Detalhes omitidos no cliente."
       console.error(
-        `❌ Erro ao buscar configurações da instância na Evolution API (Status ${response.status}): ${responseText}`,
+        `❌ Erro ao buscar configurações da instância na Evolution API (Status ${response.status}): ${errorDetail}`,
       )
       return null
     }

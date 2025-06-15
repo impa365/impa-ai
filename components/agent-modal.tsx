@@ -205,7 +205,7 @@ export function AgentModal({
       if (data && data.config) setN8nIntegrationConfig(data.config)
       else console.warn("Configuração da integração n8n não encontrada.")
     } catch (err) {
-      console.error("Erro ao carregar configuração N8N:", err)
+      console.error("Erro ao carregar configuração N8N:", err?.message || err)
     }
   }
 
@@ -439,8 +439,7 @@ export function AgentModal({
         keepOpen: formData.model_config?.keep_open || false,
         debounceTime: formData.model_config?.debounce_time || 10,
         ignoreJids: formData.model_config?.ignore_jids || [],
-        splitMessages:
-          formData.model_config?.split_messages === undefined ? true : formData.model_config.split_messages,
+        splitMessages: formData.model_config?.split_messages === undefined ? true : formData.model_config.splitMessages,
         timePerChar: formData.model_config?.time_per_char || 100,
       }
 

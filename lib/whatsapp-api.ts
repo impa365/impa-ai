@@ -90,6 +90,9 @@ export async function createEvolutionInstance(
     } while (await checkInstanceExists(instanceName, token))
 
     // Criar instância na Evolution API
+    const apiUrl = integrationData.config.apiUrl
+    const maskedApiUrl = apiUrl.replace(/^(https?:\/\/)[^@/]+@/, "$1")
+
     const response = await fetch(`${integrationData.config.apiUrl}/instance/create`, {
       method: "POST",
       headers: {

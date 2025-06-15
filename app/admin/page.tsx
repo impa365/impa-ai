@@ -38,6 +38,7 @@ import {
   Bot,
   Smartphone,
   Activity,
+  Key,
 } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { db } from "@/lib/supabase"
@@ -354,6 +355,15 @@ export default function AdminDashboard() {
           <Button variant="outline" className="gap-2 text-gray-700 border-gray-300 hover:bg-gray-100">
             <Download className="w-4 h-4" />
             Exportar Relatório
+          </Button>
+          {/* Adicione este botão na seção de navegação rápida do dashboard */}
+          <Button
+            variant="outline"
+            className="gap-2 text-gray-700 border-gray-300 hover:bg-gray-100"
+            onClick={() => router.push("/admin/apikeys")}
+          >
+            <Key className="w-4 h-4" />
+            Gerenciar API Keys
           </Button>
           <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => updateURL("settings")}>
             <Settings className="w-4 h-4" />

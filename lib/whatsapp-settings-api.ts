@@ -238,7 +238,8 @@ export async function disconnectInstance(instanceName: string) {
     if (integrationData?.config?.apiUrl && integrationData?.config?.apiKey) {
       try {
         // Tentar desconectar via API
-        const response = await fetch(`${integrationData.config.apiUrl}/instance/logout/${instanceName}`, {
+        const apiUrl = `${integrationData.config.apiUrl}/instance/logout/${instanceName}`
+        const response = await fetch(apiUrl, {
           method: "DELETE",
           headers: {
             apikey: integrationData.config.apiKey,

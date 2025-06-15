@@ -474,7 +474,7 @@ export default function AdminSettingsPage() {
           throw error
         }
 
-        console.log("Integração atualizada:", data)
+        console.log("Integração atualizada:", data?.id || "Integração atualizada com sucesso")
       } else {
         // Criar nova integração
         const { data, error } = await (await db.integrations())
@@ -495,7 +495,7 @@ export default function AdminSettingsPage() {
           throw error
         }
 
-        console.log("Nova integração criada:", data)
+        console.log("Nova integração criada:", data?.id || "Nova integração criada com sucesso")
       }
 
       // Recarregar lista de integrações
@@ -504,7 +504,10 @@ export default function AdminSettingsPage() {
       setSaveMessage("Integração salva com sucesso!")
       setTimeout(() => setSaveMessage(""), 3000)
     } catch (error: any) {
-      console.error("Erro detalhado ao salvar integração:", error)
+      console.error(
+        "Erro detalhado ao salvar integração:",
+        error.message ? `Erro ao salvar integração: ${error.message}` : "Erro ao salvar integração",
+      )
       setSaveMessage(`Erro ao salvar integração: ${error.message}`)
       setTimeout(() => setSaveMessage(""), 5000)
     } finally {
@@ -528,7 +531,7 @@ export default function AdminSettingsPage() {
         throw error
       }
 
-      console.log("Integrações carregadas:", data)
+      console.log(`Integrações carregadas: ${data?.length} integrações`)
       if (data) setIntegrations(data)
     } catch (err) {
       console.error("Erro ao buscar integrações:", err)
