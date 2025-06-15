@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Users, Bot, MessageSquare, Settings, Home, LogOut, Shield, Menu, X, Key } from "lucide-react"
+import { Users, Bot, MessageSquare, Settings, Home, LogOut, Menu, X } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
 import { DynamicTitle } from "@/components/dynamic-title"
@@ -50,8 +50,6 @@ export default function AdminLayout({
     { href: "/admin/users", icon: Users, label: "Gerenciar Usuários" },
     { href: "/admin/agents", icon: Bot, label: "Agentes IA" },
     { href: "/admin/whatsapp", icon: MessageSquare, label: "Conexões WhatsApp" },
-    { href: "/admin/apikeys", icon: Key, label: "API Keys" },
-    { href: "/admin/administration", icon: Shield, label: "Administração Avançada" },
     { href: "/admin/settings", icon: Settings, label: "Configurações" },
   ]
 

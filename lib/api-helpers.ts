@@ -1,46 +1,7 @@
 import { db } from "@/lib/supabase" // Usando a nova estrutura do supabase.ts
-import type { NextRequest } from "next/server"
+// import type { NextRequest } from "next/server" // No longer needed for API key auth
 
-export interface AuthResult {
-  userId: string | null
-  isAdmin: boolean
-  error?: string
-  status?: number
-}
-
-export async function authenticateApiKey(req: NextRequest): Promise<AuthResult> {
-  const apiKey = req.headers.get("apikey")
-
-  if (!apiKey) {
-    return { userId: null, isAdmin: false, error: "API Key não fornecida.", status: 401 }
-  }
-
-  try {
-    const userApiKeysTable = await db.userApiKeys()
-    const { data: keyData, error: keyError } = await userApiKeysTable
-      .select("user_id, is_admin_key, is_active, expires_at")
-      .eq("api_key", apiKey)
-      .single() // API keys devem ser únicas
-
-    if (keyError || !keyData) {
-      console.error("Erro ao buscar API key ou chave não encontrada:", keyError?.message)
-      return { userId: null, isAdmin: false, error: "API Key inválida ou não encontrada.", status: 403 }
-    }
-
-    if (!keyData.is_active) {
-      return { userId: null, isAdmin: false, error: "API Key inativa.", status: 403 }
-    }
-
-    if (keyData.expires_at && new Date(keyData.expires_at) < new Date()) {
-      return { userId: null, isAdmin: false, error: "API Key expirada.", status: 403 }
-    }
-
-    return { userId: keyData.user_id, isAdmin: keyData.is_admin_key === true, error: undefined, status: 200 }
-  } catch (error: any) {
-    console.error("Erro interno ao autenticar API key:", error.message)
-    return { userId: null, isAdmin: false, error: "Erro interno do servidor ao validar API Key.", status: 500 }
-  }
-}
+// AuthResult interface and authenticateApiKey function have been removed
 
 export async function getDefaultModel(): Promise<string | null> {
   try {

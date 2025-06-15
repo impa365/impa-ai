@@ -5,7 +5,7 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Home, Bot, Cog, LogOut, Smartphone, Key } from "lucide-react"
+import { Home, Bot, Cog, LogOut, Smartphone } from "lucide-react"
 import { getCurrentUser, signOut } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
 import { DynamicTitle } from "@/components/dynamic-title"
@@ -49,7 +49,6 @@ export default function DashboardLayout({
     { icon: Home, label: "Dashboard", href: "/dashboard", active: pathname === "/dashboard" },
     { icon: Bot, label: "Agentes IA", href: "/dashboard/agents", active: pathname === "/dashboard/agents" },
     { icon: Smartphone, label: "WhatsApp", href: "/dashboard/whatsapp", active: pathname === "/dashboard/whatsapp" },
-    { icon: Key, label: "API Keys", href: "/dashboard/apikeys", active: pathname === "/dashboard/apikeys" },
     { icon: Cog, label: "Configurações", href: "/dashboard/settings", active: pathname === "/dashboard/settings" },
   ]
 

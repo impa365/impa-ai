@@ -86,7 +86,7 @@ export const db = {
   integrations: async () => await getTable("integrations"),
   vectorStores: async () => await getTable("vector_stores"),
   vectorDocuments: async () => await getTable("vector_documents"),
-  apiKeys: async () => await getTable("user_api_keys"),
+  // apiKeys: async () => await getTable("user_api_keys"), // Removed this line
   organizations: async () => await getTable("organizations"),
   dailyMetrics: async () => await getTable("daily_metrics"),
 
