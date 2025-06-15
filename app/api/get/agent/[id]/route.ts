@@ -4,19 +4,19 @@ import { db } from "@/lib/supabase"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const apiKey = request.headers.get("apikey")
+    // REMOVER: const apiKey = request.headers.get("apikey")
+    // REMOVER: if (!apiKey) { ... }
 
-    if (!apiKey) {
-      return NextResponse.json({ error: "API key é obrigatória" }, { status: 401 })
+    // ALTERAR PARA:
+    const validation = await validateApiKey(request)
+
+    if (!validation.isValid || !validation.user) {
+      return NextResponse.json({ error: validation.error || "Falha na autenticação da API key" }, { status: 401 })
     }
 
-    // Validar API key
-    const validation = await validateApiKey(apiKey)
-    if (!validation.isValid) {
-      return NextResponse.json({ error: validation.error }, { status: 401 })
-    }
+    const { user } = validation // Extrair o usuário validado
+    // REMOVER: const { user, apiKeyData } = validation (apiKeyData não é mais retornado assim)
 
-    const { user, apiKeyData } = validation
     const agentId = params.id
 
     // Buscar modelo padrão do sistema
@@ -34,8 +34,17 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    // Verificar permissões de acesso
-    if (!canAccessAgent(user!.role, apiKeyData!.is_admin_key, agent.user_id, user!.id)) {
+    // ALTERAR LÓGICA DE PERMISSÃO:
+    // A função canAccessAgent espera isAdminKey. Vamos inferir isso.
+    // Se a API key pertencer a um usuário admin, ou se a própria chave tiver um status de admin.
+    // A função validateApiKey em lib/api-auth.ts não retorna is_admin_key diretamente.
+    // Vamos assumir por agora que se o user.role é 'admin', a chave tem privilégios de admin.
+    // Para uma lógica mais granular, a tabela user_api_keys precisaria de uma coluna is_admin_key
+    // e validateApiKey precisaria retorná-la.
+    // Por simplicidade, usaremos user.role.
+    const isAdminAccess = user.role === "admin"
+
+    if (!canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)) {
       return NextResponse.json({ error: "Sem permissão para acessar este agente" }, { status: 403 })
     }
 
