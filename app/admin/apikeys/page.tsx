@@ -37,6 +37,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { createClient } from "@supabase/supabase-js"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { getConfig } from "@/lib/config"
 
 interface ApiKey {
   id: string
@@ -68,6 +69,7 @@ export default function AdminApiKeysPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
+  const [supabaseClient, setSupabaseClient] = useState<any>(null)
   const router = useRouter()
 
   // Modal states
@@ -98,37 +100,65 @@ export default function AdminApiKeysPage() {
       return
     }
     setUser(currentUser)
-    loadData()
+    initializeSupabase()
   }, [router])
 
-  const loadData = async () => {
+  const initializeSupabase = async () => {
+    try {
+      console.log("🔧 Initializing Supabase client for API Keys page...")
+      const config = await getConfig()
+
+      if (!config.supabaseUrl || !config.supabaseAnonKey) {
+        console.error("❌ Supabase configuration missing:", {
+          url: !!config.supabaseUrl,
+          key: !!config.supabaseAnonKey,
+        })
+        setMessage("Erro de configuração do Supabase.")
+        setLoading(false)
+        return
+      }
+
+      console.log("✅ Creating Supabase client with config:", {
+        url: config.supabaseUrl,
+        keyLength: config.supabaseAnonKey.length,
+      })
+
+      const client = createClient(config.supabaseUrl, config.supabaseAnonKey, {
+        db: { schema: "impaai" },
+      })
+
+      setSupabaseClient(client)
+      await loadData(client)
+    } catch (error) {
+      console.error("❌ Error initializing Supabase:", error)
+      setMessage("Erro ao inicializar conexão com o banco de dados")
+      setLoading(false)
+    }
+  }
+
+  const loadData = async (client: any) => {
+    if (!client) {
+      console.error("❌ No Supabase client available")
+      return
+    }
+
     setLoading(true)
     try {
-      await Promise.all([fetchApiKeys(), fetchUsers()])
+      await Promise.all([fetchApiKeys(client), fetchUsers(client)])
     } catch (error) {
-      console.error("Erro ao carregar dados:", error)
+      console.error("❌ Erro ao carregar dados:", error)
       setMessage("Erro ao carregar dados")
     } finally {
       setLoading(false)
     }
   }
 
-  const fetchApiKeys = async () => {
+  const fetchApiKeys = async (client: any) => {
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-      if (!supabaseUrl || !supabaseAnonKey) {
-        console.error("Supabase URL or Anon Key is missing.")
-        setMessage("Erro de configuração do Supabase.")
-        return
-      }
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        db: { schema: "impaai" },
-      })
+      console.log("🔍 Fetching API keys...")
 
       // Buscar API keys com informações do usuário
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from("user_api_keys")
         .select(`
         id,
@@ -147,7 +177,12 @@ export default function AdminApiKeysPage() {
       `)
         .order("created_at", { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error("❌ Error fetching API keys:", error)
+        throw error
+      }
+
+      console.log("✅ API keys fetched:", data?.length || 0)
 
       // Transformar os dados para o formato esperado
       const transformedKeys: ApiKey[] =
@@ -158,34 +193,31 @@ export default function AdminApiKeysPage() {
 
       setApiKeys(transformedKeys)
     } catch (error) {
-      console.error("Erro ao buscar API keys:", error)
+      console.error("❌ Erro ao buscar API keys:", error)
+      setMessage("Erro ao buscar API keys")
     }
   }
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (client: any) => {
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      console.log("🔍 Fetching users...")
 
-      if (!supabaseUrl || !supabaseAnonKey) {
-        console.error("Supabase URL or Anon Key is missing.")
-        setMessage("Erro de configuração do Supabase.")
-        return
-      }
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        db: { schema: "impaai" },
-      })
-
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from("user_profiles")
         .select("id, full_name, email, role")
         .eq("status", "active")
         .order("full_name", { ascending: true })
 
-      if (error) throw error
+      if (error) {
+        console.error("❌ Error fetching users:", error)
+        throw error
+      }
+
+      console.log("✅ Users fetched:", data?.length || 0)
       setUsers(data || [])
     } catch (error) {
-      console.error("Erro ao buscar usuários:", error)
+      console.error("❌ Erro ao buscar usuários:", error)
+      setMessage("Erro ao buscar usuários")
     }
   }
 
@@ -204,24 +236,19 @@ export default function AdminApiKeysPage() {
       return
     }
 
+    if (!supabaseClient) {
+      setMessage("Erro de conexão com o banco de dados")
+      return
+    }
+
     setSaving(true)
     setMessage("")
 
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-      if (!supabaseUrl || !supabaseAnonKey) {
-        console.error("Supabase URL or Anon Key is missing.")
-        setMessage("Erro de configuração do Supabase.")
-        return
-      }
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        db: { schema: "impaai" },
-      })
+      console.log("🔧 Creating new API key...")
       const newApiKey = generateApiKey()
 
-      const { error } = await supabase.from("user_api_keys").insert({
+      const { error } = await supabaseClient.from("user_api_keys").insert({
         user_id: createForm.user_id,
         name: createForm.name.trim(),
         api_key: newApiKey,
@@ -233,14 +260,18 @@ export default function AdminApiKeysPage() {
         access_scope: "user",
       })
 
-      if (error) throw error
+      if (error) {
+        console.error("❌ Error creating API key:", error)
+        throw error
+      }
 
-      await fetchApiKeys()
+      console.log("✅ API key created successfully")
+      await fetchApiKeys(supabaseClient)
       setCreateModalOpen(false)
       setCreateForm({ user_id: "", name: "", description: "" })
       toast.success("API Key criada com sucesso!")
     } catch (error) {
-      console.error("Erro ao criar API key:", error)
+      console.error("❌ Erro ao criar API key:", error)
       setMessage("Erro ao criar API key")
     } finally {
       setSaving(false)
@@ -248,32 +279,26 @@ export default function AdminApiKeysPage() {
   }
 
   const handleDeleteApiKey = async () => {
-    if (!selectedApiKey) return
+    if (!selectedApiKey || !supabaseClient) return
 
     setSaving(true)
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      console.log("🗑️ Deleting API key:", selectedApiKey.id)
 
-      if (!supabaseUrl || !supabaseAnonKey) {
-        console.error("Supabase URL or Anon Key is missing.")
-        setMessage("Erro de configuração do Supabase.")
-        return
+      const { error } = await supabaseClient.from("user_api_keys").delete().eq("id", selectedApiKey.id)
+
+      if (error) {
+        console.error("❌ Error deleting API key:", error)
+        throw error
       }
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        db: { schema: "impaai" },
-      })
 
-      const { error } = await supabase.from("user_api_keys").delete().eq("id", selectedApiKey.id)
-
-      if (error) throw error
-
-      await fetchApiKeys()
+      console.log("✅ API key deleted successfully")
+      await fetchApiKeys(supabaseClient)
       setDeleteModalOpen(false)
       setSelectedApiKey(null)
       toast.success("API Key excluída com sucesso!")
     } catch (error) {
-      console.error("Erro ao excluir API key:", error)
+      console.error("❌ Erro ao excluir API key:", error)
       setMessage("Erro ao excluir API key")
     } finally {
       setSaving(false)
