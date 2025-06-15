@@ -8,7 +8,6 @@ export async function GET(request: NextRequest) {
     const authResult = await validateApiKey(request)
 
     if (!authResult.isValid || !authResult.user) {
-      // Adicionada verificação para authResult.user
       return NextResponse.json(
         {
           error: authResult.error || "Unauthorized",
@@ -35,7 +34,7 @@ export async function GET(request: NextRequest) {
 
     // Buscar agentes do usuário
     let query = supabase
-      .from("ai_agents") // Confirme se o nome da tabela está correto
+      .from("ai_agents")
       .select(`
         id,
         name,
@@ -44,7 +43,7 @@ export async function GET(request: NextRequest) {
         training_prompt,
         temperature,
         max_tokens,
-        is_active,
+        status, 
         created_at,
         updated_at,
         user_id, 
@@ -54,10 +53,8 @@ export async function GET(request: NextRequest) {
         total_messages,
         performance_score
       `)
-      .eq("is_active", true)
+      .eq("status", "active") // Corrigido de is_active para status e true para "active"
 
-    // Se não for admin, filtrar apenas agentes do usuário
-    // Certifique-se que user.id e user.role estão corretos e disponíveis
     if (user.role !== "admin") {
       if (!user.id) {
         console.error("User ID is missing for non-admin role.")
@@ -73,14 +70,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Failed to fetch agents",
-          details: dbError.message, // Adiciona detalhes do erro do Supabase
+          details: dbError.message,
           hint: dbError.hint,
         },
         { status: 500 },
       )
     }
 
-    // Formatar resposta para incluir estatísticas e outros campos relevantes
     const formattedAgents =
       agents?.map((agent) => ({
         id: agent.id,
@@ -90,7 +86,7 @@ export async function GET(request: NextRequest) {
         training_prompt: agent.training_prompt,
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
-        is_active: agent.is_active,
+        status: agent.status, // Corrigido de is_active para status
         created_at: agent.created_at,
         updated_at: agent.updated_at,
         user_id: agent.user_id,
@@ -114,12 +110,11 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error: any) {
-    // Especificar o tipo do erro se possível
     console.error("API Route Error in /api/get-all/agent:", error)
     return NextResponse.json(
       {
         error: "Internal server error",
-        message: error.message, // Adiciona a mensagem do erro genérico
+        message: error.message,
       },
       { status: 500 },
     )
