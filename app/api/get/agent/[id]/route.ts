@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { validateApiKey, canAccessAgent } from "@/lib/api-auth"
-import { db } from "@/lib/supabase" // Assumindo que db é o cliente Supabase ou uma factory
+import { db } from "@/lib/supabase" // db é o nosso objeto de helpers
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -13,18 +13,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const { user } = validation
     const agentId = params.id
 
-    // Obter o cliente Supabase (ajuste conforme a implementação de @/lib/supabase)
-    // Se 'db' já for o cliente, pode usar diretamente. Se for uma função, chame-a.
-    // Exemplo: const supabase = db; ou const supabase = await db();
-    // Para este exemplo, vou assumir que 'db' pode ser usado para 'from' diretamente
-    // ou que existe uma função getClient() ou similar.
-    // A forma mais comum é que 'db' já seja o cliente Supabase.
-
-    const supabaseClient = db // Ajuste se 'db' for uma função como db() ou db.getClient()
-
     // Buscar agente específico da tabela 'ai_agents' e fazer join com 'user_profiles'
-    const { data: agent, error: agentError } = await supabaseClient
-      .from("ai_agents")
+    // Usando o helper db.agents() que aponta para a tabela correta com o schema correto.
+    const { data: agent, error: agentError } = await (await db.agents())
       .select(`
         *,
         user_profiles (
@@ -37,20 +28,27 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .single()
 
     if (agentError || !agent) {
-      console.error("Erro ao buscar agente ou agente não encontrado:", agentError?.message)
+      console.error(`Agente não encontrado com ID: ${agentId}. Erro: ${agentError?.message}`)
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    // Buscar modelo padrão do sistema (esta parte parece OK, mas verificando a tabela)
-    // Assumindo que 'agent_system_settings' é a tabela correta para 'default_model'
-    const { data: defaultModelData, error: modelError } = await supabaseClient
-      .from("agent_system_settings") // Corrigido para agent_system_settings
+    // Buscar modelo padrão do sistema. O código original usa db.users() para isso.
+    // Isso implica que a tabela user_profiles (ou a que db.users() aponta)
+    // tem as colunas setting_key e setting_value.
+    const { data: defaultModelData, error: modelError } = await (await db.users())
       .select("setting_value")
       .eq("setting_key", "default_model")
+      .eq("id", user.id) // Assumindo que é uma configuração por usuário, ou remover .eq("id", user.id) se for global em user_profiles
       .single()
 
+    // Se for uma configuração global do sistema, o ideal seria usar db.systemSettings()
+    // const { data: defaultModelData, error: modelError } = await (await db.systemSettings())
+    //   .select("setting_value")
+    //   .eq("setting_key", "default_model")
+    //   .single();
+
     if (modelError && modelError.code !== "PGRST116") {
-      // PGRST116 = single row not found, o que é ok se não houver default
+      // PGRST116: Single row not found
       console.error("Erro ao buscar modelo padrão:", modelError?.message)
     }
     const defaultModel = defaultModelData?.setting_value || "gpt-4o-mini"
@@ -62,8 +60,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     let whatsappConnection = null
     if (agent.whatsapp_connection_id) {
-      const { data: connectionData, error: connError } = await supabaseClient
-        .from("whatsapp_connections") // Corrigido para whatsapp_connections
+      const { data: connectionData, error: connError } = await (await db.whatsappConnections())
         .select("id, instance_name, status, phone_number, connection_name")
         .eq("id", agent.whatsapp_connection_id)
         .single()
@@ -126,7 +123,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         whatsapp_connection: whatsappConnection,
         owner: agent.user_profiles
           ? {
-              // Verificar se user_profiles existe
               id: agent.user_profiles.id,
               name: agent.user_profiles.name,
               email: agent.user_profiles.email,
@@ -138,7 +134,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         access_scope: user!.role === "admin" ? "admin" : "user",
         requester: {
           id: user!.id,
-          name: user!.name,
+          name: user!.name, // Assumindo que 'name' existe em user, senão user.full_name
           role: user!.role,
         },
       },
