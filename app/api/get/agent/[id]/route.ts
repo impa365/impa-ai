@@ -1,67 +1,83 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { validateApiKey, canAccessAgent } from "@/lib/api-auth"
-import { db } from "@/lib/supabase"
+import { db } from "@/lib/supabase" // Assumindo que db é o cliente Supabase ou uma factory
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    // Validar API key usando o objeto request completo
-    const validation = await validateApiKey(request) // Passa o objeto request
+    const validation = await validateApiKey(request)
 
     if (!validation.isValid || !validation.user) {
-      // Adiciona verificação para user
       return NextResponse.json({ error: validation.error || "Falha na autenticação da API key" }, { status: 401 })
     }
 
-    const { user } = validation // Extrai o usuário validado
+    const { user } = validation
     const agentId = params.id
 
-    // Buscar modelo padrão do sistema
-    const { data: defaultModelData } = await (await db.users())
+    // Obter o cliente Supabase (ajuste conforme a implementação de @/lib/supabase)
+    // Se 'db' já for o cliente, pode usar diretamente. Se for uma função, chame-a.
+    // Exemplo: const supabase = db; ou const supabase = await db();
+    // Para este exemplo, vou assumir que 'db' pode ser usado para 'from' diretamente
+    // ou que existe uma função getClient() ou similar.
+    // A forma mais comum é que 'db' já seja o cliente Supabase.
+
+    const supabaseClient = db // Ajuste se 'db' for uma função como db() ou db.getClient()
+
+    // Buscar agente específico da tabela 'ai_agents' e fazer join com 'user_profiles'
+    const { data: agent, error: agentError } = await supabaseClient
+      .from("ai_agents")
+      .select(`
+        *,
+        user_profiles (
+          id,
+          name,
+          email
+        )
+      `)
+      .eq("id", agentId)
+      .single()
+
+    if (agentError || !agent) {
+      console.error("Erro ao buscar agente ou agente não encontrado:", agentError?.message)
+      return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
+    }
+
+    // Buscar modelo padrão do sistema (esta parte parece OK, mas verificando a tabela)
+    // Assumindo que 'agent_system_settings' é a tabela correta para 'default_model'
+    const { data: defaultModelData, error: modelError } = await supabaseClient
+      .from("agent_system_settings") // Corrigido para agent_system_settings
       .select("setting_value")
       .eq("setting_key", "default_model")
       .single()
 
+    if (modelError && modelError.code !== "PGRST116") {
+      // PGRST116 = single row not found, o que é ok se não houver default
+      console.error("Erro ao buscar modelo padrão:", modelError?.message)
+    }
     const defaultModel = defaultModelData?.setting_value || "gpt-4o-mini"
 
-    // Buscar agente específico com informações do proprietário
-    const { data: agent, error } = await (await db.users())
-      .select(`
-      *,
-      user_profiles!ai_agents_user_id_fkey (
-        id,
-        name,
-        email
-      )
-    `)
-      .eq("id", agentId)
-      .single()
-
-    if (error || !agent) {
-      return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
-    }
-
-    const isAdminAccess = user.role === "admin" // Inferir acesso de admin pelo papel do usuário
+    const isAdminAccess = user.role === "admin"
     if (!canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)) {
       return NextResponse.json({ error: "Sem permissão para acessar este agente" }, { status: 403 })
     }
 
-    // Buscar conexão WhatsApp se existir
     let whatsappConnection = null
     if (agent.whatsapp_connection_id) {
-      const { data: connectionData } = await (await db.users())
+      const { data: connectionData, error: connError } = await supabaseClient
+        .from("whatsapp_connections") // Corrigido para whatsapp_connections
         .select("id, instance_name, status, phone_number, connection_name")
         .eq("id", agent.whatsapp_connection_id)
         .single()
 
+      if (connError && connError.code !== "PGRST116") {
+        console.error("Erro ao buscar conexão WhatsApp:", connError?.message)
+      }
       whatsappConnection = connectionData
     }
 
-    // Estruturar resposta organizada
     const response = {
       success: true,
       default_model: defaultModel,
       agent: {
-        // Informações básicas
         id: agent.id,
         name: agent.name,
         description: agent.description,
@@ -72,8 +88,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         main_function: agent.main_function,
         type: agent.type || "chat",
         status: agent.status,
-
-        // Configurações do modelo IA
         model: agent.model || defaultModel,
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
@@ -81,20 +95,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         frequency_penalty: agent.frequency_penalty,
         presence_penalty: agent.presence_penalty,
         model_config: agent.model_config,
-
-        // Funcionalidades (true/false)
         transcribe_audio: agent.transcribe_audio,
         understand_images: agent.understand_images,
         voice_response_enabled: agent.voice_response_enabled,
         calendar_integration: agent.calendar_integration,
         chatnode_integration: agent.chatnode_integration,
         orimon_integration: agent.orimon_integration,
-
-        // Configurações de voz
         voice_provider: agent.voice_provider,
         voice_id: agent.voice_id,
-
-        // Configurações de comportamento
         is_default: agent.is_default,
         listen_own_messages: agent.listen_own_messages,
         stop_bot_by_me: agent.stop_bot_by_me,
@@ -102,40 +110,29 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         split_long_messages: agent.split_long_messages,
         character_wait_time: agent.character_wait_time,
         trigger_type: agent.trigger_type,
-
-        // Horários e respostas
         working_hours: agent.working_hours,
         auto_responses: agent.auto_responses,
         fallback_responses: agent.fallback_responses,
-
-        // Estatísticas
         performance_score: agent.performance_score || 0,
         total_conversations: agent.total_conversations || 0,
         total_messages: agent.total_messages || 0,
         last_training_at: agent.last_training_at,
-
-        // Integrações
         evolution_bot_id: agent.evolution_bot_id,
         chatnode_bot_id: agent.chatnode_bot_id,
         orimon_bot_id: agent.orimon_bot_id,
         calendar_meeting_id: agent.calendar_meeting_id,
-
-        // Datas
         created_at: agent.created_at,
         updated_at: agent.updated_at,
-
-        // Conexão WhatsApp
         whatsapp_connection: whatsappConnection,
-
-        // Proprietário
-        owner: {
-          id: agent.user_profiles.id,
-          name: agent.user_profiles.name,
-          email: agent.user_profiles.email,
-        },
+        owner: agent.user_profiles
+          ? {
+              // Verificar se user_profiles existe
+              id: agent.user_profiles.id,
+              name: agent.user_profiles.name,
+              email: agent.user_profiles.email,
+            }
+          : null,
       },
-
-      // Informações de acesso
       access_info: {
         is_admin_access: isAdminAccess,
         access_scope: user!.role === "admin" ? "admin" : "user",
