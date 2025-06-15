@@ -1,65 +1,69 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { validateApiKey, canAccessAgent } from "@/lib/api-auth"
+import { validateApiKey } from "@/lib/api-auth" // canAccessAgent pode precisar de ajuste ou remoção se a lógica mudar
 import { db } from "@/lib/supabase"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    // REMOVER: const apiKey = request.headers.get("apikey")
-    // REMOVER: if (!apiKey) { ... }
-
-    // ALTERAR PARA:
     const validation = await validateApiKey(request)
 
     if (!validation.isValid || !validation.user) {
       return NextResponse.json({ error: validation.error || "Falha na autenticação da API key" }, { status: 401 })
     }
 
-    const { user } = validation // Extrair o usuário validado
-    // REMOVER: const { user, apiKeyData } = validation (apiKeyData não é mais retornado assim)
-
+    const { user: requestingUser } = validation // Usuário que está fazendo a requisição
     const agentId = params.id
 
-    // Buscar modelo padrão do sistema
-    const { data: defaultModelData } = await (await db.users())
-      .select("setting_value")
-      .eq("setting_key", "default_model")
+    // Buscar agente específico
+    const { data: agent, error: agentError } = await (await db.agents())
+      .select(`
+        *,
+        user_profiles (id, full_name, email, role),
+        whatsapp_connections (id, instance_name, status, phone_number, name)
+      `)
+      .eq("id", agentId)
       .single()
 
-    const defaultModel = defaultModelData?.setting_value || "gpt-4o-mini"
-
-    // Buscar agente específico
-    const { data: agent, error } = await (await db.users()).select("*").eq("id", agentId).single()
-
-    if (error || !agent) {
+    if (agentError || !agent) {
+      console.error("Erro ao buscar agente ou agente não encontrado:", agentError)
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    // ALTERAR LÓGICA DE PERMISSÃO:
-    // A função canAccessAgent espera isAdminKey. Vamos inferir isso.
-    // Se a API key pertencer a um usuário admin, ou se a própria chave tiver um status de admin.
-    // A função validateApiKey em lib/api-auth.ts não retorna is_admin_key diretamente.
-    // Vamos assumir por agora que se o user.role é 'admin', a chave tem privilégios de admin.
-    // Para uma lógica mais granular, a tabela user_api_keys precisaria de uma coluna is_admin_key
-    // e validateApiKey precisaria retorná-la.
-    // Por simplicidade, usaremos user.role.
-    const isAdminAccess = user.role === "admin"
+    // Informações do proprietário do agente
+    const ownerInfo = agent.user_profiles
+      ? {
+          id: agent.user_profiles.id,
+          name: agent.user_profiles.full_name,
+          email: agent.user_profiles.email,
+        }
+      : null
 
-    if (!canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)) {
+    // Informações da conexão WhatsApp
+    const whatsappConnectionInfo = agent.whatsapp_connections
+      ? {
+          id: agent.whatsapp_connections.id,
+          status: agent.whatsapp_connections.status,
+          phone_number: agent.whatsapp_connections.phone_number,
+          instance_name: agent.whatsapp_connections.instance_name,
+          connection_name: agent.whatsapp_connections.name, // Assumindo que 'name' é o nome da conexão
+        }
+      : null
+
+    // Buscar modelo padrão do sistema (se necessário, ou pode ser removido se o agente sempre tiver um modelo)
+    const { data: defaultModelData } = await (await db.systemSettings())
+      .select("setting_value")
+      .eq("setting_key", "default_model")
+      .single()
+    const defaultModel = defaultModelData?.setting_value || "gpt-4o-mini"
+
+    // Lógica de permissão de acesso (simplificada)
+    // Um admin pode ver tudo. Um usuário pode ver seus próprios agentes.
+    const isAdminAccess = requestingUser.role === "admin"
+    const canViewAgent = isAdminAccess || agent.user_id === requestingUser.id
+
+    if (!canViewAgent) {
       return NextResponse.json({ error: "Sem permissão para acessar este agente" }, { status: 403 })
     }
 
-    // Buscar conexão WhatsApp se existir
-    let whatsappConnection = null
-    if (agent.whatsapp_connection_id) {
-      const { data: connectionData } = await (await db.users())
-        .select("instance_name, status, qr_code")
-        .eq("id", agent.whatsapp_connection_id)
-        .single()
-
-      whatsappConnection = connectionData
-    }
-
-    // Formatar resposta detalhada
     const detailedAgent = {
       id: agent.id,
       name: agent.name,
@@ -69,91 +73,81 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       training_prompt: agent.training_prompt,
       voice_tone: agent.voice_tone,
       main_function: agent.main_function,
+      type: agent.type || "chat",
 
-      // Configurações do modelo
-      model: agent.model || defaultModel,
-      temperature: agent.temperature,
-      max_tokens: agent.max_tokens,
-      top_p: agent.top_p,
-      frequency_penalty: agent.frequency_penalty,
-      presence_penalty: agent.presence_penalty,
-
-      // Funcionalidades
-      features: {
-        transcribe_audio: {
-          enabled: agent.transcribe_audio,
-          description: agent.transcribe_audio ? "Transcrição de áudio ativada" : "Transcrição de áudio desativada",
-        },
-        understand_images: {
-          enabled: agent.understand_images,
-          description: agent.understand_images ? "Análise de imagens ativada" : "Análise de imagens desativada",
-        },
-        voice_response_enabled: {
-          enabled: agent.voice_response_enabled,
-          description: agent.voice_response_enabled ? "Respostas por voz ativadas" : "Respostas por voz desativadas",
-          voice_provider: agent.voice_provider,
-          voice_id: agent.voice_id,
-        },
-        calendar_integration: {
-          enabled: agent.calendar_integration,
-          description: agent.calendar_integration
-            ? "Integração com calendário ativada"
-            : "Integração com calendário desativada",
-        },
-        chatnode_integration: {
-          enabled: agent.chatnode_integration,
-          description: agent.chatnode_integration
-            ? "Integração com ChatNode ativada"
-            : "Integração com ChatNode desativada",
-        },
-        orimon_integration: {
-          enabled: agent.orimon_integration,
-          description: agent.orimon_integration ? "Integração com Orimon ativada" : "Integração com Orimon desativada",
-        },
+      model_settings: {
+        model: agent.model || defaultModel,
+        temperature: agent.temperature,
+        max_tokens: agent.max_tokens,
+        top_p: agent.top_p,
+        frequency_penalty: agent.frequency_penalty,
+        presence_penalty: agent.presence_penalty,
       },
 
-      // Configurações de comportamento
+      features: {
+        transcribe_audio: agent.transcribe_audio,
+        understand_images: agent.understand_images,
+        voice_response_enabled: agent.voice_response_enabled,
+        voice_provider: agent.voice_provider,
+        voice_id: agent.voice_id,
+        calendar_integration: agent.calendar_integration,
+        chatnode_integration: agent.chatnode_integration, // Supondo que este campo exista
+        orimon_integration: agent.orimon_integration, // Supondo que este campo exista
+      },
+
       behavior: {
         is_default: agent.is_default,
-        listen_own_messages: agent.listen_own_messages,
+        listening_from_me: agent.listen_own_messages, // Mapeado de listen_own_messages
         stop_bot_by_me: agent.stop_bot_by_me,
         keep_conversation_open: agent.keep_conversation_open,
         split_long_messages: agent.split_long_messages,
         character_wait_time: agent.character_wait_time,
         trigger_type: agent.trigger_type,
+        activation_keyword: agent.trigger_type === "keyword" ? agent.trigger_keyword : null, // Mapeado de trigger_keyword
       },
 
-      // Horário de funcionamento
-      working_hours: agent.working_hours,
+      working_hours: agent.working_hours, // Assumindo que é um JSON ou objeto
+      auto_responses: agent.auto_responses, // Assumindo que é um JSON ou objeto
+      fallback_responses: agent.fallback_responses, // Assumindo que é um JSON ou objeto
 
-      // Respostas automáticas
-      auto_responses: agent.auto_responses,
-      fallback_responses: agent.fallback_responses,
-
-      // WhatsApp
-      whatsapp_connection: whatsappConnection,
+      whatsapp_connection: whatsappConnectionInfo,
       evolution_bot_id: agent.evolution_bot_id,
 
-      // Status e estatísticas
-      status: agent.status,
-      performance_score: agent.performance_score || 0,
-      total_conversations: agent.total_conversations || 0,
-      total_messages: agent.total_messages || 0,
-      last_training_at: agent.last_training_at,
+      statistics: {
+        status: agent.status,
+        performance_score: agent.performance_score || 0,
+        total_conversations: agent.total_conversations || 0,
+        total_messages: agent.total_messages || 0,
+      },
 
-      // Metadados
-      created_at: agent.created_at,
-      updated_at: agent.updated_at,
-      type: agent.type || "chat",
+      owner: ownerInfo,
+
+      metadata: {
+        created_at: agent.created_at,
+        updated_at: agent.updated_at,
+        last_training_at: agent.last_training_at,
+      },
+
+      access_info: {
+        is_admin_access: isAdminAccess, // Se o requisitante é admin
+        access_scope: requestingUser.role, // Papel do requisitante
+        requester: {
+          id: requestingUser.id,
+          name: requestingUser.full_name, // Assumindo que full_name está no objeto user de validateApiKey
+          role: requestingUser.role,
+        },
+      },
+      // recent_activity: [], // Para adicionar depois, se necessário (requer query adicional)
     }
 
     return NextResponse.json({
       success: true,
-      default_model: defaultModel,
       agent: detailedAgent,
     })
   } catch (error) {
     console.error("Erro na API get agent:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    // Verifica se o erro é uma instância de Error para acessar a propriedade message
+    const errorMessage = error instanceof Error ? error.message : "Erro interno do servidor"
+    return NextResponse.json({ error: "Erro interno do servidor", details: errorMessage }, { status: 500 })
   }
 }
