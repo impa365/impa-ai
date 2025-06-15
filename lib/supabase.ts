@@ -1,46 +1,55 @@
 // lib/supabase.ts
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-import { supabaseConfig, TABLES } from "./supabase-config" // Importar TABLES
+import { supabaseConfig, TABLES } from "./supabase-config"
+import { getConfig } from "./config"
 
 let clientInstance: SupabaseClient | null = null
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+let serverClientInstance: SupabaseClient | null = null
 
+// Cliente para uso no browser (busca config dinamicamente)
 export async function getSupabase(): Promise<SupabaseClient> {
   if (clientInstance) {
     return clientInstance
   }
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("Supabase URL or Anon Key is missing. Check environment variables.")
-    throw new Error("Supabase URL or Anon Key is not configured.")
-  }
-
   try {
-    clientInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    // Buscar configuração dinamicamente
+    const config = await getConfig()
+
+    if (!config.supabaseUrl || !config.supabaseAnonKey) {
+      throw new Error("Supabase configuration is missing")
+    }
+
+    console.log("🔧 Creating Supabase client with dynamic config")
+
+    clientInstance = createClient(config.supabaseUrl, config.supabaseAnonKey, {
       db: { schema: supabaseConfig.schema || "public" },
       global: { headers: supabaseConfig.headers || {} },
     })
+
+    return clientInstance
   } catch (error) {
-    console.error("Error creating Supabase client:", error)
+    console.error("❌ Error creating Supabase client:", error)
     throw error
   }
-
-  return clientInstance
 }
 
-let serverClientInstance: SupabaseClient | null = null
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
+// Cliente admin para uso no servidor (lê variáveis diretamente)
 export function getSupabaseAdmin(): SupabaseClient {
   if (serverClientInstance) {
     return serverClientInstance
   }
 
+  // No servidor, ler diretamente das variáveis de ambiente
+  const supabaseUrl = process.env.SUPABASE_URL
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
   if (!supabaseUrl || !supabaseServiceRoleKey) {
-    console.error("Supabase URL or Service Role Key is missing for admin client.")
-    throw new Error("Supabase URL or Service Role Key is not configured for admin client.")
+    console.error("❌ Missing Supabase admin configuration")
+    throw new Error("Supabase admin configuration is missing")
   }
+
+  console.log("🔧 Creating Supabase admin client")
 
   serverClientInstance = createClient(supabaseUrl, supabaseServiceRoleKey, {
     db: { schema: supabaseConfig.schema || "public" },
@@ -50,6 +59,7 @@ export function getSupabaseAdmin(): SupabaseClient {
       persistSession: false,
     },
   })
+
   return serverClientInstance
 }
 
@@ -86,11 +96,10 @@ export const supabase = {
       const client = await getSupabase()
       return client.auth.signOut()
     },
-    // Adicione outras funções de auth conforme necessário
   },
 }
 
-// Export 'db' para acesso tipado às tabelas (exemplo)
+// Export 'db' para acesso tipado às tabelas
 export const db = {
   users: async () => getTable(TABLES.USER_PROFILES),
   agents: async () => getTable(TABLES.AI_AGENTS),
@@ -105,18 +114,31 @@ export const db = {
   apiKeys: async () => getTable(TABLES.USER_API_KEYS),
   organizations: async () => getTable(TABLES.ORGANIZATIONS),
   dailyMetrics: async () => getTable(TABLES.DAILY_METRICS),
-  // Adicione outras tabelas conforme o objeto TABLES
-  rpc: supabase.rpc, // Reutilizar a função rpc do objeto supabase
+  rpc: supabase.rpc,
 }
 
-// Tipos (mantenha ou ajuste conforme sua estrutura original)
+// Função para criar cliente Supabase no servidor (para API routes)
+export async function getSupabaseServer(): Promise<SupabaseClient> {
+  const config = await getConfig()
+
+  if (!config.supabaseUrl || !config.supabaseAnonKey) {
+    throw new Error("Supabase server configuration is missing")
+  }
+
+  return createClient(config.supabaseUrl, config.supabaseAnonKey, {
+    db: { schema: supabaseConfig.schema || "public" },
+    global: { headers: supabaseConfig.headers || {} },
+  })
+}
+
+// Tipos
 export interface UserProfile {
   id: string
   full_name: string | null
   email: string
   role: "user" | "admin" | "moderator"
   status: "active" | "inactive" | "suspended" | "hibernated"
-  password?: string // Geralmente não armazenado diretamente no perfil do cliente
+  password?: string
   organization_id?: string | null
   last_login_at?: string | null
   created_at: string
@@ -126,14 +148,3 @@ export interface UserProfile {
   theme_settings?: any
   preferences?: any
 }
-
-// Adicione outras interfaces (Organization, AIAgent, etc.) se elas estavam neste arquivo
-// ou certifique-se de que estão corretamente importadas/exportadas de onde vêm.
-// Se os tipos estavam aqui, você precisará adicioná-los de volta.
-// Por exemplo:
-// export interface Organization { /* ... */ }
-// export interface AIAgent { /* ... */ }
-// ... e assim por diante para todos os tipos que estavam definidos aqui.
-
-// Se você tinha um export default supabase, remova-o, pois agora estamos usando named exports.
-// export default supabase; // REMOVA ESTA LINHA SE EXISTIR

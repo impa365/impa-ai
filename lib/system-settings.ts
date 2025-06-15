@@ -1,4 +1,4 @@
-import { getSupabase } from "@/lib/supabase"
+import { getSupabaseServer } from "@/lib/supabase"
 
 // Cache para evitar múltiplas consultas ao banco
 let settingsCache: Record<string, any> = {}
@@ -18,12 +18,12 @@ export async function getSystemSetting(key: string, defaultValue: any = null): P
 
 export async function refreshSettingsCache(): Promise<void> {
   try {
-    const client = await getSupabase()
+    console.log("🔄 Refreshing system settings cache...")
+    const client = await getSupabaseServer()
     const { data, error } = await client.from("system_settings").select("setting_key, setting_value")
 
     if (error) {
-      console.error("Erro ao buscar configurações do sistema:", error)
-      // Limpar cache em caso de erro para forçar nova tentativa
+      console.error("❌ Erro ao buscar configurações do sistema:", error)
       settingsCache = {}
       lastFetchTime = 0
       return
@@ -37,58 +37,61 @@ export async function refreshSettingsCache(): Promise<void> {
 
     settingsCache = newCache
     lastFetchTime = Date.now()
-    console.log("Cache de configurações do sistema atualizado:", settingsCache)
+    console.log("✅ Cache de configurações do sistema atualizado:", Object.keys(settingsCache))
   } catch (error) {
-    console.error("Erro ao atualizar cache de configurações:", error)
+    console.error("❌ Erro ao atualizar cache de configurações:", error)
     settingsCache = {}
     lastFetchTime = 0
   }
 }
 
-// Nova função para buscar todas as configurações do sistema
 export async function getSystemSettings(): Promise<Record<string, any>> {
   const now = Date.now()
   if (now - lastFetchTime > CACHE_TTL || Object.keys(settingsCache).length === 0) {
     await refreshSettingsCache()
   }
-  return { ...settingsCache } // Retorna uma cópia do cache
+  return { ...settingsCache }
 }
 
 export async function updateSystemSettings(settingsToUpdate: Record<string, any>): Promise<void> {
-  const client = await getSupabase() // Get client once
+  try {
+    console.log("💾 Updating system settings:", Object.keys(settingsToUpdate))
+    const client = await getSupabaseServer()
 
-  const upsertPromises = Object.entries(settingsToUpdate).map(([key, value]) => {
-    const description = settingsCache[key]?.description || `Configuração do sistema para a chave ${key}`
-    const category = settingsCache[key]?.category || "general"
+    const upsertPromises = Object.entries(settingsToUpdate).map(([key, value]) => {
+      const description = settingsCache[key]?.description || `Configuração do sistema para a chave ${key}`
+      const category = settingsCache[key]?.category || "general"
 
-    return client.from("system_settings").upsert(
-      // Use client here
-      {
-        setting_key: key,
-        setting_value: value,
-        description: description,
-        category: category,
-        is_public: settingsCache[key]?.is_public || false,
-        requires_restart: settingsCache[key]?.requires_restart || false,
-      },
-      { onConflict: "setting_key" },
-    )
-  })
+      return client.from("system_settings").upsert(
+        {
+          setting_key: key,
+          setting_value: value,
+          description: description,
+          category: category,
+          is_public: settingsCache[key]?.is_public || false,
+          requires_restart: settingsCache[key]?.requires_restart || false,
+        },
+        { onConflict: "setting_key" },
+      )
+    })
 
-  const results = await Promise.allSettled(upsertPromises)
+    const results = await Promise.allSettled(upsertPromises)
 
-  results.forEach((result, index) => {
-    if (result.status === "rejected") {
-      console.error(`Erro ao salvar configuração ${Object.keys(settingsToUpdate)[index]}:`, result.reason)
-      // Considerar lançar um erro aqui ou retornar um status de falha
-    }
-  })
+    results.forEach((result, index) => {
+      if (result.status === "rejected") {
+        console.error(`❌ Erro ao salvar configuração ${Object.keys(settingsToUpdate)[index]}:`, result.reason)
+      }
+    })
 
-  // Forçar atualização do cache após salvar
-  await refreshSettingsCache()
+    // Forçar atualização do cache após salvar
+    await refreshSettingsCache()
+    console.log("✅ System settings updated successfully")
+  } catch (error) {
+    console.error("❌ Error updating system settings:", error)
+    throw error
+  }
 }
 
-// Valores padrão para limites (mantidos para compatibilidade, mas getSystemSettings é preferível)
 export async function getDefaultWhatsAppLimit(): Promise<number> {
   const limit = await getSystemSetting("default_whatsapp_connections_limit", 1)
   return typeof limit === "number" ? limit : Number(limit) || 1
