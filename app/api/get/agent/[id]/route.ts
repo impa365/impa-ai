@@ -4,19 +4,15 @@ import { db } from "@/lib/supabase"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const apiKey = request.headers.get("apikey")
+    // Validar API key usando o objeto request completo
+    const validation = await validateApiKey(request) // Passa o objeto request
 
-    if (!apiKey) {
-      return NextResponse.json({ error: "API key é obrigatória" }, { status: 401 })
+    if (!validation.isValid || !validation.user) {
+      // Adiciona verificação para user
+      return NextResponse.json({ error: validation.error || "Falha na autenticação da API key" }, { status: 401 })
     }
 
-    // Validar API key
-    const validation = await validateApiKey(apiKey)
-    if (!validation.isValid) {
-      return NextResponse.json({ error: validation.error }, { status: 401 })
-    }
-
-    const { user, apiKeyData } = validation
+    const { user } = validation // Extrai o usuário validado
     const agentId = params.id
 
     // Buscar modelo padrão do sistema
@@ -30,13 +26,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Buscar agente específico com informações do proprietário
     const { data: agent, error } = await (await db.users())
       .select(`
-        *,
-        user_profiles!ai_agents_user_id_fkey (
-          id,
-          name,
-          email
-        )
-      `)
+      *,
+      user_profiles!ai_agents_user_id_fkey (
+        id,
+        name,
+        email
+      )
+    `)
       .eq("id", agentId)
       .single()
 
@@ -44,8 +40,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    // Verificar permissões de acesso
-    if (!canAccessAgent(user!.role, apiKeyData!.is_admin_key, agent.user_id, user!.id)) {
+    const isAdminAccess = user.role === "admin" // Inferir acesso de admin pelo papel do usuário
+    if (!canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)) {
       return NextResponse.json({ error: "Sem permissão para acessar este agente" }, { status: 403 })
     }
 
@@ -141,7 +137,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
       // Informações de acesso
       access_info: {
-        is_admin_access: apiKeyData!.is_admin_key,
+        is_admin_access: isAdminAccess,
         access_scope: user!.role === "admin" ? "admin" : "user",
         requester: {
           id: user!.id,
