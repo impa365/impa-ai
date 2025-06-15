@@ -20,7 +20,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         *,
         user_profiles (
           id,
-          name,
+          full_name,
           email
         )
       `)
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         owner: agent.user_profiles
           ? {
               id: agent.user_profiles.id,
-              name: agent.user_profiles.name,
+              name: agent.user_profiles.full_name,
               email: agent.user_profiles.email,
             }
           : null,
