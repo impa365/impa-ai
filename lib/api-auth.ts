@@ -1,91 +1,127 @@
-import { db } from "./supabase"
+import { createClient } from "@supabase/supabase-js"
 
-export interface ApiKeyData {
-  id: string
-  user_id: string
-  name: string
-  api_key: string
-  description?: string
-  permissions: string[]
-  rate_limit: number
-  is_active: boolean
-  is_admin_key: boolean
-  access_scope: string
-  created_at: string
-  updated_at: string
-}
-
-export interface UserData {
-  id: string
-  email: string
-  full_name: string
-  role: string
-  status: string
-}
-
-export async function validateApiKey(apiKey: string): Promise<{
-  isValid: boolean
-  user?: UserData
-  apiKeyData?: ApiKeyData
-  error?: string
-}> {
+export async function validateApiKey(request: Request): Promise<{ isValid: boolean; user?: any; error?: string }> {
   try {
-    if (!apiKey || !apiKey.startsWith("impa_")) {
-      return { isValid: false, error: "API key inválida" }
+    const authHeader = request.headers.get("authorization")
+
+    // Debug log (apenas em desenvolvimento)
+    if (process.env.NODE_ENV === "development") {
+      console.log("Auth header received:", authHeader ? "Present" : "Missing")
     }
 
-    // Buscar API key usando query direta ao invés de RPC
-    const { data: apiKeyData, error: apiKeyError } = await (await db.users())
+    if (!authHeader) {
+      return { isValid: false, error: "Authorization header missing" }
+    }
+
+    // Verificar se o header está no formato correto
+    if (!authHeader.startsWith("Bearer ")) {
+      return { isValid: false, error: "Invalid authorization format. Use: Bearer YOUR_API_KEY" }
+    }
+
+    const apiKey = authHeader.replace("Bearer ", "").trim()
+
+    if (process.env.NODE_ENV === "development") {
+      console.log("API key extracted:", apiKey ? `${apiKey.substring(0, 12)}...` : "Empty")
+    }
+
+    if (!apiKey) {
+      return { isValid: false, error: "API key é obrigatória" }
+    }
+
+    // Verificar se a API key tem o formato esperado
+    if (!apiKey.startsWith("impaai_")) {
+      return { isValid: false, error: "Invalid API key format" }
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return { isValid: false, error: "Server configuration error" }
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      db: { schema: "impaai" },
+    })
+
+    // Buscar a API key no banco
+    const { data: apiKeyData, error: apiKeyError } = await supabase
+      .from("user_api_keys")
       .select(`
         id,
         user_id,
         name,
-        api_key,
-        description,
+        is_active,
         permissions,
         rate_limit,
-        is_active,
-        is_admin_key,
-        access_scope,
-        created_at,
-        updated_at
+        last_used_at,
+        user_profiles!inner(
+          id,
+          email,
+          full_name,
+          role,
+          status
+        )
       `)
       .eq("api_key", apiKey)
       .eq("is_active", true)
       .single()
 
-    if (apiKeyError) {
-      console.error("Erro ao buscar API key:", apiKeyError)
-      return { isValid: false, error: "API key não encontrada" }
+    if (apiKeyError || !apiKeyData) {
+      if (process.env.NODE_ENV === "development") {
+        console.log("API key lookup error:", apiKeyError?.message || "Key not found")
+      }
+      return { isValid: false, error: "Invalid or inactive API key" }
     }
 
-    if (!apiKeyData) {
-      return { isValid: false, error: "API key não encontrada" }
+    // Verificar se o usuário está ativo
+    if (apiKeyData.user_profiles.status !== "active") {
+      return { isValid: false, error: "User account is not active" }
     }
 
-    // Buscar dados do usuário
-    const { data: userData, error: userError } = await (await db.users())
-      .select("id, email, full_name, role, status")
-      .eq("id", apiKeyData.user_id)
-      .eq("status", "active")
-      .single()
-
-    if (userError || !userData) {
-      return { isValid: false, error: "Usuário não encontrado ou inativo" }
-    }
-
-    // Atualizar último uso da API key
-    await (await db.users()).rpc("update_api_key_usage", [apiKey])
+    // Atualizar o último uso da API key (sem aguardar)
+    supabase
+      .from("user_api_keys")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", apiKeyData.id)
+      .then(() => {
+        if (process.env.NODE_ENV === "development") {
+          console.log("API key last_used_at updated")
+        }
+      })
+      .catch((error) => {
+        console.error("Error updating last_used_at:", error)
+      })
 
     return {
       isValid: true,
-      user: userData as UserData,
-      apiKeyData: apiKeyData as ApiKeyData,
+      user: {
+        id: apiKeyData.user_profiles.id,
+        email: apiKeyData.user_profiles.email,
+        full_name: apiKeyData.user_profiles.full_name,
+        role: apiKeyData.user_profiles.role,
+        api_key_id: apiKeyData.id,
+        api_key_name: apiKeyData.name,
+        permissions: apiKeyData.permissions || ["read"],
+      },
     }
   } catch (error) {
-    console.error("Erro na validação da API key:", error)
-    return { isValid: false, error: "Erro interno do servidor" }
+    console.error("Error validating API key:", error)
+    return { isValid: false, error: "Internal server error during authentication" }
   }
+}
+
+export function hasPermission(user: any, requiredPermission: string): boolean {
+  if (!user || !user.permissions) {
+    return false
+  }
+
+  // Admin sempre tem todas as permissões
+  if (user.role === "admin") {
+    return true
+  }
+
+  return user.permissions.includes(requiredPermission) || user.permissions.includes("all")
 }
 
 export function canAccessAgent(
@@ -101,23 +137,4 @@ export function canAccessAgent(
 
   // Usuário comum só pode acessar seus próprios agentes
   return agentUserId === requestUserId
-}
-
-export async function getDefaultModel(): Promise<string> {
-  try {
-    const { data: setting, error } = await (await db.users())
-      .select("setting_value")
-      .eq("setting_key", "default_model")
-      .single()
-
-    if (error || !setting) {
-      console.warn("Modelo padrão não encontrado, usando gpt-4o-mini")
-      return "gpt-4o-mini"
-    }
-
-    return setting.setting_value as string
-  } catch (error: any) {
-    console.error("Erro ao buscar modelo padrão:", error.message)
-    return "gpt-4o-mini"
-  }
 }
