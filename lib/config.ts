@@ -12,14 +12,19 @@ export async function getConfig() {
   // No servidor, ler diretamente das variáveis de ambiente (SEM NEXT_PUBLIC_)
   if (typeof window === "undefined") {
     const config = {
-      supabaseUrl: process.env.SUPABASE_URL || "http://localhost:54321",
-      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "dummy-key",
+      supabaseUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "http://localhost:54321",
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-key",
       nextAuthUrl: process.env.NEXTAUTH_URL || "http://localhost:3000",
     }
 
     console.log("🔧 Server config loaded:")
     console.log("Supabase URL:", config.supabaseUrl)
     console.log("NextAuth URL:", config.nextAuthUrl)
+    console.log("Using runtime variables:", {
+      SUPABASE_URL: !!process.env.SUPABASE_URL,
+      SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
+      NEXTAUTH_URL: !!process.env.NEXTAUTH_URL,
+    })
 
     return config
   }
@@ -29,7 +34,6 @@ export async function getConfig() {
     console.log("🌐 Client fetching config from /api/config...")
     const response = await fetch("/api/config")
     if (!response.ok) {
-      // Log the status and statusText for more details on HTTP errors
       console.error(`❌ Failed to fetch config from /api/config: ${response.status} ${response.statusText}`)
       throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`)
     }
@@ -42,18 +46,16 @@ export async function getConfig() {
 
     return config
   } catch (error) {
-    // This catch block handles network errors from fetch (like TypeError: Failed to fetch)
-    // or the error thrown above if response.ok is false.
     console.error("❌ Failed to load config from /api/config, using fallback. Error details:", error)
 
     // Fallback para desenvolvimento
     const fallbackConfig = {
       supabaseUrl: "http://localhost:54321",
-      supabaseAnonKey: "dummy-key", // Ensure fallback has a key, even if dummy
+      supabaseAnonKey: "dummy-key",
       nextAuthUrl: "http://localhost:3000",
     }
     console.log("🔧 Using fallback config:", fallbackConfig)
-    configCache = fallbackConfig // Cache the fallback to prevent repeated failed fetches
+    configCache = fallbackConfig
     return fallbackConfig
   }
 }
