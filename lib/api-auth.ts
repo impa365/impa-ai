@@ -29,15 +29,18 @@ async function verifyApiKeyInDatabase(apiKeyToVerify: string): Promise<ApiKeyDat
     apiKeyToVerify ? `${apiKeyToVerify.substring(0, 12)}...` : "CHAVE_VAZIA_PARA_DB",
   )
 
+  // Adicionado .trim() para remover espaços em branco no início/fim
+  const trimmedApiKey = apiKeyToVerify.trim()
+
   if (
-    !apiKeyToVerify ||
-    typeof apiKeyToVerify !== "string" ||
-    !apiKeyToVerify.startsWith("impaai_") ||
-    apiKeyToVerify.length !== 37
+    !trimmedApiKey ||
+    typeof trimmedApiKey !== "string" ||
+    !trimmedApiKey.startsWith("impaai_") ||
+    trimmedApiKey.length !== 37
   ) {
     console.error("verifyApiKeyInDatabase: Formato inválido da chave para consulta ao DB.", {
-      keyReceived: apiKeyToVerify,
-      length: apiKeyToVerify?.length,
+      keyReceived: apiKeyToVerify, // Loga a chave original
+      length: trimmedApiKey.length, // Loga o comprimento após o trim
     })
     return null
   }
@@ -46,17 +49,17 @@ async function verifyApiKeyInDatabase(apiKeyToVerify: string): Promise<ApiKeyDat
     const supabaseClient = await db.userApiKeys() // Obtém o cliente Supabase para a tabela
     const { data, error } = await supabaseClient
       .select("*")
-      .eq("api_key", apiKeyToVerify) // Compara a chave completa
+      .eq("api_key", trimmedApiKey) // Usa a chave tratada na consulta
       .single()
 
     if (error) {
       console.error("verifyApiKeyInDatabase: Erro ao buscar API key no DB:", error.message, {
-        keyUsedForLookup: apiKeyToVerify,
+        keyUsedForLookup: trimmedApiKey,
       })
       return null
     }
     if (!data) {
-      console.warn("verifyApiKeyInDatabase: API key não encontrada no DB.", { keyUsedForLookup: apiKeyToVerify })
+      console.warn("verifyApiKeyInDatabase: API key não encontrada no DB.", { keyUsedForLookup: trimmedApiKey })
       return null
     }
     console.log("verifyApiKeyInDatabase: API key encontrada no DB:", data.api_key.substring(0, 12) + "...")
@@ -120,6 +123,7 @@ export async function validateApiKey(request: Request): Promise<ValidationResult
     extractedApiKey ? `${extractedApiKey.substring(0, 12)}...` : "VAZIA_ANTES_DB",
   )
 
+  // Passa a chave extraída para a função de verificação
   const apiKeyData = await verifyApiKeyInDatabase(extractedApiKey)
 
   if (!apiKeyData) {
