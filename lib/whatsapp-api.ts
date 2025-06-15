@@ -1,4 +1,4 @@
-import { supabase } from "./supabase" // Import db as well for potential future refactor
+import { supabase } from "./supabase"
 
 // Função para gerar token único
 function generateInstanceToken(): string {
@@ -28,6 +28,12 @@ async function checkInstanceExists(instanceName: string, token: string): Promise
   return (data?.length || 0) > 0
 }
 
+// Função para validar se a resposta é JSON
+function isJsonResponse(response: Response): boolean {
+  const contentType = response.headers.get("content-type")
+  return contentType && contentType.includes("application/json")
+}
+
 // Função para criar instância na Evolution API
 export async function createEvolutionInstance(
   connectionName: string,
@@ -50,6 +56,7 @@ export async function createEvolutionInstance(
       console.error("Erro ao buscar configuração da Evolution API:", integrationError)
       return { success: false, error: "Erro ao buscar configuração da Evolution API." }
     }
+
     if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
       return {
         success: false,
@@ -57,8 +64,19 @@ export async function createEvolutionInstance(
       }
     }
 
+    // Validar URL da API
+    let apiUrl: string
+    try {
+      const url = new URL(integrationData.config.apiUrl)
+      apiUrl = url.toString().replace(/\/$/, "") // Remove trailing slash
+    } catch (urlError) {
+      return {
+        success: false,
+        error: "URL da Evolution API inválida na configuração.",
+      }
+    }
+
     // Buscar nome da plataforma
-    // Note: "global_theme_config" might be better accessed via db.systemSettings or db.themes if it's one of those
     const globalThemeConfigTable = await supabase.from("global_theme_config")
     const { data: themeData, error: themeError } = await globalThemeConfigTable
       .select("system_name")
@@ -66,8 +84,8 @@ export async function createEvolutionInstance(
       .limit(1)
       .single()
 
-    if (themeError) {
-      console.warn("Aviso: Não foi possível buscar nome da plataforma de global_theme_config:", themeError.message)
+    if (themeError && process.env.NODE_ENV === "development") {
+      console.warn("Aviso: Não foi possível buscar nome da plataforma:", themeError.message)
     }
     const platformName = themeData?.system_name || "impaai"
 
@@ -90,32 +108,81 @@ export async function createEvolutionInstance(
     } while (await checkInstanceExists(instanceName, token))
 
     // Criar instância na Evolution API
-    const apiUrl = integrationData.config.apiUrl
-    const maskedApiUrl = apiUrl.replace(/^(https?:\/\/)[^@/]+@/, "$1")
+    const requestBody = {
+      instanceName,
+      token,
+      integration: "WHATSAPP-BAILEYS",
+    }
 
-    const response = await fetch(`${integrationData.config.apiUrl}/instance/create`, {
+    if (process.env.NODE_ENV === "development") {
+      console.log("Fazendo requisição para Evolution API...")
+    }
+
+    const response = await fetch(`${apiUrl}/instance/create`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: integrationData.config.apiKey,
       },
-      body: JSON.stringify({
-        instanceName,
-        token,
-        integration: "WHATSAPP-BAILEYS", // Consider making this configurable if other integrations are planned
-      }),
+      body: JSON.stringify(requestBody),
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`Erro na Evolution API ao criar instância: ${response.status} - ${errorText}`)
+    // Verificar se a resposta é JSON válido
+    if (!isJsonResponse(response)) {
+      const responseText = await response.text()
+      console.error("Evolution API retornou resposta não-JSON:", {
+        status: response.status,
+        statusText: response.statusText,
+        contentType: response.headers.get("content-type"),
+        responsePreview: responseText.substring(0, 200) + "...",
+      })
+
       return {
         success: false,
-        error: `Erro na Evolution API: ${response.status} - ${errorText}`,
+        error: `Evolution API retornou resposta inválida. Status: ${response.status}. Verifique se a URL e chave da API estão corretas.`,
       }
     }
 
-    const evolutionResponse = await response.json()
+    if (!response.ok) {
+      let errorMessage = `Erro ${response.status}`
+      try {
+        const errorData = await response.json()
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch {
+        errorMessage = `${errorMessage} - ${response.statusText}`
+      }
+
+      console.error("Erro na Evolution API ao criar instância:", {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorMessage,
+      })
+
+      return {
+        success: false,
+        error: `Erro na Evolution API: ${errorMessage}`,
+      }
+    }
+
+    let evolutionResponse: any
+    try {
+      evolutionResponse = await response.json()
+    } catch (jsonError) {
+      console.error("Erro ao fazer parse do JSON da resposta:", jsonError)
+      return {
+        success: false,
+        error: "Resposta da Evolution API não é um JSON válido.",
+      }
+    }
+
+    // Verificar se a resposta tem a estrutura esperada
+    if (!evolutionResponse || (!Array.isArray(evolutionResponse) && !evolutionResponse.instance)) {
+      console.error("Resposta da Evolution API tem estrutura inesperada:", evolutionResponse)
+      return {
+        success: false,
+        error: "Resposta da Evolution API tem formato inesperado.",
+      }
+    }
 
     // Salvar no banco de dados
     const whatsappConnectionsTableInsert = await supabase.from("whatsapp_connections")
@@ -125,9 +192,11 @@ export async function createEvolutionInstance(
           user_id: userId,
           connection_name: connectionName,
           instance_name: instanceName,
-          instance_id: evolutionResponse[0]?.instance?.instanceId || null,
+          instance_id: Array.isArray(evolutionResponse)
+            ? evolutionResponse[0]?.instance?.instanceId || null
+            : evolutionResponse.instance?.instanceId || null,
           instance_token: token,
-          status: "disconnected", // Initial status
+          status: "disconnected",
         },
       ])
       .select()
@@ -145,14 +214,14 @@ export async function createEvolutionInstance(
       success: true,
       data: {
         connection: connectionData,
-        evolutionResponse: evolutionResponse[0],
+        evolutionResponse: Array.isArray(evolutionResponse) ? evolutionResponse[0] : evolutionResponse,
       },
     }
   } catch (error: any) {
     console.error("Erro interno ao criar instância:", error)
     return {
       success: false,
-      error: `Erro interno do servidor: ${error.message || error}`,
+      error: `Erro interno: ${error.message || "Erro desconhecido"}`,
     }
   }
 }
@@ -173,9 +242,10 @@ export async function fetchInstanceDetails(instanceName: string): Promise<{
       .single()
 
     if (integrationError) {
-      console.error("Erro ao buscar config da Evolution API (fetchInstanceDetails):", integrationError)
+      console.error("Erro ao buscar config da Evolution API:", integrationError)
       return { success: false, error: "Erro ao buscar configuração da Evolution API." }
     }
+
     if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
       return {
         success: false,
@@ -183,19 +253,50 @@ export async function fetchInstanceDetails(instanceName: string): Promise<{
       }
     }
 
-    const response = await fetch(`${integrationData.config.apiUrl}/instance/fetchInstances`, {
+    // Validar URL da API
+    let apiUrl: string
+    try {
+      const url = new URL(integrationData.config.apiUrl)
+      apiUrl = url.toString().replace(/\/$/, "")
+    } catch (urlError) {
+      return {
+        success: false,
+        error: "URL da Evolution API inválida na configuração.",
+      }
+    }
+
+    const response = await fetch(`${apiUrl}/instance/fetchInstances`, {
       method: "GET",
       headers: {
         apikey: integrationData.config.apiKey,
       },
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`Erro ao buscar detalhes da instância da Evolution API: ${response.status} - ${errorText}`)
+    if (!isJsonResponse(response)) {
+      const responseText = await response.text()
+      console.error("Evolution API retornou resposta não-JSON ao buscar instâncias:", {
+        status: response.status,
+        responsePreview: responseText.substring(0, 200) + "...",
+      })
+
       return {
         success: false,
-        error: `Erro ao buscar detalhes: ${response.status}`,
+        error: `Erro ao buscar detalhes: resposta inválida da API (Status: ${response.status})`,
+      }
+    }
+
+    if (!response.ok) {
+      let errorMessage = `Erro ${response.status}`
+      try {
+        const errorData = await response.json()
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch {
+        errorMessage = `${errorMessage} - ${response.statusText}`
+      }
+
+      return {
+        success: false,
+        error: `Erro ao buscar detalhes: ${errorMessage}`,
       }
     }
 
@@ -219,7 +320,7 @@ export async function fetchInstanceDetails(instanceName: string): Promise<{
     console.error("Erro interno ao buscar detalhes da instância:", error)
     return {
       success: false,
-      error: `Erro interno do servidor: ${error.message || error}`,
+      error: `Erro interno: ${error.message || "Erro desconhecido"}`,
     }
   }
 }
@@ -239,9 +340,10 @@ export async function getInstanceQRCode(instanceName: string): Promise<{
       .single()
 
     if (integrationError) {
-      console.error("Erro ao buscar config da Evolution API (getInstanceQRCode):", integrationError)
+      console.error("Erro ao buscar config da Evolution API:", integrationError)
       return { success: false, error: "Erro ao buscar configuração da Evolution API." }
     }
+
     if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
       return {
         success: false,
@@ -249,19 +351,50 @@ export async function getInstanceQRCode(instanceName: string): Promise<{
       }
     }
 
-    const response = await fetch(`${integrationData.config.apiUrl}/instance/connect/${instanceName}`, {
+    // Validar URL da API
+    let apiUrl: string
+    try {
+      const url = new URL(integrationData.config.apiUrl)
+      apiUrl = url.toString().replace(/\/$/, "")
+    } catch (urlError) {
+      return {
+        success: false,
+        error: "URL da Evolution API inválida na configuração.",
+      }
+    }
+
+    const response = await fetch(`${apiUrl}/instance/connect/${instanceName}`, {
       method: "GET",
       headers: {
         apikey: integrationData.config.apiKey,
       },
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`Erro ao buscar QR Code da Evolution API: ${response.status} - ${errorText}`)
+    if (!isJsonResponse(response)) {
+      const responseText = await response.text()
+      console.error("Evolution API retornou resposta não-JSON ao buscar QR Code:", {
+        status: response.status,
+        responsePreview: responseText.substring(0, 200) + "...",
+      })
+
       return {
         success: false,
-        error: `Erro ao buscar QR Code: ${response.status}`,
+        error: `Erro ao buscar QR Code: resposta inválida da API (Status: ${response.status})`,
+      }
+    }
+
+    if (!response.ok) {
+      let errorMessage = `Erro ${response.status}`
+      try {
+        const errorData = await response.json()
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch {
+        errorMessage = `${errorMessage} - ${response.statusText}`
+      }
+
+      return {
+        success: false,
+        error: `Erro ao buscar QR Code: ${errorMessage}`,
       }
     }
 
@@ -275,7 +408,7 @@ export async function getInstanceQRCode(instanceName: string): Promise<{
     console.error("Erro interno ao buscar QR Code:", error)
     return {
       success: false,
-      error: `Erro interno do servidor: ${error.message || error}`,
+      error: `Erro interno: ${error.message || "Erro desconhecido"}`,
     }
   }
 }
@@ -294,9 +427,10 @@ export async function deleteEvolutionInstance(instanceName: string): Promise<{
       .single()
 
     if (integrationError) {
-      console.error("Erro ao buscar config da Evolution API (deleteEvolutionInstance):", integrationError)
+      console.error("Erro ao buscar config da Evolution API:", integrationError)
       return { success: false, error: "Erro ao buscar configuração da Evolution API." }
     }
+
     if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
       return {
         success: false,
@@ -304,7 +438,19 @@ export async function deleteEvolutionInstance(instanceName: string): Promise<{
       }
     }
 
-    const response = await fetch(`${integrationData.config.apiUrl}/instance/delete/${instanceName}`, {
+    // Validar URL da API
+    let apiUrl: string
+    try {
+      const url = new URL(integrationData.config.apiUrl)
+      apiUrl = url.toString().replace(/\/$/, "")
+    } catch (urlError) {
+      return {
+        success: false,
+        error: "URL da Evolution API inválida na configuração.",
+      }
+    }
+
+    const response = await fetch(`${apiUrl}/instance/delete/${instanceName}`, {
       method: "DELETE",
       headers: {
         apikey: integrationData.config.apiKey,
@@ -312,11 +458,22 @@ export async function deleteEvolutionInstance(instanceName: string): Promise<{
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`Erro ao deletar instância na Evolution API: ${response.status} - ${errorText}`)
+      let errorMessage = `Erro ${response.status}`
+
+      if (isJsonResponse(response)) {
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.message || errorData.error || errorMessage
+        } catch {
+          errorMessage = `${errorMessage} - ${response.statusText}`
+        }
+      } else {
+        errorMessage = `${errorMessage} - ${response.statusText}`
+      }
+
       return {
         success: false,
-        error: `Erro ao deletar instância: ${response.status}`,
+        error: `Erro ao deletar instância: ${errorMessage}`,
       }
     }
 
@@ -325,7 +482,7 @@ export async function deleteEvolutionInstance(instanceName: string): Promise<{
     console.error("Erro interno ao deletar instância:", error)
     return {
       success: false,
-      error: `Erro interno do servidor: ${error.message || error}`,
+      error: `Erro interno: ${error.message || "Erro desconhecido"}`,
     }
   }
 }

@@ -19,10 +19,24 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Key, Trash2, Copy, Eye, EyeOff, AlertCircle, CheckCircle, Users } from "lucide-react"
+import {
+  Plus,
+  Key,
+  Trash2,
+  Copy,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  CheckCircle,
+  Users,
+  Code,
+  BookOpen,
+  ExternalLink,
+} from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { createClient } from "@supabase/supabase-js"
 import { toast } from "sonner"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface ApiKey {
   id: string
@@ -60,6 +74,8 @@ export default function AdminApiKeysPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [selectedApiKey, setSelectedApiKey] = useState<ApiKey | null>(null)
+  const [examplesModalOpen, setExamplesModalOpen] = useState(false)
+  const [selectedApiKeyForExamples, setSelectedApiKeyForExamples] = useState<ApiKey | null>(null)
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -298,6 +314,29 @@ export default function AdminApiKeysPage() {
     })
   }
 
+  const generateCurlExamples = (apiKey: string) => {
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://your-domain.com"
+
+    return {
+      listAgents: `curl -X GET "${baseUrl}/api/get-all/agent" \\
+    -H "Authorization: Bearer ${apiKey}" \\
+    -H "Content-Type: application/json"`,
+
+      getAgent: `curl -X GET "${baseUrl}/api/get/agent/AGENT_ID" \\
+    -H "Authorization: Bearer ${apiKey}" \\
+    -H "Content-Type: application/json"`,
+
+      webhook: `curl -X POST "${baseUrl}/api/agents/webhook" \\
+    -H "Authorization: Bearer ${apiKey}" \\
+    -H "Content-Type: application/json" \\
+    -d '{
+      "message": "Sua mensagem aqui",
+      "phone": "5511999999999",
+      "agent_id": "AGENT_ID"
+    }'`,
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-6">
@@ -399,7 +438,7 @@ export default function AdminApiKeysPage() {
                     <TableHead>Status</TableHead>
                     <TableHead>Último Uso</TableHead>
                     <TableHead>Criada em</TableHead>
-                    <TableHead>Ações</TableHead>
+                    <TableHead className="w-32">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -468,6 +507,17 @@ export default function AdminApiKeysPage() {
                         <div className="text-sm">{formatDate(apiKey.created_at)}</div>
                       </TableCell>
                       <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-blue-600 hover:text-blue-700"
+                          onClick={() => {
+                            setSelectedApiKeyForExamples(apiKey)
+                            setExamplesModalOpen(true)
+                          }}
+                        >
+                          <Code className="w-4 h-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -572,6 +622,149 @@ export default function AdminApiKeysPage() {
                   Criar API Key
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Examples Modal */}
+      <Dialog open={examplesModalOpen} onOpenChange={setExamplesModalOpen}>
+        <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5" />
+              Exemplos de Uso da API
+            </DialogTitle>
+            <DialogDescription>
+              Copie e cole estes exemplos no n8n ou outras ferramentas de integração
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedApiKeyForExamples && (
+            <div className="space-y-6">
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <Key className="w-4 h-4 text-blue-600" />
+                  <span className="font-medium text-blue-900">API Key Selecionada:</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="text-sm bg-white px-2 py-1 rounded border flex-1">
+                    {selectedApiKeyForExamples.name} - {maskApiKey(selectedApiKeyForExamples.api_key)}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyToClipboard(selectedApiKeyForExamples.api_key)}
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <Tabs defaultValue="list-agents" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="list-agents">Listar Agentes</TabsTrigger>
+                  <TabsTrigger value="get-agent">Obter Agente</TabsTrigger>
+                  <TabsTrigger value="webhook">Webhook</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="list-agents" className="space-y-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Listar todos os agentes</h4>
+                    <p className="text-sm text-gray-600 mb-3">
+                      Retorna a lista de todos os agentes disponíveis para o usuário
+                    </p>
+                    <div className="relative">
+                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
+                        <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).listAgents}</code>
+                      </pre>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={() =>
+                          copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).listAgents)
+                        }
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="get-agent" className="space-y-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Obter detalhes de um agente específico</h4>
+                    <p className="text-sm text-gray-600 mb-3">
+                      Retorna os detalhes completos de um agente específico. Substitua AGENT_ID pelo ID do agente
+                      desejado.
+                    </p>
+                    <div className="relative">
+                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
+                        <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).getAgent}</code>
+                      </pre>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={() =>
+                          copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).getAgent)
+                        }
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="webhook" className="space-y-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Enviar mensagem via webhook</h4>
+                    <p className="text-sm text-gray-600 mb-3">
+                      Envia uma mensagem através de um agente específico. Substitua os valores conforme necessário.
+                    </p>
+                    <div className="relative">
+                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
+                        <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).webhook}</code>
+                      </pre>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={() => copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).webhook)}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+
+              <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-amber-900 mb-1">Dicas para uso no n8n:</h4>
+                    <ul className="text-sm text-amber-800 space-y-1">
+                      <li>• Use o nó "HTTP Request" para fazer as chamadas</li>
+                      <li>• Configure o método HTTP correto (GET ou POST)</li>
+                      <li>• Adicione o header "Authorization" com o valor "Bearer SUA_API_KEY"</li>
+                      <li>• Para POST requests, configure o Content-Type como "application/json"</li>
+                      <li>• Teste sempre em ambiente de desenvolvimento primeiro</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExamplesModalOpen(false)}>
+              Fechar
+            </Button>
+            <Button onClick={() => window.open("/docs/api", "_blank")} className="gap-2">
+              <ExternalLink className="w-4 h-4" />
+              Ver Documentação Completa
             </Button>
           </DialogFooter>
         </DialogContent>
