@@ -34,10 +34,9 @@ import {
   ExternalLink,
 } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
-import { createClient } from "@supabase/supabase-js"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { getConfig } from "@/lib/config"
+import { getSupabaseServer } from "@/lib/supabase"
 
 interface ApiKey {
   id: string
@@ -69,7 +68,6 @@ export default function AdminApiKeysPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
-  const [supabaseClient, setSupabaseClient] = useState<any>(null)
   const router = useRouter()
 
   // Modal states
@@ -100,51 +98,13 @@ export default function AdminApiKeysPage() {
       return
     }
     setUser(currentUser)
-    initializeSupabase()
+    loadData()
   }, [router])
 
-  const initializeSupabase = async () => {
-    try {
-      console.log("🔧 Initializing Supabase client for API Keys page...")
-      const config = await getConfig()
-
-      if (!config.supabaseUrl || !config.supabaseAnonKey) {
-        console.error("❌ Supabase configuration missing:", {
-          url: !!config.supabaseUrl,
-          key: !!config.supabaseAnonKey,
-        })
-        setMessage("Erro de configuração do Supabase.")
-        setLoading(false)
-        return
-      }
-
-      console.log("✅ Creating Supabase client with config:", {
-        url: config.supabaseUrl,
-        keyLength: config.supabaseAnonKey.length,
-      })
-
-      const client = createClient(config.supabaseUrl, config.supabaseAnonKey, {
-        db: { schema: "impaai" },
-      })
-
-      setSupabaseClient(client)
-      await loadData(client)
-    } catch (error) {
-      console.error("❌ Error initializing Supabase:", error)
-      setMessage("Erro ao inicializar conexão com o banco de dados")
-      setLoading(false)
-    }
-  }
-
-  const loadData = async (client: any) => {
-    if (!client) {
-      console.error("❌ No Supabase client available")
-      return
-    }
-
+  const loadData = async () => {
     setLoading(true)
     try {
-      await Promise.all([fetchApiKeys(client), fetchUsers(client)])
+      await Promise.all([fetchApiKeys(), fetchUsers()])
     } catch (error) {
       console.error("❌ Erro ao carregar dados:", error)
       setMessage("Erro ao carregar dados")
@@ -153,12 +113,14 @@ export default function AdminApiKeysPage() {
     }
   }
 
-  const fetchApiKeys = async (client: any) => {
+  const fetchApiKeys = async () => {
     try {
       console.log("🔍 Fetching API keys...")
 
+      const supabase = await getSupabaseServer()
+
       // Buscar API keys com informações do usuário
-      const { data, error } = await client
+      const { data, error } = await supabase
         .from("user_api_keys")
         .select(`
         id,
@@ -198,11 +160,13 @@ export default function AdminApiKeysPage() {
     }
   }
 
-  const fetchUsers = async (client: any) => {
+  const fetchUsers = async () => {
     try {
       console.log("🔍 Fetching users...")
 
-      const { data, error } = await client
+      const supabase = await getSupabaseServer()
+
+      const { data, error } = await supabase
         .from("user_profiles")
         .select("id, full_name, email, role")
         .eq("status", "active")
@@ -236,19 +200,16 @@ export default function AdminApiKeysPage() {
       return
     }
 
-    if (!supabaseClient) {
-      setMessage("Erro de conexão com o banco de dados")
-      return
-    }
-
     setSaving(true)
     setMessage("")
 
     try {
       console.log("🔧 Creating new API key...")
+
+      const supabase = await getSupabaseServer()
       const newApiKey = generateApiKey()
 
-      const { error } = await supabaseClient.from("user_api_keys").insert({
+      const { error } = await supabase.from("user_api_keys").insert({
         user_id: createForm.user_id,
         name: createForm.name.trim(),
         api_key: newApiKey,
@@ -266,7 +227,7 @@ export default function AdminApiKeysPage() {
       }
 
       console.log("✅ API key created successfully")
-      await fetchApiKeys(supabaseClient)
+      await fetchApiKeys()
       setCreateModalOpen(false)
       setCreateForm({ user_id: "", name: "", description: "" })
       toast.success("API Key criada com sucesso!")
@@ -279,13 +240,15 @@ export default function AdminApiKeysPage() {
   }
 
   const handleDeleteApiKey = async () => {
-    if (!selectedApiKey || !supabaseClient) return
+    if (!selectedApiKey) return
 
     setSaving(true)
     try {
       console.log("🗑️ Deleting API key:", selectedApiKey.id)
 
-      const { error } = await supabaseClient.from("user_api_keys").delete().eq("id", selectedApiKey.id)
+      const supabase = await getSupabaseServer()
+
+      const { error } = await supabase.from("user_api_keys").delete().eq("id", selectedApiKey.id)
 
       if (error) {
         console.error("❌ Error deleting API key:", error)
@@ -293,7 +256,7 @@ export default function AdminApiKeysPage() {
       }
 
       console.log("✅ API key deleted successfully")
-      await fetchApiKeys(supabaseClient)
+      await fetchApiKeys()
       setDeleteModalOpen(false)
       setSelectedApiKey(null)
       toast.success("API Key excluída com sucesso!")
