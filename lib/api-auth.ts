@@ -1,199 +1,140 @@
-// @ts-nocheck
-// TODO: Arrumar os types desse arquivo
-import { db } from "./supabase" // Garanta que db é importado corretamente e funcional
-import type { UserProfile } from "@/types/user" // Verifique se este tipo está correto e acessível
+import { createClient } from "@supabase/supabase-js"
 
-interface ApiKeyData {
-  id: string
-  user_id: string
-  name: string
-  api_key: string // Coluna que armazena a chave completa (para fins de depuração, idealmente seria um hash)
-  is_admin_key: boolean
-  last_used_at: string | null
-  expires_at: string | null
-  created_at: string
-  updated_at: string
-}
-
-interface ValidationResult {
-  isValid: boolean
-  user?: UserProfile | null
-  apiKeyData?: ApiKeyData | null
-  error?: string
-  status?: number
-}
-
-async function verifyApiKeyInDatabase(apiKeyToVerify: string): Promise<ApiKeyData | null> {
-  console.log(
-    "verifyApiKeyInDatabase: Verificando chave no DB:",
-    apiKeyToVerify ? `${apiKeyToVerify.substring(0, 12)}...` : "CHAVE_VAZIA_PARA_DB",
-  )
-
-  // Adicionado .trim() para remover espaços em branco no início/fim
-  const trimmedApiKey = apiKeyToVerify.trim()
-
-  if (
-    !trimmedApiKey ||
-    typeof trimmedApiKey !== "string" ||
-    !trimmedApiKey.startsWith("impaai_") ||
-    trimmedApiKey.length !== 37
-  ) {
-    console.error("verifyApiKeyInDatabase: Formato inválido da chave para consulta ao DB.", {
-      keyReceived: apiKeyToVerify, // Loga a chave original
-      length: trimmedApiKey.length, // Loga o comprimento após o trim
-    })
-    return null
-  }
-
+export async function validateApiKey(request: Request): Promise<{ isValid: boolean; user?: any; error?: string }> {
   try {
-    const supabaseClient = await db.userApiKeys() // Obtém o cliente Supabase para a tabela
-    const { data, error } = await supabaseClient
-      .select("*")
-      .eq("api_key", trimmedApiKey) // Usa a chave tratada na consulta
+    const authHeader = request.headers.get("authorization")
+
+    // Debug log (apenas em desenvolvimento)
+    if (process.env.NODE_ENV === "development") {
+      console.log("Auth header received:", authHeader ? "Present" : "Missing")
+    }
+
+    if (!authHeader) {
+      return { isValid: false, error: "Authorization header missing" }
+    }
+
+    // Verificar se o header está no formato correto
+    if (!authHeader.startsWith("Bearer ")) {
+      return { isValid: false, error: "Invalid authorization format. Use: Bearer YOUR_API_KEY" }
+    }
+
+    const apiKey = authHeader.replace("Bearer ", "").trim()
+
+    if (process.env.NODE_ENV === "development") {
+      console.log("API key extracted:", apiKey ? `${apiKey.substring(0, 12)}...` : "Empty")
+    }
+
+    if (!apiKey) {
+      return { isValid: false, error: "API key é obrigatória" }
+    }
+
+    // Verificar se a API key tem o formato esperado
+    if (!apiKey.startsWith("impaai_")) {
+      return { isValid: false, error: "Invalid API key format" }
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return { isValid: false, error: "Server configuration error" }
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      db: { schema: "impaai" },
+    })
+
+    // Buscar a API key no banco
+    const { data: apiKeyData, error: apiKeyError } = await supabase
+      .from("user_api_keys")
+      .select(`
+        id,
+        user_id,
+        name,
+        is_active,
+        permissions,
+        rate_limit,
+        last_used_at,
+        user_profiles!inner(
+          id,
+          email,
+          full_name,
+          role,
+          status
+        )
+      `)
+      .eq("api_key", apiKey)
+      .eq("is_active", true)
       .single()
 
-    if (error) {
-      console.error("verifyApiKeyInDatabase: Erro ao buscar API key no DB:", error.message, {
-        keyUsedForLookup: trimmedApiKey,
+    if (apiKeyError || !apiKeyData) {
+      if (process.env.NODE_ENV === "development") {
+        console.log("API key lookup error:", apiKeyError?.message || "Key not found")
+      }
+      return { isValid: false, error: "Invalid or inactive API key" }
+    }
+
+    // Verificar se o usuário está ativo
+    if (apiKeyData.user_profiles.status !== "active") {
+      return { isValid: false, error: "User account is not active" }
+    }
+
+    // Atualizar o último uso da API key (sem aguardar)
+    supabase
+      .from("user_api_keys")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", apiKeyData.id)
+      .then(() => {
+        if (process.env.NODE_ENV === "development") {
+          console.log("API key last_used_at updated")
+        }
       })
-      return null
+      .catch((error) => {
+        console.error("Error updating last_used_at:", error)
+      })
+
+    return {
+      isValid: true,
+      user: {
+        id: apiKeyData.user_profiles.id,
+        email: apiKeyData.user_profiles.email,
+        full_name: apiKeyData.user_profiles.full_name,
+        role: apiKeyData.user_profiles.role,
+        api_key_id: apiKeyData.id,
+        api_key_name: apiKeyData.name,
+        permissions: apiKeyData.permissions || ["read"],
+      },
     }
-    if (!data) {
-      console.warn("verifyApiKeyInDatabase: API key não encontrada no DB.", { keyUsedForLookup: trimmedApiKey })
-      return null
-    }
-    console.log("verifyApiKeyInDatabase: API key encontrada no DB:", data.api_key.substring(0, 12) + "...")
-    return data as ApiKeyData
-  } catch (e) {
-    console.error("verifyApiKeyInDatabase: Exceção durante consulta ao DB:", e)
-    return null
+  } catch (error) {
+    console.error("Error validating API key:", error)
+    return { isValid: false, error: "Internal server error during authentication" }
   }
 }
 
-export async function validateApiKey(request: Request): Promise<ValidationResult> {
-  let extractedApiKey: string | null = null
-  const headers = request.headers
-
-  const allHeaders: Record<string, string> = {}
-  headers.forEach((value, key) => {
-    allHeaders[key.toLowerCase()] = value
-  }) // Normaliza para minúsculas
-  console.log("validateApiKey: Cabeçalhos recebidos (normalizados para minúsculas):", allHeaders)
-
-  // 1. Tenta pegar do header 'apikey'
-  const apiKeyHeaderValue = allHeaders["apikey"] // Acessa normalizado
-  if (apiKeyHeaderValue) {
-    extractedApiKey = apiKeyHeaderValue
-    console.log(
-      "validateApiKey: Chave encontrada no header 'apikey':",
-      extractedApiKey ? `${extractedApiKey.substring(0, 12)}...` : "VAZIO",
-    )
+export function hasPermission(user: any, requiredPermission: string): boolean {
+  if (!user || !user.permissions) {
+    return false
   }
 
-  // 2. Se não encontrou, tenta pegar do header 'Authorization: Bearer <token>'
-  if (!extractedApiKey) {
-    const authHeaderValue = allHeaders["authorization"] // Acessa normalizado
-    console.log("validateApiKey: Valor do header 'authorization':", authHeaderValue)
-    if (authHeaderValue) {
-      const parts = authHeaderValue.split(" ")
-      if (parts.length === 2 && parts[0].toLowerCase() === "bearer") {
-        extractedApiKey = parts[1]
-        console.log(
-          "validateApiKey: Chave extraída do 'Authorization: Bearer':",
-          extractedApiKey ? `${extractedApiKey.substring(0, 12)}...` : "VAZIO_NO_BEARER",
-        )
-      } else {
-        console.log(
-          "validateApiKey: Header 'authorization' encontrado, mas formato não é 'Bearer <token>'. Valor:",
-          authHeaderValue,
-        )
-      }
-    } else {
-      console.log("validateApiKey: Header 'authorization' não encontrado.")
-    }
+  // Admin sempre tem todas as permissões
+  if (user.role === "admin") {
+    return true
   }
 
-  if (!extractedApiKey) {
-    console.warn("validateApiKey: FALHA FINAL - API key NÃO foi extraída dos headers.")
-    return { isValid: false, error: "API key é obrigatória", status: 401 }
-  }
-
-  console.log(
-    "validateApiKey: Chave extraída para verificação no DB:",
-    extractedApiKey ? `${extractedApiKey.substring(0, 12)}...` : "VAZIA_ANTES_DB",
-  )
-
-  // Passa a chave extraída para a função de verificação
-  const apiKeyData = await verifyApiKeyInDatabase(extractedApiKey)
-
-  if (!apiKeyData) {
-    console.warn("validateApiKey: Falha na verificação da API key (não encontrada no DB ou erro no DB).", {
-      apiKeyUsed: extractedApiKey ? `${extractedApiKey.substring(0, 12)}...` : "VAZIA_PARA_VERIFICACAO_DB",
-    })
-    return { isValid: false, error: "API key inválida ou não encontrada", status: 401 }
-  }
-
-  if (apiKeyData.expires_at && new Date(apiKeyData.expires_at) < new Date()) {
-    console.warn("validateApiKey: API key expirada.", { apiKeyId: apiKeyData.id })
-    return { isValid: false, error: "API key expirada", status: 401 }
-  }
-
-  const supabaseUserProfilesClient = await db.userProfiles()
-  const { data: user, error: userError } = await supabaseUserProfilesClient
-    .select("*")
-    .eq("id", apiKeyData.user_id)
-    .single()
-
-  if (userError || !user) {
-    console.error("validateApiKey: Usuário não encontrado para API key.", {
-      userId: apiKeyData.user_id,
-      userError: userError?.message,
-    })
-    return { isValid: false, error: "Usuário associado à API key não encontrado", status: 403 }
-  }
-
-  if (user.status !== "active") {
-    console.warn("validateApiKey: Usuário não está ativo.", { userId: user.id, userStatus: user.status })
-    return { isValid: false, error: "Usuário associado à API key não está ativo", status: 403 }
-  }
-  ;(async () => {
-    try {
-      const supabaseApiKeysClient = await db.userApiKeys()
-      const { error: updateError } = await supabaseApiKeysClient
-        .update({ last_used_at: new Date().toISOString() })
-        .eq("id", apiKeyData.id)
-      if (updateError) {
-        console.error("validateApiKey: Falha ao atualizar last_used_at:", updateError.message)
-      } else {
-        console.log("validateApiKey: last_used_at atualizado para key ID:", apiKeyData.id)
-      }
-    } catch (e) {
-      console.error("validateApiKey: Exceção ao atualizar last_used_at:", e)
-    }
-  })()
-
-  console.log("validateApiKey: API key validada com sucesso.", { userId: user.id, apiKeyId: apiKeyData.id })
-  return { isValid: true, user: user as UserProfile, apiKeyData, status: 200 }
-}
-
-export function hasPermission(
-  userRole: string | undefined,
-  isAdminKey: boolean | undefined,
-  requiredRole: string,
-): boolean {
-  if (!userRole) return false
-  if (isAdminKey === true) return true
-  return userRole === "admin" || userRole === requiredRole
+  return user.permissions.includes(requiredPermission) || user.permissions.includes("all")
 }
 
 export function canAccessAgent(
-  userRole: string | undefined,
-  isAdminKey: boolean | undefined,
-  agentUserId: string | undefined,
-  currentUserId: string | undefined,
+  userRole: string,
+  isAdminKey: boolean,
+  agentUserId: string,
+  requestUserId: string,
 ): boolean {
-  if (!userRole || !currentUserId) return false
-  if (isAdminKey === true) return true
-  if (userRole === "admin") return true
-  return agentUserId === currentUserId
+  // Admin ou chave admin pode acessar qualquer agente
+  if (userRole === "admin" || isAdminKey) {
+    return true
+  }
+
+  // Usuário comum só pode acessar seus próprios agentes
+  return agentUserId === requestUserId
 }

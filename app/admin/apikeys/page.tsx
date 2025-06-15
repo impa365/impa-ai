@@ -192,7 +192,7 @@ export default function AdminApiKeysPage() {
   const generateApiKey = (): string => {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     let result = "impaai_"
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 32; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length))
     }
     return result
@@ -219,17 +219,13 @@ export default function AdminApiKeysPage() {
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         db: { schema: "impaai" },
       })
-
       const newApiKey = generateApiKey()
 
-      // INSERÇÃO CORRETA COM A ORDEM CERTA DAS COLUNAS
       const { error } = await supabase.from("user_api_keys").insert({
         user_id: createForm.user_id,
         name: createForm.name.trim(),
+        api_key: newApiKey,
         description: createForm.description.trim() || "API Key para integração com sistemas externos",
-        last_used_at: null,
-        expires_at: null,
-        api_key: newApiKey, // API KEY NA COLUNA CORRETA!
         permissions: ["read"],
         rate_limit: 100,
         is_active: true,
