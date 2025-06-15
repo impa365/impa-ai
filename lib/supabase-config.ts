@@ -32,3 +32,20 @@ export const defaultHeaders = {
   "Content-Profile": supabaseConfig.schema,
   apikey: supabaseConfig.anonKey,
 }
+
+export const TABLES = {
+  USER_PROFILES: "user_profiles",
+  AI_AGENTS: "ai_agents",
+  WHATSAPP_CONNECTIONS: "whatsapp_connections",
+  AGENT_ACTIVITY_LOGS: "agent_activity_logs",
+  USER_SETTINGS: "user_settings",
+  SYSTEM_SETTINGS: "system_settings",
+  SYSTEM_THEMES: "system_themes",
+  INTEGRATIONS: "integrations",
+  VECTOR_STORES: "vector_stores",
+  VECTOR_DOCUMENTS: "vector_documents",
+  USER_API_KEYS: "user_api_keys",
+  ORGANIZATIONS: "organizations",
+  DAILY_METRICS: "daily_metrics",
+  // Adicione outras tabelas conforme necessário
+} as const // Usar 'as const' para tipos mais estritos

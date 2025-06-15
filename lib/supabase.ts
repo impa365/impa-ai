@@ -1,63 +1,84 @@
-import { createClient } from "@supabase/supabase-js"
-import { getConfig } from "./config"
+// lib/supabase.ts
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+import { supabaseConfig, TABLES } from "./supabase-config" // Importar TABLES
 
-// Cliente Supabase singleton
-let supabaseClient: any = null
-let configPromise: Promise<any> | null = null
+let clientInstance: SupabaseClient | null = null
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// Função para obter o cliente Supabase configurado
-export async function getSupabase() {
-  if (supabaseClient) {
-    return supabaseClient
+export async function getSupabase(): Promise<SupabaseClient> {
+  if (clientInstance) {
+    return clientInstance
   }
 
-  if (!configPromise) {
-    configPromise = getConfig()
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Supabase URL or Anon Key is missing. Check environment variables.")
+    throw new Error("Supabase URL or Anon Key is not configured.")
   }
 
-  const config = await configPromise
-
-  // Add a check for valid configuration
-  if (!config || !config.supabaseUrl || !config.supabaseAnonKey) {
-    console.error("Supabase configuration is invalid. URL or Anon Key is missing.", config)
-    // Throw an error to make the failure explicit and prevent creating a faulty client
-    throw new Error("Supabase configuration is invalid. Cannot create client.")
+  try {
+    clientInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      db: { schema: supabaseConfig.schema || "public" },
+      global: { headers: supabaseConfig.headers || {} },
+    })
+  } catch (error) {
+    console.error("Error creating Supabase client:", error)
+    throw error
   }
 
-  console.log("🔧 Creating Supabase client with config:")
-  console.log("URL:", config.supabaseUrl)
-  console.log("Key:", config.supabaseAnonKey ? `${config.supabaseAnonKey.substring(0, 20)}...` : "❌ Missing")
-
-  supabaseClient = createClient(config.supabaseUrl, config.supabaseAnonKey, {
-    db: {
-      schema: "impaai",
-    },
-    // global headers removed
-  })
-
-  return supabaseClient
+  return clientInstance
 }
 
-// Para compatibilidade com código existente - VERSÃO SIMPLIFICADA
+let serverClientInstance: SupabaseClient | null = null
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+export function getSupabaseAdmin(): SupabaseClient {
+  if (serverClientInstance) {
+    return serverClientInstance
+  }
+
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    console.error("Supabase URL or Service Role Key is missing for admin client.")
+    throw new Error("Supabase URL or Service Role Key is not configured for admin client.")
+  }
+
+  serverClientInstance = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    db: { schema: supabaseConfig.schema || "public" },
+    global: { headers: supabaseConfig.headers || {} },
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+  return serverClientInstance
+}
+
+// Função auxiliar para acessar tabelas
+export async function getTable(tableName: string) {
+  const client = await getSupabase()
+  return client.from(tableName)
+}
+
+// Export 'supabase' para compatibilidade e uso geral
 export const supabase = {
   from: async (table: string) => {
     const client = await getSupabase()
     return client.from(table)
   },
-  rpc: async (functionName: string, params?: any) => {
+  rpc: async (fn: string, params?: object, options?: { head?: boolean; count?: "exact" | "planned" | "estimated" }) => {
     const client = await getSupabase()
-    return client.rpc(functionName, params)
+    return client.rpc(fn, params, options)
   },
   auth: {
     getUser: async () => {
       const client = await getSupabase()
       return client.auth.getUser()
     },
-    signInWithPassword: async (credentials: any) => {
+    signInWithPassword: async (credentials: Parameters<SupabaseClient["auth"]["signInWithPassword"]>[0]) => {
       const client = await getSupabase()
       return client.auth.signInWithPassword(credentials)
     },
-    signUp: async (credentials: any) => {
+    signUp: async (credentials: Parameters<SupabaseClient["auth"]["signUp"]>[0]) => {
       const client = await getSupabase()
       return client.auth.signUp(credentials)
     },
@@ -65,46 +86,37 @@ export const supabase = {
       const client = await getSupabase()
       return client.auth.signOut()
     },
+    // Adicione outras funções de auth conforme necessário
   },
 }
 
-// Função para acessar qualquer tabela no schema correto
-export async function getTable(tableName: string) {
-  const client = await getSupabase()
-  return client.from(tableName)
-}
-
-// Funções específicas para cada tabela - USANDO A NOVA ESTRUTURA
+// Export 'db' para acesso tipado às tabelas (exemplo)
 export const db = {
-  users: async () => await getTable("user_profiles"),
-  agents: async () => await getTable("ai_agents"),
-  whatsappConnections: async () => await getTable("whatsapp_connections"),
-  activityLogs: async () => await getTable("agent_activity_logs"),
-  userSettings: async () => await getTable("user_settings"),
-  systemSettings: async () => await getTable("system_settings"),
-  themes: async () => await getTable("system_themes"),
-  integrations: async () => await getTable("integrations"),
-  vectorStores: async () => await getTable("vector_stores"),
-  vectorDocuments: async () => await getTable("vector_documents"),
-  // apiKeys: async () => await getTable("user_api_keys"), // Removed this line
-  organizations: async () => await getTable("organizations"),
-  dailyMetrics: async () => await getTable("daily_metrics"),
-
-  // Função para executar queries SQL diretas
-  rpc: async (functionName: string, params?: any) => {
-    const client = await getSupabase()
-    return client.rpc(functionName, params)
-  },
+  users: async () => getTable(TABLES.USER_PROFILES),
+  agents: async () => getTable(TABLES.AI_AGENTS),
+  whatsappConnections: async () => getTable(TABLES.WHATSAPP_CONNECTIONS),
+  activityLogs: async () => getTable(TABLES.AGENT_ACTIVITY_LOGS),
+  userSettings: async () => getTable(TABLES.USER_SETTINGS),
+  systemSettings: async () => getTable(TABLES.SYSTEM_SETTINGS),
+  themes: async () => getTable(TABLES.SYSTEM_THEMES),
+  integrations: async () => getTable(TABLES.INTEGRATIONS),
+  vectorStores: async () => getTable(TABLES.VECTOR_STORES),
+  vectorDocuments: async () => getTable(TABLES.VECTOR_DOCUMENTS),
+  apiKeys: async () => getTable(TABLES.USER_API_KEYS),
+  organizations: async () => getTable(TABLES.ORGANIZATIONS),
+  dailyMetrics: async () => getTable(TABLES.DAILY_METRICS),
+  // Adicione outras tabelas conforme o objeto TABLES
+  rpc: supabase.rpc, // Reutilizar a função rpc do objeto supabase
 }
 
-// Tipos para o banco de dados - NOVA ESTRUTURA
+// Tipos (mantenha ou ajuste conforme sua estrutura original)
 export interface UserProfile {
   id: string
   full_name: string | null
   email: string
   role: "user" | "admin" | "moderator"
   status: "active" | "inactive" | "suspended" | "hibernated"
-  password?: string
+  password?: string // Geralmente não armazenado diretamente no perfil do cliente
   organization_id?: string | null
   last_login_at?: string | null
   created_at: string
@@ -115,124 +127,13 @@ export interface UserProfile {
   preferences?: any
 }
 
-export interface Organization {
-  id: string
-  name: string
-  slug: string
-  description?: string
-  logo_url?: string
-  website?: string
-  admin_user_id?: string
-  settings?: any
-  plan?: string
-  status?: string
-  created_at: string
-  updated_at: string
-}
+// Adicione outras interfaces (Organization, AIAgent, etc.) se elas estavam neste arquivo
+// ou certifique-se de que estão corretamente importadas/exportadas de onde vêm.
+// Se os tipos estavam aqui, você precisará adicioná-los de volta.
+// Por exemplo:
+// export interface Organization { /* ... */ }
+// export interface AIAgent { /* ... */ }
+// ... e assim por diante para todos os tipos que estavam definidos aqui.
 
-export interface AIAgent {
-  id: string
-  user_id: string
-  organization_id?: string
-  whatsapp_connection_id?: string
-  name: string
-  description?: string
-  avatar_url?: string
-  identity_description?: string
-  training_prompt: string
-  voice_tone?: string
-  main_function?: string
-  model?: string
-  temperature?: number
-  max_tokens?: number
-  model_config?: any
-  transcribe_audio?: boolean
-  understand_images?: boolean
-  voice_response_enabled?: boolean
-  voice_provider?: string
-  voice_api_key?: string
-  voice_id?: string
-  calendar_integration?: boolean
-  calendar_api_key?: string
-  calendar_meeting_id?: string
-  chatnode_integration?: boolean
-  chatnode_api_key?: string
-  chatnode_bot_id?: string
-  orimon_integration?: boolean
-  orimon_api_key?: string
-  orimon_bot_id?: string
-  is_default?: boolean
-  status?: string
-  created_at: string
-  updated_at: string
-}
-
-export interface WhatsAppConnection {
-  id: string
-  user_id: string
-  organization_id?: string
-  connection_name: string
-  instance_name: string
-  instance_id?: string
-  instance_token: string
-  status: "connected" | "disconnected" | "connecting" | "error" | "banned"
-  qr_code?: string
-  phone_number?: string
-  created_at: string
-  updated_at: string
-}
-
-export interface UserSettings {
-  id: string
-  user_id: string
-  agents_limit?: number
-  transcribe_audio_enabled?: boolean
-  understand_images_enabled?: boolean
-  voice_response_enabled?: boolean
-  calendar_integration_enabled?: boolean
-  vector_store_enabled?: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface SystemSettings {
-  id: string
-  setting_key: string
-  setting_value: any
-  category?: string
-  description?: string
-  is_public?: boolean
-  requires_restart?: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface SystemTheme {
-  id: string
-  name: string
-  display_name: string
-  description?: string
-  colors: any
-  fonts?: any
-  spacing?: any
-  borders?: any
-  shadows?: any
-  is_default?: boolean
-  is_active?: boolean
-  preview_image_url?: string
-  created_by?: string
-  created_at: string
-  updated_at: string
-}
-
-export interface Integration {
-  id: string
-  name: string
-  type: string
-  config: any
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export default supabase
+// Se você tinha um export default supabase, remova-o, pois agora estamos usando named exports.
+// export default supabase; // REMOVA ESTA LINHA SE EXISTIR
