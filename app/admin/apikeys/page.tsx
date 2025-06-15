@@ -47,8 +47,6 @@ interface ApiKey {
   is_active: boolean
   last_used_at?: string
   created_at: string
-  permissions?: string[]
-  rate_limit?: number
   user_profiles?: {
     full_name: string
     email: string
@@ -125,37 +123,31 @@ export default function AdminApiKeysPage() {
         setMessage("Erro de configuração do Supabase.")
         return
       }
-
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         db: { schema: "impaai" },
       })
 
-      // Buscar API keys diretamente da tabela com JOIN
+      // Buscar API keys com informações do usuário
       const { data, error } = await supabase
         .from("user_api_keys")
         .select(`
-          id,
-          user_id,
-          name,
-          api_key,
-          description,
-          is_active,
-          last_used_at,
-          created_at,
-          permissions,
-          rate_limit,
-          user_profiles!inner(
-            full_name,
-            email,
-            role
-          )
-        `)
+        id,
+        user_id,
+        name,
+        api_key,
+        description,
+        is_active,
+        last_used_at,
+        created_at,
+        user_profiles!inner(
+          full_name,
+          email,
+          role
+        )
+      `)
         .order("created_at", { ascending: false })
 
-      if (error) {
-        console.error("Erro ao buscar API keys:", error)
-        throw error
-      }
+      if (error) throw error
 
       // Transformar os dados para o formato esperado
       const transformedKeys: ApiKey[] =
@@ -167,7 +159,6 @@ export default function AdminApiKeysPage() {
       setApiKeys(transformedKeys)
     } catch (error) {
       console.error("Erro ao buscar API keys:", error)
-      setMessage("Erro ao carregar API keys. Verifique a configuração do banco de dados.")
     }
   }
 
@@ -181,7 +172,6 @@ export default function AdminApiKeysPage() {
         setMessage("Erro de configuração do Supabase.")
         return
       }
-
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         db: { schema: "impaai" },
       })
@@ -192,15 +182,10 @@ export default function AdminApiKeysPage() {
         .eq("status", "active")
         .order("full_name", { ascending: true })
 
-      if (error) {
-        console.error("Erro ao buscar usuários:", error)
-        throw error
-      }
-
+      if (error) throw error
       setUsers(data || [])
     } catch (error) {
       console.error("Erro ao buscar usuários:", error)
-      setMessage("Erro ao carregar usuários.")
     }
   }
 
@@ -229,17 +214,13 @@ export default function AdminApiKeysPage() {
       if (!supabaseUrl || !supabaseAnonKey) {
         console.error("Supabase URL or Anon Key is missing.")
         setMessage("Erro de configuração do Supabase.")
-        setSaving(false)
         return
       }
-
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         db: { schema: "impaai" },
       })
-
       const newApiKey = generateApiKey()
 
-      // Inserção direta na tabela (mais confiável que RPC)
       const { error } = await supabase.from("user_api_keys").insert({
         user_id: createForm.user_id,
         name: createForm.name.trim(),
@@ -248,26 +229,19 @@ export default function AdminApiKeysPage() {
         permissions: ["read"],
         rate_limit: 100,
         is_active: true,
+        is_admin_key: false,
+        access_scope: "user",
       })
 
-      if (error) {
-        console.error("Erro ao inserir API key:", error)
-        throw error
-      }
+      if (error) throw error
 
       await fetchApiKeys()
       setCreateModalOpen(false)
       setCreateForm({ user_id: "", name: "", description: "" })
       toast.success("API Key criada com sucesso!")
-    } catch (error: any) {
+    } catch (error) {
       console.error("Erro ao criar API key:", error)
-      const errorMessage = error.message?.includes("permission denied")
-        ? "Erro de permissão. Verifique as configurações RLS."
-        : error.message?.includes("duplicate key")
-          ? "Já existe uma API key com este nome para este usuário."
-          : "Erro ao criar API key: " + error.message
-      setMessage(errorMessage)
-      toast.error(errorMessage)
+      setMessage("Erro ao criar API key")
     } finally {
       setSaving(false)
     }
@@ -286,26 +260,21 @@ export default function AdminApiKeysPage() {
         setMessage("Erro de configuração do Supabase.")
         return
       }
-
       const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         db: { schema: "impaai" },
       })
 
       const { error } = await supabase.from("user_api_keys").delete().eq("id", selectedApiKey.id)
 
-      if (error) {
-        console.error("Erro ao excluir API key:", error)
-        throw error
-      }
+      if (error) throw error
 
       await fetchApiKeys()
       setDeleteModalOpen(false)
       setSelectedApiKey(null)
       toast.success("API Key excluída com sucesso!")
-    } catch (error: any) {
+    } catch (error) {
       console.error("Erro ao excluir API key:", error)
-      setMessage("Erro ao excluir API key: " + error.message)
-      toast.error("Erro ao excluir API key")
+      setMessage("Erro ao excluir API key")
     } finally {
       setSaving(false)
     }
@@ -467,8 +436,7 @@ export default function AdminApiKeysPage() {
                     <TableHead>Usuário</TableHead>
                     <TableHead>API Key</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Permissões</TableHead>
-                    <TableHead>Uso</TableHead>
+                    <TableHead>Último Uso</TableHead>
                     <TableHead>Criada em</TableHead>
                     <TableHead className="w-32">Ações</TableHead>
                   </TableRow>
@@ -520,15 +488,10 @@ export default function AdminApiKeysPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-xs border-blue-200 text-blue-700">
-                          {apiKey.permissions?.join(", ") || "read"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
                         <div className="text-sm">
                           {apiKey.last_used_at ? (
                             <div>
-                              <div className="font-medium text-green-600">Usada</div>
+                              <div>{formatDate(apiKey.last_used_at)}</div>
                               <div className="text-gray-500">
                                 {new Date(apiKey.last_used_at) > new Date(Date.now() - 24 * 60 * 60 * 1000)
                                   ? "Recente"
@@ -536,9 +499,7 @@ export default function AdminApiKeysPage() {
                               </div>
                             </div>
                           ) : (
-                            <div>
-                              <div className="font-medium text-gray-500">Nunca usada</div>
-                            </div>
+                            <span className="text-gray-500">Nunca usada</span>
                           )}
                         </div>
                       </TableCell>
@@ -546,30 +507,28 @@ export default function AdminApiKeysPage() {
                         <div className="text-sm">{formatDate(apiKey.created_at)}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-blue-600 hover:text-blue-700"
-                            onClick={() => {
-                              setSelectedApiKeyForExamples(apiKey)
-                              setExamplesModalOpen(true)
-                            }}
-                          >
-                            <Code className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => {
-                              setSelectedApiKey(apiKey)
-                              setDeleteModalOpen(true)
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-blue-600 hover:text-blue-700"
+                          onClick={() => {
+                            setSelectedApiKeyForExamples(apiKey)
+                            setExamplesModalOpen(true)
+                          }}
+                        >
+                          <Code className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => {
+                            setSelectedApiKey(apiKey)
+                            setDeleteModalOpen(true)
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}

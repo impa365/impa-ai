@@ -1,42 +1,43 @@
 -- ============================================
--- IMPA AI - SETUP COMPLETO PARA SUPABASE
--- Execute este script no seu Supabase
+-- SCRIPT COMPLETO PARA NOVO SUPABASE
+-- Schema: impaai
 -- ============================================
 
--- 1. CRIAR SCHEMA E FUNÇÕES BÁSICAS
--- ============================================
-
+-- 1. Criar schema impaai
 CREATE SCHEMA IF NOT EXISTS impaai;
+
+-- 2. Definir schema como padrão para esta sessão
 SET search_path TO impaai, public;
 
--- Função para atualizar updated_at
+-- 3. Criar função para atualizar updated_at
 CREATE OR REPLACE FUNCTION impaai.update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ language 'plpgsql';
 
--- Função para gerar API keys
+-- 4. Criar função para gerar API keys
 CREATE OR REPLACE FUNCTION impaai.generate_api_key()
 RETURNS TEXT AS $$
 BEGIN
-    RETURN 'impaai_' || replace(gen_random_uuid()::text, '-', '');
+    RETURN 'impa_' || encode(gen_random_bytes(32), 'hex');
 END;
-$$ LANGUAGE plpgsql;
+$$ language 'plpgsql';
 
--- 2. TABELAS PRINCIPAIS
+-- ============================================
+-- TABELAS PRINCIPAIS
 -- ============================================
 
--- Tabela de usuários
+-- 5. Tabela de perfis de usuário (COMPLETA)
 CREATE TABLE impaai.user_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role VARCHAR(50) DEFAULT 'user' CHECK (role IN ('admin', 'user', 'moderator')),
-    status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),
+    status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended', 'hibernated')),
     
     -- Informações pessoais
     avatar_url TEXT,
@@ -46,13 +47,19 @@ CREATE TABLE impaai.user_profiles (
     timezone VARCHAR(100) DEFAULT 'America/Sao_Paulo',
     language VARCHAR(10) DEFAULT 'pt-BR',
     
-    -- API e configurações
+    -- API e autenticação
     api_key VARCHAR(255) UNIQUE DEFAULT impaai.generate_api_key(),
     email_verified BOOLEAN DEFAULT false,
+    email_verification_token TEXT,
+    password_reset_token TEXT,
+    password_reset_expires TIMESTAMP WITH TIME ZONE,
+    
+    -- Configurações e preferências
     preferences JSONB DEFAULT '{}',
+    notification_settings JSONB DEFAULT '{"email": true, "push": true, "sms": false}',
     theme_settings JSONB DEFAULT '{"mode": "light", "color": "blue"}',
     
-    -- Limites
+    -- Limites e quotas
     agents_limit INTEGER DEFAULT 3,
     connections_limit INTEGER DEFAULT 5,
     monthly_messages_limit INTEGER DEFAULT 1000,
@@ -64,7 +71,7 @@ CREATE TABLE impaai.user_profiles (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tabela de API keys dos usuários
+-- 6. Tabela de chaves de API dos usuários
 CREATE TABLE impaai.user_api_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES impaai.user_profiles(id) ON DELETE CASCADE,
@@ -73,17 +80,34 @@ CREATE TABLE impaai.user_api_keys (
     description TEXT,
     permissions JSONB DEFAULT '["read"]',
     rate_limit INTEGER DEFAULT 100,
-    is_active BOOLEAN DEFAULT true,
     last_used_at TIMESTAMP WITH TIME ZONE,
     expires_at TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tabela de conexões WhatsApp
+-- 7. Tabela de organizações (para multi-tenancy futuro)
+CREATE TABLE impaai.organizations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(100) UNIQUE NOT NULL,
+    description TEXT,
+    logo_url TEXT,
+    website VARCHAR(255),
+    admin_user_id UUID REFERENCES impaai.user_profiles(id),
+    settings JSONB DEFAULT '{}',
+    plan VARCHAR(50) DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'enterprise')),
+    status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 8. Tabela de conexões WhatsApp (COMPLETA)
 CREATE TABLE impaai.whatsapp_connections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES impaai.user_profiles(id) ON DELETE CASCADE,
+    organization_id UUID REFERENCES impaai.organizations(id) ON DELETE SET NULL,
     
     -- Informações da conexão
     connection_name VARCHAR(255) NOT NULL,
@@ -119,10 +143,11 @@ CREATE TABLE impaai.whatsapp_connections (
     UNIQUE(user_id, instance_name)
 );
 
--- Tabela de agentes de IA
+-- 9. Tabela de agentes de IA (COMPLETA COM TODAS AS INTEGRAÇÕES)
 CREATE TABLE impaai.ai_agents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES impaai.user_profiles(id) ON DELETE CASCADE,
+    organization_id UUID REFERENCES impaai.organizations(id) ON DELETE SET NULL,
     whatsapp_connection_id UUID REFERENCES impaai.whatsapp_connections(id) ON DELETE SET NULL,
     evolution_bot_id VARCHAR(255) UNIQUE,
     
@@ -165,7 +190,7 @@ CREATE TABLE impaai.ai_agents (
     orimon_api_key TEXT,
     orimon_bot_id TEXT,
     
-    -- Configurações avançadas
+    -- Configurações avançadas de comportamento
     is_default BOOLEAN DEFAULT false,
     listen_own_messages BOOLEAN DEFAULT false,
     stop_bot_by_me BOOLEAN DEFAULT true,
@@ -187,10 +212,13 @@ CREATE TABLE impaai.ai_agents (
     total_messages INTEGER DEFAULT 0,
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Garantir que só existe um agente padrão por conexão
+    UNIQUE(whatsapp_connection_id, is_default) WHERE is_default = true
 );
 
--- Tabela de configurações do sistema
+-- 10. Tabela de configurações do sistema (INCLUINDO TEMAS)
 CREATE TABLE impaai.system_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     setting_key VARCHAR(255) UNIQUE NOT NULL,
@@ -203,7 +231,7 @@ CREATE TABLE impaai.system_settings (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tabela de temas do sistema
+-- 11. Tabela de temas do sistema
 CREATE TABLE impaai.system_themes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100) UNIQUE NOT NULL,
@@ -211,26 +239,18 @@ CREATE TABLE impaai.system_themes (
     description TEXT,
     colors JSONB NOT NULL,
     fonts JSONB DEFAULT '{}',
+    spacing JSONB DEFAULT '{}',
     borders JSONB DEFAULT '{}',
-    logo_icon VARCHAR(10) DEFAULT '🤖',
+    shadows JSONB DEFAULT '{}',
     is_default BOOLEAN DEFAULT false,
     is_active BOOLEAN DEFAULT true,
+    preview_image_url TEXT,
+    created_by UUID REFERENCES impaai.user_profiles(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tabela de integrações
-CREATE TABLE impaai.integrations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL,
-    type VARCHAR(100) NOT NULL UNIQUE,
-    config JSONB DEFAULT '{}',
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Tabela de logs de atividade dos agentes
+-- 12. Tabela de logs de atividade dos agentes
 CREATE TABLE impaai.agent_activity_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     agent_id UUID NOT NULL REFERENCES impaai.ai_agents(id) ON DELETE CASCADE,
@@ -246,11 +266,12 @@ CREATE TABLE impaai.agent_activity_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tabela de logs de atividade geral
+-- 13. Tabela de logs de atividade geral
 CREATE TABLE impaai.activity_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id VARCHAR(255),
     agent_id UUID REFERENCES impaai.ai_agents(id) ON DELETE SET NULL,
+    organization_id UUID REFERENCES impaai.organizations(id) ON DELETE SET NULL,
     action VARCHAR(255) NOT NULL,
     resource_type VARCHAR(100),
     resource_id VARCHAR(255),
@@ -260,7 +281,32 @@ CREATE TABLE impaai.activity_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tabela de conversas
+-- 14. Tabela de configurações dos agentes
+CREATE TABLE impaai.agent_system_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    setting_key VARCHAR(255) NOT NULL,
+    setting_value JSONB NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 15. Tabela de configurações de usuário-agente
+CREATE TABLE impaai.user_agent_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES impaai.user_profiles(id) ON DELETE CASCADE,
+    agents_limit INTEGER DEFAULT 1,
+    transcribe_audio_enabled BOOLEAN DEFAULT true,
+    understand_images_enabled BOOLEAN DEFAULT true,
+    voice_response_enabled BOOLEAN DEFAULT false,
+    calendar_integration_enabled BOOLEAN DEFAULT false,
+    vector_store_enabled BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id)
+);
+
+-- 16. Tabela de conversas (para histórico)
 CREATE TABLE impaai.conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     agent_id UUID NOT NULL REFERENCES impaai.ai_agents(id) ON DELETE CASCADE,
@@ -275,7 +321,7 @@ CREATE TABLE impaai.conversations (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tabela de mensagens
+-- 17. Tabela de mensagens (para histórico detalhado)
 CREATE TABLE impaai.messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id UUID NOT NULL REFERENCES impaai.conversations(id) ON DELETE CASCADE,
@@ -289,7 +335,8 @@ CREATE TABLE impaai.messages (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 3. ÍNDICES PARA PERFORMANCE
+-- ============================================
+-- ÍNDICES PARA PERFORMANCE
 -- ============================================
 
 -- Índices para user_profiles
@@ -307,37 +354,46 @@ CREATE INDEX idx_user_api_keys_active ON impaai.user_api_keys(is_active) WHERE i
 CREATE INDEX idx_whatsapp_connections_user_id ON impaai.whatsapp_connections(user_id);
 CREATE INDEX idx_whatsapp_connections_status ON impaai.whatsapp_connections(status);
 CREATE INDEX idx_whatsapp_connections_instance ON impaai.whatsapp_connections(instance_name);
+CREATE INDEX idx_whatsapp_connections_phone ON impaai.whatsapp_connections(phone_number);
 
 -- Índices para ai_agents
 CREATE INDEX idx_ai_agents_user_id ON impaai.ai_agents(user_id);
 CREATE INDEX idx_ai_agents_status ON impaai.ai_agents(status);
 CREATE INDEX idx_ai_agents_whatsapp_connection ON impaai.ai_agents(whatsapp_connection_id);
 CREATE INDEX idx_ai_agents_evolution_bot_id ON impaai.ai_agents(evolution_bot_id);
-
--- Índice único parcial para agente padrão
-CREATE UNIQUE INDEX idx_ai_agents_default_per_connection 
-ON impaai.ai_agents(whatsapp_connection_id) 
-WHERE is_default = true;
+CREATE INDEX idx_ai_agents_chatnode ON impaai.ai_agents(chatnode_integration) WHERE chatnode_integration = true;
+CREATE INDEX idx_ai_agents_orimon ON impaai.ai_agents(orimon_integration) WHERE orimon_integration = true;
+CREATE INDEX idx_ai_agents_voice_enabled ON impaai.ai_agents(voice_response_enabled) WHERE voice_response_enabled = true;
 
 -- Índices para logs
 CREATE INDEX idx_agent_activity_logs_agent_id ON impaai.agent_activity_logs(agent_id);
+CREATE INDEX idx_agent_activity_logs_type ON impaai.agent_activity_logs(activity_type);
 CREATE INDEX idx_agent_activity_logs_created_at ON impaai.agent_activity_logs(created_at);
+CREATE INDEX idx_agent_activity_logs_success ON impaai.agent_activity_logs(success);
+
 CREATE INDEX idx_activity_logs_user_id ON impaai.activity_logs(user_id);
+CREATE INDEX idx_activity_logs_agent_id ON impaai.activity_logs(agent_id);
+CREATE INDEX idx_activity_logs_action ON impaai.activity_logs(action);
 CREATE INDEX idx_activity_logs_created_at ON impaai.activity_logs(created_at);
 
 -- Índices para conversas e mensagens
 CREATE INDEX idx_conversations_agent_id ON impaai.conversations(agent_id);
 CREATE INDEX idx_conversations_contact_phone ON impaai.conversations(contact_phone);
+CREATE INDEX idx_conversations_status ON impaai.conversations(status);
+CREATE INDEX idx_conversations_last_message ON impaai.conversations(last_message_at);
+
 CREATE INDEX idx_messages_conversation_id ON impaai.messages(conversation_id);
+CREATE INDEX idx_messages_agent_id ON impaai.messages(agent_id);
+CREATE INDEX idx_messages_direction ON impaai.messages(direction);
 CREATE INDEX idx_messages_created_at ON impaai.messages(created_at);
 
--- Índices para configurações
+-- Índices para system_settings
 CREATE INDEX idx_system_settings_key ON impaai.system_settings(setting_key);
 CREATE INDEX idx_system_settings_category ON impaai.system_settings(category);
-CREATE INDEX idx_integrations_type ON impaai.integrations(type);
-CREATE INDEX idx_integrations_active ON impaai.integrations(is_active);
+CREATE INDEX idx_system_settings_public ON impaai.system_settings(is_public) WHERE is_public = true;
 
--- 4. TRIGGERS PARA UPDATED_AT
+-- ============================================
+-- TRIGGERS PARA UPDATED_AT
 -- ============================================
 
 CREATE TRIGGER update_user_profiles_updated_at 
@@ -346,6 +402,10 @@ CREATE TRIGGER update_user_profiles_updated_at
 
 CREATE TRIGGER update_user_api_keys_updated_at 
     BEFORE UPDATE ON impaai.user_api_keys 
+    FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
+
+CREATE TRIGGER update_organizations_updated_at 
+    BEFORE UPDATE ON impaai.organizations 
     FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
 
 CREATE TRIGGER update_whatsapp_connections_updated_at 
@@ -360,287 +420,241 @@ CREATE TRIGGER update_system_settings_updated_at
     BEFORE UPDATE ON impaai.system_settings 
     FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
 
+CREATE TRIGGER update_system_themes_updated_at 
+    BEFORE UPDATE ON impaai.system_themes 
+    FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
+
 CREATE TRIGGER update_conversations_updated_at 
     BEFORE UPDATE ON impaai.conversations 
     FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
 
--- 5. FUNÇÕES RPC PARA API
+-- ============================================
+-- CONFIGURAÇÕES PADRÃO DO SISTEMA
 -- ============================================
 
--- Função para criar API key
-CREATE OR REPLACE FUNCTION impaai.create_user_api_key(
-    p_user_id UUID,
-    p_name TEXT,
-    p_api_key TEXT,
-    p_description TEXT DEFAULT NULL
-)
-RETURNS VOID
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-    INSERT INTO impaai.user_api_keys (
-        user_id, name, api_key, description, permissions, rate_limit, is_active
-    ) VALUES (
-        p_user_id, p_name, p_api_key, 
-        COALESCE(p_description, 'API Key para integração'), 
-        '["read"]'::jsonb, 100, true
-    );
-END;
-$$;
-
--- Função para buscar API key
-CREATE OR REPLACE FUNCTION impaai.get_user_api_key_by_key(p_api_key TEXT)
-RETURNS TABLE (
-    id UUID, user_id UUID, name TEXT, api_key TEXT, 
-    description TEXT, permissions JSONB, rate_limit INTEGER, 
-    is_active BOOLEAN, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-    RETURN QUERY
-    SELECT u.id, u.user_id, u.name, u.api_key, u.description, 
-           u.permissions, u.rate_limit, u.is_active, u.created_at, u.updated_at
-    FROM impaai.user_api_keys u
-    WHERE u.api_key = p_api_key AND u.is_active = true;
-END;
-$$;
-
--- Função para atualizar sincronização de conexão
-CREATE OR REPLACE FUNCTION impaai.update_connection_sync(connection_id UUID)
-RETURNS JSON
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    result JSON;
-    current_time TIMESTAMPTZ := NOW();
-BEGIN
-    UPDATE impaai.whatsapp_connections 
-    SET updated_at = current_time
-    WHERE id = connection_id;
-    
-    IF FOUND THEN
-        result := json_build_object(
-            'success', true,
-            'updated', true,
-            'timestamp', current_time
-        );
-    ELSE
-        result := json_build_object(
-            'success', false,
-            'error', 'Connection not found'
-        );
-    END IF;
-    
-    RETURN result;
-END;
-$$;
-
--- Função para obter tema ativo
-CREATE OR REPLACE FUNCTION impaai.get_active_theme()
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    theme_data JSONB;
-BEGIN
-    SELECT jsonb_build_object(
-        'display_name', display_name,
-        'description', description,
-        'colors', colors,
-        'logo_icon', logo_icon
-    ) INTO theme_data
-    FROM impaai.system_themes
-    WHERE is_active = true
-    LIMIT 1;
-    
-    IF theme_data IS NULL THEN
-        SELECT jsonb_build_object(
-            'display_name', display_name,
-            'description', description,
-            'colors', colors,
-            'logo_icon', logo_icon
-        ) INTO theme_data
-        FROM impaai.system_themes
-        WHERE is_default = true
-        LIMIT 1;
-    END IF;
-    
-    IF theme_data IS NULL THEN
-        theme_data := '{"display_name": "Impa AI", "colors": {"primary": "#3b82f6"}, "logo_icon": "🤖"}'::jsonb;
-    END IF;
-    
-    RETURN theme_data;
-END;
-$$;
-
--- 6. ROW LEVEL SECURITY (RLS)
--- ============================================
-
--- Habilitar RLS nas tabelas principais
-ALTER TABLE impaai.user_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE impaai.user_api_keys ENABLE ROW LEVEL SECURITY;
-ALTER TABLE impaai.whatsapp_connections ENABLE ROW LEVEL SECURITY;
-ALTER TABLE impaai.ai_agents ENABLE ROW LEVEL SECURITY;
-ALTER TABLE impaai.agent_activity_logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE impaai.conversations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE impaai.messages ENABLE ROW LEVEL SECURITY;
-
--- Políticas para user_profiles
-CREATE POLICY "Users can view own profile" ON impaai.user_profiles
-    FOR SELECT USING (auth.uid()::text = id::text);
-
-CREATE POLICY "Users can update own profile" ON impaai.user_profiles
-    FOR UPDATE USING (auth.uid()::text = id::text);
-
--- Políticas para user_api_keys
-CREATE POLICY "Users can view own API keys" ON impaai.user_api_keys
-    FOR SELECT USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "Users can manage own API keys" ON impaai.user_api_keys
-    FOR ALL USING (auth.uid()::text = user_id::text);
-
--- Políticas para whatsapp_connections
-CREATE POLICY "Users can view own connections" ON impaai.whatsapp_connections
-    FOR SELECT USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "Users can manage own connections" ON impaai.whatsapp_connections
-    FOR ALL USING (auth.uid()::text = user_id::text);
-
--- Políticas para ai_agents
-CREATE POLICY "Users can view own agents" ON impaai.ai_agents
-    FOR SELECT USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "Users can manage own agents" ON impaai.ai_agents
-    FOR ALL USING (auth.uid()::text = user_id::text);
-
--- Políticas para logs (somente leitura)
-CREATE POLICY "Users can view own agent logs" ON impaai.agent_activity_logs
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM impaai.ai_agents 
-            WHERE id = agent_activity_logs.agent_id 
-            AND user_id::text = auth.uid()::text
-        )
-    );
-
--- Políticas para conversas
-CREATE POLICY "Users can view own conversations" ON impaai.conversations
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM impaai.ai_agents 
-            WHERE id = conversations.agent_id 
-            AND user_id::text = auth.uid()::text
-        )
-    );
-
--- Políticas para mensagens
-CREATE POLICY "Users can view own messages" ON impaai.messages
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM impaai.conversations c
-            JOIN impaai.ai_agents a ON c.agent_id = a.id
-            WHERE c.id = messages.conversation_id 
-            AND a.user_id::text = auth.uid()::text
-        )
-    );
-
--- Permitir acesso público às configurações do sistema (somente leitura)
-CREATE POLICY "Public read access to system settings" ON impaai.system_settings
-    FOR SELECT USING (is_public = true);
-
-CREATE POLICY "Public read access to system themes" ON impaai.system_themes
-    FOR SELECT USING (true);
-
-CREATE POLICY "Public read access to integrations" ON impaai.integrations
-    FOR SELECT USING (true);
-
--- 7. PERMISSÕES PARA ANON
--- ============================================
-
--- Conceder permissões básicas para usuários anônimos
-GRANT USAGE ON SCHEMA impaai TO anon;
-GRANT SELECT ON impaai.system_settings TO anon;
-GRANT SELECT ON impaai.system_themes TO anon;
-GRANT SELECT ON impaai.integrations TO anon;
-
--- Conceder permissões para usuários autenticados
-GRANT USAGE ON SCHEMA impaai TO authenticated;
-GRANT ALL ON ALL TABLES IN SCHEMA impaai TO authenticated;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA impaai TO authenticated;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA impaai TO authenticated;
-
--- 8. DADOS INICIAIS
--- ============================================
-
--- Configurações do sistema
+-- Configurações gerais
 INSERT INTO impaai.system_settings (setting_key, setting_value, category, description, is_public) VALUES 
 ('app_name', '"Impa AI"', 'general', 'Nome da aplicação', true),
 ('app_version', '"1.0.0"', 'general', 'Versão da aplicação', true),
-('allow_public_registration', 'false', 'auth', 'Permitir registro público', false),
+('allow_public_registration', 'false', 'auth', 'Permitir registro público de usuários', false),
+('require_email_verification', 'true', 'auth', 'Exigir verificação de email', false),
+('session_timeout', '86400', 'auth', 'Timeout da sessão em segundos', false),
+
+-- Configurações de agentes
 ('max_agents_per_user', '5', 'agents', 'Máximo de agentes por usuário', false),
-('default_model', '"gpt-3.5-turbo"', 'agents', 'Modelo padrão', false),
-('enable_vector_stores', 'true', 'integrations', 'Habilitar vector stores', false),
-('enable_voice_responses', 'true', 'integrations', 'Habilitar respostas por voz', false);
+('default_model', '"gpt-3.5-turbo"', 'agents', 'Modelo padrão para novos agentes', false),
+('max_tokens_default', '1000', 'agents', 'Tokens máximos padrão', false),
+('temperature_default', '0.7', 'agents', 'Temperatura padrão para novos agentes', false),
 
--- Tema padrão
-INSERT INTO impaai.system_themes (name, display_name, description, colors, logo_icon, is_default, is_active) VALUES 
-('default_blue', 'Impa AI', 'Tema padrão azul da plataforma', 
-'{"primary": "#3b82f6", "secondary": "#10b981", "accent": "#8b5cf6", "background": "#ffffff", "text": "#1e293b"}', 
-'🤖', true, true);
+-- Configurações de integrações
+('enable_vector_stores', 'true', 'integrations', 'Habilitar integrações de vector store', false),
+('enable_voice_responses', 'true', 'integrations', 'Habilitar respostas por voz', false),
+('enable_image_analysis', 'true', 'integrations', 'Habilitar análise de imagens', false),
+('enable_audio_transcription', 'true', 'integrations', 'Habilitar transcrição de áudio', false),
 
--- Integrações disponíveis
-INSERT INTO impaai.integrations (name, type, config, is_active) VALUES 
-('Evolution API', 'evolution_api', '{}', false),
-('n8n Automation', 'n8n', '{}', false);
+-- Configurações de WhatsApp
+('max_connections_per_user', '5', 'whatsapp', 'Máximo de conexões WhatsApp por usuário', false),
+('webhook_timeout', '30', 'whatsapp', 'Timeout para webhooks em segundos', false),
+('auto_reconnect_enabled', 'true', 'whatsapp', 'Habilitar reconexão automática', false),
 
--- Usuário administrador padrão (senha: admin123)
+-- Configurações de tema
+('default_theme', '"light"', 'theme', 'Tema padrão do sistema', true),
+('allow_custom_themes', 'true', 'theme', 'Permitir temas personalizados', false),
+('theme_customization_enabled', 'true', 'theme', 'Habilitar personalização de tema', false);
+
+-- Temas padrão
+INSERT INTO impaai.system_themes (name, display_name, description, colors, is_default, is_active) VALUES 
+('light', 'Tema Claro', 'Tema claro padrão do sistema', '{
+    "primary": "#3B82F6",
+    "secondary": "#64748B", 
+    "background": "#FFFFFF",
+    "surface": "#F8FAFC",
+    "text": "#1E293B",
+    "border": "#E2E8F0",
+    "accent": "#10B981"
+}', true, true),
+
+('dark', 'Tema Escuro', 'Tema escuro para uso noturno', '{
+    "primary": "#60A5FA",
+    "secondary": "#94A3B8",
+    "background": "#0F172A", 
+    "surface": "#1E293B",
+    "text": "#F1F5F9",
+    "border": "#334155",
+    "accent": "#34D399"
+}', false, true),
+
+('blue', 'Azul Profissional', 'Tema azul para ambiente corporativo', '{
+    "primary": "#2563EB",
+    "secondary": "#475569",
+    "background": "#FFFFFF",
+    "surface": "#F1F5F9", 
+    "text": "#1E293B",
+    "border": "#CBD5E1",
+    "accent": "#0EA5E9"
+}', false, true);
+
+-- ============================================
+-- USUÁRIOS PADRÃO
+-- ============================================
+
+-- ADMIN USER (senha: admin123)
 INSERT INTO impaai.user_profiles (
-    full_name, email, password_hash, role, status, 
-    agents_limit, connections_limit, monthly_messages_limit, email_verified
+    id,
+    full_name, 
+    email, 
+    password_hash, 
+    role, 
+    status,
+    agents_limit,
+    connections_limit,
+    monthly_messages_limit,
+    email_verified,
+    theme_settings,
+    preferences,
+    created_at
 ) VALUES (
+    gen_random_uuid(),
     'Administrador do Sistema',
     'admin@impa.ai',
-    '$2a$12$LQv3c1yqBwEHxPuNYkGOSuOiUiIq6QEX9K6FhmXEuKtcsNdvQqDAa',
-    'admin', 'active', 999, 999, 999999, true
+    '$2a$12$LQv3c1yqBwEHxPuNYkGOSuOiUiIq6QEX9K6FhmXEuKtcsNdvQqDAa', -- admin123
+    'admin',
+    'active',
+    999,
+    999,
+    999999,
+    true,
+    '{"mode": "light", "color": "blue", "customizations": {}}',
+    '{"notifications": true, "analytics": true, "beta_features": true}',
+    NOW()
 );
 
--- 9. COMENTÁRIOS PARA DOCUMENTAÇÃO
+-- USER COMUM (senha: user123)  
+INSERT INTO impaai.user_profiles (
+    id,
+    full_name, 
+    email, 
+    password_hash, 
+    role, 
+    status,
+    agents_limit,
+    connections_limit,
+    monthly_messages_limit,
+    email_verified,
+    theme_settings,
+    preferences,
+    created_at
+) VALUES (
+    gen_random_uuid(),
+    'Usuário de Teste',
+    'user@impa.ai',
+    '$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- user123
+    'user',
+    'active',
+    3,
+    5,
+    1000,
+    true,
+    '{"mode": "light", "color": "blue", "customizations": {}}',
+    '{"notifications": true, "analytics": false, "beta_features": false}',
+    NOW()
+);
+
+-- Criar configurações de agente para os usuários
+INSERT INTO impaai.user_agent_settings (user_id, agents_limit, transcribe_audio_enabled, understand_images_enabled, voice_response_enabled, calendar_integration_enabled, vector_store_enabled)
+SELECT id, agents_limit, true, true, false, false, true
+FROM impaai.user_profiles;
+
+-- ============================================
+-- COMENTÁRIOS PARA DOCUMENTAÇÃO
 -- ============================================
 
 COMMENT ON SCHEMA impaai IS 'Schema principal do sistema Impa AI';
-COMMENT ON TABLE impaai.user_profiles IS 'Perfis dos usuários do sistema';
-COMMENT ON TABLE impaai.user_api_keys IS 'Chaves de API dos usuários';
+
+COMMENT ON TABLE impaai.user_profiles IS 'Perfis completos dos usuários do sistema';
+COMMENT ON TABLE impaai.user_api_keys IS 'Chaves de API dos usuários para acesso externo';
+COMMENT ON TABLE impaai.organizations IS 'Organizações para multi-tenancy';
 COMMENT ON TABLE impaai.whatsapp_connections IS 'Conexões WhatsApp dos usuários';
-COMMENT ON TABLE impaai.ai_agents IS 'Agentes de IA configurados';
+COMMENT ON TABLE impaai.ai_agents IS 'Agentes de IA com todas as integrações';
 COMMENT ON TABLE impaai.system_settings IS 'Configurações globais do sistema';
 COMMENT ON TABLE impaai.system_themes IS 'Temas visuais do sistema';
-COMMENT ON TABLE impaai.integrations IS 'Integrações externas disponíveis';
+COMMENT ON TABLE impaai.agent_activity_logs IS 'Logs detalhados de atividade dos agentes';
+COMMENT ON TABLE impaai.activity_logs IS 'Logs de atividade geral do sistema';
+COMMENT ON TABLE impaai.conversations IS 'Histórico de conversas';
+COMMENT ON TABLE impaai.messages IS 'Mensagens detalhadas das conversas';
+
+-- Comentários específicos para integrações
+COMMENT ON COLUMN impaai.ai_agents.chatnode_integration IS 'Habilita integração com ChatNode.ai para vector store';
+COMMENT ON COLUMN impaai.ai_agents.chatnode_api_key IS 'Chave da API do ChatNode.ai';
+COMMENT ON COLUMN impaai.ai_agents.chatnode_bot_id IS 'ID do bot no ChatNode.ai';
+COMMENT ON COLUMN impaai.ai_agents.orimon_integration IS 'Habilita integração com Orimon.ai para vector store';
+COMMENT ON COLUMN impaai.ai_agents.orimon_api_key IS 'Chave da API do Orimon.ai';
+COMMENT ON COLUMN impaai.ai_agents.orimon_bot_id IS 'ID do bot no Orimon.ai';
+COMMENT ON COLUMN impaai.ai_agents.voice_response_enabled IS 'Habilita respostas por voz';
+COMMENT ON COLUMN impaai.ai_agents.voice_provider IS 'Provedor de voz (fish_audio ou eleven_labs)';
+COMMENT ON COLUMN impaai.ai_agents.calendar_integration IS 'Habilita integração com calendário';
 
 -- ============================================
 -- VERIFICAÇÃO FINAL
 -- ============================================
 
--- Verificar se as tabelas foram criadas
+-- Mostrar estatísticas das tabelas criadas
 SELECT 
-    table_name,
-    table_type
-FROM information_schema.tables 
-WHERE table_schema = 'impaai'
-ORDER BY table_name;
+    schemaname,
+    tablename,
+    COALESCE(n_tup_ins, 0) as registros
+FROM pg_stat_user_tables 
+WHERE schemaname = 'impaai'
+ORDER BY tablename;
+
+-- Mostrar usuários criados
+SELECT 
+    full_name,
+    email,
+    role,
+    status,
+    agents_limit,
+    connections_limit,
+    CASE 
+        WHEN email = 'admin@impa.ai' THEN 'Senha: admin123'
+        WHEN email = 'user@impa.ai' THEN 'Senha: user123'
+        ELSE 'N/A'
+    END as credenciais
+FROM impaai.user_profiles 
+ORDER BY role DESC;
+
+-- Mostrar configurações do sistema
+SELECT 
+    setting_key,
+    setting_value,
+    category,
+    description
+FROM impaai.system_settings 
+ORDER BY category, setting_key;
+
+-- Mostrar temas disponíveis
+SELECT 
+    name,
+    display_name,
+    description,
+    is_default,
+    is_active
+FROM impaai.system_themes 
+ORDER BY is_default DESC, name;
 
 -- ============================================
--- SETUP CONCLUÍDO!
+-- SCRIPT CONCLUÍDO!
 -- 
--- CREDENCIAIS PADRÃO:
--- Admin: admin@impa.ai (senha: admin123)
+-- SCHEMA: impaai
+-- 
+-- USUÁRIOS CRIADOS:
+-- 1. Admin: admin@impa.ai (senha: admin123)
+-- 2. User:  user@impa.ai  (senha: user123)
 --
--- PRÓXIMOS PASSOS:
--- 1. Configure as variáveis de ambiente no seu projeto
--- 2. Teste a conexão com Supabase
--- 3. Faça login com as credenciais padrão
+-- TABELAS CRIADAS: 17 tabelas completas
+-- TEMAS: 3 temas padrão (light, dark, blue)
+-- CONFIGURAÇÕES: Sistema completo configurado
+--
+-- Execute este script no seu novo Supabase
+-- e depois me passe a URL e ANON_KEY
 -- ============================================
