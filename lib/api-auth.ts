@@ -1,13 +1,13 @@
 // @ts-nocheck
 // TODO: Arrumar os types desse arquivo
 import { db } from "./supabase"
-import type { UserProfile } from "@/types/user" // Certifique-se que este tipo está correto
+import type { UserProfile } from "@/types/user"
 
 interface ApiKeyData {
   id: string
   user_id: string
   name: string
-  key_hash: string // Assumindo que você armazena o hash da chave
+  api_key: string // Mantendo o nome da coluna como está no seu banco
   is_admin_key: boolean
   last_used_at: string | null
   expires_at: string | null
@@ -23,44 +23,43 @@ interface ValidationResult {
   status?: number
 }
 
-// Função para simular a verificação de hash (substitua pela sua lógica real)
-// Em um cenário real, você usaria bcrypt.compare() ou similar.
-// Para este exemplo, vamos assumir que a chave completa é passada e comparada diretamente
-// com um valor não hasheado no banco, o que NÃO é seguro para produção.
-// A forma correta é: cliente envia a chave, servidor busca pelo prefixo,
-// depois compara o hash da parte secreta da chave enviada com o hash armazenado.
-// Por simplicidade e para focar no problema do header, vamos manter a lógica atual de busca.
+async function verifyApiKey(apiKeyToVerify: string): Promise<ApiKeyData | null> {
+  // Log para ver a chave que está sendo verificada
+  console.log(
+    "verifyApiKey: Attempting to verify key:",
+    apiKeyToVerify ? `${apiKeyToVerify.substring(0, 12)}...` : "EMPTY_KEY_RECEIVED",
+  )
 
-async function verifyApiKey(apiKey: string): Promise<ApiKeyData | null> {
-  if (!apiKey || typeof apiKey !== "string") {
-    console.error("verifyApiKey: API key is invalid or not a string.", { apiKey })
+  if (!apiKeyToVerify || typeof apiKeyToVerify !== "string") {
+    console.error("verifyApiKey: API key is invalid or not a string.", { apiKeyToVerify })
     return null
   }
 
-  // As chaves geradas são "impaai_" + 30 caracteres aleatórios.
-  // O prefixo "impaai_" tem 7 caracteres.
-  // A chave completa tem 37 caracteres.
-  if (!apiKey.startsWith("impaai_") || apiKey.length !== 37) {
-    console.error("verifyApiKey: API key format is invalid.", { keyReceived: apiKey, length: apiKey.length })
+  if (!apiKeyToVerify.startsWith("impaai_") || apiKeyToVerify.length !== 37) {
+    console.error("verifyApiKey: API key format is invalid.", {
+      keyReceived: apiKeyToVerify,
+      length: apiKeyToVerify.length,
+    })
     return null
   }
 
   try {
     const { data, error } = await (await db.userApiKeys())
       .select("*")
-      .eq("api_key", apiKey) // Assumindo que você armazena a chave completa (NÃO SEGURO)
-      // .eq("key_prefix", apiKey.substring(0, 15)) // Exemplo se usasse prefixo
+      .eq("api_key", apiKeyToVerify) // Usando a coluna "api_key" como no seu schema
       .single()
 
     if (error) {
-      console.error("verifyApiKey: Error fetching API key from DB:", error.message, { keyUsedForLookup: apiKey })
+      console.error("verifyApiKey: Error fetching API key from DB:", error.message, {
+        keyUsedForLookup: apiKeyToVerify,
+      })
       return null
     }
     if (!data) {
-      console.warn("verifyApiKey: API key not found in DB.", { keyUsedForLookup: apiKey })
+      console.warn("verifyApiKey: API key not found in DB.", { keyUsedForLookup: apiKeyToVerify })
       return null
     }
-    console.log("verifyApiKey: API key data found in DB:", data)
+    console.log("verifyApiKey: API key data found in DB for key prefix:", data.api_key.substring(0, 12) + "...")
     return data as ApiKeyData
   } catch (e) {
     console.error("verifyApiKey: Exception during DB query:", e)
@@ -70,38 +69,69 @@ async function verifyApiKey(apiKey: string): Promise<ApiKeyData | null> {
 
 export async function validateApiKey(request: Request): Promise<ValidationResult> {
   let apiKey: string | null = null
+  const headers = request.headers
+
+  // Log de todos os cabeçalhos recebidos para depuração
+  const allHeaders: Record<string, string> = {}
+  headers.forEach((value, key) => {
+    allHeaders[key] = value
+  })
+  console.log("validateApiKey: Received headers:", allHeaders)
 
   // 1. Tenta pegar do header 'apikey' (case-insensitive)
-  const apiKeyHeader = request.headers.get("apikey") || request.headers.get("Apikey") || request.headers.get("APIKEY")
-  if (apiKeyHeader) {
-    apiKey = apiKeyHeader
-    console.log("validateApiKey: Found key in 'apikey' header:", apiKey)
+  const apiKeyHeaderValue = headers.get("apikey")
+  if (apiKeyHeaderValue) {
+    apiKey = apiKeyHeaderValue
+    console.log(
+      "validateApiKey: Found key in 'apikey' header:",
+      apiKey ? `${apiKey.substring(0, 12)}...` : "EMPTY_APIKEY_HEADER",
+    )
   }
 
   // 2. Se não encontrou, tenta pegar do header 'Authorization: Bearer <token>'
   if (!apiKey) {
-    const authHeader = request.headers.get("Authorization") || request.headers.get("authorization")
-    if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
-      apiKey = authHeader.substring(7) // Remove "Bearer "
-      console.log("validateApiKey: Found key in 'Authorization: Bearer' header:", apiKey)
+    const authHeaderValue = headers.get("Authorization")
+    console.log("validateApiKey: Value of 'Authorization' header:", authHeaderValue)
+    if (authHeaderValue) {
+      const parts = authHeaderValue.split(" ")
+      if (parts.length === 2 && parts[0].toLowerCase() === "bearer") {
+        apiKey = parts[1]
+        console.log(
+          "validateApiKey: Extracted key from 'Authorization: Bearer' header:",
+          apiKey ? `${apiKey.substring(0, 12)}...` : "EMPTY_BEARER_TOKEN",
+        )
+      } else {
+        console.log(
+          "validateApiKey: 'Authorization' header found, but not in 'Bearer <token>' format. Value:",
+          authHeaderValue,
+        )
+      }
+    } else {
+      console.log("validateApiKey: 'Authorization' header not found.")
     }
   }
 
   if (!apiKey) {
-    console.warn("validateApiKey: API key not found in headers.")
+    console.warn("validateApiKey: Final check - API key was NOT extracted from headers.")
     return { isValid: false, error: "API key é obrigatória", status: 401 }
   }
+
+  console.log(
+    "validateApiKey: API key extracted for verification:",
+    apiKey ? `${apiKey.substring(0, 12)}...` : "EMPTY_EXTRACTED_KEY",
+  )
 
   const apiKeyData = await verifyApiKey(apiKey)
 
   if (!apiKeyData) {
-    console.warn("validateApiKey: API key verification failed (not found or DB error).", { apiKey })
+    console.warn("validateApiKey: API key verification failed (key not found in DB or DB error).", {
+      apiKeyUsed: apiKey ? `${apiKey.substring(0, 12)}...` : "EMPTY_KEY_FOR_VERIFY",
+    })
     return { isValid: false, error: "API key inválida ou não encontrada", status: 401 }
   }
 
-  // Verifica se a chave expirou (se houver expires_at)
   if (apiKeyData.expires_at && new Date(apiKeyData.expires_at) < new Date()) {
-    console.warn("validateApiKey: API key has expired.", { apiKeyData })
+    console.warn("validateApiKey: API key has expired.", { apiKeyId: apiKeyData.id })
     return { isValid: false, error: "API key expirada", status: 401 }
   }
 
@@ -111,7 +141,10 @@ export async function validateApiKey(request: Request): Promise<ValidationResult
     .single()
 
   if (userError || !user) {
-    console.error("validateApiKey: User not found for API key.", { userId: apiKeyData.user_id, userError })
+    console.error("validateApiKey: User not found for API key.", {
+      userId: apiKeyData.user_id,
+      userError: userError?.message,
+    })
     return {
       isValid: false,
       error: "Usuário associado à API key não encontrado",
@@ -120,10 +153,9 @@ export async function validateApiKey(request: Request): Promise<ValidationResult
   }
 
   if (user.status !== "active") {
-    console.warn("validateApiKey: User is not active.", { userStatus: user.status })
+    console.warn("validateApiKey: User is not active.", { userId: user.id, userStatus: user.status })
     return { isValid: false, error: "Usuário associado à API key não está ativo", status: 403 }
   }
-  // Atualiza last_used_at (não precisa esperar)
   ;(async () => {
     try {
       const { error: updateError } = await (await db.userApiKeys())
@@ -143,18 +175,16 @@ export async function validateApiKey(request: Request): Promise<ValidationResult
   return { isValid: true, user: user as UserProfile, apiKeyData, status: 200 }
 }
 
-// Função de verificação de permissão (exemplo)
 export function hasPermission(
   userRole: string | undefined,
   isAdminKey: boolean | undefined,
   requiredRole: string,
 ): boolean {
   if (!userRole) return false
-  if (isAdminKey) return true // Chave de admin tem todas as permissões
+  if (isAdminKey === true) return true
   return userRole === "admin" || userRole === requiredRole
 }
 
-// Função para verificar se pode acessar um agente específico
 export function canAccessAgent(
   userRole: string | undefined,
   isAdminKey: boolean | undefined,
@@ -162,7 +192,7 @@ export function canAccessAgent(
   currentUserId: string | undefined,
 ): boolean {
   if (!userRole || !currentUserId) return false
-  if (isAdminKey) return true // Chave de admin pode acessar qualquer agente
-  if (userRole === "admin") return true // Usuário admin pode acessar qualquer agente
-  return agentUserId === currentUserId // Usuário comum só pode acessar seus próprios agentes
+  if (isAdminKey === true) return true
+  if (userRole === "admin") return true
+  return agentUserId === currentUserId
 }
