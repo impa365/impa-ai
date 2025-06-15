@@ -21,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Sparkles, Eye, EyeOff, Volume2, Users, MessageSquare, Clock } from "lucide-react"
+import { Bot, Sparkles, Eye, EyeOff, Settings, MessageSquare, Volume2, Database, Brain, Users } from "lucide-react"
 import { getSupabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
@@ -29,9 +29,11 @@ import { fetchWhatsAppConnections, fetchUsers } from "@/lib/whatsapp-connections
 import {
   createEvolutionBot,
   updateEvolutionBot,
+  fetchEvolutionBot,
   setEvolutionInstanceSettings,
   type EvolutionBotIndividualConfig,
   type EvolutionInstanceSettings,
+  fetchEvolutionBotSettings,
 } from "@/lib/evolution-api"
 
 // Estilos customizados para os switches
@@ -49,7 +51,16 @@ interface AgentModalProps {
 
 export interface Agent {
   id: string
+  organization_id?: string | null
   name: string
+  type: string
+  description?: string | null
+  status?: string | null
+  model_config?: any // JSONB field
+  prompt_template?: string | null
+  user_id?: string | null
+  whatsapp_connection_id?: string | null
+  evolution_bot_id?: string | null
   identity_description?: string | null
   training_prompt?: string | null
   voice_tone?: string | null
@@ -62,25 +73,13 @@ export interface Agent {
   voice_api_key?: string | null
   calendar_integration?: boolean | null
   calendar_api_key?: string | null
-  status?: string | null
+  chatnode_integration?: boolean | null
+  chatnode_api_key?: string | null
+  chatnode_bot_id?: string | null
+  orimon_integration?: boolean | null
+  orimon_api_key?: string | null
+  orimon_bot_id?: string | null
   is_default?: boolean | null
-  user_id?: string | null
-  whatsapp_connection_id?: string | null
-  evolution_bot_id?: string | null
-  // Campos para sincronização com Evolution API
-  trigger_type?: string | null
-  trigger_operator?: string | null
-  trigger_value?: string | null
-  keyword_finish?: string | null
-  debounce_time?: number | null
-  listening_from_me?: boolean | null
-  stop_bot_from_me?: boolean | null
-  keep_open?: boolean | null
-  split_messages?: boolean | null
-  unknown_message?: string | null
-  delay_message?: number | null
-  expire_time?: number | null
-  ignore_jids?: string[] | null
   created_at?: string
   updated_at?: string
 }
@@ -96,6 +95,28 @@ interface User {
 const initialFormData: Agent = {
   id: "",
   name: "",
+  type: "chat",
+  description: "",
+  status: "active",
+  model_config: {
+    activation_keyword: "",
+    model: "gpt-3.5-turbo",
+    voice_id: "",
+    calendar_event_id: "",
+    keyword_finish: "#sair",
+    delay_message: 1000,
+    unknown_message: "Desculpe, não entendi. Digite a palavra-chave para começar.",
+    listening_from_me: false,
+    stop_bot_from_me: true,
+    keep_open: false,
+    debounce_time: 10,
+    split_messages: true,
+    time_per_char: 100,
+  },
+  prompt_template: "",
+  user_id: "",
+  whatsapp_connection_id: null,
+  evolution_bot_id: null,
   identity_description: "",
   training_prompt: "",
   voice_tone: "humanizado",
@@ -108,25 +129,13 @@ const initialFormData: Agent = {
   voice_api_key: null,
   calendar_integration: false,
   calendar_api_key: null,
-  status: "active",
+  chatnode_integration: false,
+  chatnode_api_key: null,
+  chatnode_bot_id: null,
+  orimon_integration: false,
+  orimon_api_key: null,
+  orimon_bot_id: null,
   is_default: false,
-  user_id: "",
-  whatsapp_connection_id: null,
-  evolution_bot_id: null,
-  // Valores padrão para campos Evolution API
-  trigger_type: "keyword", // Garantir que sempre tenha um valor válido
-  trigger_operator: "equals", // Garantir que sempre tenha um valor válido
-  trigger_value: "",
-  keyword_finish: "#sair",
-  debounce_time: 10,
-  listening_from_me: false,
-  stop_bot_from_me: true,
-  keep_open: false,
-  split_messages: true,
-  unknown_message: "Desculpe, não entendi sua mensagem.",
-  delay_message: 1000,
-  expire_time: 0,
-  ignore_jids: [],
 }
 
 export function AgentModal({
@@ -148,6 +157,8 @@ export function AgentModal({
   const [n8nIntegrationConfig, setN8nIntegrationConfig] = useState<any>(null)
   const [showVoiceApiKey, setShowVoiceApiKey] = useState(false)
   const [showCalendarApiKey, setShowCalendarApiKey] = useState(false)
+  const [showChatnodeApiKey, setShowChatnodeApiKey] = useState(false)
+  const [showOrimonApiKey, setShowOrimonApiKey] = useState(false)
   const [evolutionSyncStatus, setEvolutionSyncStatus] = useState<string>("")
 
   const isAdmin = currentUser?.role === "admin"
@@ -222,6 +233,69 @@ export function AgentModal({
   }
 
   useEffect(() => {
+    if (agent && agent.evolution_bot_id && agent.whatsapp_connection_id && open) {
+      syncWithEvolutionAPI()
+    }
+  }, [agent, open])
+
+  const syncWithEvolutionAPI = async () => {
+    if (!agent?.evolution_bot_id || !agent?.whatsapp_connection_id) return
+
+    setEvolutionSyncStatus("Sincronizando com Evolution API...")
+    try {
+      const client = await getSupabase()
+      const { data: connection } = await client
+        .from("whatsapp_connections")
+        .select("instance_name")
+        .eq("id", agent.whatsapp_connection_id)
+        .single()
+
+      if (connection?.instance_name) {
+        const evolutionBotData = await fetchEvolutionBot(connection.instance_name, agent.evolution_bot_id)
+        if (evolutionBotData) {
+          setFormData((prev) => ({
+            ...prev,
+            model_config: {
+              ...prev.model_config,
+              activation_keyword: evolutionBotData.triggerValue || prev.model_config.activation_keyword,
+              keyword_finish: evolutionBotData.keywordFinish || prev.model_config.keyword_finish,
+              delay_message: evolutionBotData.delayMessage || prev.model_config.delay_message,
+              unknown_message: evolutionBotData.unknownMessage || prev.model_config.unknown_message,
+              listening_from_me:
+                evolutionBotData.listeningFromMe === undefined
+                  ? prev.model_config.listening_from_me
+                  : evolutionBotData.listeningFromMe,
+              stop_bot_from_me:
+                evolutionBotData.stopBotFromMe === undefined
+                  ? prev.model_config.stop_bot_from_me
+                  : evolutionBotData.stopBotFromMe,
+              keep_open:
+                evolutionBotData.keepOpen === undefined ? prev.model_config.keep_open : evolutionBotData.keepOpen,
+              debounce_time: evolutionBotData.debounceTime || prev.model_config.debounce_time,
+              split_messages:
+                evolutionBotData.splitMessages === undefined
+                  ? prev.model_config.split_messages
+                  : evolutionBotData.splitMessages,
+              time_per_char: evolutionBotData.timePerChar || prev.model_config.time_per_char,
+            },
+            status: evolutionBotData.enabled ? "active" : "inactive",
+          }))
+          setEvolutionSyncStatus("Sincronizado com sucesso!")
+        } else {
+          setEvolutionSyncStatus("Erro na sincronização: Bot não encontrado na Evolution API.")
+        }
+      } else {
+        setEvolutionSyncStatus("Conexão WhatsApp não encontrada para sincronia.")
+      }
+    } catch (error) {
+      console.error("Erro ao sincronizar com Evolution API:", error)
+      setEvolutionSyncStatus("Erro na sincronização com Evolution API.")
+    } finally {
+      setTimeout(() => setEvolutionSyncStatus(""), 3000)
+    }
+  }
+
+  useEffect(() => {
     if (agent) {
       setFormData({ ...initialFormData, ...agent, user_id: agent.user_id || selectedUserId || currentUser?.id || "" })
       if (isAdmin && agent.user_id) {
@@ -237,13 +311,14 @@ export function AgentModal({
     const checked = type === "checkbox" ? (e.target as HTMLInputElement).checked : undefined
     setFormData((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }))
   }
-
   const handleSelectChange = (name: string, value: string | number) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
-
   const handleSliderChange = (name: string, value: number[]) => {
     setFormData((prev) => ({ ...prev, [name]: value[0] }))
+  }
+  const handleConfigChange = (key: string, value: any) => {
+    setFormData((prev) => ({ ...prev, model_config: { ...(prev.model_config || {}), [key]: value } }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -270,8 +345,8 @@ export function AgentModal({
       setLoading(false)
       return
     }
-    if (!formData.trigger_value?.trim() && formData.trigger_type === "keyword") {
-      setError("A palavra-chave de ativação é obrigatória para bots com ativação por palavra-chave.")
+    if (!formData.model_config?.activation_keyword?.trim() && !formData.is_default) {
+      setError("A palavra-chave de ativação é obrigatória para bots não padrão.")
       setLoading(false)
       return
     }
@@ -286,25 +361,16 @@ export function AgentModal({
 
     try {
       const client = await getSupabase()
-
-      // Garantir que trigger_type tenha um valor válido
-      const validTriggerType =
-        formData.trigger_type && ["keyword", "all"].includes(formData.trigger_type)
-          ? formData.trigger_type
-          : formData.is_default
-            ? "all"
-            : "keyword"
-
-      // Garantir que trigger_operator tenha um valor válido
-      const validTriggerOperator =
-        formData.trigger_operator &&
-        ["equals", "contains", "startsWith", "endsWith", "regex"].includes(formData.trigger_operator)
-          ? formData.trigger_operator
-          : "equals"
-
-      // Payload completo com todos os campos necessários para Evolution API
       const agentPayloadForDb = {
         name: formData.name,
+        type: formData.type,
+        description: formData.description,
+        status: formData.status,
+        model_config: formData.model_config,
+        prompt_template: formData.prompt_template,
+        user_id: formData.user_id,
+        whatsapp_connection_id: formData.whatsapp_connection_id,
+        evolution_bot_id: currentEvolutionBotId,
         identity_description: formData.identity_description,
         training_prompt: formData.training_prompt,
         voice_tone: formData.voice_tone,
@@ -317,25 +383,13 @@ export function AgentModal({
         voice_api_key: formData.voice_api_key,
         calendar_integration: formData.calendar_integration,
         calendar_api_key: formData.calendar_api_key,
-        status: formData.status,
+        chatnode_integration: formData.chatnode_integration,
+        chatnode_api_key: formData.chatnode_api_key,
+        chatnode_bot_id: formData.chatnode_bot_id,
+        orimon_integration: formData.orimon_integration,
+        orimon_api_key: formData.orimon_api_key,
+        orimon_bot_id: formData.orimon_bot_id,
         is_default: formData.is_default,
-        user_id: formData.user_id,
-        whatsapp_connection_id: formData.whatsapp_connection_id,
-        evolution_bot_id: currentEvolutionBotId,
-        // Campos para sincronização Evolution API
-        trigger_type: validTriggerType,
-        trigger_operator: validTriggerOperator,
-        trigger_value: formData.trigger_value,
-        keyword_finish: formData.keyword_finish,
-        debounce_time: formData.debounce_time,
-        listening_from_me: formData.listening_from_me,
-        stop_bot_from_me: formData.stop_bot_from_me,
-        keep_open: formData.keep_open,
-        split_messages: formData.split_messages,
-        unknown_message: formData.unknown_message,
-        delay_message: formData.delay_message,
-        expire_time: formData.expire_time,
-        ignore_jids: formData.ignore_jids,
       }
 
       if (isEditing && currentAgentIdInDb) {
@@ -354,7 +408,6 @@ export function AgentModal({
         currentAgentIdInDb = newAgent.id
       }
 
-      // Configuração Evolution API
       const { data: connection, error: connectionError } = await client
         .from("whatsapp_connections")
         .select("instance_name")
@@ -364,77 +417,92 @@ export function AgentModal({
       if (!connection?.instance_name) throw new Error("Instância WhatsApp não encontrada.")
       const instanceName = connection.instance_name
 
-      if (n8nIntegrationConfig?.flowUrl && currentAgentIdInDb) {
-        const webhookUrl = `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=AGENT_${currentAgentIdInDb}`
+      if (!n8nIntegrationConfig?.flowUrl || !currentAgentIdInDb) {
+        throw new Error("Configuração n8n ou ID do agente não encontrado para sincronização com Evolution API.")
+      }
+      const webhookUrl = `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=AGENT_${currentAgentIdInDb}`
 
-        const evolutionBotIndividualData: EvolutionBotIndividualConfig = {
-          enabled: formData.status === "active",
-          description: formData.name,
-          apiUrl: webhookUrl,
-          apiKey: n8nIntegrationConfig.apiKey || "",
-          triggerType: formData.trigger_type || "keyword",
-          triggerOperator: formData.trigger_operator || "equals",
-          triggerValue: formData.trigger_value || "",
-          expire: formData.expire_time || 0,
-          keywordFinish: formData.keyword_finish || "#sair",
-          delayMessage: formData.delay_message || 1000,
-          unknownMessage: formData.unknown_message || "Desculpe, não entendi.",
-          listeningFromMe: formData.listening_from_me || false,
-          stopBotFromMe: formData.stop_bot_from_me || true,
-          keepOpen: formData.keep_open || false,
-          debounceTime: formData.debounce_time || 10,
-          ignoreJids: formData.ignore_jids || [],
-          splitMessages: formData.split_messages || true,
-          timePerChar: 100,
+      const evolutionBotIndividualData: EvolutionBotIndividualConfig = {
+        enabled: formData.status === "active",
+        description: formData.name,
+        apiUrl: webhookUrl,
+        apiKey: n8nIntegrationConfig.apiKey || "",
+        triggerType: formData.is_default ? "all" : "keyword",
+        triggerOperator: formData.is_default ? "contains" : "equals", // Add missing triggerOperator
+        triggerValue: formData.is_default ? "" : formData.model_config?.activation_keyword || "", // Ensure triggerValue is always a string
+        expire: formData.model_config?.expire_message_bot || 0,
+        keywordFinish: formData.model_config?.keyword_finish || "#sair",
+        delayMessage: formData.model_config?.delay_message || 1000,
+        unknownMessage: formData.model_config?.unknown_message || "Desculpe, não entendi.",
+        listeningFromMe: formData.model_config?.listening_from_me || false,
+        stopBotFromMe: formData.model_config?.stop_bot_from_me || true,
+        keepOpen: formData.model_config?.keep_open || false,
+        debounceTime: formData.model_config?.debounce_time || 10,
+        ignoreJids: formData.model_config?.ignore_jids || [],
+        splitMessages: formData.model_config?.split_messages === undefined ? true : formData.model_config.splitMessages,
+        timePerChar: formData.model_config?.time_per_char || 100,
+      }
+
+      if (currentEvolutionBotId) {
+        const updateSuccess = await updateEvolutionBot(instanceName, currentEvolutionBotId, evolutionBotIndividualData)
+        if (!updateSuccess) throw new Error("Falha ao atualizar bot na Evolution API.")
+      } else {
+        const createResult = await createEvolutionBot(instanceName, evolutionBotIndividualData)
+        if (!createResult.success || !createResult.botId) {
+          throw new Error(createResult.error || "Falha ao criar bot na Evolution API.")
+        }
+        currentEvolutionBotId = createResult.botId
+        const { error: updateEvoIdError } = await client
+          .from("ai_agents")
+          .update({ evolution_bot_id: currentEvolutionBotId })
+          .eq("id", currentAgentIdInDb)
+        if (updateEvoIdError) console.error("Erro ao salvar evolution_bot_id no DB ImpaAI:", updateEvoIdError.message)
+        setFormData((prev) => ({ ...prev, evolution_bot_id: currentEvolutionBotId }))
+      }
+
+      if (formData.is_default && currentEvolutionBotId) {
+        const { error: uncheckError } = await client
+          .from("ai_agents")
+          .update({ is_default: false })
+          .eq("whatsapp_connection_id", formData.whatsapp_connection_id)
+          .not("id", "eq", currentAgentIdInDb)
+        if (uncheckError) console.error("Erro ao desmarcar outros bots padrão no DB:", uncheckError.message)
+
+        const { error: setDefaultError } = await client
+          .from("ai_agents")
+          .update({ is_default: true })
+          .eq("id", currentAgentIdInDb)
+        if (setDefaultError) console.error("Erro ao definir agente atual como padrão no DB:", setDefaultError.message)
+
+        const instanceSettingsPayload: EvolutionInstanceSettings = {
+          botIdFallback: currentEvolutionBotId,
+          expire: formData.model_config?.expire_message_bot || 20,
+          keywordFinish: formData.model_config?.keyword_finish || "#SAIR",
+          delayMessage: formData.model_config?.delay_message || 1000,
+          unknownMessage: formData.model_config?.unknown_message || "Mensagem não reconhecida",
+          listeningFromMe:
+            formData.model_config?.listening_from_me === undefined ? false : formData.model_config.listeningFromMe,
+          stopBotFromMe:
+            formData.model_config?.stop_bot_from_me === undefined ? false : formData.model_config.stopBotFromMe,
+          keepOpen: formData.model_config?.keep_open === undefined ? false : formData.model_config.keepOpen,
+          splitMessages:
+            formData.model_config?.split_messages === undefined ? true : formData.model_config.splitMessages,
+          timePerChar: formData.model_config?.time_per_char || 50,
+          debounceTime: formData.model_config?.debounce_time || 5,
+          ignoreJids: formData.model_config?.ignore_jids || ["@g.us"],
         }
 
-        if (currentEvolutionBotId) {
-          const updateSuccess = await updateEvolutionBot(
-            instanceName,
-            currentEvolutionBotId,
-            evolutionBotIndividualData,
-          )
-          if (!updateSuccess) throw new Error("Falha ao atualizar bot na Evolution API.")
-        } else {
-          const createResult = await createEvolutionBot(instanceName, evolutionBotIndividualData)
-          if (!createResult.success || !createResult.botId) {
-            throw new Error(createResult.error || "Falha ao criar bot na Evolution API.")
-          }
-          currentEvolutionBotId = createResult.botId
-          const { error: updateEvoIdError } = await client
-            .from("ai_agents")
-            .update({ evolution_bot_id: currentEvolutionBotId })
-            .eq("id", currentAgentIdInDb)
-          if (updateEvoIdError) console.error("Erro ao salvar evolution_bot_id no DB ImpaAI:", updateEvoIdError.message)
-        }
-
-        // Configurar bot padrão se necessário
-        if (formData.is_default && currentEvolutionBotId) {
-          const { error: uncheckError } = await client
-            .from("ai_agents")
-            .update({ is_default: false })
-            .eq("whatsapp_connection_id", formData.whatsapp_connection_id)
-            .not("id", "eq", currentAgentIdInDb)
-          if (uncheckError) console.error("Erro ao desmarcar outros bots padrão no DB:", uncheckError.message)
-
+        const settingsSuccess = await setEvolutionInstanceSettings(instanceName, instanceSettingsPayload)
+        if (!settingsSuccess)
+          throw new Error("Falha ao definir configurações da instância na Evolution API (bot padrão).")
+      } else if (!formData.is_default && agent?.is_default && currentEvolutionBotId) {
+        const currentInstanceSettings = await fetchEvolutionBotSettings(instanceName)
+        if (currentInstanceSettings && currentInstanceSettings.botIdFallback === currentEvolutionBotId) {
           const instanceSettingsPayload: EvolutionInstanceSettings = {
-            botIdFallback: currentEvolutionBotId,
-            expire: formData.expire_time || 20,
-            keywordFinish: formData.keyword_finish || "#SAIR",
-            delayMessage: formData.delay_message || 1000,
-            unknownMessage: formData.unknown_message || "Mensagem não reconhecida",
-            listeningFromMe: formData.listening_from_me || false,
-            stopBotFromMe: formData.stop_bot_from_me || false,
-            keepOpen: formData.keep_open || false,
-            splitMessages: formData.split_messages || true,
-            timePerChar: 50,
-            debounceTime: formData.debounce_time || 5,
-            ignoreJids: formData.ignore_jids || ["@g.us"],
+            ...currentInstanceSettings,
+            botIdFallback: null,
           }
-
-          const settingsSuccess = await setEvolutionInstanceSettings(instanceName, instanceSettingsPayload)
-          if (!settingsSuccess)
-            throw new Error("Falha ao definir configurações da instância na Evolution API (bot padrão).")
+          await setEvolutionInstanceSettings(instanceName, instanceSettingsPayload)
         }
       }
 
@@ -455,7 +523,7 @@ export function AgentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto p-0">
         <form onSubmit={handleSubmit}>
           <DialogHeader className="p-6 pb-4 border-b">
             <DialogTitle className="text-2xl font-bold flex items-center text-gray-900 dark:text-gray-100">
@@ -543,39 +611,20 @@ export function AgentModal({
                 </div>
 
                 <div>
-                  <Label htmlFor="identity_description" className="text-gray-900 dark:text-gray-100">
-                    Como a IA se Apresenta
+                  <Label htmlFor="description" className="text-gray-900 dark:text-gray-100">
+                    Descrição do Propósito da IA
                   </Label>
                   <Textarea
-                    id="identity_description"
-                    name="identity_description"
-                    value={formData.identity_description || ""}
+                    id="description"
+                    name="description"
+                    value={formData.description || ""}
                     onChange={handleInputChange}
-                    placeholder="Ex: Olá! Eu sou a Luna, sua assistente virtual..."
+                    placeholder="Ex: IA especializada em vendas de produtos digitais..."
                     rows={3}
                     className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Como a IA irá se apresentar ao iniciar uma conversa.
-                  </p>
-                </div>
-
-                <div>
-                  <Label htmlFor="training_prompt" className="text-gray-900 dark:text-gray-100">
-                    Instruções de Comportamento (Prompt de Treinamento) *
-                  </Label>
-                  <Textarea
-                    id="training_prompt"
-                    name="training_prompt"
-                    value={formData.training_prompt || ""}
-                    onChange={handleInputChange}
-                    placeholder="Ex: Você é uma assistente de vendas..."
-                    rows={6}
-                    required
-                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Instruções detalhadas sobre como a IA deve se comportar.
+                    Descreva qual é o objetivo principal desta IA.
                   </p>
                 </div>
 
@@ -623,25 +672,6 @@ export function AgentModal({
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="temperature" className="text-gray-900 dark:text-gray-100">
-                    Criatividade das Respostas: {(formData.temperature || 0.7).toFixed(1)}
-                  </Label>
-                  <Slider
-                    id="temperature"
-                    name="temperature"
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    defaultValue={[0.7]}
-                    value={[formData.temperature || 0.7]}
-                    onValueChange={(value) => handleSliderChange("temperature", value)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    0 = Mais previsível | 2 = Mais criativo
-                  </p>
                 </div>
 
                 <div>
@@ -700,137 +730,64 @@ export function AgentModal({
               <CardHeader>
                 <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
                   <MessageSquare className="w-5 h-5 mr-2" />
-                  Configurações de Ativação
+                  Personalidade e Comportamento
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="trigger_type" className="text-gray-900 dark:text-gray-100">
-                    Tipo de Ativação
-                  </Label>
-                  <Select
-                    name="trigger_type"
-                    value={formData.trigger_type || "keyword"}
-                    onValueChange={(value) => {
-                      handleSelectChange("trigger_type", value)
-                      if (value === "all") {
-                        setFormData((prev) => ({ ...prev, is_default: true }))
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                      <SelectValue placeholder="Como a IA será ativada" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                      <SelectItem value="keyword">Por Palavra-chave</SelectItem>
-                      <SelectItem value="all">Todas as Mensagens (IA Padrão)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Escolha se a IA responde apenas a palavras-chave específicas ou a todas as mensagens
-                  </p>
-                </div>
-
-                {formData.trigger_type === "keyword" && (
-                  <>
-                    <div>
-                      <Label htmlFor="trigger_operator" className="text-gray-900 dark:text-gray-100">
-                        Operador de Comparação
-                      </Label>
-                      <Select
-                        name="trigger_operator"
-                        value={formData.trigger_operator || "equals"}
-                        onValueChange={(value) => handleSelectChange("trigger_operator", value)}
-                      >
-                        <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                          <SelectValue placeholder="Como comparar a palavra-chave" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                          <SelectItem value="equals">Igual a</SelectItem>
-                          <SelectItem value="contains">Contém</SelectItem>
-                          <SelectItem value="startsWith">Começa com</SelectItem>
-                          <SelectItem value="endsWith">Termina com</SelectItem>
-                          <SelectItem value="regex">Expressão Regular</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="trigger_value" className="text-gray-900 dark:text-gray-100">
-                        Palavra-chave para Ativar a IA *
-                      </Label>
-                      <Input
-                        id="trigger_value"
-                        name="trigger_value"
-                        value={formData.trigger_value || ""}
-                        onChange={handleInputChange}
-                        placeholder="Ex: /bot, !assistente, oi"
-                        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                        Palavra ou frase que ativa a IA
-                      </p>
-                    </div>
-                  </>
-                )}
-
-                <div>
-                  <Label htmlFor="keyword_finish" className="text-gray-900 dark:text-gray-100">
-                    Palavra para Finalizar Conversa
-                  </Label>
-                  <Input
-                    id="keyword_finish"
-                    name="keyword_finish"
-                    value={formData.keyword_finish || "#sair"}
-                    onChange={handleInputChange}
-                    placeholder="#sair"
-                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Palavra que o usuário pode enviar para encerrar a conversa com a IA
-                  </p>
-                </div>
-
-                <div>
-                  <Label htmlFor="unknown_message" className="text-gray-900 dark:text-gray-100">
-                    Mensagem para Quando Não Entender
+                  <Label htmlFor="identity_description" className="text-gray-900 dark:text-gray-100">
+                    Como a IA se Apresenta
                   </Label>
                   <Textarea
-                    id="unknown_message"
-                    name="unknown_message"
-                    value={formData.unknown_message || ""}
+                    id="identity_description"
+                    name="identity_description"
+                    value={formData.identity_description || ""}
                     onChange={handleInputChange}
-                    placeholder="Desculpe, não entendi sua mensagem."
-                    rows={2}
+                    placeholder="Ex: Olá! Eu sou a Luna, sua assistente virtual..."
+                    rows={3}
                     className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Mensagem enviada quando a IA não consegue processar a solicitação
+                    Como a IA irá se apresentar ao iniciar uma conversa.
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="is_default" className="text-gray-900 dark:text-gray-100">
-                      IA Padrão desta Conexão
-                    </Label>
-                    <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                      IA principal deste número WhatsApp.
-                    </p>
-                  </div>
-                  <Switch
-                    id="is_default"
-                    name="is_default"
-                    checked={formData.is_default || false}
-                    onCheckedChange={(checked) => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        is_default: checked,
-                        trigger_type: checked ? "all" : "keyword",
-                      }))
-                    }}
-                    className={switchStyles}
+                <div>
+                  <Label htmlFor="training_prompt" className="text-gray-900 dark:text-gray-100">
+                    Instruções de Comportamento (Prompt de Treinamento) *
+                  </Label>
+                  <Textarea
+                    id="training_prompt"
+                    name="training_prompt"
+                    value={formData.training_prompt || ""}
+                    onChange={handleInputChange}
+                    placeholder="Ex: Você é uma assistente de vendas..."
+                    rows={6}
+                    required
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                    Instruções detalhadas sobre como a IA deve se comportar.
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="temperature" className="text-gray-900 dark:text-gray-100">
+                    Criatividade das Respostas: {(formData.temperature || 0.7).toFixed(1)}
+                  </Label>
+                  <Slider
+                    id="temperature"
+                    name="temperature"
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    defaultValue={[0.7]}
+                    value={[formData.temperature || 0.7]}
+                    onValueChange={(value) => handleSliderChange("temperature", value)}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                    0 = Mais previsível | 2 = Mais criativo
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -838,141 +795,186 @@ export function AgentModal({
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
-                  <Clock className="w-5 h-5 mr-2" />
-                  Configurações de Tempo e Comportamento
+                  <Settings className="w-5 h-5 mr-2" />
+                  Configurações de Ativação e Controle (Evolution API)
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="debounce_time" className="text-gray-900 dark:text-gray-100">
-                      Tempo de Espera (segundos): {formData.debounce_time || 10}
-                    </Label>
-                    <Slider
-                      id="debounce_time"
-                      name="debounce_time"
-                      min={1}
-                      max={60}
-                      step={1}
-                      value={[formData.debounce_time || 10]}
-                      onValueChange={(value) => handleSliderChange("debounce_time", value)}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                      Tempo que a IA espera antes de processar uma mensagem
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="delay_message" className="text-gray-900 dark:text-gray-100">
-                      Delay entre Mensagens (ms): {formData.delay_message || 1000}
-                    </Label>
-                    <Slider
-                      id="delay_message"
-                      name="delay_message"
-                      min={100}
-                      max={5000}
-                      step={100}
-                      value={[formData.delay_message || 1000]}
-                      onValueChange={(value) => handleSliderChange("delay_message", value)}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                      Tempo entre o envio de mensagens consecutivas
-                    </p>
-                  </div>
-                </div>
-
                 <div>
-                  <Label htmlFor="expire_time" className="text-gray-900 dark:text-gray-100">
-                    Tempo de Expiração da Conversa (minutos): {formData.expire_time || 0}{" "}
-                    {(formData.expire_time || 0) === 0 ? "(Sem expiração)" : ""}
+                  <Label htmlFor="activation_keyword" className="text-gray-900 dark:text-gray-100">
+                    Palavra-chave para Ativar a IA *
                   </Label>
-                  <Slider
-                    id="expire_time"
-                    name="expire_time"
-                    min={0}
-                    max={120}
-                    step={5}
-                    value={[formData.expire_time || 0]}
-                    onValueChange={(value) => handleSliderChange("expire_time", value)}
+                  <Input
+                    id="activation_keyword"
+                    value={formData.model_config?.activation_keyword || ""}
+                    onChange={(e) => handleConfigChange("activation_keyword", e.target.value)}
+                    placeholder="Ex: /bot, !assistente, oi"
+                    disabled={formData.is_default}
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Tempo após o qual a conversa expira automaticamente (0 = sem expiração)
+                    Palavra para iniciar a conversa com a IA. Ignorado se "IA Padrão" estiver ativo.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <Label htmlFor="keyword_finish" className="text-gray-900 dark:text-gray-100">
+                    Palavra para Encerrar Conversa
+                  </Label>
+                  <Input
+                    id="keyword_finish"
+                    value={formData.model_config?.keyword_finish || ""}
+                    onChange={(e) => handleConfigChange("keyword_finish", e.target.value)}
+                    placeholder="Ex: #sair, /parar, tchau"
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                    Palavra para o usuário encerrar a conversa.
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="unknown_message" className="text-gray-900 dark:text-gray-100">
+                    Mensagem para Comandos Não Reconhecidos
+                  </Label>
+                  <Textarea
+                    id="unknown_message"
+                    value={formData.model_config?.unknown_message || ""}
+                    onChange={(e) => handleConfigChange("unknown_message", e.target.value)}
+                    placeholder="Ex: Desculpe, não entendi. Digite '/bot' para falar comigo."
+                    rows={2}
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                    Mensagem quando a IA não é ativada.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="delay_message" className="text-gray-900 dark:text-gray-100">
+                      Delay entre Mensagens (ms)
+                    </Label>
+                    <Input
+                      type="number"
+                      id="delay_message"
+                      value={formData.model_config?.delay_message || 1000}
+                      onChange={(e) => handleConfigChange("delay_message", Number.parseInt(e.target.value))}
+                      placeholder="1000"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                      Tempo de espera entre mensagens.
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="debounce_time" className="text-gray-900 dark:text-gray-100">
+                      Tempo de Debounce (segundos)
+                    </Label>
+                    <Input
+                      type="number"
+                      id="debounce_time"
+                      value={formData.model_config?.debounce_time || 10}
+                      onChange={(e) => handleConfigChange("debounce_time", Number.parseInt(e.target.value))}
+                      placeholder="10"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                      Tempo para aguardar antes de processar.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="listening_from_me" className="text-gray-900 dark:text-gray-100">
-                        Escutar Minhas Mensagens
+                        Ouvir Minhas Mensagens
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        IA responde às suas próprias mensagens
+                        IA responde quando EU envio.
                       </p>
                     </div>
                     <Switch
                       id="listening_from_me"
-                      name="listening_from_me"
-                      checked={formData.listening_from_me || false}
-                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, listening_from_me: checked }))}
+                      checked={formData.model_config?.listening_from_me || false}
+                      onCheckedChange={(checked) => handleConfigChange("listening_from_me", checked)}
                       className={switchStyles}
                     />
                   </div>
-
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="stop_bot_from_me" className="text-gray-900 dark:text-gray-100">
-                        Parar Bot com Minhas Mensagens
+                        Parar Bot por Mim
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        Suas mensagens interrompem o bot
+                        Eu posso parar a IA.
                       </p>
                     </div>
                     <Switch
                       id="stop_bot_from_me"
-                      name="stop_bot_from_me"
-                      checked={formData.stop_bot_from_me || false}
-                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, stop_bot_from_me: checked }))}
+                      checked={formData.model_config?.stop_bot_from_me || false}
+                      onCheckedChange={(checked) => handleConfigChange("stop_bot_from_me", checked)}
                       className={switchStyles}
                     />
                   </div>
-
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="keep_open" className="text-gray-900 dark:text-gray-100">
                         Manter Conversa Aberta
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        Conversa não expira automaticamente
+                        IA continua sem reativar.
                       </p>
                     </div>
                     <Switch
                       id="keep_open"
-                      name="keep_open"
-                      checked={formData.keep_open || false}
-                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, keep_open: checked }))}
+                      checked={formData.model_config?.keep_open || false}
+                      onCheckedChange={(checked) => handleConfigChange("keep_open", checked)}
                       className={switchStyles}
                     />
                   </div>
-
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="split_messages" className="text-gray-900 dark:text-gray-100">
                         Dividir Mensagens Longas
                       </Label>
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
-                        Quebra mensagens muito longas
+                        Quebra respostas longas.
                       </p>
                     </div>
                     <Switch
                       id="split_messages"
-                      name="split_messages"
-                      checked={formData.split_messages || false}
-                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, split_messages: checked }))}
+                      checked={
+                        formData.model_config?.split_messages === undefined
+                          ? true
+                          : formData.model_config.split_messages
+                      }
+                      onCheckedChange={(checked) => handleConfigChange("split_messages", checked)}
                       className={switchStyles}
                     />
                   </div>
                 </div>
+
+                {formData.model_config?.split_messages && (
+                  <div>
+                    <Label htmlFor="time_per_char" className="text-gray-900 dark:text-gray-100">
+                      Tempo por Caractere (ms)
+                    </Label>
+                    <Input
+                      type="number"
+                      id="time_per_char"
+                      value={formData.model_config?.time_per_char || 100}
+                      onChange={(e) => handleConfigChange("time_per_char", Number.parseInt(e.target.value))}
+                      placeholder="100"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                      Tempo por caractere ao dividir mensagens.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -1086,6 +1088,21 @@ export function AgentModal({
                           </Button>
                         </div>
                       </div>
+                      <div>
+                        <Label htmlFor="voice_id" className="text-gray-900 dark:text-gray-100">
+                          ID da Voz
+                        </Label>
+                        <Input
+                          id="voice_id"
+                          value={formData.model_config?.voice_id || ""}
+                          onChange={(e) => handleConfigChange("voice_id", e.target.value)}
+                          placeholder="ID da voz no provedor"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          Encontre na plataforma do provedor.
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1135,9 +1152,201 @@ export function AgentModal({
                           </Button>
                         </div>
                       </div>
+                      <div>
+                        <Label htmlFor="calendar_event_id" className="text-gray-900 dark:text-gray-100">
+                          ID da Agenda/Evento
+                        </Label>
+                        <Input
+                          id="calendar_event_id"
+                          value={formData.model_config?.calendar_event_id || ""}
+                          onChange={(e) => handleConfigChange("calendar_event_id", e.target.value)}
+                          placeholder="ID do tipo de evento"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          ID do tipo de reunião.
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="is_default" className="text-gray-900 dark:text-gray-100">
+                      IA Padrão desta Conexão
+                    </Label>
+                    <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                      IA principal deste número WhatsApp.
+                    </p>
+                  </div>
+                  <Switch
+                    id="is_default"
+                    name="is_default"
+                    checked={formData.is_default || false}
+                    onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked }))}
+                    className={switchStyles}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
+                  <Database className="w-5 h-5 mr-2" />
+                  Integrações de Vector Store (Base de Conhecimento)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="text-sm text-muted-foreground mb-4 text-gray-500 dark:text-gray-400">
+                  <Brain className="w-4 h-4 inline mr-1" />
+                  Vector stores melhoram a qualidade das respostas da IA.
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="chatnode_integration" className="text-gray-900 dark:text-gray-100">
+                        ChatNode.ai
+                      </Label>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Integração com ChatNode.ai.
+                      </p>
+                    </div>
+                    <Switch
+                      id="chatnode_integration"
+                      name="chatnode_integration"
+                      checked={formData.chatnode_integration || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, chatnode_integration: checked }))}
+                      className={switchStyles}
+                    />
+                  </div>
+                  {formData.chatnode_integration && (
+                    <div className="space-y-3 pl-4 border-l-2 border-purple-200 bg-purple-50 p-4 rounded dark:bg-gray-700 dark:border-purple-700">
+                      <div>
+                        <Label htmlFor="chatnode_api_key" className="text-gray-900 dark:text-gray-100">
+                          Chave API ChatNode.ai
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="chatnode_api_key"
+                            name="chatnode_api_key"
+                            type={showChatnodeApiKey ? "text" : "password"}
+                            value={formData.chatnode_api_key || ""}
+                            onChange={handleInputChange}
+                            placeholder="Chave API ChatNode.ai"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowChatnodeApiKey(!showChatnodeApiKey)}
+                          >
+                            {showChatnodeApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="chatnode_bot_id" className="text-gray-900 dark:text-gray-100">
+                          ID do Bot ChatNode.ai
+                        </Label>
+                        <Input
+                          id="chatnode_bot_id"
+                          name="chatnode_bot_id"
+                          value={formData.chatnode_bot_id || ""}
+                          onChange={handleInputChange}
+                          placeholder="ID do bot ChatNode.ai"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          Encontre no painel ChatNode.ai.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="orimon_integration" className="text-gray-900 dark:text-gray-100">
+                        Orimon.ai
+                      </Label>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Integração com Orimon.ai.
+                      </p>
+                    </div>
+                    <Switch
+                      id="orimon_integration"
+                      name="orimon_integration"
+                      checked={formData.orimon_integration || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, orimon_integration: checked }))}
+                      className={switchStyles}
+                    />
+                  </div>
+                  {formData.orimon_integration && (
+                    <div className="space-y-3 pl-4 border-l-2 border-orange-200 bg-orange-50 p-4 rounded dark:bg-gray-700 dark:border-orange-700">
+                      <div>
+                        <Label htmlFor="orimon_api_key" className="text-gray-900 dark:text-gray-100">
+                          Chave API Orimon.ai
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="orimon_api_key"
+                            name="orimon_api_key"
+                            type={showOrimonApiKey ? "text" : "password"}
+                            value={formData.orimon_api_key || ""}
+                            onChange={handleInputChange}
+                            placeholder="Chave API Orimon.ai"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowOrimonApiKey(!showOrimonApiKey)}
+                          >
+                            {showOrimonApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="orimon_bot_id" className="text-gray-900 dark:text-gray-100">
+                          ID do Bot Orimon.ai
+                        </Label>
+                        <Input
+                          id="orimon_bot_id"
+                          name="orimon_bot_id"
+                          value={formData.orimon_bot_id || ""}
+                          onChange={handleInputChange}
+                          placeholder="ID do bot Orimon.ai"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          Encontre no painel Orimon.ai.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {(formData.chatnode_integration || formData.orimon_integration) && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 dark:bg-gray-700 dark:border-blue-700">
+                    <div className="flex items-start space-x-2">
+                      <Brain className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium text-blue-900 dark:text-blue-100">💡 Dica sobre Vector Stores:</p>
+                        <p className="text-blue-700 dark:text-blue-300 mt-1">
+                          Você pode ativar ambas as integrações. A IA consultará ambas as bases de conhecimento.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

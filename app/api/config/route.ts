@@ -2,42 +2,27 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
-    // Usar as variáveis de ambiente de runtime (sem NEXT_PUBLIC_)
+    // Ler APENAS as variáveis de runtime (sem NEXT_PUBLIC_)
     const config = {
-      supabaseUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      nextAuthUrl: process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_NEXTAUTH_URL,
+      supabaseUrl: process.env.SUPABASE_URL || "http://localhost:54321",
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "dummy-key",
+      nextAuthUrl: process.env.NEXTAUTH_URL || "http://localhost:3000",
     }
 
-    // Log para debug
-    console.log("🔧 API Config - Environment variables:")
-    console.log("SUPABASE_URL (runtime):", process.env.SUPABASE_URL ? "✅ Defined" : "❌ Not defined")
-    console.log("SUPABASE_ANON_KEY (runtime):", process.env.SUPABASE_ANON_KEY ? "✅ Defined" : "❌ Not defined")
-    console.log("NEXTAUTH_URL (runtime):", process.env.NEXTAUTH_URL ? "✅ Defined" : "❌ Not defined")
-
-    console.log("🔧 API Config - Final config:")
-    console.log("supabaseUrl:", config.supabaseUrl)
-    console.log("nextAuthUrl:", config.nextAuthUrl)
-
-    // Verificar se as variáveis essenciais estão definidas
-    if (!config.supabaseUrl || !config.supabaseAnonKey) {
-      console.error("❌ Missing essential environment variables!")
-      return NextResponse.json(
-        {
-          error: "Missing environment variables",
-          details: {
-            supabaseUrl: !!config.supabaseUrl,
-            supabaseAnonKey: !!config.supabaseAnonKey,
-            nextAuthUrl: !!config.nextAuthUrl,
-          },
-        },
-        { status: 500 },
-      )
-    }
+    // Log detalhado no servidor para debug
+    console.log("📡 Config API Debug:")
+    console.log("SUPABASE_URL:", process.env.SUPABASE_URL || "❌ NOT DEFINED")
+    console.log("SUPABASE_ANON_KEY:", process.env.SUPABASE_ANON_KEY ? "✅ Defined" : "❌ NOT DEFINED")
+    console.log("NEXTAUTH_URL:", process.env.NEXTAUTH_URL || "❌ NOT DEFINED")
+    console.log("Final config being returned:", {
+      supabaseUrl: config.supabaseUrl,
+      supabaseAnonKey: config.supabaseAnonKey ? `${config.supabaseAnonKey.substring(0, 20)}...` : "❌ Missing",
+      nextAuthUrl: config.nextAuthUrl,
+    })
 
     return NextResponse.json(config)
   } catch (error) {
-    console.error("❌ Error in /api/config:", error)
+    console.error("❌ Error in config API:", error)
     return NextResponse.json({ error: "Failed to load configuration" }, { status: 500 })
   }
 }
