@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Buscar agentes do usuário
+    // Selecionando apenas colunas que existem conforme o INSERT SQL fornecido
     let query = supabase
       .from("ai_agents")
       .select(`
@@ -43,17 +44,17 @@ export async function GET(request: NextRequest) {
         training_prompt,
         temperature,
         max_tokens,
-        status, 
+        status,
         created_at,
         updated_at,
-        user_id, 
-        assistant_type,
+        user_id,
         main_function,
         total_conversations,
         total_messages,
-        performance_score
+        performance_score,
+        type 
       `)
-      .eq("status", "active") // Corrigido de is_active para status e true para "active"
+      .eq("status", "active")
 
     if (user.role !== "admin") {
       if (!user.id) {
@@ -86,12 +87,12 @@ export async function GET(request: NextRequest) {
         training_prompt: agent.training_prompt,
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
-        status: agent.status, // Corrigido de is_active para status
+        status: agent.status,
         created_at: agent.created_at,
         updated_at: agent.updated_at,
         user_id: agent.user_id,
-        assistant_type: agent.assistant_type,
         main_function: agent.main_function,
+        type: agent.type, // Adicionada a coluna 'type' que existe no seu SQL
         stats: {
           total_conversations: agent.total_conversations || 0,
           total_messages: agent.total_messages || 0,
@@ -105,7 +106,7 @@ export async function GET(request: NextRequest) {
       total: formattedAgents.length,
       user: {
         id: user.id,
-        name: user.full_name,
+        name: user.full_name, // Assumindo que full_name existe em authResult.user
         role: user.role,
       },
     })
