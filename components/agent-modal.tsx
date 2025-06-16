@@ -172,6 +172,9 @@ export function AgentModal({
   const [showOrimonApiKey, setShowOrimonApiKey] = useState(false) // Adicionar esta linha
   const [evolutionSyncStatus, setEvolutionSyncStatus] = useState<string>("")
   const [systemDefaultModel, setSystemDefaultModel] = useState<string | null>(null)
+  const [showCurlModal, setShowCurlModal] = useState(false)
+  const [curlInput, setCurlInput] = useState("")
+  const [curlDescription, setCurlDescription] = useState("")
 
   const isAdmin = currentUser?.role === "admin"
 
@@ -284,6 +287,67 @@ export function AgentModal({
 
   const handleSliderChange = (name: string, value: number[]) => {
     setFormData((prev) => ({ ...prev, [name]: value[0] }))
+  }
+
+  const convertCurlToDescription = () => {
+    if (!curlInput.trim()) return
+
+    // Parse básico do cURL
+    const lines = curlInput
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line)
+    let method = "GET"
+    let url = ""
+    let headers = ""
+    let body = ""
+
+    lines.forEach((line) => {
+      if (line.includes("-X ") || line.includes("--request ")) {
+        method = line.split(/(-X |--request )/)[2]?.split(" ")[0] || "GET"
+      }
+      if (line.includes("-H ") || line.includes("--header ")) {
+        const headerMatch = line.match(/(-H |--header )['"]([^'"]+)['"]/)
+        if (headerMatch) {
+          headers += headers ? "\n" + headerMatch[2] : headerMatch[2]
+        }
+      }
+      if (line.includes("-d ") || line.includes("--data ")) {
+        const dataMatch = line.match(/(-d |--data )['"]([^'"]+)['"]/)
+        if (dataMatch) {
+          body = dataMatch[2]
+        }
+      }
+      if (line.startsWith("curl ") || (!line.startsWith("-") && line.includes("http"))) {
+        const urlMatch = line.match(/https?:\/\/[^\s'"]+/)
+        if (urlMatch) {
+          url = urlMatch[0]
+        }
+      }
+    })
+
+    const description = curlDescription.trim() || "[Descreva o que este endpoint faz]"
+
+    const newEndpoint = `
+Descrição: ${description}
+
+${method.toUpperCase()}: ${url}
+${headers ? `header: ${headers.replace(/:/g, ":")}` : "header: {}"}
+${body ? `body: ${body}` : "body: {}"}
+query: {}
+
+_______________________________________
+`
+
+    const currentDescription = formData.description || ""
+    setFormData((prev) => ({
+      ...prev,
+      description: currentDescription + newEndpoint,
+    }))
+
+    setCurlInput("")
+    setCurlDescription("")
+    setShowCurlModal(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -630,23 +694,110 @@ export function AgentModal({
                 </div>
 
                 <div>
-                  <Label htmlFor="description" className="text-gray-900 dark:text-gray-100">
-                    Descrição de APIs (Integrações Personalizadas)
-                  </Label>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label htmlFor="description" className="text-gray-900 dark:text-gray-100">
+                      Descrição de APIs (Integrações Personalizadas)
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowCurlModal(true)}
+                      className="text-xs"
+                    >
+                      + Adicionar cURL
+                    </Button>
+                  </div>
                   <Textarea
                     id="description"
                     name="description"
                     value={formData.description || ""}
                     onChange={handleInputChange}
-                    placeholder="Ex: Use a API do Mercado Livre para buscar produtos: GET https://api.mercadolibre.com/sites/MLB/search?q={produto}"
-                    rows={4}
-                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    placeholder={`Exemplo de formato:
+
+Descrição: Para consultar CPF de clientes ativos
+
+GET: https://webhook.nexo3.com.br/webhook/CONSULTA_CPF
+header: APIKEY:40028922
+body: cpf:cpf do cliente sem pontos traços ou vírgulas apenas números
+query: {}
+
+_______________________________________
+
+Descrição: Para buscar produtos no e-commerce
+
+POST: https://api.exemplo.com/produtos
+header: Authorization:Bearer token_aqui
+body: {"categoria": "categoria_desejada", "limite": 10}
+query: {}
+
+_______________________________________`}
+                    rows={12}
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 font-mono text-sm"
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     Para usar integrações que não estão disponíveis nativamente, descreva aqui as APIs que o agente pode
-                    usar. Inclua URLs, métodos HTTP, parâmetros e exemplos de uso.
+                    usar. Separe cada endpoint com uma linha de underscores.
+                    <br />
+                    <strong>Importante:</strong> Caso o endpoint não tenha header, body ou query, não deixe vazio -
+                    sempre coloque as chaves vazias {} para evitar erros na requisição.
                   </p>
                 </div>
+
+                {/* Modal para cURL */}
+                {showCurlModal && (
+                  <Dialog open={showCurlModal} onOpenChange={setShowCurlModal}>
+                    <DialogContent className="sm:max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Converter cURL para Endpoint</DialogTitle>
+                        <DialogDescription>
+                          Cole seu comando cURL aqui e ele será convertido para o formato de endpoint
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="curl_description" className="text-gray-900 dark:text-gray-100">
+                            Descrição do Endpoint
+                          </Label>
+                          <Input
+                            id="curl_description"
+                            value={curlDescription}
+                            onChange={(e) => setCurlDescription(e.target.value)}
+                            placeholder="Ex: Para consultar CPF de clientes ativos"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                            Descreva o que este endpoint faz
+                          </p>
+                        </div>
+                        <div>
+                          <Label htmlFor="curl_input" className="text-gray-900 dark:text-gray-100">
+                            Comando cURL
+                          </Label>
+                          <Textarea
+                            id="curl_input"
+                            value={curlInput}
+                            onChange={(e) => setCurlInput(e.target.value)}
+                            placeholder={`Cole seu cURL aqui, exemplo:
+
+curl -X POST "https://api.exemplo.com/endpoint" \\
+  -H "Authorization: Bearer token" \\
+  -H "Content-Type: application/json" \\
+  -d '{"campo": "valor"}'`}
+                            rows={8}
+                            className="font-mono text-sm"
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowCurlModal(false)}>
+                          Cancelar
+                        </Button>
+                        <Button onClick={convertCurlToDescription}>Converter e Adicionar</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
