@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { validateApiKey } from "@/lib/api-auth"
 import { createClient } from "@supabase/supabase-js"
+import { getDefaultModel } from "@/lib/api-helpers"
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,8 +33,11 @@ export async function GET(request: NextRequest) {
       db: { schema: "impaai" },
     })
 
+    // Buscar modelo padrão do sistema
+    const systemDefaultModel = await getDefaultModel()
+    const fallbackModel = systemDefaultModel || "gpt-4o-mini"
+
     // Buscar agentes do usuário
-    // Selecionando apenas colunas que existem conforme o INSERT SQL fornecido
     let query = supabase
       .from("ai_agents")
       .select(`
@@ -83,7 +87,7 @@ export async function GET(request: NextRequest) {
         id: agent.id,
         name: agent.name,
         description: agent.description,
-        model: agent.model,
+        model: agent.model || fallbackModel, // Usar modelo do agente ou padrão do sistema
         training_prompt: agent.training_prompt,
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
@@ -92,7 +96,7 @@ export async function GET(request: NextRequest) {
         updated_at: agent.updated_at,
         user_id: agent.user_id,
         main_function: agent.main_function,
-        type: agent.type, // Adicionada a coluna 'type' que existe no seu SQL
+        type: agent.type,
         stats: {
           total_conversations: agent.total_conversations || 0,
           total_messages: agent.total_messages || 0,
@@ -102,11 +106,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      default_model: systemDefaultModel, // Incluir o modelo padrão do sistema na resposta
       data: formattedAgents,
       total: formattedAgents.length,
       user: {
         id: user.id,
-        name: user.full_name, // Assumindo que full_name existe em authResult.user
+        name: user.full_name,
         role: user.role,
       },
     })

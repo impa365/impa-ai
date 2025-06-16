@@ -126,7 +126,7 @@ export async function getSupabaseServer(): Promise<SupabaseClient> {
   }
 
   return createClient(config.supabaseUrl, config.supabaseAnonKey, {
-    db: { schema: supabaseConfig.schema || "public" },
+    db: { schema: "impaai" }, // Garantir que está usando o schema correto
     global: { headers: supabaseConfig.headers || {} },
   })
 }

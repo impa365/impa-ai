@@ -33,7 +33,17 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
+    // Buscar modelo padrão do sistema
     const systemDefaultModel = await getDefaultModel()
+    console.log("Sistema default model:", systemDefaultModel)
+
+    // Se não conseguir buscar o modelo padrão, usar um fallback
+    const fallbackModel = systemDefaultModel || "gpt-4o-mini"
+
+    const isAdminAccess = user.role === "admin"
+    if (!canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)) {
+      return NextResponse.json({ error: "Sem permissão para acessar este agente" }, { status: 403 })
+    }
 
     let whatsappConnection = null
     if (agent.whatsapp_connection_id) {
@@ -48,14 +58,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       whatsappConnection = connectionData
     }
 
-    const isAdminAccess = user.role === "admin"
-    if (!canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)) {
-      return NextResponse.json({ error: "Sem permissão para acessar este agente" }, { status: 403 })
-    }
-
     const response = {
       success: true,
-      default_model: systemDefaultModel, // Corretamente usa o valor de system_settings
+      default_model: systemDefaultModel, // Retorna o valor real do sistema ou null
       agent: {
         id: agent.id,
         name: agent.name,
@@ -67,7 +72,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         main_function: agent.main_function,
         type: agent.type || "chat",
         status: agent.status,
-        model: agent.model || systemDefaultModel, // Usa o modelo do agente, ou o padrão do sistema. Se ambos forem null, será null.
+        model: agent.model || fallbackModel, // Usa o modelo do agente ou o padrão do sistema
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
         top_p: agent.top_p,
@@ -116,7 +121,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         access_scope: user!.role === "admin" ? "admin" : "user",
         requester: {
           id: user!.id,
-          name: user!.name, // Assumindo que 'name' existe em user, senão user.full_name
+          name: user!.name,
           role: user!.role,
         },
       },

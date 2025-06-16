@@ -7,18 +7,28 @@ export async function getDefaultModel(): Promise<string | null> {
     const { getSupabaseServer } = await import("@/lib/supabase")
     const supabase = getSupabaseServer()
 
+    // Buscar da tabela system_settings no schema impaai
     const { data: modelSetting, error: settingError } = await supabase
       .from("system_settings")
       .select("setting_value")
       .eq("setting_key", "default_model")
       .single()
 
-    if (settingError || !modelSetting) {
-      console.error("Configuração 'default_model' não encontrada:", settingError?.message)
+    if (settingError) {
+      console.error("Erro ao buscar default_model:", settingError.message)
       return null
     }
 
-    return modelSetting.setting_value as string
+    if (!modelSetting || !modelSetting.setting_value) {
+      console.error("Configuração 'default_model' não encontrada ou vazia")
+      return null
+    }
+
+    // O setting_value já é uma string simples, não precisa de parsing JSON
+    const defaultModel = modelSetting.setting_value.trim()
+    console.log("Default model encontrado:", defaultModel)
+
+    return defaultModel || null
   } catch (error: any) {
     console.error("Erro ao buscar default_model:", error.message)
     return null
