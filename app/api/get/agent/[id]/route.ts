@@ -33,7 +33,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     // Buscar modelo padrão do sistema da tabela system_settings
-    const { data: defaultModelData, error: modelError } = await (await db.supabase())
+    const supabase = await db.supabase()
+    const { data: defaultModelData, error: modelError } = await supabase
       .from("system_settings")
       .select("setting_value")
       .eq("setting_key", "default_model")
