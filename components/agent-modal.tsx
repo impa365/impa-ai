@@ -669,33 +669,52 @@ export function AgentModal({
                 </div>
 
                 <div>
-                  <Label htmlFor="model" className="text-gray-900 dark:text-gray-100">
+                  <Label htmlFor="model_type" className="text-gray-900 dark:text-gray-100">
                     Modelo de IA
                   </Label>
                   <Select
-                    name="model"
-                    value={formData.model || ""}
-                    onValueChange={(value) => handleSelectChange("model", value === "default" ? null : value)}
+                    name="model_type"
+                    value={formData.model ? "custom" : "default"}
+                    onValueChange={(value) => {
+                      if (value === "default") {
+                        setFormData((prev) => ({ ...prev, model: null }))
+                      } else {
+                        setFormData((prev) => ({ ...prev, model: formData.model || "" }))
+                      }
+                    }}
                   >
                     <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                      <SelectValue placeholder={`Padrão do sistema (${systemDefaultModel || "carregando..."})`} />
+                      <SelectValue placeholder="Selecione o tipo de modelo" />
                     </SelectTrigger>
                     <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                      <SelectItem value="default">
-                        Usar Padrão do Sistema ({systemDefaultModel || "carregando..."})
-                      </SelectItem>
-                      <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                      <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                      <SelectItem value="gpt-4.1-mini">GPT-4.1 Mini</SelectItem>
-                      <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
-                      <SelectItem value="claude-3-sonnet">Claude 3 Sonnet</SelectItem>
-                      <SelectItem value="claude-3-haiku">Claude 3 Haiku</SelectItem>
+                      <SelectItem value="default">Modelo Padrão ({systemDefaultModel || "carregando..."})</SelectItem>
+                      <SelectItem value="custom">Outro Modelo</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Modelo de IA que será usado por este agente. Se não especificado, usará o padrão do sistema.
+                    Escolha se quer usar o modelo padrão do sistema ou especificar outro modelo
                   </p>
                 </div>
+
+                {formData.model !== null && (
+                  <div>
+                    <Label htmlFor="model" className="text-gray-900 dark:text-gray-100">
+                      Nome do Modelo Personalizado *
+                    </Label>
+                    <Input
+                      id="model"
+                      name="model"
+                      value={formData.model || ""}
+                      onChange={handleInputChange}
+                      placeholder="Ex: gpt-4o, claude-3-sonnet, gemini-pro, etc."
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                      Digite o nome exato do modelo que deseja usar (ex: gpt-4o, gpt-4o-mini, claude-3-sonnet,
+                      gemini-pro)
+                    </p>
+                  </div>
+                )}
 
                 <div>
                   <Label htmlFor="whatsapp_connection_id" className="text-gray-900 dark:text-gray-100">
