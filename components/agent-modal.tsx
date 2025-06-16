@@ -1151,8 +1151,8 @@ export function AgentModal({
                             <SelectValue placeholder="Selecione o provedor" />
                           </SelectTrigger>
                           <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                            <SelectItem value="eleven_labs">ElevenLabs (Recomendado)</SelectItem>
-                            <SelectItem value="fish_audio">Fish Audio</SelectItem>
+                            <SelectItem value="fish_audio">Fish Audio (Recomendado)</SelectItem>
+                            <SelectItem value="eleven_labs">ElevenLabs</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
