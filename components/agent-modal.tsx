@@ -62,11 +62,13 @@ export interface Agent {
   voice_api_key?: string | null
   calendar_integration?: boolean | null
   calendar_api_key?: string | null
+  calendar_meeting_id?: string | null // Adicionar esta linha
   status?: string | null
   is_default?: boolean | null
   user_id?: string | null
   whatsapp_connection_id?: string | null
   evolution_bot_id?: string | null
+  model?: string | null
   // Campos para sincronização com Evolution API
   trigger_type?: string | null
   trigger_operator?: string | null
@@ -108,11 +110,13 @@ const initialFormData: Agent = {
   voice_api_key: null,
   calendar_integration: false,
   calendar_api_key: null,
+  calendar_meeting_id: null, // Adicionar esta linha
   status: "active",
   is_default: false,
   user_id: "",
   whatsapp_connection_id: null,
   evolution_bot_id: null,
+  model: null,
   // Valores padrão para campos Evolution API
   trigger_type: "keyword", // Garantir que sempre tenha um valor válido
   trigger_operator: "equals", // Garantir que sempre tenha um valor válido
@@ -149,8 +153,26 @@ export function AgentModal({
   const [showVoiceApiKey, setShowVoiceApiKey] = useState(false)
   const [showCalendarApiKey, setShowCalendarApiKey] = useState(false)
   const [evolutionSyncStatus, setEvolutionSyncStatus] = useState<string>("")
+  const [systemDefaultModel, setSystemDefaultModel] = useState<string | null>(null)
 
   const isAdmin = currentUser?.role === "admin"
+
+  useEffect(() => {
+    const loadSystemDefaultModel = async () => {
+      try {
+        const { getDefaultModel } = await import("@/lib/api-helpers")
+        const defaultModel = await getDefaultModel()
+        setSystemDefaultModel(defaultModel)
+        console.log("✅ Modelo padrão do sistema carregado:", defaultModel)
+      } catch (error) {
+        console.error("❌ Erro ao carregar modelo padrão:", error)
+      }
+    }
+
+    if (open) {
+      loadSystemDefaultModel()
+    }
+  }, [open])
 
   useEffect(() => {
     const user = getCurrentUser()
@@ -317,11 +339,13 @@ export function AgentModal({
         voice_api_key: formData.voice_api_key,
         calendar_integration: formData.calendar_integration,
         calendar_api_key: formData.calendar_api_key,
+        calendar_meeting_id: formData.calendar_meeting_id, // Adicionar esta linha
         status: formData.status,
         is_default: formData.is_default,
         user_id: formData.user_id,
         whatsapp_connection_id: formData.whatsapp_connection_id,
         evolution_bot_id: currentEvolutionBotId,
+        model: formData.model || systemDefaultModel,
         // Campos para sincronização Evolution API
         trigger_type: validTriggerType,
         trigger_operator: validTriggerOperator,
@@ -641,6 +665,35 @@ export function AgentModal({
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     0 = Mais previsível | 2 = Mais criativo
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="model" className="text-gray-900 dark:text-gray-100">
+                    Modelo de IA
+                  </Label>
+                  <Select
+                    name="model"
+                    value={formData.model || ""}
+                    onValueChange={(value) => handleSelectChange("model", value === "default" ? null : value)}
+                  >
+                    <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                      <SelectValue placeholder={`Padrão do sistema (${systemDefaultModel || "carregando..."})`} />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                      <SelectItem value="default">
+                        Usar Padrão do Sistema ({systemDefaultModel || "carregando..."})
+                      </SelectItem>
+                      <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                      <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+                      <SelectItem value="gpt-4.1-mini">GPT-4.1 Mini</SelectItem>
+                      <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
+                      <SelectItem value="claude-3-sonnet">Claude 3 Sonnet</SelectItem>
+                      <SelectItem value="claude-3-haiku">Claude 3 Haiku</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                    Modelo de IA que será usado por este agente. Se não especificado, usará o padrão do sistema.
                   </p>
                 </div>
 
@@ -1134,6 +1187,22 @@ export function AgentModal({
                             {showCalendarApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </Button>
                         </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="calendar_meeting_id" className="text-gray-900 dark:text-gray-100">
+                          ID da Reunião/Calendário
+                        </Label>
+                        <Input
+                          id="calendar_meeting_id"
+                          name="calendar_meeting_id"
+                          value={formData.calendar_meeting_id || ""}
+                          onChange={handleInputChange}
+                          placeholder="ID da reunião ou calendário"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          ID específico da reunião ou calendário para agendamentos
+                        </p>
                       </div>
                     </div>
                   )}

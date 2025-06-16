@@ -74,7 +74,8 @@ export async function GET(request: NextRequest) {
         total_conversations,
         total_messages,
         performance_score,
-        type 
+        type,
+        calendar_api_key
       `)
       .eq("status", "active")
 
@@ -110,6 +111,7 @@ export async function GET(request: NextRequest) {
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
         status: agent.status,
+        calendar_api_key: agent.calendar_api_key,
         created_at: agent.created_at,
         updated_at: agent.updated_at,
         user_id: agent.user_id,

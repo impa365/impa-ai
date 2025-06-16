@@ -97,6 +97,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         understand_images: agent.understand_images,
         voice_response_enabled: agent.voice_response_enabled,
         calendar_integration: agent.calendar_integration,
+        calendar_api_key: agent.calendar_api_key, // Adicionar esta linha
         chatnode_integration: agent.chatnode_integration,
         orimon_integration: agent.orimon_integration,
         voice_provider: agent.voice_provider,
