@@ -55,11 +55,19 @@ WHERE is_default = true;
 -- Verificar constraints criadas
 SELECT 
     constraint_name,
-    constraint_type,
-    constraint_definition
+    check_clause as constraint_definition
 FROM information_schema.check_constraints 
 WHERE constraint_schema = 'impaai' 
 AND constraint_name LIKE '%ai_agents%'
 ORDER BY constraint_name;
+
+-- Verificar índices criados
+SELECT 
+    indexname,
+    indexdef
+FROM pg_indexes 
+WHERE schemaname = 'impaai' 
+AND tablename = 'ai_agents'
+AND indexname LIKE '%default%';
 
 SELECT 'ETAPA 3 CONCLUÍDA: Constraints e validações criadas' as status;
