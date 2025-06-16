@@ -33,17 +33,21 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     // Buscar modelo padrão do sistema da tabela system_settings
-    const supabase = await db.supabase()
-    const { data: defaultModelData, error: modelError } = await supabase
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "default_model")
-      .single()
+    let defaultModel = "gpt-4o-mini" // Valor padrão
+    try {
+      const supabase = await db.supabase()
+      const { data: defaultModelData, error: modelError } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", "default_model")
+        .single()
 
-    if (modelError && modelError.code !== "PGRST116") {
-      console.error("Erro ao buscar modelo padrão:", modelError?.message)
+      if (!modelError && defaultModelData?.setting_value) {
+        defaultModel = defaultModelData.setting_value
+      }
+    } catch (error) {
+      console.error("Erro ao buscar modelo padrão, usando padrão:", error)
     }
-    const defaultModel = defaultModelData?.setting_value || "gpt-4o-mini"
 
     const isAdminAccess = user.role === "admin"
     if (!canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)) {
