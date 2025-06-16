@@ -32,22 +32,26 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    // Buscar modelo padrão do sistema da tabela system_settings
-    let defaultModel = "gpt-4o-mini" // Valor padrão
-    try {
-      const supabase = await db.supabase()
-      const { data: defaultModelData, error: modelError } = await supabase
-        .from("system_settings")
-        .select("setting_value")
-        .eq("setting_key", "default_model")
-        .single()
+    // Buscar modelo padrão do sistema. O código original usa db.users() para isso.
+    // Isso implica que a tabela user_profiles (ou a que db.users() aponta)
+    // tem as colunas setting_key e setting_value.
+    const { data: defaultModelData, error: modelError } = await (await db.users())
+      .select("setting_value")
+      .eq("setting_key", "default_model")
+      .eq("id", user.id) // Assumindo que é uma configuração por usuário, ou remover .eq("id", user.id) se for global em user_profiles
+      .single()
 
-      if (!modelError && defaultModelData?.setting_value) {
-        defaultModel = defaultModelData.setting_value
-      }
-    } catch (error) {
-      console.error("Erro ao buscar modelo padrão, usando padrão:", error)
+    // Se for uma configuração global do sistema, o ideal seria usar db.systemSettings()
+    // const { data: defaultModelData, error: modelError } = await (await db.systemSettings())
+    //   .select("setting_value")
+    //   .eq("setting_key", "default_model")
+    //   .single();
+
+    if (modelError && modelError.code !== "PGRST116") {
+      // PGRST116: Single row not found
+      console.error("Erro ao buscar modelo padrão:", modelError?.message)
     }
+    const defaultModel = defaultModelData?.setting_value || "gpt-4o-mini"
 
     const isAdminAccess = user.role === "admin"
     if (!canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)) {

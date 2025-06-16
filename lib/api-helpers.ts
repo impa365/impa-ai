@@ -5,21 +5,20 @@ import { db } from "@/lib/supabase" // Usando a nova estrutura do supabase.ts
 
 export async function getDefaultModel(): Promise<string | null> {
   try {
-    const supabase = await db.supabase()
-    const { data: modelSetting, error: settingError } = await supabase
-      .from("system_settings")
+    const systemSettingsTable = await db.systemSettings()
+    const { data: modelSetting, error: settingError } = await systemSettingsTable
       .select("setting_value")
       .eq("setting_key", "default_model")
       .single()
 
     if (settingError || !modelSetting) {
       console.warn("Configuração 'default_model' não encontrada:", settingError?.message)
-      return "gpt-4o-mini" // Valor padrão
+      return null // Ou um valor padrão como 'gpt-3.5-turbo'
     }
     return modelSetting.setting_value as string
   } catch (error: any) {
     console.error("Erro ao buscar default_model:", error.message)
-    return "gpt-4o-mini" // Valor padrão
+    return null
   }
 }
 

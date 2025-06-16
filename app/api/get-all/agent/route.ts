@@ -32,18 +32,6 @@ export async function GET(request: NextRequest) {
       db: { schema: "impaai" },
     })
 
-    // Buscar modelo padrão do sistema da tabela system_settings
-    const { data: defaultModelData, error: modelError } = await supabase
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "default_model")
-      .single()
-
-    if (modelError && modelError.code !== "PGRST116") {
-      console.error("Erro ao buscar modelo padrão:", modelError?.message)
-    }
-    const defaultModel = defaultModelData?.setting_value || "gpt-4o-mini"
-
     // Buscar agentes do usuário
     // Selecionando apenas colunas que existem conforme o INSERT SQL fornecido
     let query = supabase
@@ -95,7 +83,7 @@ export async function GET(request: NextRequest) {
         id: agent.id,
         name: agent.name,
         description: agent.description,
-        model: agent.model || defaultModel,
+        model: agent.model,
         training_prompt: agent.training_prompt,
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
