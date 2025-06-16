@@ -102,6 +102,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         orimon_integration: agent.orimon_integration,
         voice_provider: agent.voice_provider,
         voice_id: agent.voice_id,
+        voice_api_key: agent.voice_api_key, // Adicionar esta linha
+        calendar_integration: agent.calendar_integration,
+        chatnode_integration: agent.chatnode_integration,
+        orimon_integration: agent.orimon_integration,
+        voice_provider: agent.voice_provider,
+        voice_id: agent.voice_id,
         is_default: agent.is_default,
         listen_own_messages: agent.listen_own_messages,
         stop_bot_by_me: agent.stop_bot_by_me,
