@@ -14,14 +14,14 @@ export async function getDefaultModel(): Promise<string | null> {
       .single()
 
     if (settingError || !modelSetting) {
-      console.warn("Configuração 'default_model' não encontrada:", settingError?.message)
-      return "gpt-3.5-turbo" // Fallback padrão
+      console.error("Configuração 'default_model' não encontrada:", settingError?.message)
+      return null
     }
 
     return modelSetting.setting_value as string
   } catch (error: any) {
     console.error("Erro ao buscar default_model:", error.message)
-    return "gpt-3.5-turbo" // Fallback padrão
+    return null
   }
 }
 
