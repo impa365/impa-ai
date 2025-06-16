@@ -1,8 +1,8 @@
 "use client"
 
+import type React from "react"
+
 import { createContext, useContext, useEffect, useState } from "react"
-import { ThemeProvider as NextThemesProvider } from "next-themes"
-import type { ThemeProviderProps } from "next-themes"
 import { getSupabase } from "@/lib/supabase"
 
 // Definição do tipo ThemeConfig
@@ -449,6 +449,14 @@ export function saveThemeToLocalStorage(theme: ThemeConfig): void {
   }
 }
 
+interface ThemeProviderProps {
+  children: React.ReactNode
+  attribute?: string
+  defaultTheme?: string
+  enableSystem?: boolean
+  disableTransitionOnChange?: boolean
+}
+
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   const [theme, setTheme] = useState<ThemeConfig | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -524,7 +532,7 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 
   return (
     <ThemeContext.Provider value={{ theme, updateTheme, loadTheme, isLoading }}>
-      <NextThemesProvider {...props}>{children}</NextThemesProvider>
+      <div className="min-h-screen">{children}</div>
     </ThemeContext.Provider>
   )
 }
