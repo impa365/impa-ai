@@ -299,7 +299,7 @@ export function AgentModal({
       .filter((line) => line)
     let method = "GET"
     let url = ""
-    let headers = ""
+    const headers = []
     let body = ""
 
     lines.forEach((line) => {
@@ -309,7 +309,7 @@ export function AgentModal({
       if (line.includes("-H ") || line.includes("--header ")) {
         const headerMatch = line.match(/(-H |--header )['"]([^'"]+)['"]/)
         if (headerMatch) {
-          headers += headers ? "\n" + headerMatch[2] : headerMatch[2]
+          headers.push(headerMatch[2])
         }
       }
       if (line.includes("-d ") || line.includes("--data ")) {
@@ -328,12 +328,18 @@ export function AgentModal({
 
     const description = curlDescription.trim() || "[Descreva o que este endpoint faz]"
 
+    // Formatar headers corretamente
+    const formattedHeaders = headers.length > 0 ? headers.map((header) => `header: ${header}`).join("\n") : "header: {}"
+
+    // Garantir que body seja {} quando vazio
+    const formattedBody = body ? `body: ${body}` : "body: {}"
+
     const newEndpoint = `
 Descrição: ${description}
 
 ${method.toUpperCase()}: ${url}
-${headers ? `header: ${headers.replace(/:/g, ":")}` : "header: {}"}
-${body ? `body: ${body}` : "body: {}"}
+${formattedHeaders}
+${formattedBody}
 query: {}
 
 _______________________________________
