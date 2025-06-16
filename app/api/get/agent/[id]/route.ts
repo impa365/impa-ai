@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { validateApiKey, canAccessAgent } from "@/lib/api-auth"
 import { db } from "@/lib/supabase" // db é o nosso objeto de helpers
+import { getDefaultModel } from "@/lib/api-helpers"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -17,13 +18,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Usando o helper db.agents() que aponta para a tabela correta com o schema correto.
     const { data: agent, error: agentError } = await (await db.agents())
       .select(`
-        *,
-        user_profiles (
-          id,
-          full_name,
-          email
-        )
-      `)
+      *,
+      user_profiles (
+        id,
+        full_name,
+        email
+      )
+    `)
       .eq("id", agentId)
       .single()
 
@@ -32,31 +33,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    // Buscar modelo padrão do sistema. O código original usa db.users() para isso.
-    // Isso implica que a tabela user_profiles (ou a que db.users() aponta)
-    // tem as colunas setting_key e setting_value.
-    const { data: defaultModelData, error: modelError } = await (await db.users())
-      .select("setting_value")
-      .eq("setting_key", "default_model")
-      .eq("id", user.id) // Assumindo que é uma configuração por usuário, ou remover .eq("id", user.id) se for global em user_profiles
-      .single()
-
-    // Se for uma configuração global do sistema, o ideal seria usar db.systemSettings()
-    // const { data: defaultModelData, error: modelError } = await (await db.systemSettings())
-    //   .select("setting_value")
-    //   .eq("setting_key", "default_model")
-    //   .single();
-
-    if (modelError && modelError.code !== "PGRST116") {
-      // PGRST116: Single row not found
-      console.error("Erro ao buscar modelo padrão:", modelError?.message)
-    }
-    const defaultModel = defaultModelData?.setting_value || "gpt-4o-mini"
-
-    const isAdminAccess = user.role === "admin"
-    if (!canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)) {
-      return NextResponse.json({ error: "Sem permissão para acessar este agente" }, { status: 403 })
-    }
+    const systemDefaultModel = await getDefaultModel()
 
     let whatsappConnection = null
     if (agent.whatsapp_connection_id) {
@@ -71,9 +48,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       whatsappConnection = connectionData
     }
 
+    const isAdminAccess = user.role === "admin"
+    if (!canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)) {
+      return NextResponse.json({ error: "Sem permissão para acessar este agente" }, { status: 403 })
+    }
+
     const response = {
       success: true,
-      default_model: defaultModel,
+      default_model: systemDefaultModel, // Corretamente usa o valor de system_settings
       agent: {
         id: agent.id,
         name: agent.name,
@@ -85,7 +67,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         main_function: agent.main_function,
         type: agent.type || "chat",
         status: agent.status,
-        model: agent.model || defaultModel,
+        model: agent.model || systemDefaultModel, // Usa o modelo do agente, ou o padrão do sistema. Se ambos forem null, será null.
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
         top_p: agent.top_p,
