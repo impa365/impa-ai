@@ -60,16 +60,17 @@ export interface Agent {
   voice_response_enabled?: boolean | null
   voice_provider?: string | null
   voice_api_key?: string | null
-  voice_id?: string | null // Adicionar esta linha
+  voice_id?: string | null
   calendar_integration?: boolean | null
   calendar_api_key?: string | null
   calendar_meeting_id?: string | null
-  chatnode_integration?: boolean | null // Adicionar esta linha
-  chatnode_api_key?: string | null // Adicionar esta linha
-  chatnode_bot_id?: string | null // Adicionar esta linha
-  orimon_integration?: boolean | null // Adicionar esta linha
-  orimon_api_key?: string | null // Adicionar esta linha
-  orimon_bot_id?: string | null // Adicionar esta linha
+  chatnode_integration?: boolean | null
+  chatnode_api_key?: string | null
+  chatnode_bot_id?: string | null
+  orimon_integration?: boolean | null
+  orimon_api_key?: string | null
+  orimon_bot_id?: string | null
+  description?: string | null // Adicionar esta linha
   status?: string | null
   is_default?: boolean | null
   user_id?: string | null
@@ -115,16 +116,17 @@ const initialFormData: Agent = {
   voice_response_enabled: false,
   voice_provider: null,
   voice_api_key: null,
-  voice_id: null, // Adicionar esta linha
+  voice_id: null,
   calendar_integration: false,
   calendar_api_key: null,
   calendar_meeting_id: null,
-  chatnode_integration: false, // Adicionar esta linha
-  chatnode_api_key: null, // Adicionar esta linha
-  chatnode_bot_id: null, // Adicionar esta linha
-  orimon_integration: false, // Adicionar esta linha
-  orimon_api_key: null, // Adicionar esta linha
-  orimon_bot_id: null, // Adicionar esta linha
+  chatnode_integration: false,
+  chatnode_api_key: null,
+  chatnode_bot_id: null,
+  orimon_integration: false,
+  orimon_api_key: null,
+  orimon_bot_id: null,
+  description: null, // Adicionar esta linha
   status: "active",
   is_default: false,
   user_id: "",
@@ -353,16 +355,17 @@ export function AgentModal({
         voice_response_enabled: formData.voice_response_enabled,
         voice_provider: formData.voice_provider,
         voice_api_key: formData.voice_api_key,
-        voice_id: formData.voice_id, // Adicionar esta linha
+        voice_id: formData.voice_id,
         calendar_integration: formData.calendar_integration,
         calendar_api_key: formData.calendar_api_key,
         calendar_meeting_id: formData.calendar_meeting_id,
-        chatnode_integration: formData.chatnode_integration, // Adicionar esta linha
-        chatnode_api_key: formData.chatnode_api_key, // Adicionar esta linha
-        chatnode_bot_id: formData.chatnode_bot_id, // Adicionar esta linha
-        orimon_integration: formData.orimon_integration, // Adicionar esta linha
-        orimon_api_key: formData.orimon_api_key, // Adicionar esta linha
-        orimon_bot_id: formData.orimon_bot_id, // Adicionar esta linha
+        chatnode_integration: formData.chatnode_integration,
+        chatnode_api_key: formData.chatnode_api_key,
+        chatnode_bot_id: formData.chatnode_bot_id,
+        orimon_integration: formData.orimon_integration,
+        orimon_api_key: formData.orimon_api_key,
+        orimon_bot_id: formData.orimon_bot_id,
+        description: formData.description, // Adicionar esta linha
         status: formData.status,
         is_default: formData.is_default,
         user_id: formData.user_id,
@@ -623,6 +626,25 @@ export function AgentModal({
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     Instruções detalhadas sobre como a IA deve se comportar.
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="description" className="text-gray-900 dark:text-gray-100">
+                    Descrição de APIs (Integrações Personalizadas)
+                  </Label>
+                  <Textarea
+                    id="description"
+                    name="description"
+                    value={formData.description || ""}
+                    onChange={handleInputChange}
+                    placeholder="Ex: Use a API do Mercado Livre para buscar produtos: GET https://api.mercadolibre.com/sites/MLB/search?q={produto}"
+                    rows={4}
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                    Para usar integrações que não estão disponíveis nativamente, descreva aqui as APIs que o agente pode
+                    usar. Inclua URLs, métodos HTTP, parâmetros e exemplos de uso.
                   </p>
                 </div>
 
