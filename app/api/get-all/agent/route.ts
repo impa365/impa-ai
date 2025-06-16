@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { validateApiKey } from "@/lib/api-auth"
 import { createClient } from "@supabase/supabase-js"
-import { getDefaultModel } from "@/lib/api-helpers"
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,13 +28,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
     }
 
+    // Logo após validar a API key, adicione:
+    console.log("🔍 Iniciando busca do default_model...")
+
+    // Buscar modelo padrão diretamente
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       db: { schema: "impaai" },
     })
 
-    // Buscar modelo padrão do sistema
-    const systemDefaultModel = await getDefaultModel()
-    const fallbackModel = systemDefaultModel || "gpt-4o-mini"
+    const { data: defaultModelData, error: defaultModelError } = await supabase
+      .from("system_settings")
+      .select("setting_value")
+      .eq("setting_key", "default_model")
+      .single()
+
+    let systemDefaultModel = null
+    if (defaultModelError) {
+      console.error("❌ Erro ao buscar default_model:", defaultModelError)
+    } else if (defaultModelData && defaultModelData.setting_value) {
+      systemDefaultModel = defaultModelData.setting_value.toString().trim()
+      console.log("✅ Default model encontrado:", systemDefaultModel)
+    } else {
+      console.error("❌ default_model não encontrado")
+    }
+
+    // Remova a linha: const systemDefaultModel = await getDefaultModel()
+    // Remova a linha: const fallbackModel = systemDefaultModel || "gpt-4o-mini"
 
     // Buscar agentes do usuário
     let query = supabase
@@ -87,7 +105,7 @@ export async function GET(request: NextRequest) {
         id: agent.id,
         name: agent.name,
         description: agent.description,
-        model: agent.model || fallbackModel, // Usar modelo do agente ou padrão do sistema
+        model: agent.model || systemDefaultModel, // Usar apenas o valor do banco, sem fallback
         training_prompt: agent.training_prompt,
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
@@ -106,7 +124,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      default_model: systemDefaultModel, // Incluir o modelo padrão do sistema na resposta
+      default_model: systemDefaultModel, // Valor direto do banco
       data: formattedAgents,
       total: formattedAgents.length,
       user: {

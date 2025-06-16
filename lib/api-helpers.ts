@@ -4,33 +4,48 @@
 
 export async function getDefaultModel(): Promise<string | null> {
   try {
-    const { getSupabaseServer } = await import("@/lib/supabase")
-    const supabase = getSupabaseServer()
+    // Importar diretamente o createClient
+    const { createClient } = await import("@supabase/supabase-js")
 
-    // Buscar da tabela system_settings no schema impaai
-    const { data: modelSetting, error: settingError } = await supabase
+    // Usar as variáveis de ambiente diretamente
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ Supabase config missing for getDefaultModel")
+      return null
+    }
+
+    // Criar cliente direto
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      db: { schema: "impaai" },
+    })
+
+    console.log("🔍 Buscando default_model da tabela system_settings...")
+
+    // Query direta e simples
+    const { data, error } = await supabase
       .from("system_settings")
       .select("setting_value")
       .eq("setting_key", "default_model")
       .single()
 
-    if (settingError) {
-      console.error("Erro ao buscar default_model:", settingError.message)
+    if (error) {
+      console.error("❌ Erro ao buscar default_model:", error)
       return null
     }
 
-    if (!modelSetting || !modelSetting.setting_value) {
-      console.error("Configuração 'default_model' não encontrada ou vazia")
+    if (!data || !data.setting_value) {
+      console.error("❌ default_model não encontrado ou vazio")
       return null
     }
 
-    // O setting_value já é uma string simples, não precisa de parsing JSON
-    const defaultModel = modelSetting.setting_value.trim()
-    console.log("Default model encontrado:", defaultModel)
+    const defaultModel = data.setting_value.toString().trim()
+    console.log("✅ Default model encontrado:", defaultModel)
 
-    return defaultModel || null
+    return defaultModel
   } catch (error: any) {
-    console.error("Erro ao buscar default_model:", error.message)
+    console.error("❌ Erro na função getDefaultModel:", error.message)
     return null
   }
 }

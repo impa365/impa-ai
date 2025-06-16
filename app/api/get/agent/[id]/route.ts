@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { validateApiKey, canAccessAgent } from "@/lib/api-auth"
 import { db } from "@/lib/supabase" // db é o nosso objeto de helpers
-import { getDefaultModel } from "@/lib/api-helpers"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -33,12 +32,27 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    // Buscar modelo padrão do sistema
-    const systemDefaultModel = await getDefaultModel()
-    console.log("Sistema default model:", systemDefaultModel)
+    // Após buscar o agente, adicione esta busca direta:
+    console.log("🔍 Buscando default_model diretamente...")
 
-    // Se não conseguir buscar o modelo padrão, usar um fallback
-    const fallbackModel = systemDefaultModel || "gpt-4o-mini"
+    const { getSupabaseServer } = await import("@/lib/supabase")
+    const supabaseClient = await getSupabaseServer()
+
+    const { data: defaultModelData, error: defaultModelError } = await supabaseClient
+      .from("system_settings")
+      .select("setting_value")
+      .eq("setting_key", "default_model")
+      .single()
+
+    let systemDefaultModel = null
+    if (defaultModelError) {
+      console.error("❌ Erro ao buscar default_model:", defaultModelError)
+    } else if (defaultModelData && defaultModelData.setting_value) {
+      systemDefaultModel = defaultModelData.setting_value.toString().trim()
+      console.log("✅ Default model encontrado:", systemDefaultModel)
+    } else {
+      console.error("❌ default_model não encontrado")
+    }
 
     const isAdminAccess = user.role === "admin"
     if (!canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)) {
@@ -60,7 +74,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const response = {
       success: true,
-      default_model: systemDefaultModel, // Retorna o valor real do sistema ou null
+      default_model: systemDefaultModel, // Valor direto do banco
       agent: {
         id: agent.id,
         name: agent.name,
@@ -72,7 +86,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         main_function: agent.main_function,
         type: agent.type || "chat",
         status: agent.status,
-        model: agent.model || fallbackModel, // Usa o modelo do agente ou o padrão do sistema
+        model: agent.model || systemDefaultModel, // Sem fallback adicional
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
         top_p: agent.top_p,
