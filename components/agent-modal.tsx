@@ -60,9 +60,16 @@ export interface Agent {
   voice_response_enabled?: boolean | null
   voice_provider?: string | null
   voice_api_key?: string | null
+  voice_id?: string | null // Adicionar esta linha
   calendar_integration?: boolean | null
   calendar_api_key?: string | null
-  calendar_meeting_id?: string | null // Adicionar esta linha
+  calendar_meeting_id?: string | null
+  chatnode_integration?: boolean | null // Adicionar esta linha
+  chatnode_api_key?: string | null // Adicionar esta linha
+  chatnode_bot_id?: string | null // Adicionar esta linha
+  orimon_integration?: boolean | null // Adicionar esta linha
+  orimon_api_key?: string | null // Adicionar esta linha
+  orimon_bot_id?: string | null // Adicionar esta linha
   status?: string | null
   is_default?: boolean | null
   user_id?: string | null
@@ -108,9 +115,16 @@ const initialFormData: Agent = {
   voice_response_enabled: false,
   voice_provider: null,
   voice_api_key: null,
+  voice_id: null, // Adicionar esta linha
   calendar_integration: false,
   calendar_api_key: null,
-  calendar_meeting_id: null, // Adicionar esta linha
+  calendar_meeting_id: null,
+  chatnode_integration: false, // Adicionar esta linha
+  chatnode_api_key: null, // Adicionar esta linha
+  chatnode_bot_id: null, // Adicionar esta linha
+  orimon_integration: false, // Adicionar esta linha
+  orimon_api_key: null, // Adicionar esta linha
+  orimon_bot_id: null, // Adicionar esta linha
   status: "active",
   is_default: false,
   user_id: "",
@@ -118,8 +132,8 @@ const initialFormData: Agent = {
   evolution_bot_id: null,
   model: null,
   // Valores padrão para campos Evolution API
-  trigger_type: "keyword", // Garantir que sempre tenha um valor válido
-  trigger_operator: "equals", // Garantir que sempre tenha um valor válido
+  trigger_type: "keyword",
+  trigger_operator: "equals",
   trigger_value: "",
   keyword_finish: "#sair",
   debounce_time: 10,
@@ -152,6 +166,8 @@ export function AgentModal({
   const [n8nIntegrationConfig, setN8nIntegrationConfig] = useState<any>(null)
   const [showVoiceApiKey, setShowVoiceApiKey] = useState(false)
   const [showCalendarApiKey, setShowCalendarApiKey] = useState(false)
+  const [showChatnodeApiKey, setShowChatnodeApiKey] = useState(false) // Adicionar esta linha
+  const [showOrimonApiKey, setShowOrimonApiKey] = useState(false) // Adicionar esta linha
   const [evolutionSyncStatus, setEvolutionSyncStatus] = useState<string>("")
   const [systemDefaultModel, setSystemDefaultModel] = useState<string | null>(null)
 
@@ -337,9 +353,16 @@ export function AgentModal({
         voice_response_enabled: formData.voice_response_enabled,
         voice_provider: formData.voice_provider,
         voice_api_key: formData.voice_api_key,
+        voice_id: formData.voice_id, // Adicionar esta linha
         calendar_integration: formData.calendar_integration,
         calendar_api_key: formData.calendar_api_key,
-        calendar_meeting_id: formData.calendar_meeting_id, // Adicionar esta linha
+        calendar_meeting_id: formData.calendar_meeting_id,
+        chatnode_integration: formData.chatnode_integration, // Adicionar esta linha
+        chatnode_api_key: formData.chatnode_api_key, // Adicionar esta linha
+        chatnode_bot_id: formData.chatnode_bot_id, // Adicionar esta linha
+        orimon_integration: formData.orimon_integration, // Adicionar esta linha
+        orimon_api_key: formData.orimon_api_key, // Adicionar esta linha
+        orimon_bot_id: formData.orimon_bot_id, // Adicionar esta linha
         status: formData.status,
         is_default: formData.is_default,
         user_id: formData.user_id,
@@ -1158,6 +1181,22 @@ export function AgentModal({
                           </Button>
                         </div>
                       </div>
+                      <div>
+                        <Label htmlFor="voice_id" className="text-gray-900 dark:text-gray-100">
+                          ID da Voz
+                        </Label>
+                        <Input
+                          id="voice_id"
+                          name="voice_id"
+                          value={formData.voice_id || ""}
+                          onChange={handleInputChange}
+                          placeholder="ID específico da voz do provedor"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          ID específico da voz no provedor selecionado
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1221,6 +1260,136 @@ export function AgentModal({
                         />
                         <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                           ID específico da reunião ou calendário para agendamentos
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="chatnode_integration" className="text-gray-900 dark:text-gray-100">
+                        Integração Chatnode
+                      </Label>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Conectar com plataforma Chatnode.
+                      </p>
+                    </div>
+                    <Switch
+                      id="chatnode_integration"
+                      name="chatnode_integration"
+                      checked={formData.chatnode_integration || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, chatnode_integration: checked }))}
+                      className={switchStyles}
+                    />
+                  </div>
+                  {formData.chatnode_integration && (
+                    <div className="space-y-3 pl-4 border-l-2 border-purple-200 bg-purple-50 p-4 rounded dark:bg-gray-700 dark:border-purple-700">
+                      <div>
+                        <Label htmlFor="chatnode_api_key" className="text-gray-900 dark:text-gray-100">
+                          Chave API Chatnode
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="chatnode_api_key"
+                            name="chatnode_api_key"
+                            type={showChatnodeApiKey ? "text" : "password"}
+                            value={formData.chatnode_api_key || ""}
+                            onChange={handleInputChange}
+                            placeholder="Chave API do Chatnode"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowChatnodeApiKey(!showChatnodeApiKey)}
+                          >
+                            {showChatnodeApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="chatnode_bot_id" className="text-gray-900 dark:text-gray-100">
+                          ID do Bot Chatnode
+                        </Label>
+                        <Input
+                          id="chatnode_bot_id"
+                          name="chatnode_bot_id"
+                          value={formData.chatnode_bot_id || ""}
+                          onChange={handleInputChange}
+                          placeholder="ID do bot no Chatnode"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          ID específico do bot na plataforma Chatnode
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="orimon_integration" className="text-gray-900 dark:text-gray-100">
+                        Integração Orimon
+                      </Label>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Conectar com plataforma Orimon.
+                      </p>
+                    </div>
+                    <Switch
+                      id="orimon_integration"
+                      name="orimon_integration"
+                      checked={formData.orimon_integration || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, orimon_integration: checked }))}
+                      className={switchStyles}
+                    />
+                  </div>
+                  {formData.orimon_integration && (
+                    <div className="space-y-3 pl-4 border-l-2 border-orange-200 bg-orange-50 p-4 rounded dark:bg-gray-700 dark:border-orange-700">
+                      <div>
+                        <Label htmlFor="orimon_api_key" className="text-gray-900 dark:text-gray-100">
+                          Chave API Orimon
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="orimon_api_key"
+                            name="orimon_api_key"
+                            type={showOrimonApiKey ? "text" : "password"}
+                            value={formData.orimon_api_key || ""}
+                            onChange={handleInputChange}
+                            placeholder="Chave API do Orimon"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowOrimonApiKey(!showOrimonApiKey)}
+                          >
+                            {showOrimonApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="orimon_bot_id" className="text-gray-900 dark:text-gray-100">
+                          ID do Bot Orimon
+                        </Label>
+                        <Input
+                          id="orimon_bot_id"
+                          name="orimon_bot_id"
+                          value={formData.orimon_bot_id || ""}
+                          onChange={handleInputChange}
+                          placeholder="ID do bot no Orimon"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          ID específico do bot na plataforma Orimon
                         </p>
                       </div>
                     </div>
