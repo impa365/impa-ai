@@ -67,7 +67,7 @@ export interface Agent {
   chatnode_integration?: boolean | null
   chatnode_api_key?: string | null
   chatnode_bot_id?: string | null
-  orimon_integration?: boolean | null
+  orimon_integration?: string | null
   orimon_api_key?: string | null
   orimon_bot_id?: string | null
   description?: string | null // Adicionar esta linha
@@ -299,25 +299,44 @@ export function AgentModal({
       .filter((line) => line)
     let method = "GET"
     let url = ""
-    const headers = []
-    let body = ""
+    const headersArray: string[] = []
+    let localBody = "" // Usar uma variável local para o body
 
     lines.forEach((line) => {
       if (line.includes("-X ") || line.includes("--request ")) {
         method = line.split(/(-X |--request )/)[2]?.split(" ")[0] || "GET"
       }
-      if (line.includes("-H ") || line.includes("--header ")) {
-        const headerMatch = line.match(/(-H |--header )['"]([^'"]+)['"]/)
-        if (headerMatch) {
-          headers.push(headerMatch[2])
+
+      // Captura de Headers
+      const headerMatch = line.match(/(-H |--header )\s*(['"])(.*?)\2/) // Regex para header com aspas
+      if (headerMatch && headerMatch[3]) {
+        headersArray.push(headerMatch[3])
+      } else {
+        const headerMatchNoQuotes = line.match(/(-H |--header )\s*([^'"].*)/) // Regex para header sem aspas em volta do valor completo
+        if (headerMatchNoQuotes && headerMatchNoQuotes[2]) {
+          headersArray.push(headerMatchNoQuotes[2].trim())
         }
       }
-      if (line.includes("-d ") || line.includes("--data ")) {
-        const dataMatch = line.match(/(-d |--data )['"]([^'"]+)['"]/)
-        if (dataMatch) {
-          body = dataMatch[2]
+
+      // Captura de Body (-d, --data, --data-raw)
+      // Tenta capturar body delimitado por aspas primeiro
+      const dataMatchWithQuotes = line.match(/(-d|--data(?:-raw)?)\s*(['"])([\s\S]*?)\2/)
+      if (dataMatchWithQuotes && typeof dataMatchWithQuotes[3] === "string") {
+        localBody = dataMatchWithQuotes[3]
+      } else {
+        // Se não encontrar com aspas, tenta capturar body não delimitado por aspas
+        // (ex: -d foo=bar ou -d '{"key":"val"}' onde o shell remove as aspas externas)
+        const dataMatchWithoutQuotes = line.match(/(-d|--data(?:-raw)?)\s+(.+)/)
+        if (dataMatchWithoutQuotes && typeof dataMatchWithoutQuotes[2] === "string" && !localBody) {
+          // só preenche se não foi preenchido antes
+          // Verifica se o que foi capturado não é um novo argumento -H, etc.
+          const potentialBody = dataMatchWithoutQuotes[2].trim()
+          if (!potentialBody.startsWith("-")) {
+            localBody = potentialBody
+          }
         }
       }
+
       if (line.startsWith("curl ") || (!line.startsWith("-") && line.includes("http"))) {
         const urlMatch = line.match(/https?:\/\/[^\s'"]+/)
         if (urlMatch) {
@@ -328,11 +347,8 @@ export function AgentModal({
 
     const description = curlDescription.trim() || "[Descreva o que este endpoint faz]"
 
-    // Formatar headers corretamente
-    const formattedHeaders = headers.length > 0 ? headers.map((header) => `header: ${header}`).join("\n") : "header: {}"
-
-    // Garantir que body seja {} quando vazio
-    const formattedBody = body ? `body: ${body}` : "body: {}"
+    const formattedHeaders = headersArray.length > 0 ? headersArray.map((h) => `header: ${h}`).join("\n") : "header: {}"
+    const formattedBody = localBody ? `body: ${localBody}` : "body: {}"
 
     const newEndpoint = `
 Descrição: ${description}
