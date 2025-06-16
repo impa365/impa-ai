@@ -686,7 +686,7 @@ _______________________________________
                     placeholder="Ex: Você é uma assistente de vendas..."
                     rows={6}
                     required
-                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-gray-300 dark:border-gray-600"
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     Instruções detalhadas sobre como a IA deve se comportar.
