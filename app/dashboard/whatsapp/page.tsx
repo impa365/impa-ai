@@ -86,36 +86,38 @@ export default function WhatsAppPage() {
         setWhatsappConnections(connections || [])
       }
 
-      // Buscar limite de conexões do usuário - corrigir chamada assíncrona
-      const userSettingsTable = await supabase.from("user_settings")
-      const { data: userSettingsData, error: userSettingsError } = await userSettingsTable
-        .select("whatsapp_connections_limit")
-        .eq("user_id", user.id)
+      // Buscar limite de conexões do usuário diretamente da user_profiles
+      const userProfilesTable = await supabase.from("user_profiles")
+      const { data: userProfileData, error: userProfileError } = await userProfilesTable
+        .select("connections_limit, role")
+        .eq("id", user.id)
+        .single()
 
-      if (!userSettingsError && userSettingsData && userSettingsData.length > 0) {
-        setConnectionLimit(userSettingsData[0].whatsapp_connections_limit)
-      } else {
-        // Buscar limite padrão do sistema - corrigir chamada assíncrona
-        const systemSettingsTable = await supabase.from("system_settings")
-        const { data: systemSettingsData, error: systemSettingsError } = await systemSettingsTable
-          .select("setting_value")
-          .eq("setting_key", "default_whatsapp_connections_limit")
+      if (!userProfileError && userProfileData) {
+        console.log("📊 Dados do perfil do usuário:", userProfileData)
 
-        if (!systemSettingsError && systemSettingsData && systemSettingsData.length > 0) {
-          const defaultLimit = Number.parseInt(systemSettingsData[0].setting_value) || 2
-          setConnectionLimit(defaultLimit)
+        let userLimit = 2 // padrão
 
-          // Criar configuração para o usuário - corrigir chamada assíncrona
-          const userSettingsInsertTable = await supabase.from("user_settings")
-          await userSettingsInsertTable.insert([
-            {
-              user_id: user.id,
-              whatsapp_connections_limit: defaultLimit,
-            },
-          ])
-        } else {
-          setConnectionLimit(2) // Fallback para 2 conexões
+        // Verificar connections_limit (valor configurado pelo admin)
+        if (userProfileData.connections_limit !== undefined && userProfileData.connections_limit !== null) {
+          // Se for string, converter para número
+          userLimit =
+            typeof userProfileData.connections_limit === "string"
+              ? Number.parseInt(userProfileData.connections_limit)
+              : userProfileData.connections_limit
+          console.log("✅ Usando connections_limit:", userLimit)
         }
+        // Se for admin, limite ilimitado
+        else if (userProfileData.role === "admin") {
+          userLimit = 999
+          console.log("✅ Usuário admin - limite ilimitado")
+        }
+
+        console.log("📊 Limite final de conexões WhatsApp:", userLimit)
+        setConnectionLimit(userLimit)
+      } else {
+        console.error("Erro ao buscar perfil do usuário:", userProfileError)
+        setConnectionLimit(2) // Fallback
       }
     } catch (error) {
       console.error("Erro ao buscar conexões:", error)

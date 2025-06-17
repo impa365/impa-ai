@@ -65,43 +65,59 @@ export default function UserAgentsPage() {
     try {
       console.log("🔍 Carregando limites do usuário:", userId)
 
-      // Primeiro, tentar buscar com as colunas de limite
-      const userProfilesTable = await supabase.from("user_profiles")
-      const { data, error } = await userProfilesTable
-        .select("max_agents, max_whatsapp_connections, max_integrations, role")
+      const supabaseClient = await supabase.from("user_profiles")
+      const { data: userData, error: userError } = await supabaseClient
+        .select("agents_limit, connections_limit, role")
         .eq("id", userId)
         .single()
 
-      if (error) {
-        console.warn("⚠️ Erro ao carregar limites do usuário:", error.message)
-
-        // Se der erro, usar limites padrão baseados no role do usuário
-        const userProfilesTable2 = await supabase.from("user_profiles")
-        const { data: userData, error: userError } = await userProfilesTable2.select("role").eq("id", userId).single()
-
-        if (!userError && userData) {
-          const limits =
-            userData.role === "admin"
-              ? { max_agents: 999, max_whatsapp_connections: 999, max_integrations: 999 }
-              : DEFAULT_LIMITS
-
-          console.log("📊 Usando limites padrão:", limits)
-          setUserLimits(limits)
-        } else {
-          console.log("📊 Usando limites padrão globais:", DEFAULT_LIMITS)
-          setUserLimits(DEFAULT_LIMITS)
-        }
+      if (userError) {
+        console.error("❌ Erro ao carregar dados do usuário:", userError)
+        setUserLimits(DEFAULT_LIMITS)
         return
       }
 
-      // Se conseguiu buscar os dados, usar os valores do banco ou padrão
-      const limits = {
-        max_agents: data?.max_agents || DEFAULT_LIMITS.max_agents,
-        max_whatsapp_connections: data?.max_whatsapp_connections || DEFAULT_LIMITS.max_whatsapp_connections,
-        max_integrations: data?.max_integrations || DEFAULT_LIMITS.max_integrations,
+      console.log("📊 Dados do usuário carregados:", userData)
+
+      // Usar os valores exatos da tabela user_profiles
+      let agentsLimit = DEFAULT_LIMITS.max_agents
+      let whatsappLimit = DEFAULT_LIMITS.max_whatsapp_connections
+
+      // Verificar agents_limit (valor configurado pelo admin)
+      if (userData.agents_limit !== undefined && userData.agents_limit !== null) {
+        // Se for string, converter para número
+        agentsLimit =
+          typeof userData.agents_limit === "string" ? Number.parseInt(userData.agents_limit) : userData.agents_limit
+        console.log("✅ Usando agents_limit do user_profiles:", agentsLimit)
+      }
+      // Se for admin, limite ilimitado
+      else if (userData.role === "admin") {
+        agentsLimit = 999
+        console.log("✅ Usuário admin - limite de agentes: 999")
       }
 
-      console.log("📊 Limites carregados:", limits)
+      // Verificar connections_limit (valor configurado pelo admin)
+      if (userData.connections_limit !== undefined && userData.connections_limit !== null) {
+        // Se for string, converter para número
+        whatsappLimit =
+          typeof userData.connections_limit === "string"
+            ? Number.parseInt(userData.connections_limit)
+            : userData.connections_limit
+        console.log("✅ Usando connections_limit do user_profiles:", whatsappLimit)
+      }
+      // Se for admin, limite ilimitado
+      else if (userData.role === "admin") {
+        whatsappLimit = 999
+        console.log("✅ Usuário admin - limite de WhatsApp: 999")
+      }
+
+      const limits = {
+        max_agents: agentsLimit,
+        max_whatsapp_connections: whatsappLimit,
+        max_integrations: DEFAULT_LIMITS.max_integrations,
+      }
+
+      console.log("📊 Limites finais aplicados:", limits)
       setUserLimits(limits)
     } catch (error) {
       console.error("❌ Erro ao carregar limites:", error)
