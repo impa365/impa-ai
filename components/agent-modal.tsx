@@ -176,10 +176,21 @@ export function AgentModal({
   const [curlInput, setCurlInput] = useState("")
   const [curlDescription, setCurlDescription] = useState("")
   const [showIgnoreJidsWarning, setShowIgnoreJidsWarning] = useState(false)
+  const [showGroupsProtectionWarning, setShowGroupsProtectionWarning] = useState(false)
   const [tempIgnoreJids, setTempIgnoreJids] = useState<string[]>([])
   const [newIgnoreJid, setNewIgnoreJid] = useState("")
+  const [pendingSubmit, setPendingSubmit] = useState(false)
 
   const isAdmin = currentUser?.role === "admin"
+
+  // Função para garantir que @g.us esteja sempre presente
+  const ensureGroupsProtection = (jids: string[] | null): string[] => {
+    const currentJids = jids || []
+    if (!currentJids.includes("@g.us")) {
+      return ["@g.us", ...currentJids]
+    }
+    return currentJids
+  }
 
   useEffect(() => {
     const loadSystemDefaultModel = async () => {
@@ -269,7 +280,14 @@ export function AgentModal({
 
   useEffect(() => {
     if (agent) {
-      setFormData({ ...initialFormData, ...agent, user_id: agent.user_id || selectedUserId || currentUser?.id || "" })
+      const agentData = {
+        ...initialFormData,
+        ...agent,
+        user_id: agent.user_id || selectedUserId || currentUser?.id || "",
+      }
+      // Garantir que @g.us esteja sempre presente
+      agentData.ignore_jids = ensureGroupsProtection(agentData.ignore_jids)
+      setFormData(agentData)
       if (isAdmin && agent.user_id) {
         setSelectedUserId(agent.user_id)
       }
@@ -411,40 +429,15 @@ _______________________________________
     setShowCurlModal(false)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (maxAgentsReached && !isEditing) {
-      setError("Você atingiu o limite máximo de agentes.")
-      return
-    }
+  const proceedWithSubmit = async () => {
+    setShowGroupsProtectionWarning(false)
+    setPendingSubmit(false)
+    await performSubmit()
+  }
+
+  const performSubmit = async () => {
     setLoading(true)
     setError(null)
-
-    if (!formData.name.trim()) {
-      setError("O nome da IA é obrigatório.")
-      setLoading(false)
-      return
-    }
-    if (!formData.user_id) {
-      setError(isAdmin ? "É necessário selecionar um usuário." : "Erro: ID de usuário não encontrado.")
-      setLoading(false)
-      return
-    }
-    if (!formData.whatsapp_connection_id) {
-      setError("A conexão WhatsApp é obrigatória.")
-      setLoading(false)
-      return
-    }
-    if (!formData.trigger_value?.trim() && formData.trigger_type === "keyword") {
-      setError("A palavra-chave de ativação é obrigatória para bots com ativação por palavra-chave.")
-      setLoading(false)
-      return
-    }
-    if (!formData.training_prompt?.trim()) {
-      setError("O prompt de treinamento é obrigatório.")
-      setLoading(false)
-      return
-    }
 
     let currentAgentIdInDb = isEditing && agent?.id ? agent.id : null
     let currentEvolutionBotId = formData.evolution_bot_id
@@ -466,6 +459,9 @@ _______________________________________
         ["equals", "contains", "startsWith", "endsWith", "regex"].includes(formData.trigger_operator)
           ? formData.trigger_operator
           : "equals"
+
+      // Garantir que @g.us esteja sempre presente antes de salvar
+      const finalIgnoreJids = ensureGroupsProtection(formData.ignore_jids)
 
       // Payload completo com todos os campos necessários para Evolution API
       const agentPayloadForDb = {
@@ -510,7 +506,7 @@ _______________________________________
         unknown_message: formData.unknown_message,
         delay_message: formData.delay_message,
         expire_time: formData.expire_time,
-        ignore_jids: formData.ignore_jids,
+        ignore_jids: finalIgnoreJids,
       }
 
       if (isEditing && currentAgentIdInDb) {
@@ -558,7 +554,7 @@ _______________________________________
           stopBotFromMe: formData.stop_bot_from_me || true,
           keepOpen: formData.keep_open || false,
           debounceTime: formData.debounce_time || 10,
-          ignoreJids: formData.ignore_jids || [],
+          ignoreJids: finalIgnoreJids || [],
           splitMessages: formData.split_messages || true,
           timePerChar: 100,
         }
@@ -583,7 +579,23 @@ _______________________________________
           if (updateEvoIdError) console.error("Erro ao salvar evolution_bot_id no DB ImpaAI:", updateEvoIdError.message)
         }
 
-        // Configurar bot padrão se necessário
+        // SEMPRE configurar as settings da instância para garantir proteção contra grupos
+        // Isso é feito independentemente de ser bot padrão ou não
+        const instanceSettingsPayload: EvolutionInstanceSettings = {
+          expire: formData.expire_time || 20,
+          keywordFinish: formData.keyword_finish || "#SAIR",
+          delayMessage: formData.delay_message || 1000,
+          unknownMessage: formData.unknown_message || "Mensagem não reconhecida",
+          listeningFromMe: formData.listening_from_me || false,
+          stopBotFromMe: formData.stop_bot_from_me || false,
+          keepOpen: formData.keep_open || false,
+          splitMessages: formData.split_messages || true,
+          timePerChar: 50,
+          debounceTime: formData.debounce_time || 0,
+          ignoreJids: finalIgnoreJids || ["@g.us"],
+        }
+
+        // Se for bot padrão, incluir o botIdFallback
         if (formData.is_default && currentEvolutionBotId) {
           const { error: uncheckError } = await client
             .from("ai_agents")
@@ -592,24 +604,12 @@ _______________________________________
             .not("id", "eq", currentAgentIdInDb)
           if (uncheckError) console.error("Erro ao desmarcar outros bots padrão no DB:", uncheckError.message)
 
-          const instanceSettingsPayload: EvolutionInstanceSettings = {
-            botIdFallback: currentEvolutionBotId,
-            expire: formData.expire_time || 20,
-            keywordFinish: formData.keyword_finish || "#SAIR",
-            delayMessage: formData.delay_message || 1000,
-            unknownMessage: formData.unknown_message || "Mensagem não reconhecida",
-            listeningFromMe: formData.listening_from_me || false,
-            stopBotFromMe: formData.stop_bot_from_me || false,
-            keepOpen: formData.keep_open || false,
-            splitMessages: formData.split_messages || true,
-            timePerChar: 50,
-            debounceTime: formData.debounce_time || 0,
-            ignoreJids: formData.ignore_jids || ["@g.us"],
-          }
+          instanceSettingsPayload.botIdFallback = currentEvolutionBotId
+        }
 
-          const settingsSuccess = await setEvolutionInstanceSettings(instanceName, instanceSettingsPayload)
-          if (!settingsSuccess)
-            throw new Error("Falha ao definir configurações da instância na Evolution API (bot padrão).")
+        const settingsSuccess = await setEvolutionInstanceSettings(instanceName, instanceSettingsPayload)
+        if (!settingsSuccess) {
+          console.warn("Falha ao definir configurações da instância na Evolution API, mas continuando...")
         }
       }
 
@@ -626,6 +626,45 @@ _______________________________________
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (maxAgentsReached && !isEditing) {
+      setError("Você atingiu o limite máximo de agentes.")
+      return
+    }
+
+    if (!formData.name.trim()) {
+      setError("O nome da IA é obrigatório.")
+      return
+    }
+    if (!formData.user_id) {
+      setError(isAdmin ? "É necessário selecionar um usuário." : "Erro: ID de usuário não encontrado.")
+      return
+    }
+    if (!formData.whatsapp_connection_id) {
+      setError("A conexão WhatsApp é obrigatória.")
+      return
+    }
+    if (!formData.trigger_value?.trim() && formData.trigger_type === "keyword") {
+      setError("A palavra-chave de ativação é obrigatória para bots com ativação por palavra-chave.")
+      return
+    }
+    if (!formData.training_prompt?.trim()) {
+      setError("O prompt de treinamento é obrigatório.")
+      return
+    }
+
+    // Verificar se @g.us está presente
+    const currentJids = formData.ignore_jids || []
+    if (!currentJids.includes("@g.us")) {
+      setPendingSubmit(true)
+      setShowGroupsProtectionWarning(true)
+      return
+    }
+
+    await performSubmit()
   }
 
   return (
@@ -1248,7 +1287,7 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {(formData.ignore_jids || ["@g.us"]).map((jid, index) => (
+                      {ensureGroupsProtection(formData.ignore_jids).map((jid, index) => (
                         <div
                           key={index}
                           className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
@@ -1720,6 +1759,59 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                   </Button>
                   <Button variant="destructive" onClick={confirmRemoveGroupsJid}>
                     Remover Mesmo Assim
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* Modal de Aviso para Salvar sem Proteção de Grupos */}
+          {showGroupsProtectionWarning && (
+            <Dialog open={showGroupsProtectionWarning} onOpenChange={setShowGroupsProtectionWarning}>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="text-orange-600 flex items-center">
+                    🚨 Aviso: Proteção contra Grupos Desativada
+                  </DialogTitle>
+                  <DialogDescription className="text-gray-600">
+                    Você está tentando salvar o agente sem a proteção <strong>@g.us</strong> ativada.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-orange-800 mb-2">⚠️ Riscos de continuar sem proteção:</h4>
+                    <ul className="text-sm text-orange-700 space-y-1">
+                      <li>• Sua IA será ativada em TODOS os grupos do WhatsApp</li>
+                      <li>• Pode gerar spam massivo e incomodar outros usuários</li>
+                      <li>• Risco de banimento da sua conta WhatsApp</li>
+                      <li>• Violação das boas práticas de uso do WhatsApp</li>
+                      <li>• Experiência ruim para outros membros dos grupos</li>
+                    </ul>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="text-sm text-green-700">
+                      <strong>Recomendação:</strong> Clique em "Adicionar Proteção" para que o sistema adicione
+                      automaticamente <strong>@g.us</strong> à lista de JIDs ignorados.
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      // Adicionar @g.us automaticamente
+                      setFormData((prev) => ({
+                        ...prev,
+                        ignore_jids: ensureGroupsProtection(prev.ignore_jids),
+                      }))
+                      setShowGroupsProtectionWarning(false)
+                      setPendingSubmit(false)
+                    }}
+                  >
+                    Adicionar Proteção (Recomendado)
+                  </Button>
+                  <Button variant="destructive" onClick={proceedWithSubmit}>
+                    Continuar sem Proteção
                   </Button>
                 </DialogFooter>
               </DialogContent>
