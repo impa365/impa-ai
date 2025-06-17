@@ -200,34 +200,31 @@ export function AgentModal({
         console.log("🔄 [AgentModal] Carregando modelo padrão do sistema...")
         setSystemDefaultModel("carregando...")
 
-        const { getDefaultModel } = await import("@/lib/api-helpers")
+        // Busca direta no banco igual a API faz
+        const { getSupabaseServer } = await import("@/lib/supabase")
+        const supabaseClient = await getSupabaseServer()
 
-        // Tentar carregar com retry
-        let attempts = 0
-        let defaultModel = null
+        const { data: defaultModelData, error: defaultModelError } = await supabaseClient
+          .from("system_settings")
+          .select("setting_value")
+          .eq("setting_key", "default_model")
+          .single()
 
-        while (attempts < 3 && !defaultModel) {
-          attempts++
-          console.log(`🔄 [AgentModal] Tentativa ${attempts}/3 de carregar modelo padrão`)
-
-          defaultModel = await getDefaultModel()
-
-          if (!defaultModel && attempts < 3) {
-            console.log("⏳ [AgentModal] Aguardando 2s antes da próxima tentativa...")
-            await new Promise((resolve) => setTimeout(resolve, 2000))
-          }
-        }
-
-        if (defaultModel) {
-          setSystemDefaultModel(defaultModel)
-          console.log("✅ [AgentModal] Modelo padrão carregado:", defaultModel)
+        let systemDefaultModel = null
+        if (defaultModelError) {
+          console.error("❌ [AgentModal] Erro ao buscar default_model:", defaultModelError)
+          setSystemDefaultModel("Erro ao carregar")
+        } else if (defaultModelData && defaultModelData.setting_value) {
+          systemDefaultModel = defaultModelData.setting_value.toString().trim()
+          console.log("✅ [AgentModal] Default model encontrado:", systemDefaultModel)
+          setSystemDefaultModel(systemDefaultModel)
         } else {
-          console.warn("⚠️ [AgentModal] Não foi possível carregar modelo padrão, usando fallback")
-          setSystemDefaultModel("gpt-4o-mini")
+          console.error("❌ [AgentModal] default_model não encontrado no banco")
+          setSystemDefaultModel("Não configurado")
         }
       } catch (error) {
         console.error("❌ [AgentModal] Erro ao carregar modelo padrão:", error)
-        setSystemDefaultModel("gpt-4o-mini")
+        setSystemDefaultModel("Erro ao carregar")
       }
     }
 
