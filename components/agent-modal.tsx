@@ -146,7 +146,7 @@ const initialFormData: Agent = {
   unknown_message: "Desculpe, não entendi sua mensagem.",
   delay_message: 1000,
   expire_time: 0,
-  ignore_jids: [],
+  ignore_jids: ["@g.us"],
 }
 
 export function AgentModal({
@@ -175,6 +175,9 @@ export function AgentModal({
   const [showCurlModal, setShowCurlModal] = useState(false)
   const [curlInput, setCurlInput] = useState("")
   const [curlDescription, setCurlDescription] = useState("")
+  const [showIgnoreJidsWarning, setShowIgnoreJidsWarning] = useState(false)
+  const [tempIgnoreJids, setTempIgnoreJids] = useState<string[]>([])
+  const [newIgnoreJid, setNewIgnoreJid] = useState("")
 
   const isAdmin = currentUser?.role === "admin"
 
@@ -287,6 +290,42 @@ export function AgentModal({
 
   const handleSliderChange = (name: string, value: number[]) => {
     setFormData((prev) => ({ ...prev, [name]: value[0] }))
+  }
+
+  const handleAddIgnoreJid = () => {
+    if (!newIgnoreJid.trim()) return
+
+    const currentJids = formData.ignore_jids || ["@g.us"]
+    if (!currentJids.includes(newIgnoreJid.trim())) {
+      setFormData((prev) => ({
+        ...prev,
+        ignore_jids: [...currentJids, newIgnoreJid.trim()],
+      }))
+    }
+    setNewIgnoreJid("")
+  }
+
+  const handleRemoveIgnoreJid = (jidToRemove: string) => {
+    if (jidToRemove === "@g.us") {
+      setTempIgnoreJids(formData.ignore_jids || [])
+      setShowIgnoreJidsWarning(true)
+      return
+    }
+
+    const currentJids = formData.ignore_jids || ["@g.us"]
+    setFormData((prev) => ({
+      ...prev,
+      ignore_jids: currentJids.filter((jid) => jid !== jidToRemove),
+    }))
+  }
+
+  const confirmRemoveGroupsJid = () => {
+    const currentJids = formData.ignore_jids || ["@g.us"]
+    setFormData((prev) => ({
+      ...prev,
+      ignore_jids: currentJids.filter((jid) => jid !== "@g.us"),
+    }))
+    setShowIgnoreJidsWarning(false)
   }
 
   const convertCurlToDescription = () => {
@@ -564,7 +603,7 @@ _______________________________________
             keepOpen: formData.keep_open || false,
             splitMessages: formData.split_messages || true,
             timePerChar: 50,
-            debounceTime: formData.debounce_time || 5,
+            debounceTime: formData.debounce_time || 0,
             ignoreJids: formData.ignore_jids || ["@g.us"],
           }
 
@@ -1190,6 +1229,55 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                   </p>
                 </div>
 
+                <div>
+                  <Label className="text-gray-900 dark:text-gray-100">
+                    JIDs Ignorados (Números/Grupos que não ativam a IA)
+                  </Label>
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <Input
+                        value={newIgnoreJid}
+                        onChange={(e) => setNewIgnoreJid(e.target.value)}
+                        placeholder="Ex: @s.whatsapp.net, @g.us, 5511999999999@s.whatsapp.net"
+                        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        onKeyPress={(e) => e.key === "Enter" && handleAddIgnoreJid()}
+                      />
+                      <Button type="button" onClick={handleAddIgnoreJid} variant="outline" size="sm">
+                        Adicionar
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {(formData.ignore_jids || ["@g.us"]).map((jid, index) => (
+                        <div
+                          key={index}
+                          className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                            jid === "@g.us"
+                              ? "bg-red-100 text-red-800 border border-red-200"
+                              : "bg-gray-100 text-gray-800 border border-gray-200"
+                          }`}
+                        >
+                          <span>{jid}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveIgnoreJid(jid)}
+                            className={`ml-1 hover:bg-red-200 rounded-full w-4 h-4 flex items-center justify-center ${
+                              jid === "@g.us" ? "text-red-600" : "text-gray-600"
+                            }`}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                      <strong>@g.us</strong> (grupos) é obrigatório para evitar spam em grupos do WhatsApp. Você pode
+                      adicionar números específicos ou outros tipos de JIDs para ignorar.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -1593,6 +1681,50 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
               </CardContent>
             </Card>
           </div>
+
+          {/* Modal de Aviso para Remoção de @g.us */}
+          {showIgnoreJidsWarning && (
+            <Dialog open={showIgnoreJidsWarning} onOpenChange={setShowIgnoreJidsWarning}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-red-600 flex items-center">
+                    ⚠️ Atenção: Configuração Importante
+                  </DialogTitle>
+                  <DialogDescription className="text-gray-600">
+                    Você está tentando remover <strong>@g.us</strong> da lista de JIDs ignorados.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-yellow-800 mb-2">Por que isso é importante?</h4>
+                    <ul className="text-sm text-yellow-700 space-y-1">
+                      <li>
+                        • <strong>@g.us</strong> representa todos os grupos do WhatsApp
+                      </li>
+                      <li>• Sem essa proteção, sua IA será ativada em TODOS os grupos</li>
+                      <li>• Isso pode incomodar outros membros dos grupos</li>
+                      <li>• Pode gerar spam e prejudicar a experiência dos usuários</li>
+                      <li>• Sua conta pode ser banida por comportamento inadequado</li>
+                    </ul>
+                  </div>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-sm text-red-700">
+                      <strong>Recomendação:</strong> Mantenha sempre <strong>@g.us</strong> na lista para proteger sua
+                      conta e respeitar outros usuários.
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowIgnoreJidsWarning(false)}>
+                    Cancelar (Recomendado)
+                  </Button>
+                  <Button variant="destructive" onClick={confirmRemoveGroupsJid}>
+                    Remover Mesmo Assim
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
 
           <DialogFooter className="p-6 pt-4 border-t bg-gray-50 dark:bg-gray-800">
             <DialogClose asChild>
