@@ -194,19 +194,44 @@ export function AgentModal({
 
   useEffect(() => {
     const loadSystemDefaultModel = async () => {
+      if (!open) return
+
       try {
+        console.log("🔄 [AgentModal] Carregando modelo padrão do sistema...")
+        setSystemDefaultModel("carregando...")
+
         const { getDefaultModel } = await import("@/lib/api-helpers")
-        const defaultModel = await getDefaultModel()
-        setSystemDefaultModel(defaultModel)
-        console.log("✅ Modelo padrão do sistema carregado:", defaultModel)
+
+        // Tentar carregar com retry
+        let attempts = 0
+        let defaultModel = null
+
+        while (attempts < 3 && !defaultModel) {
+          attempts++
+          console.log(`🔄 [AgentModal] Tentativa ${attempts}/3 de carregar modelo padrão`)
+
+          defaultModel = await getDefaultModel()
+
+          if (!defaultModel && attempts < 3) {
+            console.log("⏳ [AgentModal] Aguardando 2s antes da próxima tentativa...")
+            await new Promise((resolve) => setTimeout(resolve, 2000))
+          }
+        }
+
+        if (defaultModel) {
+          setSystemDefaultModel(defaultModel)
+          console.log("✅ [AgentModal] Modelo padrão carregado:", defaultModel)
+        } else {
+          console.warn("⚠️ [AgentModal] Não foi possível carregar modelo padrão, usando fallback")
+          setSystemDefaultModel("gpt-4o-mini")
+        }
       } catch (error) {
-        console.error("❌ Erro ao carregar modelo padrão:", error)
+        console.error("❌ [AgentModal] Erro ao carregar modelo padrão:", error)
+        setSystemDefaultModel("gpt-4o-mini")
       }
     }
 
-    if (open) {
-      loadSystemDefaultModel()
-    }
+    loadSystemDefaultModel()
   }, [open])
 
   useEffect(() => {
