@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, User } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 import { getDefaultWhatsAppLimit, getDefaultAgentsLimit } from "@/lib/system-settings"
 
 interface UserModalProps {
@@ -79,7 +79,9 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         try {
           console.log("🔄 Buscando dados do usuário:", user.id)
 
-          const { data: userData, error: userError } = await supabase
+          const supabaseClient = await getSupabase()
+
+          const { data: userData, error: userError } = await supabaseClient
             .from("user_profiles")
             .select("*")
             .eq("id", user.id)
@@ -90,7 +92,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
           // Buscar configurações do usuário
           let settingsData = null
           try {
-            const { data, error: settingsError } = await supabase
+            const { data, error: settingsError } = await supabaseClient
               .from("user_settings")
               .select("*")
               .eq("user_id", user.id)
@@ -229,8 +231,10 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     setError("")
 
     try {
+      const supabaseClient = await getSupabase()
+
       // Verificar se o email já existe (exceto para o usuário atual)
-      let emailCheckQuery = supabase.from("user_profiles").select("id").eq("email", formData.email.trim())
+      let emailCheckQuery = supabaseClient.from("user_profiles").select("id").eq("email", formData.email.trim())
 
       if (user) {
         emailCheckQuery = emailCheckQuery.neq("id", user.id)
@@ -271,7 +275,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         }
 
         console.log("🔄 Atualizando usuário:", user.id, updateData)
-        const { error: profileError } = await supabase.from("user_profiles").update(updateData).eq("id", user.id)
+        const { error: profileError } = await supabaseClient.from("user_profiles").update(updateData).eq("id", user.id)
 
         if (profileError) {
           console.error("❌ Erro ao atualizar perfil:", profileError)
@@ -280,7 +284,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
       } else {
         // Criar novo usuário
         console.log("🔄 Criando novo usuário")
-        const { data: newUser, error: profileError } = await supabase
+        const { data: newUser, error: profileError } = await supabaseClient
           .from("user_profiles")
           .insert({
             full_name: formData.full_name.trim(),
@@ -311,7 +315,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
       // Também tentar salvar na user_settings como backup (se a tabela existir)
       if (userId) {
         try {
-          const { data: existingSettings } = await supabase
+          const { data: existingSettings } = await supabaseClient
             .from("user_settings")
             .select("user_id")
             .eq("user_id", userId)
@@ -319,7 +323,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
 
           if (existingSettings) {
             // Atualizar configurações existentes
-            await supabase
+            await supabaseClient
               .from("user_settings")
               .update({
                 whatsapp_connections_limit: formData.whatsapp_limit,
@@ -329,7 +333,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
               .eq("user_id", userId)
           } else {
             // Inserir novas configurações
-            await supabase.from("user_settings").insert({
+            await supabaseClient.from("user_settings").insert({
               user_id: userId,
               whatsapp_connections_limit: formData.whatsapp_limit,
               agents_limit: formData.agents_limit,
