@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Edit, Trash2, Power, PowerOff, Bot, Search, Filter, Plus, Users } from "lucide-react"
-import { getSupabase } from "@/lib/supabase"
 import { AgentModal } from "@/components/agent-modal"
 import { useToast } from "@/components/ui/use-toast"
+import { publicApi } from "@/lib/api-client"
 
 export default function AdminAgentsPage() {
   const [agents, setAgents] = useState([])
@@ -36,39 +36,28 @@ export default function AdminAgentsPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const client = await getSupabase()
-      // Buscar agentes com informações do usuário
-      const { data: agentsData, error: agentsError } = await client
-        .from("ai_agents")
-        .select(`
-          *,
-          user_profiles!ai_agents_user_id_fkey(id, email, full_name),
-          whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(connection_name, status)
-        `)
-        .order("created_at", { ascending: false })
+      console.log("🔄 Carregando dados dos agentes...")
 
-      if (agentsError) throw agentsError
+      // Usar API segura ao invés de Supabase direto
+      const response = await publicApi.getAdminAgents()
+
+      if (response.error) {
+        throw new Error(response.error)
+      }
+
+      const { agents: agentsData, users: usersData, connections: connectionsData } = response.data
+
+      console.log("✅ Dados carregados:", {
+        agentes: agentsData?.length || 0,
+        usuarios: usersData?.length || 0,
+        conexoes: connectionsData?.length || 0,
+      })
+
       setAgents(agentsData || [])
-
-      // Buscar usuários para o filtro
-      const { data: usersData, error: usersError } = await client
-        .from("user_profiles")
-        .select("id, email, full_name")
-        .order("full_name")
-
-      if (usersError) throw usersError
       setUsers(usersData || [])
-
-      // Buscar conexões WhatsApp para o modal
-      const { data: connectionsData, error: connectionsError } = await client
-        .from("whatsapp_connections")
-        .select("*")
-        .order("connection_name")
-
-      if (connectionsError) throw connectionsError
       setWhatsappConnections(connectionsData || [])
     } catch (error) {
-      console.error("Erro ao buscar dados:", error)
+      console.error("❌ Erro ao buscar dados:", error.message)
       toast({
         title: "Erro",
         description: "Falha ao carregar dados dos agentes",
@@ -80,12 +69,12 @@ export default function AdminAgentsPage() {
   }
 
   const filteredAgents = agents.filter((agent) => {
-    if (!agent || !agent.user_profiles) return false
+    if (!agent) return false
 
     const matchesSearch =
       agent.name?.toLowerCase().includes(filters.search.toLowerCase()) ||
-      agent.user_profiles?.email?.toLowerCase().includes(filters.search.toLowerCase()) ||
-      agent.user_profiles?.full_name?.toLowerCase().includes(filters.search.toLowerCase())
+      agent.user_email?.toLowerCase().includes(filters.search.toLowerCase()) ||
+      agent.user_name?.toLowerCase().includes(filters.search.toLowerCase())
 
     const matchesStatus = filters.status === "all" || agent.status === filters.status
     const matchesUser = filters.user === "all" || agent.user_id === filters.user
@@ -116,41 +105,13 @@ export default function AdminAgentsPage() {
     if (!confirm("Tem certeza que deseja excluir este agente?")) return
 
     try {
-      const client = await getSupabase()
-      // Buscar informações do agente antes de excluir
-      const { data: agentData, error: fetchError } = await client
-        .from("ai_agents")
-        .select("evolution_bot_id, whatsapp_connection_id")
-        .eq("id", agentId)
-        .single()
+      console.log("🗑️ Excluindo agente:", agentId)
 
-      if (fetchError) {
-        console.error("Erro ao buscar dados do agente:", fetchError)
-      } else if (agentData?.evolution_bot_id) {
-        // Buscar o instance_name da conexão WhatsApp
-        const { data: whatsappConnection, error: whatsappError } = await client
-          .from("whatsapp_connections")
-          .select("instance_name")
-          .eq("id", agentData.whatsapp_connection_id)
-          .single()
+      const response = await publicApi.deleteAgent(agentId)
 
-        if (!whatsappError && whatsappConnection) {
-          // Importar a função necessária
-          const { deleteEvolutionBot } = await import("@/lib/evolution-api")
-
-          // Excluir o bot na Evolution API
-          try {
-            await deleteEvolutionBot(whatsappConnection.instance_name, agentData.evolution_bot_id)
-          } catch (error) {
-            console.error("Erro ao excluir bot na Evolution API:", error)
-          }
-        }
+      if (response.error) {
+        throw new Error(response.error)
       }
-
-      // Excluir o agente do banco de dados
-      const { error } = await client.from("ai_agents").delete().eq("id", agentId)
-
-      if (error) throw error
 
       toast({
         title: "Sucesso",
@@ -160,7 +121,7 @@ export default function AdminAgentsPage() {
       // Recarregar dados
       fetchData()
     } catch (error) {
-      console.error("Erro ao excluir agente:", error)
+      console.error("❌ Erro ao excluir agente:", error.message)
       toast({
         title: "Erro",
         description: "Falha ao excluir agente",
@@ -172,11 +133,13 @@ export default function AdminAgentsPage() {
   const handleToggleStatus = async (agent) => {
     try {
       const newStatus = agent.status === "active" ? "inactive" : "active"
+      console.log("🔄 Alterando status do agente:", agent.id, "para", newStatus)
 
-      const client = await getSupabase()
-      const { error } = await client.from("ai_agents").update({ status: newStatus }).eq("id", agent.id)
+      const response = await publicApi.updateAgent(agent.id, { status: newStatus })
 
-      if (error) throw error
+      if (response.error) {
+        throw new Error(response.error)
+      }
 
       toast({
         title: "Sucesso",
@@ -186,7 +149,7 @@ export default function AdminAgentsPage() {
       // Recarregar dados
       fetchData()
     } catch (error) {
-      console.error("Erro ao alterar status:", error)
+      console.error("❌ Erro ao alterar status:", error.message)
       toast({
         title: "Erro",
         description: "Falha ao alterar status do agente",
@@ -352,11 +315,9 @@ export default function AdminAgentsPage() {
                       Tipo: {agent.type} | Função: {agent.main_function}
                     </div>
                     <div className="text-xs text-gray-500">
-                      Proprietário: {agent.user_profiles?.full_name || agent.user_profiles?.email || "N/A"}
+                      Proprietário: {agent.user_name || agent.user_email || "N/A"}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      Conexão: {agent.whatsapp_connections?.connection_name || "N/A"}
-                    </div>
+                    <div className="text-xs text-gray-500">Conexão: {agent.connection_name || "N/A"}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -414,12 +375,12 @@ export default function AdminAgentsPage() {
         </CardContent>
       </Card>
 
-      {/* Modal de Agente - CORRIGIDO COM onSave */}
+      {/* Modal de Agente */}
       <AgentModal
         open={showAgentModal}
         onOpenChange={setShowAgentModal}
         agent={selectedAgent}
-        onSave={handleAgentSaved} // ✅ Função correta passada aqui
+        onSave={handleAgentSaved}
         maxAgentsReached={false}
         isEditing={!!selectedAgent}
       />
