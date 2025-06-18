@@ -33,6 +33,7 @@ import {
   type EvolutionBotIndividualConfig,
   type EvolutionInstanceSettings,
 } from "@/lib/evolution-api"
+import { publicApi } from "@/lib/api-client"
 
 // Estilos customizados para os switches
 const switchStyles =
@@ -197,29 +198,21 @@ export function AgentModal({
       if (!open) return
 
       try {
-        console.log("🔄 [AgentModal] Carregando modelo padrão do sistema...")
+        console.log("🔄 [AgentModal] Carregando modelo padrão do sistema via API...")
         setSystemDefaultModel("carregando...")
 
-        // Busca direta no banco igual a API faz
-        const { getSupabaseServer } = await import("@/lib/supabase")
-        const supabaseClient = await getSupabaseServer()
+        // Usar API segura ao invés de Supabase direto
+        const response = await publicApi.getSystemDefaultModel()
 
-        const { data: defaultModelData, error: defaultModelError } = await supabaseClient
-          .from("system_settings")
-          .select("setting_value")
-          .eq("setting_key", "default_model")
-          .single()
-
-        let systemDefaultModel = null
-        if (defaultModelError) {
-          console.error("❌ [AgentModal] Erro ao buscar default_model:", defaultModelError)
+        if (response.error) {
+          console.error("❌ [AgentModal] Erro ao buscar default_model:", response.error)
           setSystemDefaultModel("Erro ao carregar")
-        } else if (defaultModelData && defaultModelData.setting_value) {
-          systemDefaultModel = defaultModelData.setting_value.toString().trim()
+        } else if (response.data?.defaultModel) {
+          const systemDefaultModel = response.data.defaultModel.toString().trim()
           console.log("✅ [AgentModal] Default model encontrado:", systemDefaultModel)
           setSystemDefaultModel(systemDefaultModel)
         } else {
-          console.error("❌ [AgentModal] default_model não encontrado no banco")
+          console.error("❌ [AgentModal] default_model não encontrado")
           setSystemDefaultModel("Não configurado")
         }
       } catch (error) {

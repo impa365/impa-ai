@@ -6,7 +6,7 @@ export async function fetchWhatsAppConnections(userId?: string, isAdmin = false)
     console.log("📡 Buscando conexões WhatsApp via API...")
 
     // Usar API segura ao invés de Supabase direto
-    const response = await publicApi.makeRequest(`/api/whatsapp-connections?userId=${userId || ""}&isAdmin=${isAdmin}`)
+    const response = await publicApi.getWhatsAppConnections(userId, isAdmin)
 
     if (response.error) {
       console.error("❌ Erro ao buscar conexões:", response.error)
@@ -26,7 +26,7 @@ export async function fetchUsers() {
     console.log("📡 Buscando usuários via API...")
 
     // Usar API segura ao invés de Supabase direto
-    const response = await publicApi.makeRequest("/api/admin/users")
+    const response = await publicApi.getUsers()
 
     if (response.error) {
       console.error("❌ Erro ao buscar usuários:", response.error)

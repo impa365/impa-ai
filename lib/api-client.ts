@@ -89,7 +89,7 @@ class PublicApiClient {
 
   // Criar agente
   async createAgent(agentData: any): Promise<ApiResponse<{ agent: any }>> {
-    return this.makeRequest("/api/agents", {
+    return this.makeRequest("/api/admin/agents", {
       method: "POST",
       body: JSON.stringify(agentData),
     })
@@ -97,7 +97,7 @@ class PublicApiClient {
 
   // Atualizar agente
   async updateAgent(agentId: string, agentData: any): Promise<ApiResponse<{ agent: any }>> {
-    return this.makeRequest("/api/agents", {
+    return this.makeRequest("/api/admin/agents", {
       method: "PUT",
       body: JSON.stringify({ id: agentId, ...agentData }),
     })
@@ -105,7 +105,7 @@ class PublicApiClient {
 
   // Deletar agente
   async deleteAgent(agentId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return this.makeRequest(`/api/agents?id=${agentId}`, {
+    return this.makeRequest(`/api/admin/agents?id=${agentId}`, {
       method: "DELETE",
     })
   }
@@ -128,6 +128,11 @@ class PublicApiClient {
   // Buscar versão do sistema
   async getSystemVersion(): Promise<ApiResponse<{ version: string }>> {
     return this.makeRequest("/api/system/version")
+  }
+
+  // Buscar modelo padrão do sistema
+  async getSystemDefaultModel(): Promise<ApiResponse<{ defaultModel: string }>> {
+    return this.makeRequest("/api/system/default-model")
   }
 
   // Buscar usuários (admin)
@@ -196,6 +201,7 @@ export const dashboardApi = {
 export const systemApi = {
   getVersion: () => publicApi.getSystemVersion(),
   getSettings: () => publicApi.getSystemSettings(),
+  getDefaultModel: () => publicApi.getSystemDefaultModel(),
 }
 
 export const adminApi = {
