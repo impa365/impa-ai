@@ -1,9 +1,8 @@
 "use client"
 
 import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
-import { getSupabase } from "@/lib/supabase"
+import { publicApi } from "@/lib/api-client"
 
 // Definição do tipo ThemeConfig
 export interface ThemeConfig {
@@ -39,57 +38,6 @@ export function useTheme() {
   return context
 }
 
-// Temas predefinidos - usando nomes genéricos para white label
-export const themePresets: Record<string, ThemeConfig> = {
-  blue: {
-    systemName: "Sistema",
-    description: "Plataforma de gestão",
-    logoIcon: "🤖",
-    primaryColor: "#3b82f6",
-    secondaryColor: "#10b981",
-    accentColor: "#8b5cf6",
-  },
-  purple: {
-    systemName: "Sistema",
-    description: "Plataforma de gestão",
-    logoIcon: "🔮",
-    primaryColor: "#8b5cf6",
-    secondaryColor: "#ec4899",
-    accentColor: "#3b82f6",
-  },
-  green: {
-    systemName: "Sistema",
-    description: "Plataforma de gestão",
-    logoIcon: "🌱",
-    primaryColor: "#10b981",
-    secondaryColor: "#3b82f6",
-    accentColor: "#f59e0b",
-  },
-  orange: {
-    systemName: "Sistema",
-    description: "Plataforma de gestão",
-    logoIcon: "🔥",
-    primaryColor: "#f97316",
-    secondaryColor: "#8b5cf6",
-    accentColor: "#10b981",
-  },
-  dark: {
-    systemName: "Sistema",
-    description: "Plataforma de gestão",
-    logoIcon: "⚡",
-    primaryColor: "#6366f1",
-    secondaryColor: "#ec4899",
-    accentColor: "#f97316",
-    backgroundColor: "#1e293b",
-    textColor: "#f8fafc",
-  },
-}
-
-// Cache global para evitar múltiplas consultas
-let themeCache: ThemeConfig | null = null
-let themeCacheTime = 0
-const CACHE_DURATION = 5 * 60 * 1000 // 5 minutos
-
 // Tema padrão genérico
 export const defaultTheme: ThemeConfig = {
   systemName: "Sistema",
@@ -98,39 +46,6 @@ export const defaultTheme: ThemeConfig = {
   primaryColor: "#3b82f6",
   secondaryColor: "#10b981",
   accentColor: "#8b5cf6",
-}
-
-// Função para validar se uma cor é um código hexadecimal válido
-export function isValidHexColor(color: string): boolean {
-  return /^#([A-Fa-f0-9]{3}){1,2}$/.test(color)
-}
-
-// Função para ajustar o brilho de uma cor
-export function adjustColorBrightness(color: string, percent: number): string {
-  if (!isValidHexColor(color)) return color
-
-  const num = Number.parseInt(color.replace("#", ""), 16)
-  const amt = Math.round(2.55 * percent)
-  const R = (num >> 16) + amt
-  const G = ((num >> 8) & 0x00ff) + amt
-  const B = (num & 0x0000ff) + amt
-
-  return (
-    "#" +
-    (
-      0x1000000 +
-      (R < 255 ? (R < 0 ? 0 : R) : 255) * 0x10000 +
-      (G < 255 ? (G < 0 ? 0 : G) : 255) * 0x100 +
-      (B < 255 ? (B < 0 ? 0 : B) : 255)
-    )
-      .toString(16)
-      .slice(1)
-  )
-}
-
-// Função para aplicar um preset de tema
-export function applyThemePreset(presetName: string): ThemeConfig {
-  return themePresets[presetName] || defaultTheme
 }
 
 // Função para aplicar as cores do tema no CSS
@@ -178,258 +93,41 @@ export function applyThemeColors(theme: ThemeConfig): void {
     }
     customStyleElement.textContent = theme.customCss
   } else if (customStyleElement) {
-    customStyleElement.textContent = "" // Clear custom CSS if not provided
+    customStyleElement.textContent = ""
   }
 }
 
-// Função para verificar se a tabela system_themes tem a estrutura correta
-async function checkSystemThemesStructure(): Promise<boolean> {
+// Função para carregar tema via API
+async function loadThemeFromApi(): Promise<ThemeConfig | null> {
   try {
-    const client = await getSupabase() // This should use NEXT_PUBLIC_ vars client-side
-    const { data, error } = await client.from("system_themes").select("logo_icon").limit(1)
+    console.log("🎨 Loading theme from API...")
+    const result = await publicApi.getConfig()
 
-    if (error) {
-      console.warn("Tabela system_themes não existe ou tem problemas de estrutura (client-side):", error.message)
-      return false
+    if (result.error) {
+      console.error("❌ Error loading theme from API:", result.error)
+      return null
     }
 
-    return true
-  } catch (error) {
-    console.warn("Erro ao verificar estrutura da tabela system_themes (client-side):", error)
-    return false
-  }
-}
-
-// Função otimizada para carregar tema com cache
-export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
-  // Verificar cache primeiro
-  const now = Date.now()
-  if (themeCache && now - themeCacheTime < CACHE_DURATION) {
-    return themeCache
-  }
-
-  try {
-    // Verificar se a estrutura da tabela está correta
-    const hasCorrectStructure = await checkSystemThemesStructure()
-
-    if (!hasCorrectStructure) {
-      const fallbackTheme = await loadThemeFromSystemSettings()
-      if (fallbackTheme) {
-        themeCache = fallbackTheme
-        themeCacheTime = now
-      }
-      return fallbackTheme
-    }
-
-    // Tentar carregar da tabela system_themes
-    const client = await getSupabase() // This should use NEXT_PUBLIC_ vars client-side
-    const { data, error } = await client.from("system_themes").select("*").eq("is_active", true).single()
-
-    if (error && error.code === "PGRST116") {
-      // No active theme found
-      const fallbackTheme = await loadThemeFromSystemSettings()
-      if (fallbackTheme) {
-        themeCache = fallbackTheme
-        themeCacheTime = now
-      }
-      return fallbackTheme
-    }
-
-    if (error) {
-      console.warn("Erro ao carregar tema de system_themes (client-side):", error.message)
-      const fallbackTheme = await loadThemeFromSystemSettings()
-      if (fallbackTheme) {
-        themeCache = fallbackTheme
-        themeCacheTime = now
-      }
-      return fallbackTheme
-    }
-
-    if (!data) {
-      const fallbackTheme = await loadThemeFromSystemSettings()
-      if (fallbackTheme) {
-        themeCache = fallbackTheme
-        themeCacheTime = now
-      }
-      return fallbackTheme
-    }
-
-    // Mapear os dados do banco para o formato ThemeConfig
-    const theme: ThemeConfig = {
-      systemName: data.display_name || data.name || "Sistema",
-      description: data.description || "Sistema de gestão",
-      logoIcon: data.logo_icon || "🔧",
-      primaryColor: data.colors?.primary || "#3b82f6",
-      secondaryColor: data.colors?.secondary || "#10b981",
-      accentColor: data.colors?.accent || "#8b5cf6",
-      textColor: data.colors?.text,
-      backgroundColor: data.colors?.background,
-      fontFamily: data.fonts?.primary,
-      borderRadius: data.borders?.radius,
-      customCss: data.custom_css,
-    }
-
-    // Atualizar cache
-    themeCache = theme
-    themeCacheTime = now
-
-    return theme
-  } catch (error) {
-    console.warn("Erro ao carregar tema do banco (client-side), usando fallback:", error)
-    const fallbackTheme = await loadThemeFromSystemSettings()
-    if (fallbackTheme) {
-      themeCache = fallbackTheme
-      themeCacheTime = now
-    }
-    return fallbackTheme
-  }
-}
-
-// Função fallback para carregar tema das configurações do sistema
-async function loadThemeFromSystemSettings(): Promise<ThemeConfig | null> {
-  try {
-    const client = await getSupabase() // This should use NEXT_PUBLIC_ vars client-side
-    const { data: settingsData, error: settingsError } = await client
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "current_theme")
-      .single()
-
-    if (!settingsError && settingsData?.setting_value) {
-      // Se encontrar configuração de tema como JSON, usar diretamente
-      if (typeof settingsData.setting_value === "object") {
-        return settingsData.setting_value as ThemeConfig
-      }
-      // Se for string, tentar usar como preset
-      const presetName = settingsData.setting_value as string
-      if (themePresets[presetName]) {
-        return themePresets[presetName]
-      }
+    if (result.data?.theme) {
+      console.log("✅ Theme loaded from API:", result.data.theme.systemName)
+      return result.data.theme
     }
 
     return null
   } catch (error) {
-    console.warn("Erro ao carregar tema das configurações (client-side):", error)
+    console.error("💥 Critical error loading theme from API:", error)
     return null
   }
 }
 
-// Função para invalidar cache
-export function invalidateThemeCache(): void {
-  themeCache = null
-  themeCacheTime = 0
-}
+// Função para salvar o tema no localStorage
+export function saveThemeToLocalStorage(theme: ThemeConfig): void {
+  if (typeof window === "undefined") return
 
-// Função para salvar o tema no banco de dados
-export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
   try {
-    // Invalidar cache ao salvar
-    invalidateThemeCache()
-
-    // Verificar se a estrutura da tabela está correta
-    const hasCorrectStructure = await checkSystemThemesStructure()
-
-    if (!hasCorrectStructure) {
-      return await saveThemeAsSystemSetting(theme)
-    }
-
-    const client = await getSupabase() // This should use NEXT_PUBLIC_ vars client-side
-
-    // Verificar se já existe um tema ativo
-    const { data: existingTheme } = await client.from("system_themes").select("id").eq("is_active", true).single()
-
-    // Preparar os dados para salvar
-    const themeData = {
-      name: theme.systemName.toLowerCase().replace(/\s+/g, "_"),
-      display_name: theme.systemName,
-      description: theme.description || "Tema personalizado",
-      colors: {
-        primary: theme.primaryColor,
-        secondary: theme.secondaryColor,
-        accent: theme.accentColor,
-        text: theme.textColor,
-        background: theme.backgroundColor,
-      },
-      fonts: {
-        primary: theme.fontFamily,
-      },
-      borders: {
-        radius: theme.borderRadius,
-      },
-      custom_css: theme.customCss,
-      is_default: false,
-      is_active: true,
-      logo_icon: theme.logoIcon,
-    }
-
-    if (existingTheme) {
-      // Atualizar tema existente
-      const { error } = await client.from("system_themes").update(themeData).eq("id", existingTheme.id)
-
-      if (error) {
-        console.error("Erro ao atualizar tema:", error)
-        return await saveThemeAsSystemSetting(theme)
-      }
-    } else {
-      // Criar novo tema
-      const { error } = await client.from("system_themes").insert(themeData)
-
-      if (error) {
-        console.error("Erro ao criar tema:", error)
-        return await saveThemeAsSystemSetting(theme)
-      }
-    }
-
-    return true
+    localStorage.setItem("theme", JSON.stringify(theme))
   } catch (error) {
-    console.error("Erro ao salvar tema no banco:", error)
-    return await saveThemeAsSystemSetting(theme)
-  }
-}
-
-// Função fallback para salvar tema nas configurações do sistema
-async function saveThemeAsSystemSetting(theme: ThemeConfig): Promise<boolean> {
-  try {
-    const client = await getSupabase() // This should use NEXT_PUBLIC_ vars client-side
-    const { data: existingSetting } = await client
-      .from("system_settings")
-      .select("id")
-      .eq("setting_key", "current_theme")
-      .single()
-
-    const settingData = {
-      setting_key: "current_theme",
-      setting_value: theme, // Store the whole theme object
-      category: "appearance",
-      description: "Configurações do tema atual",
-      is_public: true, // Make sure this setting is public if read by anon
-    }
-
-    if (existingSetting) {
-      // Atualizar configuração existente
-      const { error } = await client.from("system_settings").update(settingData).eq("id", existingSetting.id)
-
-      if (error) {
-        console.error("Erro ao atualizar tema nas configurações:", error)
-        saveThemeToLocalStorage(theme)
-        return false
-      }
-    } else {
-      // Criar nova configuração
-      const { error } = await client.from("system_settings").insert(settingData)
-
-      if (error) {
-        console.error("Erro ao inserir tema nas configurações:", error)
-        saveThemeToLocalStorage(theme)
-        return false
-      }
-    }
-
-    return true
-  } catch (error) {
-    console.error("Erro ao salvar tema nas configurações:", error)
-    saveThemeToLocalStorage(theme)
-    return false
+    console.error("Erro ao salvar tema no localStorage:", error)
   }
 }
 
@@ -449,49 +147,41 @@ export function loadThemeFromLocalStorage(): ThemeConfig | null {
   }
 }
 
-// Função para salvar o tema no localStorage
-export function saveThemeToLocalStorage(theme: ThemeConfig): void {
-  if (typeof window === "undefined") return
-
-  try {
-    localStorage.setItem("theme", JSON.stringify(theme))
-  } catch (error) {
-    console.error("Erro ao salvar tema no localStorage:", error)
-  }
-}
-
 interface ThemeProviderProps {
   children: React.ReactNode
-  serverFetchedTheme?: ThemeConfig | null // Add new prop for server-fetched theme
-  attribute?: string // Keep existing props if they are used by underlying library
-  defaultTheme?: string // This might conflict with our defaultTheme object, ensure clarity
-  enableSystem?: boolean
-  disableTransitionOnChange?: boolean
+  serverFetchedTheme?: ThemeConfig | null
 }
 
-export function ThemeProvider({ children, serverFetchedTheme, ...props }: ThemeProviderProps) {
+export function ThemeProvider({ children, serverFetchedTheme }: ThemeProviderProps) {
   const [theme, setTheme] = useState<ThemeConfig | null>(serverFetchedTheme || null)
-  const [isLoading, setIsLoading] = useState(!serverFetchedTheme) // If theme is server-fetched, not initially loading from client
+  const [isLoading, setIsLoading] = useState(!serverFetchedTheme)
 
   const loadClientSideTheme = async () => {
     try {
       setIsLoading(true)
-      let loadedTheme = await loadThemeFromDatabase() // Client-side fetch
 
+      // Tentar carregar via API
+      let loadedTheme = await loadThemeFromApi()
+
+      // Fallback para localStorage
       if (!loadedTheme) {
         loadedTheme = loadThemeFromLocalStorage()
       }
 
+      // Fallback final para tema padrão
       if (!loadedTheme) {
-        console.warn("Client: Failed to load theme from DB/localStorage. Falling back to default.")
-        loadedTheme = defaultTheme // Use our defined defaultTheme object
+        console.warn("Client: Using default theme")
+        loadedTheme = defaultTheme
       }
 
       setTheme(loadedTheme)
       applyThemeColors(loadedTheme)
+
+      // Salvar no localStorage para cache
+      saveThemeToLocalStorage(loadedTheme)
     } catch (error) {
-      console.error("Client: Error loading theme, falling back to default:", error)
-      setTheme(defaultTheme) // Use our defined defaultTheme object
+      console.error("Client: Error loading theme, using default:", error)
+      setTheme(defaultTheme)
       applyThemeColors(defaultTheme)
     } finally {
       setIsLoading(false)
@@ -506,32 +196,29 @@ export function ThemeProvider({ children, serverFetchedTheme, ...props }: ThemeP
 
       setTheme(newTheme)
       applyThemeColors(newTheme)
+      saveThemeToLocalStorage(newTheme)
 
-      const saved = await saveThemeToDatabase(newTheme)
-      if (!saved) {
-        saveThemeToLocalStorage(newTheme)
-      }
+      // TODO: Implementar API para salvar tema
+      // await authApi.updateTheme(newTheme)
     } catch (error) {
       console.error("Error updating theme:", error)
-      if (theme) {
-        saveThemeToLocalStorage({ ...theme, ...updates }) // Save to localStorage on error
-      }
     }
   }
 
   useEffect(() => {
     if (serverFetchedTheme) {
-      // If theme is provided by server, apply it immediately
+      // Se tema foi fornecido pelo servidor, aplicar imediatamente
       setTheme(serverFetchedTheme)
       applyThemeColors(serverFetchedTheme)
+      saveThemeToLocalStorage(serverFetchedTheme)
       setIsLoading(false)
     } else {
-      // Otherwise, load it client-side (e.g., if server fetch failed or not implemented)
+      // Caso contrário, carregar do cliente
       loadClientSideTheme()
     }
-  }, [serverFetchedTheme]) // Re-run if serverFetchedTheme changes (though unlikely for layout)
+  }, [serverFetchedTheme])
 
-  // Apply theme colors whenever theme state changes and is not null
+  // Aplicar cores sempre que o tema mudar
   useEffect(() => {
     if (theme && !isLoading) {
       applyThemeColors(theme)
@@ -539,7 +226,6 @@ export function ThemeProvider({ children, serverFetchedTheme, ...props }: ThemeP
   }, [theme, isLoading])
 
   if (isLoading && !theme) {
-    // Show loading only if truly loading and no theme yet
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -547,12 +233,16 @@ export function ThemeProvider({ children, serverFetchedTheme, ...props }: ThemeP
     )
   }
 
-  // If theme is null even after attempting to load, use defaultTheme to prevent errors
-  const currentThemeToRender = theme || defaultTheme
+  const currentTheme = theme || defaultTheme
 
   return (
     <ThemeContext.Provider
-      value={{ theme: currentThemeToRender, updateTheme, loadTheme: loadClientSideTheme, isLoading }}
+      value={{
+        theme: currentTheme,
+        updateTheme,
+        loadTheme: loadClientSideTheme,
+        isLoading,
+      }}
     >
       <div className="min-h-screen">{children}</div>
     </ThemeContext.Provider>
