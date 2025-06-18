@@ -63,7 +63,53 @@ class PublicApiClient {
   async getConfig(): Promise<ApiResponse<{ theme: any; settings: any }>> {
     return this.makeRequest("/api/config")
   }
+
+  // Buscar perfil do usuário atual (quando autenticado)
+  async getCurrentUser(): Promise<ApiResponse<{ user: any }>> {
+    return this.makeRequest("/api/user/profile")
+  }
+
+  // Atualizar tema (quando autenticado)
+  async updateTheme(themeData: any): Promise<ApiResponse<{ success: boolean }>> {
+    return this.makeRequest("/api/theme/update", {
+      method: "POST",
+      body: JSON.stringify(themeData),
+    })
+  }
+
+  // Buscar agentes do usuário
+  async getAgents(): Promise<ApiResponse<{ agents: any[] }>> {
+    return this.makeRequest("/api/agents")
+  }
+
+  // Buscar estatísticas do dashboard
+  async getDashboardStats(): Promise<ApiResponse<{ stats: any }>> {
+    return this.makeRequest("/api/dashboard/stats")
+  }
 }
 
 // Instância única do cliente de API
 export const publicApi = new PublicApiClient()
+
+// Export adicional para compatibilidade (mesmo objeto, nomes diferentes)
+export const apiClient = publicApi
+
+// Exports de conveniência para diferentes contextos
+export const authApi = {
+  login: (email: string, password: string) => publicApi.login(email, password),
+  register: (userData: any) => publicApi.register(userData),
+  getCurrentUser: () => publicApi.getCurrentUser(),
+}
+
+export const themeApi = {
+  getConfig: () => publicApi.getConfig(),
+  updateTheme: (themeData: any) => publicApi.updateTheme(themeData),
+}
+
+export const dashboardApi = {
+  getStats: () => publicApi.getDashboardStats(),
+  getAgents: () => publicApi.getAgents(),
+}
+
+// Tipo para as respostas da API
+export type { ApiResponse }
