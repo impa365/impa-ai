@@ -1,65 +1,106 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
 
 export async function GET() {
   try {
     console.log("🔧 Buscando configurações públicas...")
 
-    // Usar variáveis de ambiente APENAS no servidor
+    // Usar fetch direto para o Supabase REST API
     const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
 
-    if (!supabaseUrl || !supabaseAnonKey) {
+    if (!supabaseUrl || !supabaseKey) {
       console.error("❌ Configuração do Supabase não encontrada")
       return NextResponse.json({ error: "Erro de configuração do servidor" }, { status: 500 })
     }
 
-    // Criar cliente Supabase APENAS no servidor
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
+    // Buscar tema ativo
+    const themeResponse = await fetch(`${supabaseUrl}/rest/v1/system_themes?is_active=eq.true`, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
     })
 
-    // Buscar tema ativo
-    const { data: theme, error: themeError } = await supabase
-      .from("system_themes")
-      .select("*")
-      .eq("is_active", true)
-      .single()
-
-    if (themeError) {
-      console.warn("⚠️ Erro ao buscar tema:", themeError.message)
+    let themeData = null
+    if (themeResponse.ok) {
+      const themes = await themeResponse.json()
+      if (themes && themes.length > 0) {
+        const theme = themes[0]
+        themeData = {
+          systemName: theme.display_name || theme.name || "Sistema",
+          description: theme.description || "Sistema de gestão",
+          logoIcon: theme.logo_icon || "🤖",
+          primaryColor: theme.colors?.primary || "#3b82f6",
+          secondaryColor: theme.colors?.secondary || "#10b981",
+          accentColor: theme.colors?.accent || "#8b5cf6",
+          textColor: theme.colors?.text,
+          backgroundColor: theme.colors?.background,
+          fontFamily: theme.fonts?.primary,
+          borderRadius: theme.borders?.radius,
+          customCss: theme.custom_css,
+        }
+      }
     }
 
-    // Buscar configuração de registro público
-    const { data: registrationSetting, error: settingError } = await supabase
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "allow_public_registration")
-      .single()
+    // Buscar configurações do sistema
+    const settingsResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings`, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+    })
 
-    if (settingError) {
-      console.warn("⚠️ Erro ao buscar configuração de registro:", settingError.message)
+    let settings = {}
+    if (settingsResponse.ok) {
+      const settingsData = await settingsResponse.json()
+      if (settingsData && settingsData.length > 0) {
+        // Converter array de configurações em objeto
+        settings = settingsData.reduce((acc: any, setting: any) => {
+          acc[setting.setting_key] = setting.setting_value
+          return acc
+        }, {})
+      }
     }
 
-    // Preparar resposta com dados públicos (SEM variáveis de ambiente)
-    const publicConfig = {
-      theme: theme || {
+    // Tema padrão se não encontrar no banco
+    if (!themeData) {
+      themeData = {
         systemName: "Impa AI",
+        description: "Sistema de gestão de agentes",
         logoIcon: "🤖",
         primaryColor: "#3b82f6",
-        secondaryColor: "#64748b",
-        backgroundColor: "#ffffff",
-        textColor: "#1f2937",
-      },
-      settings: {
-        allowPublicRegistration: registrationSetting?.setting_value === true || false,
-      },
+        secondaryColor: "#10b981",
+        accentColor: "#8b5cf6",
+      }
     }
 
-    console.log("✅ Configurações públicas carregadas")
-    return NextResponse.json(publicConfig)
+    console.log("✅ Configurações carregadas com sucesso")
+
+    return NextResponse.json({
+      theme: themeData,
+      settings: {
+        allowPublicRegistration: settings.allowPublicRegistration || false,
+        ...settings,
+      },
+    })
   } catch (error: any) {
     console.error("💥 Erro ao buscar configurações:", error.message)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+
+    // Retornar configurações padrão em caso de erro
+    return NextResponse.json({
+      theme: {
+        systemName: "Impa AI",
+        description: "Sistema de gestão de agentes",
+        logoIcon: "🤖",
+        primaryColor: "#3b82f6",
+        secondaryColor: "#10b981",
+        accentColor: "#8b5cf6",
+      },
+      settings: {
+        allowPublicRegistration: false,
+      },
+    })
   }
 }

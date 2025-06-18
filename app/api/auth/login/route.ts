@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { type NextRequest, NextResponse } from "next/server"
+import bcrypt from "bcryptjs"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     console.log("🔐 Iniciando processo de login...")
 
@@ -12,134 +12,87 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Email e senha são obrigatórios" }, { status: 400 })
     }
 
-    // Usar variáveis de ambiente APENAS no servidor (NUNCA no cliente)
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY
+    console.log("📧 Tentando login para email:", email)
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error("❌ Configuração do Supabase não encontrada no servidor")
+    // Usar fetch direto para o Supabase REST API
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ Configuração do Supabase não encontrada")
       return NextResponse.json({ error: "Erro de configuração do servidor" }, { status: 500 })
     }
 
-    console.log("🔗 Conectando ao Supabase no servidor...")
-
-    // Criar cliente Supabase APENAS no servidor
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
+    // Buscar usuário via REST API do Supabase
+    const userResponse = await fetch(`${supabaseUrl}/rest/v1/user_profiles?email=eq.${email}`, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
     })
 
-    console.log("🔍 Buscando usuário:", email)
+    if (!userResponse.ok) {
+      console.error("❌ Erro ao buscar usuário:", userResponse.status, userResponse.statusText)
+      return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    }
 
-    // Primeiro, vamos tentar buscar na tabela user_profiles (sem .single())
-    const { data: userProfiles, error: fetchError } = await supabase
-      .from("user_profiles")
-      .select("id, email, full_name, role, status, password, last_login_at, login_count")
-      .eq("email", email.trim().toLowerCase())
+    const users = await userResponse.json()
+    console.log("👥 Usuários encontrados:", users.length)
 
-    if (fetchError) {
-      console.error("❌ Erro ao buscar usuário na user_profiles:", fetchError.message)
-
-      // Se falhar, tentar na tabela users como fallback
-      console.log("🔄 Tentando buscar na tabela users...")
-
-      const { data: users, error: usersError } = await supabase
-        .from("users")
-        .select("id, email, full_name, role, is_active, password_hash, created_at")
-        .eq("email", email.trim().toLowerCase())
-
-      if (usersError) {
-        console.error("❌ Erro ao buscar usuário na users:", usersError.message)
-        return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 })
-      }
-
-      if (!users || users.length === 0) {
-        console.log("❌ Usuário não encontrado em nenhuma tabela:", email)
-        return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 })
-      }
-
-      // Usar o primeiro usuário encontrado na tabela users
-      const user = users[0]
-      console.log("👤 Usuário encontrado na tabela users:", user.email, "Ativo:", user.is_active)
-
-      // Verificar senha hash (se existir)
-      if (user.password_hash) {
-        // TODO: Implementar verificação de hash bcrypt
-        console.log("⚠️ Senha com hash detectada - implementar bcrypt")
-        return NextResponse.json({ error: "Sistema de autenticação em manutenção" }, { status: 503 })
-      }
-
-      // Se não tiver hash, assumir que é senha em texto plano (temporário)
-      console.log("❌ Usuário na tabela users não tem senha em texto plano")
+    if (!users || users.length === 0) {
+      console.log("❌ Usuário não encontrado")
       return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 })
     }
 
-    if (!userProfiles || userProfiles.length === 0) {
-      console.log("❌ Nenhum usuário encontrado na user_profiles:", email)
+    // Se há múltiplos usuários, pegar o primeiro ativo
+    const user = users.find((u: any) => u.status === "active") || users[0]
+    console.log("👤 Usuário selecionado:", { id: user.id, email: user.email, role: user.role })
+
+    // Verificar senha
+    if (!user.password_hash) {
+      console.log("❌ Usuário sem senha configurada")
       return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 })
     }
 
-    if (userProfiles.length > 1) {
-      console.warn("⚠️ Múltiplos usuários encontrados para o email:", email, "Quantidade:", userProfiles.length)
-      // Usar o primeiro usuário ativo encontrado
-    }
+    const isValidPassword = await bcrypt.compare(password, user.password_hash)
 
-    // Pegar o primeiro usuário (ou o primeiro ativo)
-    let userProfile = userProfiles[0]
-
-    // Se houver múltiplos, tentar pegar o ativo
-    if (userProfiles.length > 1) {
-      const activeUser = userProfiles.find((u) => u.status === "active")
-      if (activeUser) {
-        userProfile = activeUser
-        console.log("✅ Usuário ativo selecionado entre múltiplos")
-      }
-    }
-
-    console.log("👤 Usuário selecionado:", userProfile.email, "Status:", userProfile.status)
-
-    // Verificar senha (comparação direta - sem hash por enquanto)
-    if (!userProfile.password) {
-      console.log("❌ Usuário não tem senha definida:", email)
+    if (!isValidPassword) {
+      console.log("❌ Senha inválida")
       return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 })
     }
 
-    if (userProfile.password !== password) {
-      console.log("❌ Senha incorreta para:", email)
-      return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 })
-    }
-
-    // Verificar status do usuário
-    if (userProfile.status !== "active") {
-      console.log("❌ Usuário inativo:", email, "Status:", userProfile.status)
-      return NextResponse.json({ error: "Conta inativa. Entre em contato com o suporte." }, { status: 403 })
-    }
-
-    console.log("✅ Credenciais válidas, atualizando último login...")
-
-    // Atualizar último login
-    const { error: updateError } = await supabase
-      .from("user_profiles")
-      .update({
+    // Atualizar último login via REST API
+    const updateResponse = await fetch(`${supabaseUrl}/rest/v1/user_profiles?id=eq.${user.id}`, {
+      method: "PATCH",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
         last_login_at: new Date().toISOString(),
-        login_count: (userProfile.login_count || 0) + 1,
-      })
-      .eq("id", userProfile.id)
+      }),
+    })
 
-    if (updateError) {
-      console.warn("⚠️ Erro ao atualizar último login:", updateError.message)
-      // Não falhar o login por causa disso
+    if (!updateResponse.ok) {
+      console.warn("⚠️ Não foi possível atualizar último login")
     }
 
-    // Preparar dados do usuário para retorno (SEM senha)
+    // Retornar dados do usuário (sem senha)
     const userData = {
-      id: userProfile.id,
-      email: userProfile.email,
-      full_name: userProfile.full_name,
-      role: userProfile.role,
-      status: userProfile.status,
+      id: user.id,
+      email: user.email,
+      full_name: user.full_name,
+      role: user.role,
+      status: user.status,
+      avatar_url: user.avatar_url,
+      organization_id: user.organization_id,
+      created_at: user.created_at,
     }
 
-    console.log("✅ Login realizado com sucesso para:", email)
+    console.log("✅ Login realizado com sucesso para:", user.email)
 
     return NextResponse.json({
       user: userData,
@@ -147,7 +100,6 @@ export async function POST(request: Request) {
     })
   } catch (error: any) {
     console.error("💥 Erro crítico no login:", error.message)
-    console.error("Stack trace:", error.stack)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }
