@@ -84,6 +84,32 @@ export async function registerUser(userData: RegisterData) {
   }
 }
 
+// Função para trocar a senha via API
+export async function changePassword(
+  userId: string,
+  oldPassword: string,
+  newPassword: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log("🔐 Iniciando troca de senha via API para usuário:", userId)
+
+    // TODO: Implementar API endpoint para mudança de senha
+    // const result = await authApi.changePassword(userId, oldPassword, newPassword)
+
+    // Por enquanto, retornar erro informando que precisa ser implementado
+    return {
+      success: false,
+      error: "Funcionalidade de mudança de senha será implementada em breve",
+    }
+  } catch (error: any) {
+    console.error("💥 Erro inesperado ao trocar senha:", error.message)
+    return {
+      success: false,
+      error: "Erro interno do servidor: " + error.message,
+    }
+  }
+}
+
 // Funções de gerenciamento de sessão local (mantidas)
 export function getCurrentUser(): UserProfile | null {
   if (typeof window === "undefined") return null
@@ -128,6 +154,41 @@ export async function isPublicRegistrationEnabled(): Promise<boolean> {
     return result.data?.settings?.allowPublicRegistration || false
   } catch (error) {
     console.error("Erro ao verificar registro público:", error)
+    return false
+  }
+}
+
+// Funções adicionais que podem ser necessárias (mantidas para compatibilidade)
+export async function updateUserProfile(
+  userId: string,
+  updates: Partial<Omit<UserProfile, "id" | "email" | "created_at" | "role">>,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // TODO: Implementar API endpoint para atualização de perfil
+    // const result = await authApi.updateProfile(userId, updates)
+
+    return {
+      success: false,
+      error: "Funcionalidade de atualização de perfil será implementada em breve",
+    }
+  } catch (error: any) {
+    console.error("💥 Erro inesperado ao atualizar perfil:", error.message)
+    return { success: false, error: "Erro interno do servidor" }
+  }
+}
+
+export async function getUser(): Promise<any | null> {
+  // Esta função pode não ser necessária com a nova arquitetura
+  // mas mantida para compatibilidade
+  return getCurrentUser()
+}
+
+export async function isUserAdmin(): Promise<boolean> {
+  try {
+    const user = getCurrentUser()
+    return user?.role === "admin" || false
+  } catch (error) {
+    console.error("Error checking admin status:", error)
     return false
   }
 }

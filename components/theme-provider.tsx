@@ -38,6 +38,52 @@ export function useTheme() {
   return context
 }
 
+// Temas predefinidos - usando nomes genéricos para white label
+export const themePresets: Record<string, ThemeConfig> = {
+  blue: {
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
+    logoIcon: "🤖",
+    primaryColor: "#3b82f6",
+    secondaryColor: "#10b981",
+    accentColor: "#8b5cf6",
+  },
+  purple: {
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
+    logoIcon: "🔮",
+    primaryColor: "#8b5cf6",
+    secondaryColor: "#ec4899",
+    accentColor: "#3b82f6",
+  },
+  green: {
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
+    logoIcon: "🌱",
+    primaryColor: "#10b981",
+    secondaryColor: "#3b82f6",
+    accentColor: "#f59e0b",
+  },
+  orange: {
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
+    logoIcon: "🔥",
+    primaryColor: "#f97316",
+    secondaryColor: "#8b5cf6",
+    accentColor: "#10b981",
+  },
+  dark: {
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
+    logoIcon: "⚡",
+    primaryColor: "#6366f1",
+    secondaryColor: "#ec4899",
+    accentColor: "#f97316",
+    backgroundColor: "#1e293b",
+    textColor: "#f8fafc",
+  },
+}
+
 // Tema padrão genérico
 export const defaultTheme: ThemeConfig = {
   systemName: "Sistema",
@@ -46,6 +92,39 @@ export const defaultTheme: ThemeConfig = {
   primaryColor: "#3b82f6",
   secondaryColor: "#10b981",
   accentColor: "#8b5cf6",
+}
+
+// Função para validar se uma cor é um código hexadecimal válido
+export function isValidHexColor(color: string): boolean {
+  return /^#([A-Fa-f0-9]{3}){1,2}$/.test(color)
+}
+
+// Função para ajustar o brilho de uma cor
+export function adjustColorBrightness(color: string, percent: number): string {
+  if (!isValidHexColor(color)) return color
+
+  const num = Number.parseInt(color.replace("#", ""), 16)
+  const amt = Math.round(2.55 * percent)
+  const R = (num >> 16) + amt
+  const G = ((num >> 8) & 0x00ff) + amt
+  const B = (num & 0x0000ff) + amt
+
+  return (
+    "#" +
+    (
+      0x1000000 +
+      (R < 255 ? (R < 0 ? 0 : R) : 255) * 0x10000 +
+      (G < 255 ? (G < 0 ? 0 : G) : 255) * 0x100 +
+      (B < 255 ? (B < 0 ? 0 : B) : 255)
+    )
+      .toString(16)
+      .slice(1)
+  )
+}
+
+// Função para aplicar um preset de tema
+export function applyThemePreset(presetName: string): ThemeConfig {
+  return themePresets[presetName] || defaultTheme
 }
 
 // Função para aplicar as cores do tema no CSS
@@ -144,6 +223,30 @@ export function loadThemeFromLocalStorage(): ThemeConfig | null {
   } catch (error) {
     console.error("Erro ao carregar tema do localStorage:", error)
     return null
+  }
+}
+
+// Função para invalidar cache
+export function invalidateThemeCache(): void {
+  // Implementação futura se necessário
+}
+
+// Funções de carregamento e salvamento no banco (mantidas para compatibilidade)
+export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
+  return await loadThemeFromApi()
+}
+
+export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
+  try {
+    // TODO: Implementar API endpoint para salvar tema
+    // const result = await authApi.saveTheme(theme)
+
+    // Por enquanto, salvar apenas no localStorage
+    saveThemeToLocalStorage(theme)
+    return true
+  } catch (error) {
+    console.error("Erro ao salvar tema:", error)
+    return false
   }
 }
 
