@@ -20,6 +20,7 @@ export async function middleware(req: NextRequest) {
   const publicApiRoutes = [
     "/api/auth/register", // Essencial para permitir que novos usuários se cadastrem.
     "/api/agents/webhook", // Webhook para agentes. Deve ter sua própria lógica de autenticação interna.
+    "/api/config", // Adicionado aqui
     // Adicione aqui QUALQUER outra rota da API que precise ser acessível sem login.
     // Ex: /api/password-reset/request
   ]

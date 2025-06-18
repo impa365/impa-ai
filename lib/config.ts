@@ -61,13 +61,13 @@ export async function getConfig() {
     // Fallback apenas para desenvolvimento local
     if (typeof window !== "undefined" && window.location.hostname === "localhost") {
       const fallbackConfig = {
-        supabaseUrl: "http://localhost:54321",
-        supabaseAnonKey: "dummy-key",
-        nextAuthUrl: "http://localhost:3000",
-        customKey: "",
+        // Removido: supabaseUrl: "http://localhost:54321",
+        // Removido: supabaseAnonKey: "dummy-key",
+        nextAuthUrl: "http://localhost:3000", // Mantenha se for útil
+        customKey: "", // Mantenha se for útil
       }
-      console.log("🔧 Using localhost fallback config")
-      configCache = fallbackConfig
+      console.warn("🔧 Using localhost fallback for non-Supabase config from /api/config")
+      configCache = fallbackConfig // Este cache agora NÃO contém chaves Supabase
       cacheTimestamp = now
       return fallbackConfig
     }
@@ -86,20 +86,15 @@ export function clearConfigCache() {
 
 // Função para verificar se as configurações estão válidas
 export function validateConfig(config: any): boolean {
-  if (!config.supabaseUrl || config.supabaseUrl.includes("placeholder")) {
-    console.error("❌ Invalid Supabase URL:", config.supabaseUrl)
-    return false
-  }
-
-  if (!config.supabaseAnonKey || config.supabaseAnonKey === "dummy-key") {
-    console.error("❌ Invalid Supabase Anon Key")
-    return false
-  }
-
+  // nextAuthUrl pode ser importante para o cliente
   if (!config.nextAuthUrl || config.nextAuthUrl.includes("placeholder")) {
-    console.error("❌ Invalid NextAuth URL:", config.nextAuthUrl)
-    return false
+    console.error("❌ Invalid NextAuth URL in fetched config:", config.nextAuthUrl)
+    // Decida se isso deve retornar false ou apenas logar um aviso.
+    // Se o cliente NextAuth depende disso, pode ser um erro.
+    // return false;
   }
+
+  // Adicione outras validações para chaves públicas se necessário
 
   return true
 }
