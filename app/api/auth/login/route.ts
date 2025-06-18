@@ -30,27 +30,80 @@ export async function POST(request: Request) {
 
     console.log("🔍 Buscando usuário:", email)
 
-    // Buscar usuário na tabela user_profiles (conforme estrutura do sistema)
-    const { data: userProfile, error: fetchError } = await supabase
+    // Primeiro, vamos tentar buscar na tabela user_profiles (sem .single())
+    const { data: userProfiles, error: fetchError } = await supabase
       .from("user_profiles")
       .select("id, email, full_name, role, status, password, last_login_at, login_count")
       .eq("email", email.trim().toLowerCase())
-      .single()
 
     if (fetchError) {
-      console.error("❌ Erro ao buscar usuário:", fetchError.message)
+      console.error("❌ Erro ao buscar usuário na user_profiles:", fetchError.message)
+
+      // Se falhar, tentar na tabela users como fallback
+      console.log("🔄 Tentando buscar na tabela users...")
+
+      const { data: users, error: usersError } = await supabase
+        .from("users")
+        .select("id, email, full_name, role, is_active, password_hash, created_at")
+        .eq("email", email.trim().toLowerCase())
+
+      if (usersError) {
+        console.error("❌ Erro ao buscar usuário na users:", usersError.message)
+        return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 })
+      }
+
+      if (!users || users.length === 0) {
+        console.log("❌ Usuário não encontrado em nenhuma tabela:", email)
+        return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 })
+      }
+
+      // Usar o primeiro usuário encontrado na tabela users
+      const user = users[0]
+      console.log("👤 Usuário encontrado na tabela users:", user.email, "Ativo:", user.is_active)
+
+      // Verificar senha hash (se existir)
+      if (user.password_hash) {
+        // TODO: Implementar verificação de hash bcrypt
+        console.log("⚠️ Senha com hash detectada - implementar bcrypt")
+        return NextResponse.json({ error: "Sistema de autenticação em manutenção" }, { status: 503 })
+      }
+
+      // Se não tiver hash, assumir que é senha em texto plano (temporário)
+      console.log("❌ Usuário na tabela users não tem senha em texto plano")
       return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 })
     }
 
-    if (!userProfile) {
-      console.log("❌ Usuário não encontrado:", email)
+    if (!userProfiles || userProfiles.length === 0) {
+      console.log("❌ Nenhum usuário encontrado na user_profiles:", email)
       return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 })
     }
 
-    console.log("👤 Usuário encontrado:", userProfile.email, "Status:", userProfile.status)
+    if (userProfiles.length > 1) {
+      console.warn("⚠️ Múltiplos usuários encontrados para o email:", email, "Quantidade:", userProfiles.length)
+      // Usar o primeiro usuário ativo encontrado
+    }
+
+    // Pegar o primeiro usuário (ou o primeiro ativo)
+    let userProfile = userProfiles[0]
+
+    // Se houver múltiplos, tentar pegar o ativo
+    if (userProfiles.length > 1) {
+      const activeUser = userProfiles.find((u) => u.status === "active")
+      if (activeUser) {
+        userProfile = activeUser
+        console.log("✅ Usuário ativo selecionado entre múltiplos")
+      }
+    }
+
+    console.log("👤 Usuário selecionado:", userProfile.email, "Status:", userProfile.status)
 
     // Verificar senha (comparação direta - sem hash por enquanto)
-    if (!userProfile.password || userProfile.password !== password) {
+    if (!userProfile.password) {
+      console.log("❌ Usuário não tem senha definida:", email)
+      return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 })
+    }
+
+    if (userProfile.password !== password) {
       console.log("❌ Senha incorreta para:", email)
       return NextResponse.json({ error: "Email ou senha inválidos" }, { status: 401 })
     }
@@ -94,6 +147,7 @@ export async function POST(request: Request) {
     })
   } catch (error: any) {
     console.error("💥 Erro crítico no login:", error.message)
+    console.error("Stack trace:", error.stack)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }
