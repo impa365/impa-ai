@@ -15,8 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, User } from "lucide-react"
-import { getSupabase } from "@/lib/supabase"
-import { getDefaultWhatsAppLimit, getDefaultAgentsLimit } from "@/lib/system-settings"
+import { publicApi } from "@/lib/api-client"
 
 interface UserModalProps {
   open: boolean
@@ -36,34 +35,53 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     password: "",
     role: "user",
     status: "active",
-    whatsapp_limit: null as number | null, // Inicializar como null
-    agents_limit: null as number | null, // Inicializar como null
+    whatsapp_limit: null as number | null,
+    agents_limit: null as number | null,
   })
 
-  // Buscar valores padrão das configurações do sistema SEMPRE
+  // Buscar valores padrão das configurações do sistema via API
   useEffect(() => {
     const loadDefaultLimits = async () => {
       if (!open) return
 
       setLoadingDefaults(true)
       try {
-        console.log("🔄 Buscando limites padrão do sistema...")
-        const whatsappLimit = await getDefaultWhatsAppLimit()
-        const agentsLimit = await getDefaultAgentsLimit()
+        console.log("🔄 Buscando limites padrão via API...")
+        const response = await publicApi.getSystemSettings()
 
-        console.log("✅ Limites padrão carregados:", { whatsappLimit, agentsLimit })
-
-        // Se não há usuário sendo editado, usar os valores padrão
-        if (!user) {
+        if (response.error) {
+          console.error("❌ Erro ao carregar configurações:", response.error)
+          // Usar valores padrão em caso de erro
           setFormData((prev) => ({
             ...prev,
-            whatsapp_limit: whatsappLimit,
-            agents_limit: agentsLimit,
+            whatsapp_limit: 1,
+            agents_limit: 2,
           }))
+        } else {
+          const settings = response.data?.settings || {}
+          const whatsappLimit = settings.default_whatsapp_connections_limit || 1
+          const agentsLimit = settings.default_agents_limit || 2
+
+          console.log("✅ Limites padrão carregados via API:", { whatsappLimit, agentsLimit })
+
+          // Se não há usuário sendo editado, usar os valores padrão
+          if (!user) {
+            setFormData((prev) => ({
+              ...prev,
+              whatsapp_limit: whatsappLimit,
+              agents_limit: agentsLimit,
+            }))
+          }
         }
       } catch (error) {
         console.error("❌ Erro ao carregar limites padrão:", error)
         setError("Erro ao carregar configurações padrão do sistema")
+        // Usar valores padrão em caso de erro
+        setFormData((prev) => ({
+          ...prev,
+          whatsapp_limit: 1,
+          agents_limit: 2,
+        }))
       } finally {
         setLoadingDefaults(false)
       }
@@ -77,76 +95,21 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
       if (user && open) {
         setLoadingData(true)
         try {
-          console.log("🔄 Buscando dados do usuário:", user.id)
+          console.log("🔄 Buscando dados do usuário via API:", user.id)
 
-          const supabaseClient = await getSupabase()
+          const response = await publicApi.getUser(user.id)
 
-          const { data: userData, error: userError } = await supabaseClient
-            .from("user_profiles")
-            .select("*")
-            .eq("id", user.id)
-            .single()
-
-          if (userError) throw userError
-
-          // Buscar configurações do usuário
-          let settingsData = null
-          try {
-            const { data, error: settingsError } = await supabaseClient
-              .from("user_settings")
-              .select("*")
-              .eq("user_id", user.id)
-              .single()
-
-            if (!settingsError) {
-              settingsData = data
-            }
-          } catch (settingsErr) {
-            console.error("⚠️ Erro ao buscar configurações do usuário:", settingsErr)
+          if (response.error) {
+            console.error("❌ Erro ao buscar usuário:", response.error)
+            throw new Error(response.error)
           }
 
-          // Obter limites padrão do sistema como fallback
-          const defaultWhatsAppLimit = await getDefaultWhatsAppLimit()
-          const defaultAgentsLimit = await getDefaultAgentsLimit()
+          const userData = response.data?.user
+          if (!userData) {
+            throw new Error("Dados do usuário não encontrados")
+          }
 
-          console.log("📊 Dados do usuário:", {
-            userProfileLimits: {
-              connections_limit: userData.connections_limit,
-              agents_limit: userData.agents_limit,
-            },
-            userSettingsLimits: {
-              whatsapp_connections_limit: settingsData?.whatsapp_connections_limit,
-              agents_limit: settingsData?.agents_limit,
-            },
-            systemDefaults: {
-              whatsappLimit: defaultWhatsAppLimit,
-              agentsLimit: defaultAgentsLimit,
-            },
-          })
-
-          // Definir valores com prioridade:
-          // 1. Valor do usuário na tabela user_profiles
-          // 2. Valor do usuário na tabela user_settings
-          // 3. Valor padrão do sistema
-          const whatsappLimitValue =
-            userData.connections_limit !== undefined && userData.connections_limit !== null
-              ? userData.connections_limit
-              : settingsData?.whatsapp_connections_limit !== undefined &&
-                  settingsData?.whatsapp_connections_limit !== null
-                ? settingsData.whatsapp_connections_limit
-                : defaultWhatsAppLimit
-
-          const agentsLimitValue =
-            userData.agents_limit !== undefined && userData.agents_limit !== null
-              ? userData.agents_limit
-              : settingsData?.agents_limit !== undefined && settingsData?.agents_limit !== null
-                ? settingsData.agents_limit
-                : defaultAgentsLimit
-
-          console.log("✅ Valores finais definidos:", {
-            whatsappLimit: whatsappLimitValue,
-            agentsLimit: agentsLimitValue,
-          })
+          console.log("✅ Dados do usuário carregados via API")
 
           setFormData({
             full_name: userData.full_name || "",
@@ -154,24 +117,22 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             password: "",
             role: userData.role || "user",
             status: userData.status || "active",
-            whatsapp_limit: whatsappLimitValue,
-            agents_limit: agentsLimitValue,
+            whatsapp_limit: userData.connections_limit || userData.whatsapp_connections_limit || 1,
+            agents_limit: userData.agents_limit || 2,
           })
-        } catch (error) {
-          console.error("❌ Erro ao buscar dados do usuário:", error)
+        } catch (error: any) {
+          console.error("❌ Erro ao buscar dados do usuário:", error.message)
+          setError("Erro ao carregar dados do usuário")
 
-          // Obter limites padrão do sistema como fallback
-          const defaultWhatsAppLimit = await getDefaultWhatsAppLimit()
-          const defaultAgentsLimit = await getDefaultAgentsLimit()
-
+          // Usar dados básicos do usuário como fallback
           setFormData({
             full_name: user.full_name || "",
             email: user.email || "",
             password: "",
             role: user.role || "user",
             status: user.status || "active",
-            whatsapp_limit: user.connections_limit ?? defaultWhatsAppLimit,
-            agents_limit: user.agents_limit ?? defaultAgentsLimit,
+            whatsapp_limit: user.connections_limit || 1,
+            agents_limit: user.agents_limit || 2,
           })
         } finally {
           setLoadingData(false)
@@ -231,139 +192,43 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     setError("")
 
     try {
-      const supabaseClient = await getSupabase()
+      const userData = {
+        full_name: formData.full_name.trim(),
+        email: formData.email.trim(),
+        role: formData.role,
+        status: formData.status,
+        connections_limit: formData.whatsapp_limit,
+        agents_limit: formData.agents_limit,
+      }
 
-      // Verificar se o email já existe (exceto para o usuário atual)
-      let emailCheckQuery = supabaseClient.from("user_profiles").select("id").eq("email", formData.email.trim())
+      // Adicionar senha apenas se fornecida
+      if (formData.password.trim()) {
+        userData.password = formData.password.trim()
+      }
 
+      let response
       if (user) {
-        emailCheckQuery = emailCheckQuery.neq("id", user.id)
+        // Atualizar usuário existente
+        console.log("🔄 Atualizando usuário via API:", user.id)
+        response = await publicApi.updateUser(user.id, userData)
+      } else {
+        // Criar novo usuário
+        console.log("🔄 Criando novo usuário via API")
+        response = await publicApi.createUser(userData)
       }
 
-      const { data: existingUserWithEmail, error: emailCheckError } = await emailCheckQuery.maybeSingle()
-
-      if (emailCheckError) {
-        console.error("Erro ao verificar email:", emailCheckError)
-        throw new Error("Erro ao verificar duplicidade de email.")
-      }
-
-      if (existingUserWithEmail) {
-        setError("Este email já está em uso por outro usuário.")
-        setLoading(false)
+      if (response.error) {
+        console.error("❌ Erro ao salvar usuário:", response.error)
+        setError(response.error)
         return
       }
 
-      let userId = user?.id
-
-      // Processar usuário existente ou novo
-      if (user) {
-        // Atualizar usuário existente
-        const updateData = {
-          full_name: formData.full_name.trim(),
-          email: formData.email.trim(),
-          role: formData.role,
-          status: formData.status,
-          updated_at: new Date().toISOString(),
-          // Salvar limites diretamente na tabela user_profiles
-          connections_limit: formData.whatsapp_limit,
-          agents_limit: formData.agents_limit,
-        }
-
-        // Adicionar senha apenas se fornecida
-        if (formData.password.trim()) {
-          updateData.password = formData.password.trim()
-        }
-
-        console.log("🔄 Atualizando usuário:", user.id, updateData)
-        const { error: profileError } = await supabaseClient.from("user_profiles").update(updateData).eq("id", user.id)
-
-        if (profileError) {
-          console.error("❌ Erro ao atualizar perfil:", profileError)
-          throw profileError
-        }
-      } else {
-        // Criar novo usuário
-        console.log("🔄 Criando novo usuário")
-        const { data: newUser, error: profileError } = await supabaseClient
-          .from("user_profiles")
-          .insert({
-            full_name: formData.full_name.trim(),
-            email: formData.email.trim(),
-            password: formData.password.trim(),
-            role: formData.role,
-            status: formData.status,
-            // Salvar limites diretamente na tabela user_profiles
-            connections_limit: formData.whatsapp_limit,
-            agents_limit: formData.agents_limit,
-          })
-          .select()
-          .single()
-
-        if (profileError) {
-          console.error("❌ Erro ao criar usuário:", profileError)
-          throw profileError
-        }
-
-        if (!newUser) {
-          throw new Error("Falha ao criar perfil do usuário. Nenhum dado retornado.")
-        }
-
-        console.log("✅ Novo usuário criado:", newUser.id)
-        userId = newUser.id
-      }
-
-      // Também tentar salvar na user_settings como backup (se a tabela existir)
-      if (userId) {
-        try {
-          const { data: existingSettings } = await supabaseClient
-            .from("user_settings")
-            .select("user_id")
-            .eq("user_id", userId)
-            .maybeSingle()
-
-          if (existingSettings) {
-            // Atualizar configurações existentes
-            await supabaseClient
-              .from("user_settings")
-              .update({
-                whatsapp_connections_limit: formData.whatsapp_limit,
-                agents_limit: formData.agents_limit,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("user_id", userId)
-          } else {
-            // Inserir novas configurações
-            await supabaseClient.from("user_settings").insert({
-              user_id: userId,
-              whatsapp_connections_limit: formData.whatsapp_limit,
-              agents_limit: formData.agents_limit,
-            })
-          }
-        } catch (settingsError) {
-          console.warn("⚠️ Tabela user_settings não disponível, usando apenas user_profiles")
-        }
-      }
-
-      console.log("✅ Usuário salvo com sucesso!")
+      console.log("✅ Usuário salvo com sucesso via API!")
       onSuccess()
       onOpenChange(false)
     } catch (error: any) {
       console.error("❌ Erro ao salvar usuário:", error)
-
-      // Melhorar o tratamento de erro para mostrar mensagens mais detalhadas
-      let errorMessage = "Erro ao salvar usuário"
-
-      if (error.message) {
-        errorMessage += ": " + error.message
-      } else if (error.code) {
-        errorMessage += ` (código ${error.code})`
-      }
-
-      if (error.details) {
-        errorMessage += " - " + error.details
-      }
-
-      setError(errorMessage)
+      setError("Erro ao salvar usuário: " + (error.message || "Erro desconhecido"))
     } finally {
       setLoading(false)
     }

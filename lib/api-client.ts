@@ -102,6 +102,11 @@ class PublicApiClient {
     return this.makeRequest("/api/admin/users")
   }
 
+  // Buscar usuário específico (admin)
+  async getUser(userId: string): Promise<ApiResponse<{ user: any }>> {
+    return this.makeRequest(`/api/admin/users/${userId}`)
+  }
+
   // Criar usuário (admin)
   async createUser(userData: any): Promise<ApiResponse<{ user: any }>> {
     return this.makeRequest("/api/admin/users", {
@@ -110,11 +115,24 @@ class PublicApiClient {
     })
   }
 
+  // Atualizar usuário (admin)
+  async updateUser(userId: string, userData: any): Promise<ApiResponse<{ user: any }>> {
+    return this.makeRequest("/api/admin/users", {
+      method: "PUT",
+      body: JSON.stringify({ id: userId, ...userData }),
+    })
+  }
+
   // Deletar usuário (admin)
   async deleteUser(userId: string): Promise<ApiResponse<{ success: boolean }>> {
     return this.makeRequest(`/api/admin/users?id=${userId}`, {
       method: "DELETE",
     })
+  }
+
+  // Buscar configurações do sistema
+  async getSystemSettings(): Promise<ApiResponse<{ settings: any }>> {
+    return this.makeRequest("/api/system/settings")
   }
 }
 
@@ -144,11 +162,14 @@ export const dashboardApi = {
 
 export const systemApi = {
   getVersion: () => publicApi.getSystemVersion(),
+  getSettings: () => publicApi.getSystemSettings(),
 }
 
 export const adminApi = {
   getUsers: () => publicApi.getUsers(),
+  getUser: (userId: string) => publicApi.getUser(userId),
   createUser: (userData: any) => publicApi.createUser(userData),
+  updateUser: (userId: string, userData: any) => publicApi.updateUser(userId, userData),
   deleteUser: (userId: string) => publicApi.deleteUser(userId),
 }
 
