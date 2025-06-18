@@ -294,10 +294,29 @@ export function AgentModal({
   }
 
   useEffect(() => {
-    console.log("🔄 [AgentModal] useEffect - agent changed:", { agent, currentUser, selectedUserId, isAdmin })
+    console.log("🔄 [AgentModal] useEffect - agent changed:", {
+      agentExists: !!agent,
+      agentId: agent?.id,
+      agentName: agent?.name,
+      currentUser: currentUser?.id,
+      selectedUserId,
+      isAdmin,
+    })
 
     if (agent) {
-      console.log("📝 [AgentModal] Carregando dados do agente:", agent)
+      console.log("📝 [AgentModal] Dados COMPLETOS do agente recebido:", agent)
+
+      // Processar ignore_jids se for string JSON
+      let processedIgnoreJids = agent.ignore_jids
+      if (typeof agent.ignore_jids === "string") {
+        try {
+          processedIgnoreJids = JSON.parse(agent.ignore_jids)
+          console.log("✅ [AgentModal] ignore_jids processado de string para array:", processedIgnoreJids)
+        } catch (e) {
+          console.warn("⚠️ [AgentModal] Erro ao processar ignore_jids:", e)
+          processedIgnoreJids = ["@g.us"]
+        }
+      }
 
       // Carregar dados do agente existente
       const agentData = {
@@ -316,10 +335,24 @@ export function AgentModal({
         keep_open: Boolean(agent.keep_open),
         split_messages: Boolean(agent.split_messages),
         // Garantir que @g.us esteja sempre presente
-        ignore_jids: ensureGroupsProtection(agent.ignore_jids),
+        ignore_jids: ensureGroupsProtection(processedIgnoreJids),
       }
 
-      console.log("✅ [AgentModal] Dados processados para o formulário:", agentData)
+      console.log("✅ [AgentModal] Dados processados para o formulário:", {
+        name: agentData.name,
+        identity_description: agentData.identity_description,
+        training_prompt: agentData.training_prompt,
+        voice_response_enabled: agentData.voice_response_enabled,
+        voice_provider: agentData.voice_provider,
+        voice_api_key: agentData.voice_api_key ? "***PRESENTE***" : "AUSENTE",
+        voice_id: agentData.voice_id,
+        calendar_integration: agentData.calendar_integration,
+        calendar_api_key: agentData.calendar_api_key ? "***PRESENTE***" : "AUSENTE",
+        calendar_meeting_id: agentData.calendar_meeting_id,
+        chatnode_integration: agentData.chatnode_integration,
+        orimon_integration: agentData.orimon_integration,
+      })
+
       setFormData(agentData)
 
       if (isAdmin && agent.user_id) {

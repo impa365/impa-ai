@@ -27,26 +27,35 @@ export async function GET() {
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("❌ Erro ao buscar modelo padrão:", response.status, errorText)
-      throw new Error(`Erro ao buscar modelo padrão: ${response.status}`)
+      console.error("❌ Erro ao buscar default_model:", response.status, errorText)
+      throw new Error(`Erro ao buscar default_model: ${response.status}`)
     }
 
     const data = await response.json()
-    const defaultModel = data[0]?.setting_value || "gpt-4o"
+    console.log("✅ Resposta do sistema:", data)
 
-    console.log("✅ Modelo padrão encontrado:", defaultModel)
+    if (data && data.length > 0 && data[0].setting_value) {
+      const defaultModel = data[0].setting_value.toString().trim()
+      console.log("✅ Default model encontrado:", defaultModel)
 
-    return NextResponse.json({
-      success: true,
-      defaultModel: defaultModel,
-    })
+      return NextResponse.json({
+        success: true,
+        defaultModel: defaultModel,
+      })
+    } else {
+      console.warn("⚠️ Default model não encontrado, usando fallback")
+      return NextResponse.json({
+        success: true,
+        defaultModel: "gpt-3.5-turbo",
+      })
+    }
   } catch (error: any) {
-    console.error("❌ Erro na API system/default-model:", error.message)
+    console.error("❌ Erro na API default-model:", error.message)
     return NextResponse.json(
       {
         error: "Erro interno do servidor",
         details: error.message,
-        defaultModel: "gpt-4o", // Fallback
+        defaultModel: "gpt-3.5-turbo", // Fallback
       },
       { status: 500 },
     )

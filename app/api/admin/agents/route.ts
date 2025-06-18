@@ -22,7 +22,7 @@ export async function GET() {
     }
 
     console.log("🔍 Buscando agentes...")
-    // Buscar agentes com joins
+    // Buscar agentes com joins - INCLUINDO TODOS OS CAMPOS
     const agentsResponse = await fetch(
       `${supabaseUrl}/rest/v1/ai_agents?select=*,user_profiles!ai_agents_user_id_fkey(id,email,full_name),whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(connection_name,status)&order=created_at.desc`,
       { headers },
@@ -36,6 +36,23 @@ export async function GET() {
 
     const agents = await agentsResponse.json()
     console.log("✅ Agentes encontrados:", agents.length)
+
+    // Log detalhado do primeiro agente para debug
+    if (agents.length > 0) {
+      console.log("🔍 Primeiro agente (debug):", {
+        id: agents[0].id,
+        name: agents[0].name,
+        identity_description: agents[0].identity_description,
+        training_prompt: agents[0].training_prompt,
+        voice_response_enabled: agents[0].voice_response_enabled,
+        voice_provider: agents[0].voice_provider,
+        voice_api_key: agents[0].voice_api_key ? "***PRESENTE***" : "AUSENTE",
+        voice_id: agents[0].voice_id,
+        calendar_integration: agents[0].calendar_integration,
+        calendar_api_key: agents[0].calendar_api_key ? "***PRESENTE***" : "AUSENTE",
+        calendar_meeting_id: agents[0].calendar_meeting_id,
+      })
+    }
 
     console.log("🔍 Buscando usuários...")
     // Buscar usuários
@@ -69,28 +86,65 @@ export async function GET() {
     const connections = await connectionsResponse.json()
     console.log("✅ Conexões encontradas:", connections.length)
 
-    // Filtrar dados sensíveis antes de retornar
+    // RETORNAR TODOS OS CAMPOS DOS AGENTES - NÃO FILTRAR NADA SENSÍVEL AQUI
     const safeAgents = agents.map((agent: any) => ({
+      // Campos básicos
       id: agent.id,
       name: agent.name,
+      description: agent.description,
       identity_description: agent.identity_description,
-      main_function: agent.main_function,
+      training_prompt: agent.training_prompt,
       voice_tone: agent.voice_tone,
+      main_function: agent.main_function,
+      model: agent.model,
       temperature: agent.temperature,
+
+      // Campos booleanos
       transcribe_audio: agent.transcribe_audio,
       understand_images: agent.understand_images,
       voice_response_enabled: agent.voice_response_enabled,
       calendar_integration: agent.calendar_integration,
-      status: agent.status,
+      chatnode_integration: agent.chatnode_integration,
+      orimon_integration: agent.orimon_integration,
       is_default: agent.is_default,
+      listening_from_me: agent.listening_from_me,
+      stop_bot_from_me: agent.stop_bot_from_me,
+      keep_open: agent.keep_open,
+      split_messages: agent.split_messages,
+
+      // Campos de API (incluir para edição)
+      voice_provider: agent.voice_provider,
+      voice_api_key: agent.voice_api_key,
+      voice_id: agent.voice_id,
+      calendar_api_key: agent.calendar_api_key,
+      calendar_meeting_id: agent.calendar_meeting_id,
+      chatnode_api_key: agent.chatnode_api_key,
+      chatnode_bot_id: agent.chatnode_bot_id,
+      orimon_api_key: agent.orimon_api_key,
+      orimon_bot_id: agent.orimon_bot_id,
+
+      // Campos de configuração
+      trigger_type: agent.trigger_type,
+      trigger_operator: agent.trigger_operator,
+      trigger_value: agent.trigger_value,
+      keyword_finish: agent.keyword_finish,
+      debounce_time: agent.debounce_time,
+      delay_message: agent.delay_message,
+      unknown_message: agent.unknown_message,
+      expire_time: agent.expire_time,
+      ignore_jids: agent.ignore_jids,
+
+      // Campos de relacionamento
+      status: agent.status,
       user_id: agent.user_id,
       whatsapp_connection_id: agent.whatsapp_connection_id,
       evolution_bot_id: agent.evolution_bot_id,
-      model: agent.model,
-      trigger_type: agent.trigger_type,
-      trigger_value: agent.trigger_value,
+
+      // Timestamps
       created_at: agent.created_at,
       updated_at: agent.updated_at,
+
+      // Relacionamentos
       user_profiles: agent.user_profiles,
       whatsapp_connections: agent.whatsapp_connections,
     }))
