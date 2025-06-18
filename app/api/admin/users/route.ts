@@ -1,39 +1,150 @@
 import { NextResponse } from "next/server"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
 
 export async function GET() {
-  const supabase = createRouteHandlerClient({ cookies })
-
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+    console.log("🔍 Buscando usuários via REST API...")
 
-    if (!session) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ Variáveis de ambiente do Supabase não configuradas")
+      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
     }
 
-    // Verificar se é admin
-    const { data: userProfile } = await supabase.from("user_profiles").select("role").eq("id", session.user.id).single()
+    // Buscar usuários via REST API
+    const response = await fetch(`${supabaseUrl}/rest/v1/user_profiles?select=*&order=created_at.desc`, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
+      },
+    })
 
-    if (userProfile?.role !== "admin") {
-      return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error("❌ Erro ao buscar usuários:", response.status, errorData)
+      return NextResponse.json({ error: "Erro ao buscar usuários" }, { status: response.status })
     }
 
-    const { data: users, error } = await supabase
-      .from("user_profiles")
-      .select("id, full_name, email, role")
-      .order("full_name")
+    const users = await response.json()
+    console.log("✅ Usuários encontrados:", users.length)
 
-    if (error) {
-      console.error("Erro ao buscar usuários:", error)
-      return NextResponse.json({ error: "Erro ao buscar usuários" }, { status: 500 })
+    // Mapear dados para formato seguro (SEM campos sensíveis)
+    const safeUsers = users.map((user: any) => ({
+      id: user.id,
+      full_name: user.full_name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      last_login_at: user.last_login_at,
+      created_at: user.created_at,
+      agents_limit: user.agents_limit || 5,
+      connections_limit: user.connections_limit || 2,
+      whatsapp_connections_limit: user.connections_limit || 2,
+      login_count: user.login_count || 0,
+    }))
+
+    return NextResponse.json({ users: safeUsers })
+  } catch (error: any) {
+    console.error("💥 Erro interno ao buscar usuários:", error.message)
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const userData = await request.json()
+    console.log("👤 Criando novo usuário:", userData.email)
+
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
     }
 
-    return NextResponse.json({ users })
-  } catch (error) {
-    console.error("Erro no handler de usuários:", error)
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 })
+    // Criar usuário via REST API
+    const response = await fetch(`${supabaseUrl}/rest/v1/user_profiles`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        full_name: userData.full_name,
+        email: userData.email,
+        password: userData.password, // Em produção, usar hash
+        role: userData.role || "user",
+        status: "active",
+        agents_limit: userData.agents_limit || 5,
+        connections_limit: userData.connections_limit || 2,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error("❌ Erro ao criar usuário:", errorData)
+      return NextResponse.json({ error: "Erro ao criar usuário" }, { status: response.status })
+    }
+
+    const newUser = await response.json()
+    console.log("✅ Usuário criado com sucesso:", newUser[0]?.email)
+
+    return NextResponse.json({ user: newUser[0] })
+  } catch (error: any) {
+    console.error("💥 Erro ao criar usuário:", error.message)
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get("id")
+
+    if (!userId) {
+      return NextResponse.json({ error: "ID do usuário é obrigatório" }, { status: 400 })
+    }
+
+    console.log("🗑️ Deletando usuário:", userId)
+
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
+    }
+
+    // Deletar usuário via REST API
+    const response = await fetch(`${supabaseUrl}/rest/v1/user_profiles?id=eq.${userId}`, {
+      method: "DELETE",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
+      },
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error("❌ Erro ao deletar usuário:", errorData)
+      return NextResponse.json({ error: "Erro ao deletar usuário" }, { status: response.status })
+    }
+
+    console.log("✅ Usuário deletado com sucesso")
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    console.error("💥 Erro ao deletar usuário:", error.message)
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }

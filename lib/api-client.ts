@@ -96,6 +96,26 @@ class PublicApiClient {
   async getSystemVersion(): Promise<ApiResponse<{ version: string }>> {
     return this.makeRequest("/api/system/version")
   }
+
+  // Buscar usuários (admin)
+  async getUsers(): Promise<ApiResponse<{ users: any[] }>> {
+    return this.makeRequest("/api/admin/users")
+  }
+
+  // Criar usuário (admin)
+  async createUser(userData: any): Promise<ApiResponse<{ user: any }>> {
+    return this.makeRequest("/api/admin/users", {
+      method: "POST",
+      body: JSON.stringify(userData),
+    })
+  }
+
+  // Deletar usuário (admin)
+  async deleteUser(userId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.makeRequest(`/api/admin/users?id=${userId}`, {
+      method: "DELETE",
+    })
+  }
 }
 
 // Instância única do cliente de API
@@ -124,6 +144,12 @@ export const dashboardApi = {
 
 export const systemApi = {
   getVersion: () => publicApi.getSystemVersion(),
+}
+
+export const adminApi = {
+  getUsers: () => publicApi.getUsers(),
+  createUser: (userData: any) => publicApi.createUser(userData),
+  deleteUser: (userId: string) => publicApi.deleteUser(userId),
 }
 
 // Tipo para as respostas da API
