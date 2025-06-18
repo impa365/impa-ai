@@ -14,7 +14,7 @@ class PublicApiClient {
     this.baseUrl = typeof window !== "undefined" ? window.location.origin : ""
   }
 
-  private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     try {
       console.log("📡 Fazendo requisição para:", endpoint)
 
@@ -86,6 +86,16 @@ class PublicApiClient {
   async getDashboardStats(): Promise<ApiResponse<{ stats: any }>> {
     return this.makeRequest("/api/dashboard/stats")
   }
+
+  // Buscar dados do dashboard admin
+  async getAdminDashboard(): Promise<ApiResponse<any>> {
+    return this.makeRequest("/api/admin/dashboard")
+  }
+
+  // Buscar versão do sistema
+  async getSystemVersion(): Promise<ApiResponse<{ version: string }>> {
+    return this.makeRequest("/api/system/version")
+  }
 }
 
 // Instância única do cliente de API
@@ -109,6 +119,11 @@ export const themeApi = {
 export const dashboardApi = {
   getStats: () => publicApi.getDashboardStats(),
   getAgents: () => publicApi.getAgents(),
+  getAdminDashboard: () => publicApi.getAdminDashboard(),
+}
+
+export const systemApi = {
+  getVersion: () => publicApi.getSystemVersion(),
 }
 
 // Tipo para as respostas da API

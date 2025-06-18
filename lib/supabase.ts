@@ -3,11 +3,6 @@
 // Todas as operações passam pelas APIs do Next.js
 
 import { apiClient } from "./api-client"
-import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-import { supabaseConfig } from "./supabase-config"
-
-const clientInstance: SupabaseClient | null = null
-let serverClientInstance: SupabaseClient | null = null
 
 // Para compatibilidade com código existente, mantemos as interfaces
 export interface UserProfile {
@@ -55,57 +50,73 @@ export async function getSupabase() {
   }
 }
 
-// Cliente admin para uso no servidor (lê variáveis diretamente)
-export function getSupabaseAdmin(): SupabaseClient {
-  if (serverClientInstance) {
-    return serverClientInstance
-  }
-
-  // No servidor, ler diretamente das variáveis de ambiente
-  const supabaseUrl = process.env.SUPABASE_URL
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    console.error("❌ Missing Supabase admin configuration")
-    throw new Error("Supabase admin configuration is missing")
-  }
-
-  console.log("🔧 Creating Supabase admin client")
-
-  serverClientInstance = createClient(supabaseUrl, supabaseServiceRoleKey, {
-    db: { schema: supabaseConfig.schema || "public" },
-    global: { headers: supabaseConfig.headers || {} },
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  })
-
-  return serverClientInstance
+// Função para servidor (API routes) - esta SIM pode acessar Supabase diretamente
+export function getSupabaseServer() {
+  // Esta função só deve ser usada em API routes do servidor
+  throw new Error("getSupabaseServer should only be used in API routes")
 }
 
-// Função auxiliar para acessar tabelas
+// Função auxiliar para acessar tabelas via API
 export async function getTable(tableName: string) {
-  const client = await getSupabase()
-  return client.from(tableName)
+  console.warn(`Direct table access attempted for: ${tableName}`)
+  console.warn("Use specific API endpoints instead")
+  return null
 }
 
-// Manter compatibilidade com código existente
+// Manter compatibilidade com código existente mas redirecionar para APIs
 export const supabase = {
   from: async (table: string) => {
-    const client = await getSupabase()
-    return client.from(table)
+    console.warn(`Direct Supabase access attempted for table: ${table}`)
+    console.warn("Use API endpoints instead")
+    return {
+      select: () => ({
+        eq: () => ({
+          single: async () => ({ data: null, error: { message: "Use API endpoints instead" } }),
+        }),
+      }),
+    }
   },
 }
 
 export const db = {
-  // Todas essas funções agora devem usar APIs
-  users: () => console.warn("Use API endpoints instead of direct DB access"),
-  agents: () => console.warn("Use API endpoints instead of direct DB access"),
-  whatsappConnections: () => console.warn("Use API endpoints instead of direct DB access"),
+  // Todas essas funções agora redirecionam para APIs
+  users: async () => {
+    const result = await apiClient.getAdminDashboard()
+    return {
+      select: () => ({
+        order: () => result.data?.users || [],
+      }),
+    }
+  },
+  agents: async () => {
+    const result = await apiClient.getAdminDashboard()
+    return {
+      select: () => ({
+        order: () => result.data?.agents || [],
+      }),
+    }
+  },
+  whatsappConnections: async () => {
+    const result = await apiClient.getAdminDashboard()
+    return {
+      select: () => ({
+        order: () => result.data?.whatsappConnections || [],
+      }),
+    }
+  },
+  systemSettings: async () => {
+    const result = await apiClient.getAdminDashboard()
+    return {
+      select: () => ({
+        eq: () => ({
+          single: async () => ({ data: result.data?.systemLimits }),
+        }),
+      }),
+    }
+  },
+  // Outros métodos redirecionam para console.warn
   activityLogs: () => console.warn("Use API endpoints instead of direct DB access"),
   userSettings: () => console.warn("Use API endpoints instead of direct DB access"),
-  systemSettings: () => console.warn("Use API endpoints instead of direct DB access"),
   themes: () => console.warn("Use API endpoints instead of direct DB access"),
   integrations: () => console.warn("Use API endpoints instead of direct DB access"),
   vectorStores: () => console.warn("Use API endpoints instead of direct DB access"),
@@ -113,21 +124,4 @@ export const db = {
   apiKeys: () => console.warn("Use API endpoints instead of direct DB access"),
   organizations: () => console.warn("Use API endpoints instead of direct DB access"),
   dailyMetrics: () => console.warn("Use API endpoints instead of direct DB access"),
-  rpc: supabase.rpc,
-}
-
-// Função para servidor (API routes) - esta SIM pode acessar Supabase diretamente
-export function getSupabaseServer() {
-  const { createClient } = require("@supabase/supabase-js")
-
-  const supabaseUrl = process.env.SUPABASE_URL
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Supabase configuration missing on server")
-  }
-
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    db: { schema: "impaai" },
-  })
 }

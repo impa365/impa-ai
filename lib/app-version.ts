@@ -1,5 +1,5 @@
 // import { supabase } from "@/lib/supabase" // Remove this
-import { getSupabase } from "@/lib/supabase" // Import getSupabase directly
+import { apiClient } from "@/lib/api-client" // Import apiClient directly
 
 // Cache para a versão da aplicação
 let versionCache: string | null = null
@@ -15,20 +15,15 @@ export async function getAppVersion(): Promise<string> {
   }
 
   try {
-    const client = await getSupabase() // Get client directly
-    // Buscar versão do banco de dados
-    const { data, error } = await client // Use client directly
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "app_version")
-      .single()
+    // Usar API client ao invés de Supabase direto
+    const result = await apiClient.makeRequest("/api/system/version")
 
-    if (error) {
-      console.error("Erro ao buscar versão da aplicação:", error)
+    if (result.error) {
+      console.error("Erro ao buscar versão da aplicação:", result.error)
       return "1.0.0" // Versão padrão
     }
 
-    const version = data?.setting_value || "1.0.0"
+    const version = result.data?.version || "1.0.0"
 
     // Atualizar cache
     versionCache = version
@@ -36,8 +31,6 @@ export async function getAppVersion(): Promise<string> {
 
     return version
   } catch (error) {
-    // This catch block will now primarily catch errors from getSupabase() itself
-    // or unexpected errors not caught by the inner if(error)
     console.error("Erro crítico ao buscar versão da aplicação:", error)
     return "1.0.0" // Versão padrão
   }
@@ -45,52 +38,14 @@ export async function getAppVersion(): Promise<string> {
 
 export async function updateAppVersion(newVersion: string): Promise<boolean> {
   try {
-    const client = await getSupabase() // Get client directly
+    const result = await apiClient.makeRequest("/api/system/version", {
+      method: "POST",
+      body: JSON.stringify({ version: newVersion }),
+    })
 
-    // Verificar se já existe uma configuração de versão
-    const { data: existingSetting, error: fetchError } = await client // Use client directly
-      .from("system_settings")
-      .select("id")
-      .eq("setting_key", "app_version")
-      .single()
-
-    if (fetchError && fetchError.code !== "PGRST116") {
-      // PGRST116: 'single' row not found, which is fine if creating new
-      console.error("Erro ao verificar configuração de versão existente:", fetchError)
-      // Potentially return false or throw, depending on desired behavior for non-PGRST116 errors
-    }
-
-    const settingData = {
-      setting_key: "app_version",
-      setting_value: newVersion,
-      category: "general",
-      description: "Versão atual da aplicação",
-      is_public: true,
-      requires_restart: false,
-    }
-
-    if (existingSetting) {
-      // Atualizar configuração existente
-      const { error: updateError } = await client // Use client directly
-        .from("system_settings")
-        .update({
-          setting_value: newVersion,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingSetting.id)
-
-      if (updateError) {
-        console.error("Erro ao atualizar versão da aplicação:", updateError)
-        return false
-      }
-    } else {
-      // Criar nova configuração
-      const { error: insertError } = await client.from("system_settings").insert(settingData) // Use client directly
-
-      if (insertError) {
-        console.error("Erro ao inserir versão da aplicação:", insertError)
-        return false
-      }
+    if (result.error) {
+      console.error("Erro ao atualizar versão da aplicação:", result.error)
+      return false
     }
 
     // Limpar cache para forçar nova busca
