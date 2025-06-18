@@ -33,7 +33,7 @@ import {
   type EvolutionBotIndividualConfig,
   type EvolutionInstanceSettings,
 } from "@/lib/evolution-api"
-import { publicApi } from "@/lib/api-client"
+import { publicApi } from "@/lib/public-api"
 
 // Estilos customizados para os switches
 const switchStyles =
@@ -198,17 +198,17 @@ export function AgentModal({
       if (!open) return
 
       try {
-        console.log("🔄 [AgentModal] Carregando modelo padrão do sistema via API...")
+        console.log("🔄 [AgentModal] Carregando modelo padrão do sistema...")
         setSystemDefaultModel("carregando...")
 
         // Usar API segura ao invés de Supabase direto
-        const response = await publicApi.getSystemDefaultModel()
+        const response = await publicApi.getDefaultModel()
 
         if (response.error) {
           console.error("❌ [AgentModal] Erro ao buscar default_model:", response.error)
           setSystemDefaultModel("Erro ao carregar")
         } else if (response.data?.defaultModel) {
-          const systemDefaultModel = response.data.defaultModel.toString().trim()
+          const systemDefaultModel = response.data.defaultModel
           console.log("✅ [AgentModal] Default model encontrado:", systemDefaultModel)
           setSystemDefaultModel(systemDefaultModel)
         } else {

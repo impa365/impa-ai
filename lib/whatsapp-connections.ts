@@ -50,10 +50,7 @@ export async function createWhatsAppConnection(connectionData: {
   try {
     console.log("📡 Criando conexão WhatsApp via API...")
 
-    const response = await publicApi.makeRequest("/api/whatsapp-connections", {
-      method: "POST",
-      body: JSON.stringify(connectionData),
-    })
+    const response = await publicApi.createWhatsAppConnection(connectionData)
 
     if (response.error) {
       console.error("❌ Erro ao criar conexão:", response.error)
@@ -72,10 +69,7 @@ export async function updateWhatsAppConnection(connectionId: string, updates: an
   try {
     console.log("📡 Atualizando conexão WhatsApp via API...")
 
-    const response = await publicApi.makeRequest("/api/whatsapp-connections", {
-      method: "PUT",
-      body: JSON.stringify({ id: connectionId, ...updates }),
-    })
+    const response = await publicApi.updateWhatsAppConnection(connectionId, updates)
 
     if (response.error) {
       console.error("❌ Erro ao atualizar conexão:", response.error)
@@ -83,7 +77,7 @@ export async function updateWhatsAppConnection(connectionId: string, updates: an
     }
 
     console.log("✅ Conexão atualizada via API")
-    return { success: true, connection: response.data?.connection }
+    return { success: true }
   } catch (error: any) {
     console.error("💥 Erro ao atualizar conexão WhatsApp:", error)
     return { success: false, error: error.message || "Erro interno do servidor" }
@@ -94,9 +88,7 @@ export async function deleteWhatsAppConnection(connectionId: string) {
   try {
     console.log("📡 Deletando conexão WhatsApp via API...")
 
-    const response = await publicApi.makeRequest(`/api/whatsapp-connections?id=${connectionId}`, {
-      method: "DELETE",
-    })
+    const response = await publicApi.deleteWhatsAppConnection(connectionId)
 
     if (response.error) {
       console.error("❌ Erro ao deletar conexão:", response.error)
