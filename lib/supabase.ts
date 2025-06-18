@@ -3,35 +3,67 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import { supabaseConfig, TABLES } from "./supabase-config"
 import { getConfig } from "./config"
 
+const IS_SERVER = typeof window === "undefined"
+
 let clientInstance: SupabaseClient | null = null
 let serverClientInstance: SupabaseClient | null = null
 
-// Cliente para uso no browser (busca config dinamicamente)
+// Cliente para uso no browser (usa NEXT_PUBLIC_ vars) e fallback para config API
 export async function getSupabase(): Promise<SupabaseClient> {
   if (clientInstance) {
     return clientInstance
   }
 
-  try {
-    // Buscar configuração dinamicamente
-    const config = await getConfig()
+  let supabaseUrl: string | undefined
+  let supabaseAnonKey: string | undefined
 
-    if (!config.supabaseUrl || !config.supabaseAnonKey) {
-      throw new Error("Supabase configuration is missing")
-    }
-
-    console.log("🔧 Creating Supabase client with dynamic config")
-
-    clientInstance = createClient(config.supabaseUrl, config.supabaseAnonKey, {
-      db: { schema: supabaseConfig.schema || "public" },
-      global: { headers: supabaseConfig.headers || {} },
-    })
-
-    return clientInstance
-  } catch (error) {
-    console.error("❌ Error creating Supabase client:", error)
-    throw error
+  if (!IS_SERVER) {
+    // No cliente, priorizar variáveis NEXT_PUBLIC_
+    supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    console.log("🔧 Client: Attempting to use NEXT_PUBLIC Supabase vars.")
+    console.log("🔧 Client: NEXT_PUBLIC_SUPABASE_URL available:", !!supabaseUrl)
+    console.log("🔧 Client: NEXT_PUBLIC_SUPABASE_ANON_KEY available:", !!supabaseAnonKey)
   }
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn(
+      IS_SERVER
+        ? "Server: Supabase URL/Key not directly available, fetching from config API."
+        : "Client: NEXT_PUBLIC Supabase vars not found, falling back to /api/config.",
+    )
+    try {
+      // Fallback para buscar configuração dinamicamente (seja no server ou client sem NEXT_PUBLIC vars)
+      const config = await getConfig() // getConfig ainda pode ser útil para OUTRAS configs
+
+      supabaseUrl = config.supabaseUrl
+      supabaseAnonKey = config.supabaseAnonKey
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        throw new Error("Supabase configuration is missing from /api/config fallback.")
+      }
+      console.log("🔧 Fetched Supabase config from /api/config successfully.")
+    } catch (error) {
+      console.error("❌ Error fetching Supabase config from /api/config:", error)
+      // Se falhar em obter do /api/config, e as NEXT_PUBLIC_ também não estiverem lá, lançar erro.
+      // Isso é crucial para o cliente. No servidor, o getSupabaseAdmin deveria ser usado.
+      if (!IS_SERVER) {
+        console.error(
+          "❌ CRITICAL: Client-side Supabase initialization failed. NEXT_PUBLIC_ vars and /api/config fallback failed.",
+        )
+      }
+      throw new Error(`Failed to initialize Supabase client. ${error.message}`)
+    }
+  } else if (!IS_SERVER) {
+    console.log("🔧 Client: Using NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.")
+  }
+
+  clientInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    db: { schema: supabaseConfig.schema || "impaai" }, // Garanta que o schema está correto
+    global: { headers: supabaseConfig.headers || {} },
+  })
+
+  return clientInstance
 }
 
 // Cliente admin para uso no servidor (lê variáveis diretamente)
