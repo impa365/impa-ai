@@ -32,20 +32,21 @@ export async function GET() {
     }
 
     const data = await response.json()
-    const defaultModel = data[0]?.setting_value || "gpt-4o-mini"
+    const defaultModel = data[0]?.setting_value || "gpt-4o"
 
     console.log("✅ Modelo padrão encontrado:", defaultModel)
 
     return NextResponse.json({
       success: true,
-      defaultModel,
+      defaultModel: defaultModel,
     })
   } catch (error: any) {
-    console.error("❌ Erro na API default-model:", error.message)
+    console.error("❌ Erro na API system/default-model:", error.message)
     return NextResponse.json(
       {
-        error: "Erro ao buscar modelo padrão",
+        error: "Erro interno do servidor",
         details: error.message,
+        defaultModel: "gpt-4o", // Fallback
       },
       { status: 500 },
     )

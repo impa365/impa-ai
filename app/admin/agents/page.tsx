@@ -95,6 +95,7 @@ export default function AdminAgentsPage() {
   }
 
   const handleEditAgent = (agent) => {
+    console.log("🔧 [AdminAgents] Editando agente:", agent)
     setSelectedAgent(agent)
     setShowAgentModal(true)
   }

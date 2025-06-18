@@ -33,7 +33,7 @@ import {
   type EvolutionBotIndividualConfig,
   type EvolutionInstanceSettings,
 } from "@/lib/evolution-api"
-import { publicApi } from "@/lib/public-api"
+import { publicApi } from "@/lib/api-client"
 
 // Estilos customizados para os switches
 const switchStyles =
@@ -198,17 +198,17 @@ export function AgentModal({
       if (!open) return
 
       try {
-        console.log("🔄 [AgentModal] Carregando modelo padrão do sistema...")
+        console.log("🔄 [AgentModal] Carregando modelo padrão do sistema via API...")
         setSystemDefaultModel("carregando...")
 
         // Usar API segura ao invés de Supabase direto
-        const response = await publicApi.getDefaultModel()
+        const response = await publicApi.getSystemDefaultModel()
 
         if (response.error) {
           console.error("❌ [AgentModal] Erro ao buscar default_model:", response.error)
           setSystemDefaultModel("Erro ao carregar")
         } else if (response.data?.defaultModel) {
-          const systemDefaultModel = response.data.defaultModel
+          const systemDefaultModel = response.data.defaultModel.toString().trim()
           console.log("✅ [AgentModal] Default model encontrado:", systemDefaultModel)
           setSystemDefaultModel(systemDefaultModel)
         } else {
@@ -294,20 +294,44 @@ export function AgentModal({
   }
 
   useEffect(() => {
+    console.log("🔄 [AgentModal] useEffect - agent changed:", { agent, currentUser, selectedUserId, isAdmin })
+
     if (agent) {
+      console.log("📝 [AgentModal] Carregando dados do agente:", agent)
+
+      // Carregar dados do agente existente
       const agentData = {
-        ...initialFormData,
-        ...agent,
+        ...agent, // Usar todos os dados do agente primeiro
         user_id: agent.user_id || selectedUserId || currentUser?.id || "",
+        // Garantir que campos booleanos sejam tratados corretamente
+        transcribe_audio: Boolean(agent.transcribe_audio),
+        understand_images: Boolean(agent.understand_images),
+        voice_response_enabled: Boolean(agent.voice_response_enabled),
+        calendar_integration: Boolean(agent.calendar_integration),
+        chatnode_integration: Boolean(agent.chatnode_integration),
+        orimon_integration: Boolean(agent.orimon_integration),
+        is_default: Boolean(agent.is_default),
+        listening_from_me: Boolean(agent.listening_from_me),
+        stop_bot_from_me: Boolean(agent.stop_bot_from_me),
+        keep_open: Boolean(agent.keep_open),
+        split_messages: Boolean(agent.split_messages),
+        // Garantir que @g.us esteja sempre presente
+        ignore_jids: ensureGroupsProtection(agent.ignore_jids),
       }
-      // Garantir que @g.us esteja sempre presente
-      agentData.ignore_jids = ensureGroupsProtection(agentData.ignore_jids)
+
+      console.log("✅ [AgentModal] Dados processados para o formulário:", agentData)
       setFormData(agentData)
+
       if (isAdmin && agent.user_id) {
         setSelectedUserId(agent.user_id)
       }
     } else {
-      setFormData({ ...initialFormData, user_id: selectedUserId || currentUser?.id || "" })
+      console.log("🆕 [AgentModal] Criando novo agente")
+      setFormData({
+        ...initialFormData,
+        user_id: selectedUserId || currentUser?.id || "",
+        ignore_jids: ["@g.us"], // Garantir proteção padrão
+      })
     }
   }, [agent, currentUser, selectedUserId, isAdmin])
 

@@ -89,7 +89,7 @@ class PublicApiClient {
 
   // Criar agente
   async createAgent(agentData: any): Promise<ApiResponse<{ agent: any }>> {
-    return this.makeRequest("/api/agents", {
+    return this.makeRequest("/api/admin/agents", {
       method: "POST",
       body: JSON.stringify(agentData),
     })
@@ -97,7 +97,7 @@ class PublicApiClient {
 
   // Atualizar agente
   async updateAgent(agentId: string, agentData: any): Promise<ApiResponse<{ agent: any }>> {
-    return this.makeRequest("/api/agents", {
+    return this.makeRequest("/api/admin/agents", {
       method: "PUT",
       body: JSON.stringify({ id: agentId, ...agentData }),
     })
@@ -105,7 +105,7 @@ class PublicApiClient {
 
   // Deletar agente
   async deleteAgent(agentId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return this.makeRequest(`/api/agents?id=${agentId}`, {
+    return this.makeRequest(`/api/admin/agents?id=${agentId}`, {
       method: "DELETE",
     })
   }
@@ -113,32 +113,6 @@ class PublicApiClient {
   // Buscar conexões WhatsApp
   async getWhatsAppConnections(userId?: string, isAdmin = false): Promise<ApiResponse<{ connections: any[] }>> {
     return this.makeRequest(`/api/whatsapp-connections?userId=${userId || ""}&isAdmin=${isAdmin}`)
-  }
-
-  // Criar conexão WhatsApp
-  async createWhatsAppConnection(connectionData: any): Promise<ApiResponse<{ connection: any }>> {
-    return this.makeRequest("/api/whatsapp-connections", {
-      method: "POST",
-      body: JSON.stringify(connectionData),
-    })
-  }
-
-  // Atualizar conexão WhatsApp
-  async updateWhatsAppConnection(
-    connectionId: string,
-    connectionData: any,
-  ): Promise<ApiResponse<{ success: boolean }>> {
-    return this.makeRequest("/api/whatsapp-connections", {
-      method: "PUT",
-      body: JSON.stringify({ id: connectionId, ...connectionData }),
-    })
-  }
-
-  // Deletar conexão WhatsApp
-  async deleteWhatsAppConnection(connectionId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return this.makeRequest(`/api/whatsapp-connections?id=${connectionId}`, {
-      method: "DELETE",
-    })
   }
 
   // Buscar estatísticas do dashboard
@@ -154,6 +128,11 @@ class PublicApiClient {
   // Buscar versão do sistema
   async getSystemVersion(): Promise<ApiResponse<{ version: string }>> {
     return this.makeRequest("/api/system/version")
+  }
+
+  // Buscar modelo padrão do sistema
+  async getSystemDefaultModel(): Promise<ApiResponse<{ defaultModel: string }>> {
+    return this.makeRequest("/api/system/default-model")
   }
 
   // Buscar usuários (admin)
@@ -193,11 +172,6 @@ class PublicApiClient {
   async getSystemSettings(): Promise<ApiResponse<{ settings: any }>> {
     return this.makeRequest("/api/system/settings")
   }
-
-  // Buscar modelo padrão do sistema
-  async getDefaultModel(): Promise<ApiResponse<{ defaultModel: string }>> {
-    return this.makeRequest("/api/system/default-model")
-  }
 }
 
 // Instância única do cliente de API
@@ -227,7 +201,7 @@ export const dashboardApi = {
 export const systemApi = {
   getVersion: () => publicApi.getSystemVersion(),
   getSettings: () => publicApi.getSystemSettings(),
-  getDefaultModel: () => publicApi.getDefaultModel(),
+  getDefaultModel: () => publicApi.getSystemDefaultModel(),
 }
 
 export const adminApi = {
@@ -249,10 +223,6 @@ export const agentsApi = {
 
 export const whatsappApi = {
   getConnections: (userId?: string, isAdmin = false) => publicApi.getWhatsAppConnections(userId, isAdmin),
-  createWhatsAppConnection: (connectionData: any) => publicApi.createWhatsAppConnection(connectionData),
-  updateWhatsAppConnection: (connectionId: string, connectionData: any) =>
-    publicApi.updateWhatsAppConnection(connectionId, connectionData),
-  deleteWhatsAppConnection: (connectionId: string) => publicApi.deleteWhatsAppConnection(connectionId),
 }
 
 // Tipo para as respostas da API

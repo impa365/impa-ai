@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     console.error("❌ Erro na API whatsapp-connections:", error.message)
     return NextResponse.json(
       {
-        error: "Erro ao buscar conexões WhatsApp",
+        error: "Erro interno do servidor",
         details: error.message,
       },
       { status: 500 },
