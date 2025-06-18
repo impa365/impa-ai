@@ -82,6 +82,39 @@ class PublicApiClient {
     return this.makeRequest("/api/agents")
   }
 
+  // Buscar agentes (admin)
+  async getAdminAgents(): Promise<ApiResponse<{ agents: any[]; users: any[]; connections: any[] }>> {
+    return this.makeRequest("/api/admin/agents")
+  }
+
+  // Criar agente
+  async createAgent(agentData: any): Promise<ApiResponse<{ agent: any }>> {
+    return this.makeRequest("/api/agents", {
+      method: "POST",
+      body: JSON.stringify(agentData),
+    })
+  }
+
+  // Atualizar agente
+  async updateAgent(agentId: string, agentData: any): Promise<ApiResponse<{ agent: any }>> {
+    return this.makeRequest("/api/agents", {
+      method: "PUT",
+      body: JSON.stringify({ id: agentId, ...agentData }),
+    })
+  }
+
+  // Deletar agente
+  async deleteAgent(agentId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.makeRequest(`/api/agents?id=${agentId}`, {
+      method: "DELETE",
+    })
+  }
+
+  // Buscar conexões WhatsApp
+  async getWhatsAppConnections(userId?: string, isAdmin = false): Promise<ApiResponse<{ connections: any[] }>> {
+    return this.makeRequest(`/api/whatsapp-connections?userId=${userId || ""}&isAdmin=${isAdmin}`)
+  }
+
   // Buscar estatísticas do dashboard
   async getDashboardStats(): Promise<ApiResponse<{ stats: any }>> {
     return this.makeRequest("/api/dashboard/stats")
@@ -171,6 +204,19 @@ export const adminApi = {
   createUser: (userData: any) => publicApi.createUser(userData),
   updateUser: (userId: string, userData: any) => publicApi.updateUser(userId, userData),
   deleteUser: (userId: string) => publicApi.deleteUser(userId),
+  getAgents: () => publicApi.getAdminAgents(),
+}
+
+export const agentsApi = {
+  getAgents: () => publicApi.getAgents(),
+  getAdminAgents: () => publicApi.getAdminAgents(),
+  createAgent: (agentData: any) => publicApi.createAgent(agentData),
+  updateAgent: (agentId: string, agentData: any) => publicApi.updateAgent(agentId, agentData),
+  deleteAgent: (agentId: string) => publicApi.deleteAgent(agentId),
+}
+
+export const whatsappApi = {
+  getConnections: (userId?: string, isAdmin = false) => publicApi.getWhatsAppConnections(userId, isAdmin),
 }
 
 // Tipo para as respostas da API
