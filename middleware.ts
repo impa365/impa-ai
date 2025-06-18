@@ -4,40 +4,42 @@ import type { NextRequest } from "next/server"
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  console.log(`[Middleware] Processando rota: ${pathname}`)
+  console.log("🛡️ Middleware verificando rota:", pathname)
 
-  // Lista de rotas da API que devem ser COMPLETAMENTE públicas (sem verificação de auth)
+  // Lista de rotas da API que devem ser SEMPRE públicas
   const publicApiRoutes = [
     "/api/config", // Configurações públicas do sistema
     "/api/auth/login", // Login - DEVE ser público
-    "/api/auth/register", // Registro - DEVE ser público
-    "/api/agents/webhook", // Webhooks externos
+    "/api/auth/register", // Registro
+    "/api/agents/webhook", // Webhooks
   ]
 
-  // Lista de páginas públicas (não precisam de autenticação)
-  const publicPages = ["/", "/login"]
+  // Lista de páginas públicas
+  const publicPages = ["/"]
 
-  // Se for uma rota da API pública, permitir SEMPRE
+  // Se for uma rota da API
   if (pathname.startsWith("/api/")) {
+    // Verificar se é uma rota pública
     if (publicApiRoutes.includes(pathname)) {
-      console.log(`[Middleware] ✅ Permitindo acesso público à API: ${pathname}`)
+      console.log("✅ Rota da API pública permitida:", pathname)
       return NextResponse.next()
     }
 
-    // Para outras rotas da API, por enquanto vamos permitir também
-    // TODO: Implementar verificação de JWT/token para APIs protegidas
-    console.log(`[Middleware] ⚠️ Permitindo acesso à API (sem verificação): ${pathname}`)
+    // Para outras rotas da API, por enquanto permitir
+    // TODO: Implementar verificação de autenticação JWT aqui
+    console.log("⚠️ Rota da API protegida (temporariamente permitida):", pathname)
     return NextResponse.next()
   }
 
-  // Para páginas públicas, permitir acesso
+  // Se for uma página pública
   if (publicPages.includes(pathname)) {
-    console.log(`[Middleware] ✅ Permitindo acesso à página pública: ${pathname}`)
+    console.log("✅ Página pública permitida:", pathname)
     return NextResponse.next()
   }
 
-  // Para outras páginas, por enquanto permitir (TODO: implementar verificação de sessão)
-  console.log(`[Middleware] ⚠️ Permitindo acesso à página (sem verificação): ${pathname}`)
+  // Para outras páginas, por enquanto permitir
+  // TODO: Implementar verificação de sessão aqui
+  console.log("⚠️ Página protegida (temporariamente permitida):", pathname)
   return NextResponse.next()
 }
 
@@ -48,8 +50,9 @@ export const config = {
      * - _next/static (arquivos estáticos)
      * - _next/image (otimização de imagem)
      * - favicon.ico (arquivo de favicon)
-     * - arquivos públicos
+     * - /public (arquivos públicos)
+     * - /images (se você tiver uma pasta de imagens públicas)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$|.*\\.svg$|.*\\.ico$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|public|images).*)",
   ],
 }
