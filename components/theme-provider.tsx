@@ -146,46 +146,56 @@ export function applyThemeColors(theme: ThemeConfig): void {
 
   if (theme.textColor) {
     root.style.setProperty("--text-color", theme.textColor)
+  } else {
+    root.style.removeProperty("--text-color")
   }
 
   if (theme.backgroundColor) {
     root.style.setProperty("--background-color", theme.backgroundColor)
+  } else {
+    root.style.removeProperty("--background-color")
   }
 
   if (theme.fontFamily) {
     root.style.setProperty("--font-family", theme.fontFamily)
+  } else {
+    root.style.removeProperty("--font-family")
   }
 
   if (theme.borderRadius) {
     root.style.setProperty("--border-radius", theme.borderRadius)
+  } else {
+    root.style.removeProperty("--border-radius")
   }
 
   // Aplicar CSS customizado se existir
+  let customStyleElement = document.getElementById("custom-theme-css")
   if (theme.customCss) {
-    let customStyleElement = document.getElementById("custom-theme-css")
     if (!customStyleElement) {
       customStyleElement = document.createElement("style")
       customStyleElement.id = "custom-theme-css"
       document.head.appendChild(customStyleElement)
     }
     customStyleElement.textContent = theme.customCss
+  } else if (customStyleElement) {
+    customStyleElement.textContent = "" // Clear custom CSS if not provided
   }
 }
 
 // Função para verificar se a tabela system_themes tem a estrutura correta
 async function checkSystemThemesStructure(): Promise<boolean> {
   try {
-    const client = await getSupabase()
+    const client = await getSupabase() // This should use NEXT_PUBLIC_ vars client-side
     const { data, error } = await client.from("system_themes").select("logo_icon").limit(1)
 
     if (error) {
-      console.log("Tabela system_themes não existe ou tem problemas de estrutura:", error.message)
+      console.warn("Tabela system_themes não existe ou tem problemas de estrutura (client-side):", error.message)
       return false
     }
 
     return true
   } catch (error) {
-    console.log("Erro ao verificar estrutura da tabela system_themes:", error)
+    console.warn("Erro ao verificar estrutura da tabela system_themes (client-side):", error)
     return false
   }
 }
@@ -212,10 +222,11 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
     }
 
     // Tentar carregar da tabela system_themes
-    const client = await getSupabase()
+    const client = await getSupabase() // This should use NEXT_PUBLIC_ vars client-side
     const { data, error } = await client.from("system_themes").select("*").eq("is_active", true).single()
 
     if (error && error.code === "PGRST116") {
+      // No active theme found
       const fallbackTheme = await loadThemeFromSystemSettings()
       if (fallbackTheme) {
         themeCache = fallbackTheme
@@ -225,7 +236,7 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
     }
 
     if (error) {
-      console.log("Erro ao carregar tema de system_themes:", error.message)
+      console.warn("Erro ao carregar tema de system_themes (client-side):", error.message)
       const fallbackTheme = await loadThemeFromSystemSettings()
       if (fallbackTheme) {
         themeCache = fallbackTheme
@@ -264,7 +275,7 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
 
     return theme
   } catch (error) {
-    console.log("Erro ao carregar tema do banco, usando fallback:", error)
+    console.warn("Erro ao carregar tema do banco (client-side), usando fallback:", error)
     const fallbackTheme = await loadThemeFromSystemSettings()
     if (fallbackTheme) {
       themeCache = fallbackTheme
@@ -277,7 +288,7 @@ export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
 // Função fallback para carregar tema das configurações do sistema
 async function loadThemeFromSystemSettings(): Promise<ThemeConfig | null> {
   try {
-    const client = await getSupabase()
+    const client = await getSupabase() // This should use NEXT_PUBLIC_ vars client-side
     const { data: settingsData, error: settingsError } = await client
       .from("system_settings")
       .select("setting_value")
@@ -298,7 +309,7 @@ async function loadThemeFromSystemSettings(): Promise<ThemeConfig | null> {
 
     return null
   } catch (error) {
-    console.log("Erro ao carregar tema das configurações:", error)
+    console.warn("Erro ao carregar tema das configurações (client-side):", error)
     return null
   }
 }
@@ -322,7 +333,7 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
       return await saveThemeAsSystemSetting(theme)
     }
 
-    const client = await getSupabase()
+    const client = await getSupabase() // This should use NEXT_PUBLIC_ vars client-side
 
     // Verificar se já existe um tema ativo
     const { data: existingTheme } = await client.from("system_themes").select("id").eq("is_active", true).single()
@@ -379,7 +390,7 @@ export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> 
 // Função fallback para salvar tema nas configurações do sistema
 async function saveThemeAsSystemSetting(theme: ThemeConfig): Promise<boolean> {
   try {
-    const client = await getSupabase()
+    const client = await getSupabase() // This should use NEXT_PUBLIC_ vars client-side
     const { data: existingSetting } = await client
       .from("system_settings")
       .select("id")
@@ -388,10 +399,10 @@ async function saveThemeAsSystemSetting(theme: ThemeConfig): Promise<boolean> {
 
     const settingData = {
       setting_key: "current_theme",
-      setting_value: theme,
+      setting_value: theme, // Store the whole theme object
       category: "appearance",
       description: "Configurações do tema atual",
-      is_public: true,
+      is_public: true, // Make sure this setting is public if read by anon
     }
 
     if (existingSetting) {
@@ -451,37 +462,36 @@ export function saveThemeToLocalStorage(theme: ThemeConfig): void {
 
 interface ThemeProviderProps {
   children: React.ReactNode
-  attribute?: string
-  defaultTheme?: string
+  serverFetchedTheme?: ThemeConfig | null // Add new prop for server-fetched theme
+  attribute?: string // Keep existing props if they are used by underlying library
+  defaultTheme?: string // This might conflict with our defaultTheme object, ensure clarity
   enableSystem?: boolean
   disableTransitionOnChange?: boolean
 }
 
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<ThemeConfig | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+export function ThemeProvider({ children, serverFetchedTheme, ...props }: ThemeProviderProps) {
+  const [theme, setTheme] = useState<ThemeConfig | null>(serverFetchedTheme || null)
+  const [isLoading, setIsLoading] = useState(!serverFetchedTheme) // If theme is server-fetched, not initially loading from client
 
-  const loadTheme = async () => {
+  const loadClientSideTheme = async () => {
     try {
       setIsLoading(true)
-      let loadedTheme = await loadThemeFromDatabase()
+      let loadedTheme = await loadThemeFromDatabase() // Client-side fetch
 
       if (!loadedTheme) {
         loadedTheme = loadThemeFromLocalStorage()
       }
 
-      // Fallback to default theme if all else fails
       if (!loadedTheme) {
-        console.warn("Failed to load theme from database and localStorage. Falling back to default theme.")
-        loadedTheme = defaultTheme
+        console.warn("Client: Failed to load theme from DB/localStorage. Falling back to default.")
+        loadedTheme = defaultTheme // Use our defined defaultTheme object
       }
 
       setTheme(loadedTheme)
       applyThemeColors(loadedTheme)
     } catch (error) {
-      console.error("Error loading theme, falling back to default:", error)
-      // Ensure fallback on any catastrophic error
-      setTheme(defaultTheme)
+      console.error("Client: Error loading theme, falling back to default:", error)
+      setTheme(defaultTheme) // Use our defined defaultTheme object
       applyThemeColors(defaultTheme)
     } finally {
       setIsLoading(false)
@@ -497,7 +507,6 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
       setTheme(newTheme)
       applyThemeColors(newTheme)
 
-      // Tentar salvar no banco, se falhar salva no localStorage
       const saved = await saveThemeToDatabase(newTheme)
       if (!saved) {
         saveThemeToLocalStorage(newTheme)
@@ -505,24 +514,32 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
     } catch (error) {
       console.error("Error updating theme:", error)
       if (theme) {
-        saveThemeToLocalStorage({ ...theme, ...updates })
+        saveThemeToLocalStorage({ ...theme, ...updates }) // Save to localStorage on error
       }
     }
   }
 
   useEffect(() => {
-    loadTheme()
-  }, [])
+    if (serverFetchedTheme) {
+      // If theme is provided by server, apply it immediately
+      setTheme(serverFetchedTheme)
+      applyThemeColors(serverFetchedTheme)
+      setIsLoading(false)
+    } else {
+      // Otherwise, load it client-side (e.g., if server fetch failed or not implemented)
+      loadClientSideTheme()
+    }
+  }, [serverFetchedTheme]) // Re-run if serverFetchedTheme changes (though unlikely for layout)
 
-  // Apply theme colors whenever theme changes
+  // Apply theme colors whenever theme state changes and is not null
   useEffect(() => {
     if (theme && !isLoading) {
       applyThemeColors(theme)
     }
   }, [theme, isLoading])
 
-  // NÃO RENDERIZAR NADA até ter o tema do banco de dados
-  if (isLoading) {
+  if (isLoading && !theme) {
+    // Show loading only if truly loading and no theme yet
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -530,8 +547,13 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
     )
   }
 
+  // If theme is null even after attempting to load, use defaultTheme to prevent errors
+  const currentThemeToRender = theme || defaultTheme
+
   return (
-    <ThemeContext.Provider value={{ theme, updateTheme, loadTheme, isLoading }}>
+    <ThemeContext.Provider
+      value={{ theme: currentThemeToRender, updateTheme, loadTheme: loadClientSideTheme, isLoading }}
+    >
       <div className="min-h-screen">{children}</div>
     </ThemeContext.Provider>
   )
