@@ -23,10 +23,6 @@ class PublicApiClient {
 
       // Tenta parsear JSON mesmo se !response.ok para obter a mensagem de erro do corpo
       const responseData = await response.json().catch((e) => {
-        console.warn(
-          `⚠️ [API-CLIENT] Falha ao parsear JSON da resposta de ${endpoint} (status: ${response.status}). Corpo não era JSON?`,
-          e,
-        )
         return { error: `Erro no servidor (status: ${response.status}), resposta não é JSON válido.` } // Retorna um objeto de erro se o JSON falhar
       })
 

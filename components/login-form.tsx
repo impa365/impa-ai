@@ -65,8 +65,6 @@ function LoginForm() {
     setError("")
 
     try {
-      console.log("🔐 Tentando fazer login via API...")
-
       // Usar a API de login ao invés de função manual
       const { data, error: loginError } = await publicApi.login(email, password)
 
@@ -78,8 +76,6 @@ function LoginForm() {
       }
 
       if (data?.user) {
-        console.log("✅ Login realizado com sucesso")
-
         // Salvar dados do usuário no localStorage
         localStorage.setItem("user", JSON.stringify(data.user))
         localStorage.setItem("isAuthenticated", "true")
