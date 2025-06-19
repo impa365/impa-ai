@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
-import { Settings, Save, Loader2, RefreshCw, CheckCircle, AlertTriangle, Wifi, WifiOff } from "lucide-react"
+import { Settings, Save, Loader2, RefreshCw, CheckCircle, AlertTriangle } from "lucide-react"
 
 interface WhatsAppSettingsModalProps {
   open: boolean
@@ -36,11 +36,11 @@ interface SettingsConfig {
 
 const defaultSettings: SettingsConfig = {
   groupsIgnore: false,
-  readMessages: false,
+  readMessages: true,
   alwaysOnline: false,
-  readStatus: false,
+  readStatus: true,
   rejectCall: false,
-  msgCall: "",
+  msgCall: "Não posso atender no momento, envie uma mensagem.",
   syncFullHistory: false,
 }
 
@@ -55,8 +55,7 @@ export default function WhatsAppSettingsModal({
   const [loadingSettings, setLoadingSettings] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
-  const [dataSource, setDataSource] = useState<"evolution_api" | "default" | null>(null)
-  const [warning, setWarning] = useState("")
+  const [dataSource, setDataSource] = useState<"evolution_api" | "local_database" | null>(null)
 
   useEffect(() => {
     if (open && connection?.instance_name) {
@@ -68,7 +67,6 @@ export default function WhatsAppSettingsModal({
     if (!open) {
       setError("")
       setSuccess("")
-      setWarning("")
       setSettings(defaultSettings)
       setDataSource(null)
     }
@@ -80,7 +78,6 @@ export default function WhatsAppSettingsModal({
     setLoadingSettings(true)
     setError("")
     setSuccess("")
-    setWarning("")
 
     try {
       const response = await fetch(`/api/whatsapp/settings/${connection.instance_name}`)
@@ -100,19 +97,21 @@ export default function WhatsAppSettingsModal({
         setSettings(newSettings)
         setDataSource(result.source)
 
-        // Mostrar aviso se necessário
-        if (result.warning) {
-          setWarning(result.warning)
+        // Mostrar aviso baseado na fonte dos dados
+        if (result.source === "local_database") {
+          setError("Configurações carregadas do cache local. A Evolution API pode estar indisponível.")
+        } else if (result.source === "default") {
+          setError("Evolution API indisponível. Usando configurações padrão.")
+        } else if (result.warning) {
+          setError(result.warning)
         }
       } else {
         setSettings(defaultSettings)
-        setError(result.error || "Erro ao carregar configurações")
-        setDataSource("default")
+        setError(result.error || "Erro ao carregar configurações. Usando valores padrão.")
       }
     } catch (error) {
       setSettings(defaultSettings)
-      setError("Erro de conexão. Verifique sua internet.")
-      setDataSource("default")
+      setError("Erro de conexão. Verifique se a Evolution API está funcionando.")
     } finally {
       setLoadingSettings(false)
     }
@@ -127,7 +126,6 @@ export default function WhatsAppSettingsModal({
     setLoading(true)
     setError("")
     setSuccess("")
-    setWarning("")
 
     try {
       const settingsPayload = {
@@ -151,7 +149,7 @@ export default function WhatsAppSettingsModal({
       const result = await response.json()
 
       if (result.success) {
-        setSuccess("Configurações salvas com sucesso!")
+        setSuccess("Configurações salvas com sucesso na Evolution API!")
         onSettingsSaved?.()
 
         // Recarregar configurações após salvar
@@ -162,15 +160,12 @@ export default function WhatsAppSettingsModal({
         setTimeout(() => {
           setSuccess("")
           onOpenChange(false)
-        }, 2500)
+        }, 2000)
       } else {
         setError(result.error || "Erro ao salvar configurações")
-        if (result.details) {
-          console.error("Detalhes do erro:", result.details)
-        }
       }
     } catch (error) {
-      setError("Erro de conexão ao salvar configurações")
+      setError("Erro ao salvar configurações")
     } finally {
       setLoading(false)
     }
@@ -182,20 +177,6 @@ export default function WhatsAppSettingsModal({
 
   const handleRefresh = () => {
     loadCurrentSettings()
-  }
-
-  const getStatusIcon = () => {
-    if (dataSource === "evolution_api") {
-      return <Wifi className="w-4 h-4 text-green-600" />
-    }
-    return <WifiOff className="w-4 h-4 text-yellow-600" />
-  }
-
-  const getStatusText = () => {
-    if (dataSource === "evolution_api") {
-      return "Evolution API Conectada"
-    }
-    return "Usando Configurações Padrão"
   }
 
   return (
@@ -216,14 +197,7 @@ export default function WhatsAppSettingsModal({
         {error && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {warning && (
-          <Alert className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-800">
-            <AlertTriangle className="h-4 w-4 text-yellow-600" />
-            <AlertDescription className="text-yellow-700 dark:text-yellow-300">{warning}</AlertDescription>
+            <AlertDescription className="text-destructive-foreground">{error}</AlertDescription>
           </Alert>
         )}
 
@@ -243,8 +217,11 @@ export default function WhatsAppSettingsModal({
           <div className="space-y-6 bg-background text-foreground py-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
-                {getStatusIcon()}
-                <p className="text-sm text-muted-foreground">{getStatusText()}</p>
+                <p className="text-sm text-muted-foreground">
+                  Fonte: {dataSource === "evolution_api" ? "Evolution API" : "Cache Local"}
+                </p>
+                {dataSource === "evolution_api" && <CheckCircle className="w-4 h-4 text-green-600" />}
+                {dataSource === "local_database" && <AlertTriangle className="w-4 h-4 text-yellow-600" />}
               </div>
               <Button
                 variant="outline"
@@ -372,12 +349,12 @@ export default function WhatsAppSettingsModal({
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Salvando...
+                Salvando na Evolution API...
               </>
             ) : (
               <>
                 <Save className="w-4 h-4 mr-2" />
-                Salvar Configurações
+                Salvar na Evolution API
               </>
             )}
           </Button>

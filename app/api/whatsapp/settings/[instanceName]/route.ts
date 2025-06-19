@@ -49,6 +49,77 @@ async function getEvolutionConfig() {
   return config
 }
 
+// Função para buscar configurações do banco local como fallback
+async function getLocalSettings(instanceName: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    return null
+  }
+
+  try {
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}&select=settings`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Accept-Profile": "impaai",
+          "Content-Profile": "impaai",
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+      },
+    )
+
+    if (!response.ok) {
+      return null
+    }
+
+    const connections = await response.json()
+    if (connections && connections.length > 0 && connections[0].settings) {
+      return connections[0].settings
+    }
+  } catch (error) {
+    console.error("Erro ao buscar configurações locais:", error)
+  }
+
+  return null
+}
+
+// Função para salvar configurações no banco local
+async function saveLocalSettings(instanceName: string, settings: any) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    return false
+  }
+
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        settings: settings,
+        updated_at: new Date().toISOString(),
+      }),
+    })
+
+    return response.ok
+  } catch (error) {
+    console.error("Erro ao salvar configurações locais:", error)
+    return false
+  }
+}
+
 export async function GET(request: NextRequest, { params }: { params: { instanceName: string } }) {
   try {
     const { instanceName } = params
@@ -57,16 +128,16 @@ export async function GET(request: NextRequest, { params }: { params: { instance
       return NextResponse.json({ success: false, error: "Nome da instância é obrigatório" }, { status: 400 })
     }
 
-    const config = await getEvolutionConfig()
-
-    // Endpoint correto da Evolution API para buscar configurações
-    const url = `${config.apiUrl}/settings/find/${instanceName}`
-
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 segundos
-
     try {
-      const response = await fetch(url, {
+      // Tentar buscar da Evolution API primeiro
+      const config = await getEvolutionConfig()
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 segundos
+
+      // Usar o endpoint correto da Evolution API
+      const apiUrl = `${config.apiUrl}/settings/find/${instanceName}`
+      const response = await fetch(apiUrl, {
         method: "GET",
         headers: {
           apikey: config.apiKey,
@@ -77,44 +148,43 @@ export async function GET(request: NextRequest, { params }: { params: { instance
 
       clearTimeout(timeoutId)
 
-      if (!response.ok) {
-        // Se a API retornar erro, usar configurações padrão
-        const defaultSettings = {
-          rejectCall: false,
-          msgCall: "",
-          groupsIgnore: false,
-          alwaysOnline: false,
-          readMessages: false,
-          readStatus: false,
-          syncFullHistory: false,
-        }
+      if (response.ok) {
+        const data = await response.json()
+
+        // Salvar no banco local para cache
+        await saveLocalSettings(instanceName, data)
 
         return NextResponse.json({
           success: true,
-          settings: defaultSettings,
-          source: "default",
-          warning: `Evolution API retornou erro ${response.status}. Usando configurações padrão.`,
+          settings: data,
+          source: "evolution_api",
+        })
+      } else {
+        throw new Error(`Evolution API retornou status ${response.status}`)
+      }
+    } catch (evolutionError: any) {
+      console.error("Erro na Evolution API:", evolutionError.message)
+
+      // Tentar buscar do cache local
+      const localSettings = await getLocalSettings(instanceName)
+
+      if (localSettings) {
+        return NextResponse.json({
+          success: true,
+          settings: localSettings,
+          source: "local_database",
+          warning: "Evolution API indisponível. Usando configurações do cache local.",
         })
       }
 
-      const result = await response.json()
-
-      return NextResponse.json({
-        success: true,
-        settings: result,
-        source: "evolution_api",
-      })
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId)
-
-      // Se houver erro de conexão, usar configurações padrão
+      // Se não tem cache, retornar configurações padrão
       const defaultSettings = {
-        rejectCall: false,
-        msgCall: "",
         groupsIgnore: false,
+        readMessages: true,
         alwaysOnline: false,
-        readMessages: false,
-        readStatus: false,
+        readStatus: true,
+        rejectCall: false,
+        msgCall: "Não posso atender no momento, envie uma mensagem.",
         syncFullHistory: false,
       }
 
@@ -126,14 +196,8 @@ export async function GET(request: NextRequest, { params }: { params: { instance
       })
     }
   } catch (error: any) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Erro ao processar solicitação",
-        details: error.message,
-      },
-      { status: 500 },
-    )
+    console.error("Erro geral:", error.message)
+    return NextResponse.json({ success: false, error: "Erro interno do servidor" }, { status: 500 })
   }
 }
 
@@ -146,90 +210,71 @@ export async function POST(request: NextRequest, { params }: { params: { instanc
       return NextResponse.json({ success: false, error: "Nome da instância é obrigatório" }, { status: 400 })
     }
 
-    // Validar estrutura dos dados
-    const requiredFields = [
-      "rejectCall",
-      "groupsIgnore",
-      "alwaysOnline",
-      "readMessages",
-      "readStatus",
-      "syncFullHistory",
-    ]
-    for (const field of requiredFields) {
-      if (typeof settings[field] !== "boolean") {
-        return NextResponse.json({ success: false, error: `Campo ${field} deve ser um boolean` }, { status: 400 })
-      }
-    }
-
-    const config = await getEvolutionConfig()
-
-    // Endpoint correto da Evolution API para salvar configurações
-    const url = `${config.apiUrl}/settings/set/${instanceName}`
-
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 segundos para salvar
-
     try {
-      const response = await fetch(url, {
+      // Buscar configuração da Evolution API
+      const config = await getEvolutionConfig()
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 segundos para salvar
+
+      // Usar o endpoint correto da Evolution API
+      const apiUrl = `${config.apiUrl}/settings/set/${instanceName}`
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           apikey: config.apiKey,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          rejectCall: settings.rejectCall,
-          msgCall: settings.msgCall || "",
-          groupsIgnore: settings.groupsIgnore,
-          alwaysOnline: settings.alwaysOnline,
-          readMessages: settings.readMessages,
-          syncFullHistory: settings.syncFullHistory,
-          readStatus: settings.readStatus,
-        }),
+        body: JSON.stringify(settings),
         signal: controller.signal,
       })
 
       clearTimeout(timeoutId)
 
-      if (!response.ok) {
+      if (response.ok) {
+        const result = await response.json()
+
+        // Salvar no banco local para sincronização
+        await saveLocalSettings(instanceName, settings)
+
+        return NextResponse.json({
+          success: true,
+          message: "Configurações salvas com sucesso na Evolution API",
+          source: "evolution_api",
+          data: result,
+        })
+      } else {
         const errorText = await response.text()
+        throw new Error(`Evolution API retornou status ${response.status}: ${errorText}`)
+      }
+    } catch (evolutionError: any) {
+      console.error("Erro ao salvar na Evolution API:", evolutionError.message)
+
+      // Mesmo com erro na Evolution API, salvar no banco local
+      const localSaved = await saveLocalSettings(instanceName, settings)
+
+      if (localSaved) {
         return NextResponse.json(
           {
             success: false,
-            error: `Erro ao salvar na Evolution API (${response.status})`,
-            details: errorText || "Erro desconhecido",
+            error: `Erro na Evolution API: ${evolutionError.message}. Configurações salvas apenas localmente.`,
+            source: "local_database",
           },
-          { status: response.status },
+          { status: 503 },
         )
       }
-
-      const result = await response.json()
-
-      return NextResponse.json({
-        success: true,
-        message: "Configurações salvas com sucesso na Evolution API",
-        data: result,
-        source: "evolution_api",
-      })
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId)
 
       return NextResponse.json(
         {
           success: false,
-          error: "Erro ao conectar com a Evolution API",
-          details: fetchError.name === "AbortError" ? "Timeout na requisição" : fetchError.message,
+          error: `Erro na Evolution API: ${evolutionError.message}`,
+          details: "Verifique se a Evolution API está funcionando corretamente",
         },
         { status: 503 },
       )
     }
   } catch (error: any) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Erro interno do servidor",
-        details: error.message,
-      },
-      { status: 500 },
-    )
+    console.error("Erro geral ao salvar:", error.message)
+    return NextResponse.json({ success: false, error: "Erro interno do servidor" }, { status: 500 })
   }
 }
