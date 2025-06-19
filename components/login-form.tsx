@@ -35,7 +35,6 @@ function LoginForm() {
         const { data, error } = await publicApi.getConfig()
 
         if (error) {
-          console.error("Erro ao buscar configuração via API:", error)
           // Se houver erro, assumir que o registro está desabilitado por segurança
           setAllowRegistration(false)
         } else if (data && data.settings) {
@@ -49,7 +48,6 @@ function LoginForm() {
           setAllowRegistration(false)
         }
       } catch (error: any) {
-        console.error("💥 Erro inesperado ao verificar configuração:", error.message)
         setAllowRegistration(false)
       } finally {
         setCheckingRegistration(false)
@@ -69,7 +67,6 @@ function LoginForm() {
       const { data, error: loginError } = await publicApi.login(email, password)
 
       if (loginError) {
-        console.error("❌ Erro no login:", loginError)
         setError(loginError)
         setLoading(false)
         return
@@ -90,7 +87,6 @@ function LoginForm() {
         setError("Dados de login inválidos")
       }
     } catch (error: any) {
-      console.error("💥 Erro inesperado no login:", error)
       setError("Erro ao fazer login. Tente novamente.")
     } finally {
       setLoading(false)

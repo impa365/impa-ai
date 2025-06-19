@@ -1,4 +1,6 @@
-// Adicionando tipo para a resposta da API para maior clareza
+// Cliente de API que NUNCA expõe variáveis de ambiente
+// Todas as requisições passam pelas APIs do servidor
+
 interface ApiResponse<T = any> {
   data?: T
   error?: string
@@ -8,6 +10,7 @@ class PublicApiClient {
   private baseUrl: string
 
   constructor() {
+    // Usar apenas a URL base atual, SEM variáveis de ambiente
     this.baseUrl = typeof window !== "undefined" ? window.location.origin : ""
   }
 
@@ -21,71 +24,23 @@ class PublicApiClient {
         ...options,
       })
 
-      // Tenta parsear JSON mesmo se !response.ok para obter a mensagem de erro do corpo
-      const responseData = await response.json().catch((e) => {
-        return { error: `Erro no servidor (status: ${response.status}), resposta não é JSON válido.` } // Retorna um objeto de erro se o JSON falhar
-      })
+      const data = await response.json()
 
       if (!response.ok) {
-        console.error(`❌ [API-CLIENT] Erro na requisição para ${endpoint}:`, response.status, responseData)
-        // Usa o erro do responseData se existir, senão um genérico
-        return { error: responseData?.error || `Erro na requisição (status ${response.status})` }
+        return { error: data.error || "Erro na requisição" }
       }
 
-      return { data: responseData }
+      return { data }
     } catch (error: any) {
-      console.error(`💥 [API-CLIENT] Erro de rede ou inesperado para ${endpoint}:`, error.message)
-      return { error: "Erro de conexão ou processamento da resposta" }
+      return { error: "Erro de conexão" }
     }
   }
 
-  async getConfig(): Promise<ApiResponse<{ theme: any; settings: any }>> {
-    const result = await this.makeRequest<{ theme: any; settings: any }>("/api/config")
-    return result
-  }
-
+  // Login via API (NUNCA expõe variáveis de ambiente)
   async login(email: string, password: string): Promise<ApiResponse<{ user: any }>> {
     return this.makeRequest("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
-    })
-  }
-
-  // Buscar dados do dashboard admin
-  async getAdminDashboard(): Promise<ApiResponse<any>> {
-    return this.makeRequest("/api/admin/dashboard")
-  }
-
-  // Buscar usuários (admin)
-  async getUsers(): Promise<ApiResponse<any[]>> {
-    return this.makeRequest("/api/admin/users")
-  }
-
-  // Buscar usuário específico (admin)
-  async getUser(userId: string): Promise<ApiResponse<any>> {
-    return this.makeRequest(`/api/admin/users/${userId}`)
-  }
-
-  // Criar usuário (admin)
-  async createUser(userData: any): Promise<ApiResponse<any>> {
-    return this.makeRequest("/api/admin/users", {
-      method: "POST",
-      body: JSON.stringify(userData),
-    })
-  }
-
-  // Atualizar usuário (admin)
-  async updateUser(userId: string, userData: any): Promise<ApiResponse<any>> {
-    return this.makeRequest("/api/admin/users", {
-      method: "PUT",
-      body: JSON.stringify({ id: userId, ...userData }),
-    })
-  }
-
-  // Deletar usuário (admin)
-  async deleteUser(userId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return this.makeRequest(`/api/admin/users?id=${userId}`, {
-      method: "DELETE",
     })
   }
 
@@ -97,6 +52,11 @@ class PublicApiClient {
       method: "POST",
       body: JSON.stringify(userData),
     })
+  }
+
+  // Configurações públicas via API (SEM variáveis de ambiente)
+  async getConfig(): Promise<ApiResponse<{ theme: any; settings: any }>> {
+    return this.makeRequest("/api/config")
   }
 
   // Buscar perfil do usuário atual (quando autenticado)
@@ -155,6 +115,11 @@ class PublicApiClient {
     return this.makeRequest("/api/dashboard/stats")
   }
 
+  // Buscar dados do dashboard admin
+  async getAdminDashboard(): Promise<ApiResponse<any>> {
+    return this.makeRequest("/api/admin/dashboard")
+  }
+
   // Buscar versão do sistema
   async getSystemVersion(): Promise<ApiResponse<{ version: string }>> {
     return this.makeRequest("/api/system/version")
@@ -165,19 +130,95 @@ class PublicApiClient {
     return this.makeRequest("/api/system/default-model")
   }
 
+  // Buscar usuários (admin)
+  async getUsers(): Promise<ApiResponse<{ users: any[] }>> {
+    return this.makeRequest("/api/admin/users")
+  }
+
+  // Buscar usuário específico (admin)
+  async getUser(userId: string): Promise<ApiResponse<{ user: any }>> {
+    return this.makeRequest(`/api/admin/users/${userId}`)
+  }
+
+  // Criar usuário (admin)
+  async createUser(userData: any): Promise<ApiResponse<{ user: any }>> {
+    return this.makeRequest("/api/admin/users", {
+      method: "POST",
+      body: JSON.stringify(userData),
+    })
+  }
+
+  // Atualizar usuário (admin)
+  async updateUser(userId: string, userData: any): Promise<ApiResponse<{ user: any }>> {
+    return this.makeRequest("/api/admin/users", {
+      method: "PUT",
+      body: JSON.stringify({ id: userId, ...userData }),
+    })
+  }
+
+  // Deletar usuário (admin)
+  async deleteUser(userId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.makeRequest(`/api/admin/users?id=${userId}`, {
+      method: "DELETE",
+    })
+  }
+
   // Buscar configurações do sistema
   async getSystemSettings(): Promise<ApiResponse<{ settings: any }>> {
     return this.makeRequest("/api/system/settings")
   }
-
-  // Buscar integrações
-  async getIntegrations(): Promise<ApiResponse<any[]>> {
-    return this.makeRequest("/api/integrations")
-  }
-  // ... outros métodos ...
 }
 
+// Instância única do cliente de API
 export const publicApi = new PublicApiClient()
-export const apiClient = publicApi // Compatibilidade
-// ... outros exports de conveniência ...
+
+// Export adicional para compatibilidade (mesmo objeto, nomes diferentes)
+export const apiClient = publicApi
+
+// Exports de conveniência para diferentes contextos
+export const authApi = {
+  login: (email: string, password: string) => publicApi.login(email, password),
+  register: (userData: any) => publicApi.register(userData),
+  getCurrentUser: () => publicApi.getCurrentUser(),
+}
+
+export const themeApi = {
+  getConfig: () => publicApi.getConfig(),
+  updateTheme: (themeData: any) => publicApi.updateTheme(themeData),
+}
+
+export const dashboardApi = {
+  getStats: () => publicApi.getDashboardStats(),
+  getAgents: () => publicApi.getAgents(),
+  getAdminDashboard: () => publicApi.getAdminDashboard(),
+}
+
+export const systemApi = {
+  getVersion: () => publicApi.getSystemVersion(),
+  getSettings: () => publicApi.getSystemSettings(),
+  getDefaultModel: () => publicApi.getSystemDefaultModel(),
+}
+
+export const adminApi = {
+  getUsers: () => publicApi.getUsers(),
+  getUser: (userId: string) => publicApi.getUser(userId),
+  createUser: (userData: any) => publicApi.createUser(userData),
+  updateUser: (userId: string, userData: any) => publicApi.updateUser(userId, userData),
+  deleteUser: (userId: string) => publicApi.deleteUser(userId),
+  getAgents: () => publicApi.getAdminAgents(),
+}
+
+export const agentsApi = {
+  getAgents: () => publicApi.getAgents(),
+  getAdminAgents: () => publicApi.getAdminAgents(),
+  createAgent: (agentData: any) => publicApi.createAgent(agentData),
+  updateAgent: (agentId: string, agentData: any) => publicApi.updateAgent(agentId, agentData),
+  deleteAgent: (agentId: string) => publicApi.deleteAgent(agentId),
+}
+
+export const whatsappApi = {
+  getConnections: (userId?: string, isAdmin = false) => publicApi.getWhatsAppConnections(userId, isAdmin),
+}
+
+// Tipo para as respostas da API
 export type { ApiResponse }
