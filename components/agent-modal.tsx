@@ -22,17 +22,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Bot, Sparkles, Eye, EyeOff, Volume2, Users, MessageSquare, Clock } from "lucide-react"
-import { getSupabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
 import { fetchWhatsAppConnections, fetchUsers } from "@/lib/whatsapp-connections"
-import {
-  createEvolutionBot,
-  updateEvolutionBot,
-  setEvolutionInstanceSettings,
-  type EvolutionBotIndividualConfig,
-  type EvolutionInstanceSettings,
-} from "@/lib/evolution-api"
 import { publicApi } from "@/lib/api-client"
 
 // Estilos customizados para os switches
@@ -261,10 +253,10 @@ export function AgentModal({
 
   async function loadN8nConfig() {
     try {
-      const client = await getSupabase()
-      const { data } = await client.from("integrations").select("config").eq("type", "n8n").single()
-      if (data && data.config) setN8nIntegrationConfig(data.config)
-      else console.warn("Configuração da integração n8n não encontrada.")
+      // Usar API ao invés de Supabase direto
+      console.log("🔄 [AgentModal] Carregando configuração N8N via API...")
+      // Por enquanto, vamos comentar esta funcionalidade até ter a API específica
+      console.warn("⚠️ [AgentModal] Configuração N8N temporariamente desabilitada - usar API específica")
     } catch (err) {
       console.error("Erro ao carregar configuração N8N:", err?.message || err)
     }
@@ -511,11 +503,8 @@ _______________________________________
     setLoading(true)
     setError(null)
 
-    let currentAgentIdInDb = isEditing && agent?.id ? agent.id : null
-    let currentEvolutionBotId = formData.evolution_bot_id
-
     try {
-      const client = await getSupabase()
+      console.log("🔄 [AgentModal] Iniciando salvamento via API...")
 
       // Garantir que trigger_type tenha um valor válido
       const validTriggerType =
@@ -535,8 +524,8 @@ _______________________________________
       // Garantir que @g.us esteja sempre presente antes de salvar
       const finalIgnoreJids = ensureGroupsProtection(formData.ignore_jids)
 
-      // Payload completo com todos os campos necessários para Evolution API
-      const agentPayloadForDb = {
+      // Payload completo para a API
+      const agentPayload = {
         name: formData.name,
         identity_description: formData.identity_description,
         training_prompt: formData.training_prompt,
@@ -558,12 +547,12 @@ _______________________________________
         orimon_integration: formData.orimon_integration,
         orimon_api_key: formData.orimon_api_key,
         orimon_bot_id: formData.orimon_bot_id,
-        description: formData.description, // Adicionar esta linha
+        description: formData.description,
         status: formData.status,
         is_default: formData.is_default,
         user_id: formData.user_id,
         whatsapp_connection_id: formData.whatsapp_connection_id,
-        evolution_bot_id: currentEvolutionBotId,
+        evolution_bot_id: formData.evolution_bot_id,
         model: formData.model || systemDefaultModel,
         // Campos para sincronização Evolution API
         trigger_type: validTriggerType,
@@ -581,114 +570,50 @@ _______________________________________
         ignore_jids: finalIgnoreJids,
       }
 
-      if (isEditing && currentAgentIdInDb) {
-        const { error: updateDbError } = await client
-          .from("ai_agents")
-          .update(agentPayloadForDb)
-          .eq("id", currentAgentIdInDb)
-        if (updateDbError) throw updateDbError
+      let savedAgent
+      if (isEditing && agent?.id) {
+        // Atualizar agente existente
+        console.log("🔄 [AgentModal] Atualizando agente via API:", agent.id)
+        const response = await fetch(`/api/admin/agents/${agent.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(agentPayload),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || "Erro ao atualizar agente")
+        }
+
+        savedAgent = await response.json()
       } else {
-        const { data: newAgent, error: insertDbError } = await client
-          .from("ai_agents")
-          .insert(agentPayloadForDb)
-          .select()
-          .single()
-        if (insertDbError) throw insertDbError
-        currentAgentIdInDb = newAgent.id
+        // Criar novo agente
+        console.log("🔄 [AgentModal] Criando novo agente via API")
+        const response = await fetch("/api/admin/agents", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(agentPayload),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || "Erro ao criar agente")
+        }
+
+        savedAgent = await response.json()
       }
 
-      // Configuração Evolution API
-      const { data: connection, error: connectionError } = await client
-        .from("whatsapp_connections")
-        .select("instance_name")
-        .eq("id", formData.whatsapp_connection_id)
-        .single()
-      if (connectionError) throw new Error(`Erro ao buscar conexão WhatsApp: ${connectionError.message}`)
-      if (!connection?.instance_name) throw new Error("Instância WhatsApp não encontrada.")
-      const instanceName = connection.instance_name
-
-      if (n8nIntegrationConfig?.flowUrl && currentAgentIdInDb) {
-        const webhookUrl = `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=AGENT_${currentAgentIdInDb}`
-
-        const evolutionBotIndividualData: EvolutionBotIndividualConfig = {
-          enabled: formData.status === "active",
-          description: formData.name,
-          apiUrl: webhookUrl,
-          apiKey: n8nIntegrationConfig.apiKey || "",
-          triggerType: formData.trigger_type || "keyword",
-          triggerOperator: formData.trigger_operator || "equals",
-          triggerValue: formData.trigger_value || "",
-          expire: formData.expire_time || 0,
-          keywordFinish: formData.keyword_finish || "#sair",
-          delayMessage: formData.delay_message || 1000,
-          unknownMessage: formData.unknown_message || "Desculpe, não entendi.",
-          listeningFromMe: formData.listening_from_me || false,
-          stopBotFromMe: formData.stop_bot_from_me || true,
-          keepOpen: formData.keep_open || false,
-          debounceTime: formData.debounce_time || 10,
-          ignoreJids: finalIgnoreJids || [],
-          splitMessages: formData.split_messages || true,
-          timePerChar: 100,
-        }
-
-        if (currentEvolutionBotId) {
-          const updateSuccess = await updateEvolutionBot(
-            instanceName,
-            currentEvolutionBotId,
-            evolutionBotIndividualData,
-          )
-          if (!updateSuccess) throw new Error("Falha ao atualizar bot na Evolution API.")
-        } else {
-          const createResult = await createEvolutionBot(instanceName, evolutionBotIndividualData)
-          if (!createResult.success || !createResult.botId) {
-            throw new Error(createResult.error || "Falha ao criar bot na Evolution API.")
-          }
-          currentEvolutionBotId = createResult.botId
-          const { error: updateEvoIdError } = await client
-            .from("ai_agents")
-            .update({ evolution_bot_id: currentEvolutionBotId })
-            .eq("id", currentAgentIdInDb)
-          if (updateEvoIdError) console.error("Erro ao salvar evolution_bot_id no DB ImpaAI:", updateEvoIdError.message)
-        }
-
-        // SEMPRE configurar as settings da instância para garantir proteção contra grupos
-        // Isso é feito independentemente de ser bot padrão ou não
-        const instanceSettingsPayload: EvolutionInstanceSettings = {
-          expire: formData.expire_time || 20,
-          keywordFinish: formData.keyword_finish || "#SAIR",
-          delayMessage: formData.delay_message || 1000,
-          unknownMessage: formData.unknown_message || "Mensagem não reconhecida",
-          listeningFromMe: formData.listening_from_me || false,
-          stopBotFromMe: formData.stop_bot_from_me || false,
-          keepOpen: formData.keep_open || false,
-          splitMessages: formData.split_messages || true,
-          timePerChar: 50,
-          debounceTime: formData.debounce_time || 0,
-          ignoreJids: finalIgnoreJids || ["@g.us"],
-        }
-
-        // Se for bot padrão, incluir o botIdFallback
-        if (formData.is_default && currentEvolutionBotId) {
-          const { error: uncheckError } = await client
-            .from("ai_agents")
-            .update({ is_default: false })
-            .eq("whatsapp_connection_id", formData.whatsapp_connection_id)
-            .not("id", "eq", currentAgentIdInDb)
-          if (uncheckError) console.error("Erro ao desmarcar outros bots padrão no DB:", uncheckError.message)
-
-          instanceSettingsPayload.botIdFallback = currentEvolutionBotId
-        }
-
-        const settingsSuccess = await setEvolutionInstanceSettings(instanceName, instanceSettingsPayload)
-        if (!settingsSuccess) {
-          console.warn("Falha ao definir configurações da instância na Evolution API, mas continuando...")
-        }
-      }
+      console.log("✅ [AgentModal] Agente salvo com sucesso:", savedAgent)
 
       toast({
         title: "Sucesso",
         description: isEditing ? "Agente atualizado com sucesso!" : "Agente criado com sucesso!",
       })
+
       if (typeof onSave === "function") onSave()
       else onOpenChange(false)
     } catch (err: any) {
