@@ -1,20 +1,111 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { applyWhatsAppSettings } from "@/lib/whatsapp-settings-api"
+
+export async function GET(request: NextRequest, { params }: { params: { instanceName: string } }) {
+  try {
+    const { instanceName } = params
+
+    if (!instanceName) {
+      return NextResponse.json({ success: false, error: "Nome da instância é obrigatório" }, { status: 400 })
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ success: false, error: "Configuração do banco não encontrada" }, { status: 500 })
+    }
+
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}&select=*`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Accept-Profile": "impaai",
+          "Content-Profile": "impaai",
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+      },
+    )
+
+    if (!response.ok) {
+      return NextResponse.json({ success: false, error: "Erro ao buscar configurações" }, { status: 500 })
+    }
+
+    const connections = await response.json()
+
+    if (!connections || connections.length === 0) {
+      return NextResponse.json({ success: false, error: "Instância não encontrada" }, { status: 404 })
+    }
+
+    const connection = connections[0]
+
+    // Configurações padrão
+    const defaultSettings = {
+      groupsIgnore: false,
+      readMessages: true,
+      alwaysOnline: false,
+      readStatus: true,
+      rejectCall: false,
+      msgCall: "Não posso atender no momento, envie uma mensagem.",
+      syncFullHistory: false,
+    }
+
+    const settings = {
+      ...defaultSettings,
+      ...(connection.settings || {}),
+    }
+
+    return NextResponse.json({
+      success: true,
+      settings,
+    })
+  } catch (error) {
+    return NextResponse.json({ success: false, error: "Erro interno do servidor" }, { status: 500 })
+  }
+}
 
 export async function POST(request: NextRequest, { params }: { params: { instanceName: string } }) {
   try {
     const { instanceName } = params
     const settings = await request.json()
 
-    const result = await applyWhatsAppSettings(instanceName, settings)
-
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 })
+    if (!instanceName) {
+      return NextResponse.json({ success: false, error: "Nome da instância é obrigatório" }, { status: 400 })
     }
 
-    return NextResponse.json({ success: true })
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ success: false, error: "Configuração do banco não encontrada" }, { status: 500 })
+    }
+
+    const response = await fetch(`${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        settings: settings,
+        updated_at: new Date().toISOString(),
+      }),
+    })
+
+    if (!response.ok) {
+      return NextResponse.json({ success: false, error: "Erro ao salvar configurações" }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Configurações salvas com sucesso",
+    })
   } catch (error) {
-    console.error("Erro na API de configurações:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    return NextResponse.json({ success: false, error: "Erro interno do servidor" }, { status: 500 })
   }
 }

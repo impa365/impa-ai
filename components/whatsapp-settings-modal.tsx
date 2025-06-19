@@ -57,10 +57,10 @@ export default function WhatsAppSettingsModal({
   const [success, setSuccess] = useState("")
 
   useEffect(() => {
-    if (open && connection?.id) {
+    if (open && connection?.instance_name) {
       loadCurrentSettings()
     }
-  }, [open, connection?.id])
+  }, [open, connection?.instance_name])
 
   useEffect(() => {
     if (!open) {
@@ -71,45 +71,50 @@ export default function WhatsAppSettingsModal({
   }, [open])
 
   const loadCurrentSettings = async () => {
-    if (!connection?.id) return
+    if (!connection?.instance_name) return
 
     setLoadingSettings(true)
     setError("")
     setSuccess("")
 
     try {
-      const response = await fetch(`/api/whatsapp/settings/${connection.id}`)
-      const result = await response.json()
+      const response = await fetch(`/api/whatsapp/settings/${connection.instance_name}`)
 
-      if (result.success && result.settings) {
-        const apiSettings = result.settings
-        const newSettings: SettingsConfig = {
-          groupsIgnore: apiSettings.groupsIgnore ?? defaultSettings.groupsIgnore,
-          readMessages: apiSettings.readMessages ?? defaultSettings.readMessages,
-          alwaysOnline: apiSettings.alwaysOnline ?? defaultSettings.alwaysOnline,
-          readStatus: apiSettings.readStatus ?? defaultSettings.readStatus,
-          rejectCall: apiSettings.rejectCall ?? defaultSettings.rejectCall,
-          msgCall: apiSettings.msgCall || defaultSettings.msgCall,
-          syncFullHistory: apiSettings.syncFullHistory ?? defaultSettings.syncFullHistory,
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.settings) {
+          const apiSettings = result.settings
+          const newSettings: SettingsConfig = {
+            groupsIgnore: apiSettings.groupsIgnore ?? defaultSettings.groupsIgnore,
+            readMessages: apiSettings.readMessages ?? defaultSettings.readMessages,
+            alwaysOnline: apiSettings.alwaysOnline ?? defaultSettings.alwaysOnline,
+            readStatus: apiSettings.readStatus ?? defaultSettings.readStatus,
+            rejectCall: apiSettings.rejectCall ?? defaultSettings.rejectCall,
+            msgCall: apiSettings.msgCall || defaultSettings.msgCall,
+            syncFullHistory: apiSettings.syncFullHistory ?? defaultSettings.syncFullHistory,
+          }
+          setSettings(newSettings)
+        } else {
+          setSettings(defaultSettings)
+          if (result.error) {
+            setError(`Aviso: ${result.error}. Usando configurações padrão.`)
+          }
         }
-        setSettings(newSettings)
       } else {
         setSettings(defaultSettings)
-        if (result.error) {
-          setError(`Aviso: ${result.error}. Usando configurações padrão.`)
-        }
+        setError("Erro ao carregar configurações. Usando valores padrão.")
       }
-    } catch (error: any) {
-      setError("Erro ao carregar configurações. Usando valores padrão.")
+    } catch (error) {
       setSettings(defaultSettings)
+      setError("Erro ao carregar configurações. Usando valores padrão.")
     } finally {
       setLoadingSettings(false)
     }
   }
 
   const handleSaveSettings = async () => {
-    if (!connection?.id) {
-      setError("ID da conexão não encontrado")
+    if (!connection?.instance_name) {
+      setError("Nome da instância não encontrado")
       return
     }
 
@@ -128,7 +133,7 @@ export default function WhatsAppSettingsModal({
         syncFullHistory: settings.syncFullHistory,
       }
 
-      const response = await fetch(`/api/whatsapp/settings/${connection.id}`, {
+      const response = await fetch(`/api/whatsapp/settings/${connection.instance_name}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -153,7 +158,7 @@ export default function WhatsAppSettingsModal({
       } else {
         setError(result.error || "Erro ao salvar configurações")
       }
-    } catch (error: any) {
+    } catch (error) {
       setError("Erro ao salvar configurações")
     } finally {
       setLoading(false)
