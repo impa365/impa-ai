@@ -13,12 +13,14 @@ export async function GET() {
       return NextResponse.json({ error: "Erro de configuração do servidor" }, { status: 500 })
     }
 
-    // Buscar tema ativo
-    const themeResponse = await fetch(`${supabaseUrl}/rest/v1/system_themes?is_active=eq.true`, {
+    // Buscar tema ativo - CORRIGIR SCHEMA
+    const themeResponse = await fetch(`${supabaseUrl}/rest/v1/system_themes?select=*&is_active=eq.true`, {
       headers: {
         apikey: supabaseKey,
         Authorization: `Bearer ${supabaseKey}`,
         "Content-Type": "application/json",
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
       },
     })
 
@@ -43,12 +45,14 @@ export async function GET() {
       }
     }
 
-    // Buscar configurações do sistema
-    const settingsResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings`, {
+    // Buscar configurações do sistema - CORRIGIR SCHEMA
+    const settingsResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings?select=*`, {
       headers: {
         apikey: supabaseKey,
         Authorization: `Bearer ${supabaseKey}`,
         "Content-Type": "application/json",
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
       },
     })
 
