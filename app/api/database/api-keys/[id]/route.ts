@@ -9,9 +9,11 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const { id } = params
+
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!)
 
-    const { error } = await supabase.from("user_api_keys").delete().eq("id", params.id)
+    const { error } = await supabase.from("user_api_keys").delete().eq("id", id)
 
     if (error) {
       console.error("❌ Erro ao excluir API key:", error)

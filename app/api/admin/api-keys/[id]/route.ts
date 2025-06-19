@@ -1,25 +1,27 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
-import { supabase } from "@/lib/supabase"
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    // 1. Cliente faz requisição segura
     const user = getCurrentUser()
     if (!user || user.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // 2. API faz requisição segura para o banco
-    const { error } = await supabase.from("user_api_keys").delete().eq("id", params.id)
+    const { id } = params
 
-    if (error) {
-      console.error("❌ Erro ao deletar API key:", error)
-      return NextResponse.json({ error: "Erro ao deletar API key" }, { status: 500 })
+    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/database/api-keys/${id}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${user.id}`,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Database API error: ${response.status}`)
     }
 
-    // 3. Banco confirma exclusão
-    // 4. API confirma para o painel
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("❌ Erro interno:", error)
