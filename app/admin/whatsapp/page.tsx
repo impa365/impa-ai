@@ -19,7 +19,8 @@ import {
   RefreshCw,
   Info,
 } from "lucide-react"
-import { getSupabase } from "@/lib/supabase"
+// Remover esta linha se não for mais usada em outro lugar
+// import { getSupabase } from "@/lib/supabase"
 import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
 import WhatsAppInfoModal from "@/components/whatsapp-info-modal"
@@ -37,6 +38,8 @@ import {
 } from "@/components/ui/dialog"
 import { deleteEvolutionInstance } from "@/lib/whatsapp-api"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { fetchWhatsAppConnections } from "@/lib/whatsapp-connections"
+import { getSupabase } from "@/lib/supabase"
 
 export default function AdminWhatsAppPage() {
   const [connections, setConnections] = useState([])
@@ -75,16 +78,17 @@ export default function AdminWhatsAppPage() {
 
   const fetchConnections = async () => {
     try {
-      const client = await getSupabase()
-      const { data } = await client
-        .from("whatsapp_connections")
-        .select(`
-          *,
-          user_profiles!whatsapp_connections_user_id_fkey(full_name, email)
-        `)
-        .order("created_at", { ascending: false })
+      setLoading(true)
 
-      if (data) setConnections(data)
+      // Importar a função de lib/whatsapp-connections.ts que já usa a API segura
+      //const { fetchWhatsAppConnections } = await import('@/lib/whatsapp-connections');
+
+      // Buscar conexões via API segura (isAdmin = true)
+      const data = await fetchWhatsAppConnections(undefined, true)
+
+      if (data) {
+        setConnections(data)
+      }
     } catch (error) {
       console.error("Erro ao buscar conexões:", error)
     } finally {
