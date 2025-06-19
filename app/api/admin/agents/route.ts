@@ -91,3 +91,166 @@ export async function GET() {
     )
   }
 }
+
+export async function POST(request: Request) {
+  console.log("📡 API: POST /api/admin/agents chamada")
+
+  try {
+    const agentData = await request.json()
+    console.log("📝 Dados do agente recebidos:", { name: agentData.name, user_id: agentData.user_id })
+
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error("Variáveis de ambiente do Supabase não configuradas")
+    }
+
+    const headers = {
+      "Content-Type": "application/json",
+      "Accept-Profile": "impaai",
+      "Content-Profile": "impaai",
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+    }
+
+    // Criar agente
+    const response = await fetch(`${supabaseUrl}/rest/v1/ai_agents`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(agentData),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("❌ Erro ao criar agente:", response.status, errorText)
+      throw new Error(`Erro ao criar agente: ${response.status}`)
+    }
+
+    const newAgent = await response.json()
+    console.log("✅ Agente criado com sucesso:", newAgent[0]?.id)
+
+    return NextResponse.json({
+      success: true,
+      agent: newAgent[0],
+    })
+  } catch (error: any) {
+    console.error("❌ Erro ao criar agente:", error.message)
+    return NextResponse.json(
+      {
+        error: "Erro ao criar agente",
+        details: error.message,
+      },
+      { status: 500 },
+    )
+  }
+}
+
+export async function PUT(request: Request) {
+  console.log("📡 API: PUT /api/admin/agents chamada")
+
+  try {
+    const { id, ...agentData } = await request.json()
+    console.log("📝 Atualizando agente:", id)
+
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error("Variáveis de ambiente do Supabase não configuradas")
+    }
+
+    const headers = {
+      "Content-Type": "application/json",
+      "Accept-Profile": "impaai",
+      "Content-Profile": "impaai",
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+    }
+
+    // Atualizar agente
+    const response = await fetch(`${supabaseUrl}/rest/v1/ai_agents?id=eq.${id}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify(agentData),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("❌ Erro ao atualizar agente:", response.status, errorText)
+      throw new Error(`Erro ao atualizar agente: ${response.status}`)
+    }
+
+    console.log("✅ Agente atualizado com sucesso")
+
+    return NextResponse.json({
+      success: true,
+    })
+  } catch (error: any) {
+    console.error("❌ Erro ao atualizar agente:", error.message)
+    return NextResponse.json(
+      {
+        error: "Erro ao atualizar agente",
+        details: error.message,
+      },
+      { status: 500 },
+    )
+  }
+}
+
+export async function DELETE(request: Request) {
+  console.log("📡 API: DELETE /api/admin/agents chamada")
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const agentId = searchParams.get("id")
+
+    if (!agentId) {
+      throw new Error("ID do agente é obrigatório")
+    }
+
+    console.log("🗑️ Deletando agente:", agentId)
+
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error("Variáveis de ambiente do Supabase não configuradas")
+    }
+
+    const headers = {
+      "Content-Type": "application/json",
+      "Accept-Profile": "impaai",
+      "Content-Profile": "impaai",
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+    }
+
+    // Deletar agente
+    const response = await fetch(`${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`, {
+      method: "DELETE",
+      headers,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("❌ Erro ao deletar agente:", response.status, errorText)
+      throw new Error(`Erro ao deletar agente: ${response.status}`)
+    }
+
+    console.log("✅ Agente deletado com sucesso")
+
+    return NextResponse.json({
+      success: true,
+    })
+  } catch (error: any) {
+    console.error("❌ Erro ao deletar agente:", error.message)
+    return NextResponse.json(
+      {
+        error: "Erro ao deletar agente",
+        details: error.message,
+      },
+      { status: 500 },
+    )
+  }
+}
