@@ -4,7 +4,6 @@ export async function GET() {
   try {
     console.log("🔧 Buscando configurações públicas...")
 
-    // Usar fetch direto para o Supabase REST API
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
@@ -13,16 +12,17 @@ export async function GET() {
       return NextResponse.json({ error: "Erro de configuração do servidor" }, { status: 500 })
     }
 
+    const headers = {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      "Content-Type": "application/json",
+      "Accept-Profile": "impaai", // Especifica o schema para leitura
+      "Content-Profile": "impaai", // Especifica o schema para escrita (não usado aqui, mas bom ter)
+    }
+
     // Buscar tema ativo
-    const themeResponse = await fetch(`${supabaseUrl}/rest/v1/system_themes?is_active=eq.true&schema=impaai`, {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-    })
+    // Removido ?schema=impaai da URL, confiando nos headers
+    const themeResponse = await fetch(`${supabaseUrl}/rest/v1/system_themes?is_active=eq.true`, { headers })
 
     let themeData = null
     if (themeResponse.ok) {
@@ -43,18 +43,13 @@ export async function GET() {
           customCss: theme.custom_css,
         }
       }
+    } else {
+      console.error("❌ Erro ao buscar tema:", themeResponse.status, await themeResponse.text())
     }
 
     // Buscar configurações do sistema
-    const settingsResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings?schema=impaai`, {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-    })
+    // Removido ?schema=impaai da URL, confiando nos headers
+    const settingsResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings`, { headers })
 
     let settings = {}
     if (settingsResponse.ok) {
@@ -62,18 +57,22 @@ export async function GET() {
       console.log("📊 Dados brutos das configurações:", settingsData)
 
       if (settingsData && settingsData.length > 0) {
-        // Converter array de configurações em objeto
         settings = settingsData.reduce((acc: any, setting: any) => {
-          // Converter string 'true'/'false' para boolean quando necessário
           let value = setting.setting_value
           if (value === "true") value = true
           if (value === "false") value = false
-          if (!isNaN(Number(value)) && value !== "") value = Number(value)
-
+          // Apenas converte para número se for um número válido e não uma string vazia
+          if (
+            typeof value === "string" &&
+            !isNaN(Number.parseFloat(value)) &&
+            isFinite(Number(value)) &&
+            value.trim() !== ""
+          ) {
+            value = Number(value)
+          }
           acc[setting.setting_key] = value
           return acc
         }, {})
-
         console.log("✅ Configurações processadas:", settings)
       } else {
         console.log("⚠️ Nenhuma configuração encontrada na tabela system_settings")
@@ -82,7 +81,6 @@ export async function GET() {
       console.error("❌ Erro ao buscar configurações:", settingsResponse.status, await settingsResponse.text())
     }
 
-    // Tema padrão se não encontrar no banco
     if (!themeData) {
       themeData = {
         systemName: "Impa AI",
@@ -99,14 +97,12 @@ export async function GET() {
     return NextResponse.json({
       theme: themeData,
       settings: {
-        allowPublicRegistration: settings.allowPublicRegistration || false,
+        allowPublicRegistration: settings.allowPublicRegistration === true, // Garante que seja boolean
         ...settings,
       },
     })
   } catch (error: any) {
-    console.error("💥 Erro ao buscar configurações:", error.message)
-
-    // Retornar configurações padrão em caso de erro
+    console.error("💥 Erro ao buscar configurações:", error.message, error.stack)
     return NextResponse.json({
       theme: {
         systemName: "Impa AI",
