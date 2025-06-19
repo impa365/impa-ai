@@ -50,6 +50,130 @@ class PublicApiClient {
       body: JSON.stringify({ email, password }),
     })
   }
+
+  // Buscar dados do dashboard admin
+  async getAdminDashboard(): Promise<ApiResponse<any>> {
+    return this.makeRequest("/api/admin/dashboard")
+  }
+
+  // Buscar usuários (admin)
+  async getUsers(): Promise<ApiResponse<any[]>> {
+    return this.makeRequest("/api/admin/users")
+  }
+
+  // Buscar usuário específico (admin)
+  async getUser(userId: string): Promise<ApiResponse<any>> {
+    return this.makeRequest(`/api/admin/users/${userId}`)
+  }
+
+  // Criar usuário (admin)
+  async createUser(userData: any): Promise<ApiResponse<any>> {
+    return this.makeRequest("/api/admin/users", {
+      method: "POST",
+      body: JSON.stringify(userData),
+    })
+  }
+
+  // Atualizar usuário (admin)
+  async updateUser(userId: string, userData: any): Promise<ApiResponse<any>> {
+    return this.makeRequest("/api/admin/users", {
+      method: "PUT",
+      body: JSON.stringify({ id: userId, ...userData }),
+    })
+  }
+
+  // Deletar usuário (admin)
+  async deleteUser(userId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.makeRequest(`/api/admin/users?id=${userId}`, {
+      method: "DELETE",
+    })
+  }
+
+  // Registro via API
+  async register(userData: { email: string; password: string; full_name: string }): Promise<
+    ApiResponse<{ user: any }>
+  > {
+    return this.makeRequest("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(userData),
+    })
+  }
+
+  // Buscar perfil do usuário atual (quando autenticado)
+  async getCurrentUser(): Promise<ApiResponse<{ user: any }>> {
+    return this.makeRequest("/api/user/profile")
+  }
+
+  // Atualizar tema (quando autenticado)
+  async updateTheme(themeData: any): Promise<ApiResponse<{ success: boolean }>> {
+    return this.makeRequest("/api/theme/update", {
+      method: "POST",
+      body: JSON.stringify(themeData),
+    })
+  }
+
+  // Buscar agentes do usuário
+  async getAgents(): Promise<ApiResponse<{ agents: any[] }>> {
+    return this.makeRequest("/api/agents")
+  }
+
+  // Buscar agentes (admin)
+  async getAdminAgents(): Promise<ApiResponse<{ agents: any[]; users: any[]; connections: any[] }>> {
+    return this.makeRequest("/api/admin/agents")
+  }
+
+  // Criar agente
+  async createAgent(agentData: any): Promise<ApiResponse<{ agent: any }>> {
+    return this.makeRequest("/api/admin/agents", {
+      method: "POST",
+      body: JSON.stringify(agentData),
+    })
+  }
+
+  // Atualizar agente
+  async updateAgent(agentId: string, agentData: any): Promise<ApiResponse<{ agent: any }>> {
+    return this.makeRequest("/api/admin/agents", {
+      method: "PUT",
+      body: JSON.stringify({ id: agentId, ...agentData }),
+    })
+  }
+
+  // Deletar agente
+  async deleteAgent(agentId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.makeRequest(`/api/admin/agents?id=${agentId}`, {
+      method: "DELETE",
+    })
+  }
+
+  // Buscar conexões WhatsApp
+  async getWhatsAppConnections(userId?: string, isAdmin = false): Promise<ApiResponse<{ connections: any[] }>> {
+    return this.makeRequest(`/api/whatsapp-connections?userId=${userId || ""}&isAdmin=${isAdmin}`)
+  }
+
+  // Buscar estatísticas do dashboard
+  async getDashboardStats(): Promise<ApiResponse<{ stats: any }>> {
+    return this.makeRequest("/api/dashboard/stats")
+  }
+
+  // Buscar versão do sistema
+  async getSystemVersion(): Promise<ApiResponse<{ version: string }>> {
+    return this.makeRequest("/api/system/version")
+  }
+
+  // Buscar modelo padrão do sistema
+  async getSystemDefaultModel(): Promise<ApiResponse<{ defaultModel: string }>> {
+    return this.makeRequest("/api/system/default-model")
+  }
+
+  // Buscar configurações do sistema
+  async getSystemSettings(): Promise<ApiResponse<{ settings: any }>> {
+    return this.makeRequest("/api/system/settings")
+  }
+
+  // Buscar integrações
+  async getIntegrations(): Promise<ApiResponse<any[]>> {
+    return this.makeRequest("/api/integrations")
+  }
   // ... outros métodos ...
 }
 
