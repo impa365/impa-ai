@@ -1,34 +1,38 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { supabaseConfig } from "@/lib/supabase-config"
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+// Verificar se as variáveis de ambiente estão definidas
+if (!supabaseConfig.url || !supabaseConfig.serviceRoleKey) {
+  throw new Error("Configurações do Supabase não encontradas. Verifique as variáveis de ambiente.")
+}
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const agentId = params.id
     const body = await request.json()
 
-    console.log("🔄 [API] Atualizando agente:", agentId)
-    console.log("📝 [API] Dados recebidos:", body)
+    // Fazer requisição direta para a API REST do Supabase
+    const response = await fetch(`${supabaseConfig.url}/rest/v1/ai_agents?id=eq.${agentId}`, {
+      method: "PATCH",
+      headers: {
+        ...supabaseConfig.headers,
+        Authorization: `Bearer ${supabaseConfig.serviceRoleKey}`,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(body),
+    })
 
-    // Atualizar o agente no banco
-    const { data: updatedAgent, error } = await supabase
-      .from("ai_agents")
-      .update(body)
-      .eq("id", agentId)
-      .select()
-      .single()
-
-    if (error) {
-      console.error("❌ [API] Erro ao atualizar agente:", error)
-      return NextResponse.json({ error: `Erro ao atualizar agente: ${error.message}` }, { status: 500 })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      return NextResponse.json(
+        { error: `Erro ao atualizar agente: ${errorData.message || response.statusText}` },
+        { status: response.status },
+      )
     }
 
-    console.log("✅ [API] Agente atualizado com sucesso:", updatedAgent)
-
-    return NextResponse.json(updatedAgent)
+    const updatedAgent = await response.json()
+    return NextResponse.json(updatedAgent[0] || updatedAgent)
   } catch (error) {
-    console.error("❌ [API] Erro interno:", error)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }
@@ -37,21 +41,25 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   try {
     const agentId = params.id
 
-    console.log("🔄 [API] Deletando agente:", agentId)
+    // Fazer requisição direta para a API REST do Supabase
+    const response = await fetch(`${supabaseConfig.url}/rest/v1/ai_agents?id=eq.${agentId}`, {
+      method: "DELETE",
+      headers: {
+        ...supabaseConfig.headers,
+        Authorization: `Bearer ${supabaseConfig.serviceRoleKey}`,
+      },
+    })
 
-    // Deletar o agente do banco
-    const { error } = await supabase.from("ai_agents").delete().eq("id", agentId)
-
-    if (error) {
-      console.error("❌ [API] Erro ao deletar agente:", error)
-      return NextResponse.json({ error: `Erro ao deletar agente: ${error.message}` }, { status: 500 })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      return NextResponse.json(
+        { error: `Erro ao deletar agente: ${errorData.message || response.statusText}` },
+        { status: response.status },
+      )
     }
-
-    console.log("✅ [API] Agente deletado com sucesso")
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("❌ [API] Erro interno:", error)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }
