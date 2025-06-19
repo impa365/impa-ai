@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { fetchEvolutionBotSettings, setEvolutionInstanceSettings } from "@/lib/evolution-api"
 
 export async function GET(request: NextRequest, { params }: { params: { instanceName: string } }) {
   try {
@@ -9,32 +8,43 @@ export async function GET(request: NextRequest, { params }: { params: { instance
       return NextResponse.json({ success: false, error: "Nome da instância é obrigatório" }, { status: 400 })
     }
 
-    // Buscar configurações da Evolution API primeiro
-    const evolutionSettings = await fetchEvolutionBotSettings(instanceName)
+    // Buscar configurações da Evolution API via nossa API segura
+    const evolutionResponse = await fetch(
+      `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/integrations/evolution/settings/${instanceName}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
+    )
 
-    if (evolutionSettings) {
-      // Se encontrou na Evolution API, usar essas configurações
-      const settings = {
-        groupsIgnore: evolutionSettings.groupsIgnore ?? false,
-        readMessages: evolutionSettings.readMessages ?? true,
-        alwaysOnline: evolutionSettings.alwaysOnline ?? false,
-        readStatus: evolutionSettings.readStatus ?? true,
-        rejectCall: evolutionSettings.rejectCall ?? false,
-        msgCall: evolutionSettings.msgCall || "Não posso atender no momento, envie uma mensagem.",
-        syncFullHistory: evolutionSettings.syncFullHistory ?? false,
+    if (evolutionResponse.ok) {
+      const evolutionResult = await evolutionResponse.json()
+      if (evolutionResult.success && evolutionResult.settings) {
+        // Mapear configurações da Evolution API para nosso formato
+        const settings = {
+          groupsIgnore: evolutionResult.settings.groupsIgnore ?? false,
+          readMessages: evolutionResult.settings.readMessages ?? true,
+          alwaysOnline: evolutionResult.settings.alwaysOnline ?? false,
+          readStatus: evolutionResult.settings.readStatus ?? true,
+          rejectCall: evolutionResult.settings.rejectCall ?? false,
+          msgCall: evolutionResult.settings.msgCall || "Não posso atender no momento, envie uma mensagem.",
+          syncFullHistory: evolutionResult.settings.syncFullHistory ?? false,
+        }
+
+        // Salvar no banco local para cache
+        await saveToDatabase(instanceName, settings)
+
+        return NextResponse.json({
+          success: true,
+          settings,
+          source: "evolution_api",
+        })
       }
-
-      // Salvar no banco local para cache
-      await saveToDatabase(instanceName, settings)
-
-      return NextResponse.json({
-        success: true,
-        settings,
-        source: "evolution_api",
-      })
     }
 
-    // Se não encontrou na Evolution API, buscar do banco local
+    // Se não conseguiu da Evolution API, buscar do banco local
     const localSettings = await getFromDatabase(instanceName)
 
     return NextResponse.json({
@@ -43,8 +53,13 @@ export async function GET(request: NextRequest, { params }: { params: { instance
       source: "local_database",
     })
   } catch (error) {
-    console.error("Erro ao buscar configurações:", error)
-    return NextResponse.json({ success: false, error: "Erro interno do servidor" }, { status: 500 })
+    // Em caso de erro, retornar configurações padrão
+    const defaultSettings = getDefaultSettings()
+    return NextResponse.json({
+      success: true,
+      settings: defaultSettings,
+      source: "default",
+    })
   }
 }
 
@@ -57,20 +72,31 @@ export async function POST(request: NextRequest, { params }: { params: { instanc
       return NextResponse.json({ success: false, error: "Nome da instância é obrigatório" }, { status: 400 })
     }
 
-    // 1. Salvar na Evolution API primeiro
-    const evolutionSuccess = await setEvolutionInstanceSettings(instanceName, settings)
+    // Salvar na Evolution API via nossa API segura
+    const evolutionResponse = await fetch(
+      `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/integrations/evolution/settings/${instanceName}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(settings),
+      },
+    )
 
-    if (!evolutionSuccess) {
+    const evolutionResult = await evolutionResponse.json()
+
+    if (!evolutionResult.success) {
       return NextResponse.json(
         {
           success: false,
-          error: "Erro ao salvar configurações na Evolution API",
+          error: evolutionResult.error || "Erro ao salvar configurações na Evolution API",
         },
         { status: 500 },
       )
     }
 
-    // 2. Salvar no banco local para cache
+    // Salvar no banco local para cache
     await saveToDatabase(instanceName, settings)
 
     return NextResponse.json({
@@ -79,7 +105,6 @@ export async function POST(request: NextRequest, { params }: { params: { instanc
       source: "evolution_api",
     })
   } catch (error) {
-    console.error("Erro ao salvar configurações:", error)
     return NextResponse.json({ success: false, error: "Erro interno do servidor" }, { status: 500 })
   }
 }
@@ -108,7 +133,7 @@ async function saveToDatabase(instanceName: string, settings: any) {
       }),
     })
   } catch (error) {
-    console.error("Erro ao salvar no banco:", error)
+    // Silenciar erro de cache
   }
 }
 
@@ -147,7 +172,6 @@ async function getFromDatabase(instanceName: string) {
 
     return getDefaultSettings()
   } catch (error) {
-    console.error("Erro ao buscar do banco:", error)
     return getDefaultSettings()
   }
 }

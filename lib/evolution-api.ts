@@ -1,6 +1,6 @@
-import { supabase } from "./supabase"
+// Remover todas as funções que fazem acesso direto ao Supabase
+// Agora todas as operações passam pelas APIs seguras
 
-// Tipos para as configurações da Evolution API
 export interface EvolutionInstanceSettings {
   groupsIgnore?: boolean
   readMessages?: boolean
@@ -30,54 +30,24 @@ export interface CreateBotResponse {
   error?: string
 }
 
-// Melhorar a função getEvolutionConfig para validação mais robusta
-async function getEvolutionConfig() {
+// Função para verificar se a Evolution API está configurada
+export async function checkEvolutionConfig(): Promise<boolean> {
   try {
-    const integrationsTable = await supabase.from("integrations")
-    const { data, error: dbError } = await integrationsTable
-      .select("config")
-      .eq("type", "evolution_api")
-      .eq("is_active", true)
-      .single()
-
-    if (dbError) {
-      throw new Error(`Erro no banco de dados: ${dbError.message}`)
-    }
-
-    if (!data) {
-      throw new Error("Configuração da Evolution API não encontrada ou inativa")
-    }
-
-    const config = data.config as { apiUrl?: string; apiKey?: string }
-
-    if (!config || typeof config !== "object") {
-      throw new Error("Configuração da Evolution API está em formato inválido")
-    }
-
-    if (!config.apiUrl || config.apiUrl.trim() === "") {
-      throw new Error("URL da Evolution API não está configurada")
-    }
-
-    return config
-  } catch (error: any) {
-    console.error("Erro ao buscar configuração da Evolution API:", error.message)
-    throw error
+    const response = await fetch("/api/integrations/evolution/config")
+    const result = await response.json()
+    return result.success && result.configured
+  } catch (error) {
+    return false
   }
 }
+
+// Todas as outras funções agora usam as APIs seguras em vez de acesso direto ao Supabase
+// As operações específicas da Evolution API são feitas através das APIs que criamos
 
 // Função para buscar configurações da instância na Evolution API
 export async function fetchEvolutionBotSettings(instanceName: string): Promise<any> {
   try {
-    const config = await getEvolutionConfig()
-    const url = `${config.apiUrl}/instance/fetchSettings/${instanceName}`
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        apikey: config.apiKey || "",
-        "Content-Type": "application/json",
-      },
-    })
+    const response = await fetch(`/api/integrations/evolution/instance/fetchSettings/${instanceName}`)
 
     if (!response.ok) {
       console.error(`Erro ao buscar configurações da Evolution API: ${response.status}`)
@@ -98,14 +68,10 @@ export async function setEvolutionInstanceSettings(
   settingsData: EvolutionInstanceSettings,
 ): Promise<boolean> {
   try {
-    const config = await getEvolutionConfig()
-    const url = `${config.apiUrl}/instance/setSettings/${instanceName}`
-
-    const response = await fetch(url, {
+    const response = await fetch(`/api/integrations/evolution/instance/setSettings/${instanceName}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        apikey: config.apiKey || "",
       },
       body: JSON.stringify(settingsData),
     })
@@ -128,14 +94,10 @@ export async function createEvolutionBot(
   botData: EvolutionBotIndividualConfig,
 ): Promise<CreateBotResponse> {
   try {
-    const config = await getEvolutionConfig()
-    const url = `${config.apiUrl}/evolutionBot/create/${instanceName}`
-
-    const response = await fetch(url, {
+    const response = await fetch(`/api/integrations/evolution/evolutionBot/create/${instanceName}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        apikey: config.apiKey || "",
       },
       body: JSON.stringify(botData),
     })
@@ -175,14 +137,10 @@ export async function updateEvolutionBot(
   botData: EvolutionBotIndividualConfig,
 ): Promise<boolean> {
   try {
-    const config = await getEvolutionConfig()
-    const url = `${config.apiUrl}/evolutionBot/update/${botId}/${instanceName}`
-
-    const response = await fetch(url, {
+    const response = await fetch(`/api/integrations/evolution/evolutionBot/update/${botId}/${instanceName}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        apikey: config.apiKey || "",
       },
       body: JSON.stringify(botData),
     })
@@ -196,14 +154,8 @@ export async function updateEvolutionBot(
 
 export async function deleteEvolutionBot(instanceName: string, botId: string): Promise<boolean> {
   try {
-    const config = await getEvolutionConfig()
-    const url = `${config.apiUrl}/evolutionBot/delete/${botId}/${instanceName}`
-
-    const response = await fetch(url, {
+    const response = await fetch(`/api/integrations/evolution/evolutionBot/delete/${botId}/${instanceName}`, {
       method: "DELETE",
-      headers: {
-        apikey: config.apiKey || "",
-      },
     })
 
     return response.ok
@@ -215,15 +167,7 @@ export async function deleteEvolutionBot(instanceName: string, botId: string): P
 
 export async function fetchEvolutionBot(instanceName: string, botId: string): Promise<any> {
   try {
-    const config = await getEvolutionConfig()
-    const url = `${config.apiUrl}/evolutionBot/fetch/${botId}/${instanceName}`
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        apikey: config.apiKey || "",
-      },
-    })
+    const response = await fetch(`/api/integrations/evolution/evolutionBot/fetch/${botId}/${instanceName}`)
 
     if (!response.ok) {
       return null
