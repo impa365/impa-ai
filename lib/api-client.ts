@@ -8,7 +8,9 @@ const makeRequest = async (url: string, options: RequestInit = {}) => {
     throw error
   }
 
-  return res.json()
+  const data = await res.json()
+  console.log("📡 [API-CLIENT] Dados a serem retornados por makeRequest:", data)
+  return data
 }
 
 export const publicApi = {
@@ -18,6 +20,8 @@ export const publicApi = {
   },
   // Configurações públicas via API (SEM variáveis de ambiente)
   async getConfig(): Promise<any> {
-    return makeRequest("/api/config")
+    const response = await makeRequest("/api/config")
+    console.log("📡 [API-CLIENT] Resposta de getConfig:", response)
+    return response
   },
 }

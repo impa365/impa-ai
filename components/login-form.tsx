@@ -35,18 +35,22 @@ function LoginForm() {
         // Usar a API pública ao invés de acessar Supabase diretamente
         const { data, error } = await publicApi.getConfig()
 
+        console.log("🔍 [CLIENT] Dados brutos recebidos de getConfig:", { data, error })
+
         if (error) {
           console.error("Erro ao buscar configuração via API:", error)
           // Se houver erro, assumir que o registro está desabilitado por segurança
           setAllowRegistration(false)
-        } else if (data) {
-          console.log("📊 Configuração recebida da API:", data)
-
-          // Verificar se o registro público está permitido
-          const isAllowed = data.settings?.allowPublicRegistration || false
-
-          console.log("✅ Registro público permitido:", isAllowed)
+        } else if (data && data.settings) {
+          // Verifique se data E data.settings existem
+          console.log("📊 [CLIENT] Configuração recebida da API:", data)
+          // Certifique-se de que está comparando com booleano true
+          const isAllowed = data.settings.allowPublicRegistration === true
+          console.log("✅ [CLIENT] Registro público permitido:", isAllowed)
           setAllowRegistration(isAllowed)
+        } else if (data && !data.settings) {
+          console.log("⚠️ [CLIENT] 'data' recebido, mas 'data.settings' está faltando:", data)
+          setAllowRegistration(false)
         } else {
           console.log("⚠️ Nenhuma configuração retornada, desabilitando registro")
           setAllowRegistration(false)
