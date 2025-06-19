@@ -100,23 +100,71 @@ export async function POST(request: Request) {
       },
     ]
 
-    // Salvar cada configuração
+    // Salvar cada configuração usando estratégia de upsert segura
     for (const setting of settingsToUpsert) {
-      const response = await fetch(`${supabaseUrl}/rest/v1/system_settings`, {
-        method: "POST",
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          Prefer: "resolution=merge-duplicates",
+      // Primeiro, tentar buscar se já existe
+      const checkResponse = await fetch(
+        `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${setting.setting_key}&select=setting_key`,
+        {
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+            "Content-Type": "application/json",
+            "Accept-Profile": "impaai",
+            "Content-Profile": "impaai",
+          },
         },
-        body: JSON.stringify(setting),
-      })
+      )
 
-      if (!response.ok) {
-        throw new Error(`Erro ao salvar ${setting.setting_key}: ${response.status}`)
+      const existingSettings = await checkResponse.json()
+      const exists = existingSettings && existingSettings.length > 0
+
+      if (exists) {
+        // UPDATE se já existe
+        const updateResponse = await fetch(
+          `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${setting.setting_key}`,
+          {
+            method: "PATCH",
+            headers: {
+              apikey: supabaseKey,
+              Authorization: `Bearer ${supabaseKey}`,
+              "Content-Type": "application/json",
+              "Accept-Profile": "impaai",
+              "Content-Profile": "impaai",
+            },
+            body: JSON.stringify({
+              setting_value: setting.setting_value,
+              updated_at: new Date().toISOString(),
+            }),
+          },
+        )
+
+        if (!updateResponse.ok) {
+          const errorText = await updateResponse.text()
+          throw new Error(`Erro ao atualizar ${setting.setting_key}: ${updateResponse.status} - ${errorText}`)
+        }
+      } else {
+        // INSERT se não existe
+        const insertResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings`, {
+          method: "POST",
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+            "Content-Type": "application/json",
+            "Accept-Profile": "impaai",
+            "Content-Profile": "impaai",
+          },
+          body: JSON.stringify({
+            ...setting,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }),
+        })
+
+        if (!insertResponse.ok) {
+          const errorText = await insertResponse.text()
+          throw new Error(`Erro ao inserir ${setting.setting_key}: ${insertResponse.status} - ${errorText}`)
+        }
       }
     }
 
