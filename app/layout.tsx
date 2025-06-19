@@ -2,8 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { ThemeProvider, defaultTheme, type ThemeConfig } from "@/components/theme-provider" // Import defaultTheme and ThemeConfig
-import { createClient } from "@supabase/supabase-js" // Import createClient
+import { ThemeProvider, defaultTheme, type ThemeConfig } from "@/components/theme-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -14,20 +13,11 @@ export const metadata: Metadata = {
 }
 
 // Helper function to fetch theme server-side
-// This is a simplified version of loadThemeFromDatabase for server-side use
 async function getInitialTheme(): Promise<ThemeConfig | null> {
   try {
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY // Use ANON key for public data
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error("Server-side Supabase URL or Anon Key is missing for initial theme fetch.")
-      return null
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" }, // Ensure this matches your schema
-    })
+    // Usar apenas a função do servidor para evitar múltiplas instâncias
+    const { getSupabaseServer } = await import("@/lib/supabase-config")
+    const supabase = getSupabaseServer()
 
     // Attempt to load from system_themes
     const { data: themeData, error: themeError } = await supabase
@@ -72,7 +62,6 @@ async function getInitialTheme(): Promise<ThemeConfig | null> {
       if (typeof settingsData.setting_value === "object") {
         return settingsData.setting_value as ThemeConfig
       }
-      // Add preset logic if needed here, similar to client-side
     }
 
     console.warn("No theme found in database (server-side), will use default.")
@@ -84,7 +73,6 @@ async function getInitialTheme(): Promise<ThemeConfig | null> {
 }
 
 export default async function RootLayout({
-  // Make RootLayout async
   children,
 }: {
   children: React.ReactNode
@@ -94,11 +82,7 @@ export default async function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={inter.className}>
-        <ThemeProvider serverFetchedTheme={initialTheme || defaultTheme}>
-          {" "}
-          {/* Pass fetched theme */}
-          {children}
-        </ThemeProvider>
+        <ThemeProvider serverFetchedTheme={initialTheme || defaultTheme}>{children}</ThemeProvider>
       </body>
     </html>
   )

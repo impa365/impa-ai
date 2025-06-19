@@ -1,51 +1,74 @@
-// Configurações centralizadas do Supabase
+import { createClient } from "@supabase/supabase-js"
+
+// Singleton para garantir uma única instância do cliente Supabase
+let supabaseInstance: ReturnType<typeof createClient> | null = null
+
+// Função para criar/obter a instância única do Supabase (servidor)
+export function getSupabaseServer() {
+  // Esta função só deve ser usada em API routes do servidor
+  if (typeof window !== "undefined") {
+    throw new Error("getSupabaseServer should only be used on the server side")
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error("Missing Supabase environment variables")
+  }
+
+  // Sempre criar nova instância no servidor (não há problema de múltiplas instâncias)
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    db: { schema: "impaai" },
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+}
+
+// Função para criar/obter a instância única do Supabase (cliente)
+export function getSupabaseClient() {
+  // Esta função só deve ser usada no lado do cliente
+  if (typeof window === "undefined") {
+    throw new Error("getSupabaseClient should only be used on the client side")
+  }
+
+  // Se já existe uma instância, retornar ela (singleton)
+  if (supabaseInstance) {
+    return supabaseInstance
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing public Supabase environment variables")
+  }
+
+  // Criar nova instância apenas se não existir (singleton)
+  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    db: { schema: "impaai" },
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      storage: typeof window !== "undefined" ? window.localStorage : undefined,
+      storageKey: "impaai-auth-token", // Chave única para evitar conflitos
+    },
+  })
+
+  return supabaseInstance
+}
+
+// Função para resetar a instância (útil para testes ou logout)
+export function resetSupabaseInstance() {
+  if (typeof window !== "undefined") {
+    supabaseInstance = null
+  }
+}
+
+// Configurações padrão
 export const supabaseConfig = {
-  url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
   schema: "impaai",
-  headers: {
-    "Accept-Profile": "impaai",
-    "Content-Profile": "impaai",
-  },
+  storageKey: "impaai-auth-token",
 }
-
-// URLs das APIs REST
-export const restApiUrls = {
-  base: `${supabaseConfig.url}/rest/v1`,
-  users: `${supabaseConfig.url}/rest/v1/user_profiles`,
-  agents: `${supabaseConfig.url}/rest/v1/agents`,
-  whatsappConnections: `${supabaseConfig.url}/rest/v1/whatsapp_connections`,
-  activityLogs: `${supabaseConfig.url}/rest/v1/activity_logs`,
-  userSettings: `${supabaseConfig.url}/rest/v1/user_settings`,
-  systemSettings: `${supabaseConfig.url}/rest/v1/system_settings`,
-  themes: `${supabaseConfig.url}/rest/v1/themes`,
-  integrations: `${supabaseConfig.url}/rest/v1/integrations`,
-  apiKeys: `${supabaseConfig.url}/rest/v1/user_api_keys`,
-}
-
-// Headers padrão para requisições REST
-export const defaultHeaders = {
-  Accept: "application/json",
-  "Content-Type": "application/json",
-  "Accept-Profile": supabaseConfig.schema,
-  "Content-Profile": supabaseConfig.schema,
-  apikey: supabaseConfig.anonKey,
-}
-
-export const TABLES = {
-  USER_PROFILES: "user_profiles",
-  AI_AGENTS: "ai_agents",
-  WHATSAPP_CONNECTIONS: "whatsapp_connections",
-  AGENT_ACTIVITY_LOGS: "agent_activity_logs",
-  USER_SETTINGS: "user_settings",
-  SYSTEM_SETTINGS: "system_settings",
-  SYSTEM_THEMES: "system_themes",
-  INTEGRATIONS: "integrations",
-  VECTOR_STORES: "vector_stores",
-  VECTOR_DOCUMENTS: "vector_documents",
-  USER_API_KEYS: "user_api_keys",
-  ORGANIZATIONS: "organizations",
-  DAILY_METRICS: "daily_metrics",
-  // Adicione outras tabelas conforme necessário
-} as const // Usar 'as const' para tipos mais estritos

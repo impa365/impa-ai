@@ -176,25 +176,21 @@ export function applyThemeColors(theme: ThemeConfig): void {
   }
 }
 
-// Função para carregar tema via API
+// Função para carregar tema via API (SEM criar instâncias Supabase)
 async function loadThemeFromApi(): Promise<ThemeConfig | null> {
   try {
-    console.log("🎨 Loading theme from API...")
     const result = await publicApi.getConfig()
 
     if (result.error) {
-      console.error("❌ Error loading theme from API:", result.error)
       return null
     }
 
     if (result.data?.theme) {
-      console.log("✅ Theme loaded from API:", result.data.theme.systemName)
       return result.data.theme
     }
 
     return null
   } catch (error) {
-    console.error("💥 Critical error loading theme from API:", error)
     return null
   }
 }
@@ -204,7 +200,7 @@ export function saveThemeToLocalStorage(theme: ThemeConfig): void {
   if (typeof window === "undefined") return
 
   try {
-    localStorage.setItem("theme", JSON.stringify(theme))
+    localStorage.setItem("impaai-theme", JSON.stringify(theme)) // Chave única
   } catch (error) {
     console.error("Erro ao salvar tema no localStorage:", error)
   }
@@ -215,7 +211,7 @@ export function loadThemeFromLocalStorage(): ThemeConfig | null {
   if (typeof window === "undefined") return null
 
   try {
-    const savedTheme = localStorage.getItem("theme")
+    const savedTheme = localStorage.getItem("impaai-theme") // Chave única
     if (!savedTheme) return null
 
     const parsedTheme = JSON.parse(savedTheme)
@@ -228,7 +224,9 @@ export function loadThemeFromLocalStorage(): ThemeConfig | null {
 
 // Função para invalidar cache
 export function invalidateThemeCache(): void {
-  // Implementação futura se necessário
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("impaai-theme")
+  }
 }
 
 // Funções de carregamento e salvamento no banco (mantidas para compatibilidade)
@@ -263,7 +261,7 @@ export function ThemeProvider({ children, serverFetchedTheme }: ThemeProviderPro
     try {
       setIsLoading(true)
 
-      // Tentar carregar via API
+      // Tentar carregar via API (SEM criar instâncias Supabase)
       let loadedTheme = await loadThemeFromApi()
 
       // Fallback para localStorage
@@ -273,7 +271,6 @@ export function ThemeProvider({ children, serverFetchedTheme }: ThemeProviderPro
 
       // Fallback final para tema padrão
       if (!loadedTheme) {
-        console.warn("Client: Using default theme")
         loadedTheme = defaultTheme
       }
 
@@ -316,7 +313,7 @@ export function ThemeProvider({ children, serverFetchedTheme }: ThemeProviderPro
       saveThemeToLocalStorage(serverFetchedTheme)
       setIsLoading(false)
     } else {
-      // Caso contrário, carregar do cliente
+      // Caso contrário, carregar do cliente (SEM criar instâncias Supabase)
       loadClientSideTheme()
     }
   }, [serverFetchedTheme])

@@ -21,8 +21,13 @@ export interface UserProfile {
   preferences?: any
 }
 
+// AVISO: Estas funções são mantidas apenas para compatibilidade
+// TODO: Remover quando todo o código migrar para APIs
+
 // Cliente "fake" que redireciona para APIs
 export async function getSupabase() {
+  console.warn("⚠️ getSupabase() is deprecated. Use API endpoints instead.")
+
   // Retorna um objeto que simula o cliente Supabase
   // mas todas as operações passam pelas APIs
   return {
@@ -30,9 +35,8 @@ export async function getSupabase() {
       select: (columns = "*") => ({
         eq: (column: string, value: any) => ({
           single: async () => {
-            // Redirecionar para API apropriada baseada na tabela
-            console.warn(`Direct Supabase access attempted for table: ${table}`)
-            console.warn("This should be replaced with proper API calls")
+            console.warn(`❌ Direct Supabase access attempted for table: ${table}`)
+            console.warn("Use API endpoints instead")
             return { data: null, error: { message: "Use API endpoints instead" } }
           },
         }),
@@ -53,20 +57,26 @@ export async function getSupabase() {
 // Função para servidor (API routes) - esta SIM pode acessar Supabase diretamente
 export function getSupabaseServer() {
   // Esta função só deve ser usada em API routes do servidor
-  throw new Error("getSupabaseServer should only be used in API routes")
+  if (typeof window !== "undefined") {
+    throw new Error("getSupabaseServer should only be used in API routes")
+  }
+
+  // Importar apenas quando necessário (servidor)
+  const { getSupabaseServer: getServerClient } = require("./supabase-config")
+  return getServerClient()
 }
 
 // Função auxiliar para acessar tabelas via API
 export async function getTable(tableName: string) {
-  console.warn(`Direct table access attempted for: ${tableName}`)
+  console.warn(`❌ Direct table access attempted for: ${tableName}`)
   console.warn("Use specific API endpoints instead")
   return null
 }
 
-// Manter compatibilidade com código existente mas redirecionar para APIs
+// DEPRECATED: Manter compatibilidade com código existente mas redirecionar para APIs
 export const supabase = {
   from: async (table: string) => {
-    console.warn(`Direct Supabase access attempted for table: ${table}`)
+    console.warn(`❌ Direct Supabase access attempted for table: ${table}`)
     console.warn("Use API endpoints instead")
     return {
       select: () => ({
@@ -78,9 +88,11 @@ export const supabase = {
   },
 }
 
+// DEPRECATED: Todas essas funções agora redirecionam para APIs
 export const db = {
   // Todas essas funções agora redirecionam para APIs
   users: async () => {
+    console.warn("❌ Direct DB access deprecated. Use apiClient.getUsers() instead")
     const result = await apiClient.getAdminDashboard()
     return {
       select: () => ({
@@ -89,6 +101,7 @@ export const db = {
     }
   },
   agents: async () => {
+    console.warn("❌ Direct DB access deprecated. Use apiClient.getAgents() instead")
     const result = await apiClient.getAdminDashboard()
     return {
       select: () => ({
@@ -97,6 +110,7 @@ export const db = {
     }
   },
   whatsappConnections: async () => {
+    console.warn("❌ Direct DB access deprecated. Use apiClient.getWhatsAppConnections() instead")
     const result = await apiClient.getAdminDashboard()
     return {
       select: () => ({
@@ -105,6 +119,7 @@ export const db = {
     }
   },
   systemSettings: async () => {
+    console.warn("❌ Direct DB access deprecated. Use apiClient.getSystemSettings() instead")
     const result = await apiClient.getAdminDashboard()
     return {
       select: () => ({
@@ -115,13 +130,13 @@ export const db = {
     }
   },
   // Outros métodos redirecionam para console.warn
-  activityLogs: () => console.warn("Use API endpoints instead of direct DB access"),
-  userSettings: () => console.warn("Use API endpoints instead of direct DB access"),
-  themes: () => console.warn("Use API endpoints instead of direct DB access"),
-  integrations: () => console.warn("Use API endpoints instead of direct DB access"),
-  vectorStores: () => console.warn("Use API endpoints instead of direct DB access"),
-  vectorDocuments: () => console.warn("Use API endpoints instead of direct DB access"),
-  apiKeys: () => console.warn("Use API endpoints instead of direct DB access"),
-  organizations: () => console.warn("Use API endpoints instead of direct DB access"),
-  dailyMetrics: () => console.warn("Use API endpoints instead of direct DB access"),
+  activityLogs: () => console.warn("❌ Use API endpoints instead of direct DB access"),
+  userSettings: () => console.warn("❌ Use API endpoints instead of direct DB access"),
+  themes: () => console.warn("❌ Use API endpoints instead of direct DB access"),
+  integrations: () => console.warn("❌ Use API endpoints instead of direct DB access"),
+  vectorStores: () => console.warn("❌ Use API endpoints instead of direct DB access"),
+  vectorDocuments: () => console.warn("❌ Use API endpoints instead of direct DB access"),
+  apiKeys: () => console.warn("❌ Use API endpoints instead of direct DB access"),
+  organizations: () => console.warn("❌ Use API endpoints instead of direct DB access"),
+  dailyMetrics: () => console.warn("❌ Use API endpoints instead of direct DB access"),
 }
