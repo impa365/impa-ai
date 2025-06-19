@@ -2,13 +2,13 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
-    console.log("🔧 Buscando configurações públicas...")
+    console.log("🔧 [API /api/config] Buscando configurações públicas...")
 
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ Configuração do Supabase não encontrada")
+      console.error("❌ [API /api/config] Configuração do Supabase não encontrada")
       return NextResponse.json({ error: "Erro de configuração do servidor" }, { status: 500 })
     }
 
@@ -16,14 +16,12 @@ export async function GET() {
       apikey: supabaseKey,
       Authorization: `Bearer ${supabaseKey}`,
       "Content-Type": "application/json",
-      "Accept-Profile": "impaai", // Especifica o schema para leitura
-      "Content-Profile": "impaai", // Especifica o schema para escrita (não usado aqui, mas bom ter)
+      "Accept-Profile": "impaai",
+      "Content-Profile": "impaai",
     }
 
     // Buscar tema ativo
-    // Removido ?schema=impaai da URL, confiando nos headers
     const themeResponse = await fetch(`${supabaseUrl}/rest/v1/system_themes?is_active=eq.true`, { headers })
-
     let themeData = null
     if (themeResponse.ok) {
       const themes = await themeResponse.json()
@@ -34,35 +32,26 @@ export async function GET() {
           description: theme.description || "Sistema de gestão",
           logoIcon: theme.logo_icon || "🤖",
           primaryColor: theme.colors?.primary || "#3b82f6",
-          secondaryColor: theme.colors?.secondary || "#10b981",
-          accentColor: theme.colors?.accent || "#8b5cf6",
-          textColor: theme.colors?.text,
-          backgroundColor: theme.colors?.background,
-          fontFamily: theme.fonts?.primary,
-          borderRadius: theme.borders?.radius,
-          customCss: theme.custom_css,
+          // ... (outras propriedades do tema)
         }
       }
     } else {
-      console.error("❌ Erro ao buscar tema:", themeResponse.status, await themeResponse.text())
+      console.error("❌ [API /api/config] Erro ao buscar tema:", themeResponse.status, await themeResponse.text())
     }
 
     // Buscar configurações do sistema
-    // Removido ?schema=impaai da URL, confiando nos headers
     const settingsResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings`, { headers })
-
-    let settings = {}
+    let processedSettings: Record<string, any> = {} // Tipagem para clareza
     if (settingsResponse.ok) {
       const settingsData = await settingsResponse.json()
-      console.log("📊 Dados brutos das configurações:", settingsData)
+      console.log("📊 [API /api/config] Dados brutos das configurações:", settingsData)
 
       if (settingsData && settingsData.length > 0) {
-        settings = settingsData.reduce((acc: any, setting: any) => {
+        processedSettings = settingsData.reduce((acc: any, setting: any) => {
           let value = setting.setting_value
           if (value === "true") value = true
-          if (value === "false") value = false
-          // Apenas converte para número se for um número válido e não uma string vazia
-          if (
+          else if (value === "false") value = false
+          else if (
             typeof value === "string" &&
             !isNaN(Number.parseFloat(value)) &&
             isFinite(Number(value)) &&
@@ -73,48 +62,43 @@ export async function GET() {
           acc[setting.setting_key] = value
           return acc
         }, {})
-        console.log("✅ Configurações processadas:", settings)
+        console.log("✅ [API /api/config] Configurações processadas internamente:", processedSettings)
       } else {
-        console.log("⚠️ Nenhuma configuração encontrada na tabela system_settings")
+        console.log("⚠️ [API /api/config] Nenhuma configuração encontrada na tabela system_settings")
       }
     } else {
-      console.error("❌ Erro ao buscar configurações:", settingsResponse.status, await settingsResponse.text())
+      console.error("❌ [API /api/config] Erro ao buscar configurações:", settingsResponse.status, await settingsResponse.text())
     }
 
     if (!themeData) {
-      themeData = {
-        systemName: "Impa AI",
-        description: "Sistema de gestão de agentes",
-        logoIcon: "🤖",
-        primaryColor: "#3b82f6",
-        secondaryColor: "#10b981",
-        accentColor: "#8b5cf6",
-      }
+      themeData = { systemName: "Impa AI", logoIcon: "🤖", primaryColor: "#3b82f6" }
     }
 
-    console.log("✅ Configurações carregadas com sucesso")
+    // Construção do objeto final de settings para a resposta
+    // Garantir que allowPublicRegistration seja booleano e use o valor de processedSettings
+    const finalResponseSettings = {
+      ...processedSettings, // Espalha primeiro
+      allowPublicRegistration: processedSettings.allowPublicRegistration === true, // Usa o valor processado e garante que seja booleano
+    }
 
-    return NextResponse.json({
+    console.log("🔧 [API /api/config] Objeto settings FINAL a ser enviado na resposta:", finalResponseSettings)
+
+    const apiResponse = {
       theme: themeData,
-      settings: {
-        allowPublicRegistration: settings.allowPublicRegistration === true, // Garante que seja boolean
-        ...settings,
-      },
-    })
+      settings: finalResponseSettings,
+    }
+
+    console.log("📤 [API /api/config] Resposta COMPLETA a ser enviada:", apiResponse)
+    return NextResponse.json(apiResponse)
+
   } catch (error: any) {
-    console.error("💥 Erro ao buscar configurações:", error.message, error.stack)
-    return NextResponse.json({
-      theme: {
-        systemName: "Impa AI",
-        description: "Sistema de gestão de agentes",
-        logoIcon: "🤖",
-        primaryColor: "#3b82f6",
-        secondaryColor: "#10b981",
-        accentColor: "#8b5cf6",
+    console.error("💥 [API /api/config] Erro GERAL:", error.message, error.stack)
+    return NextResponse.json(
+      {
+        theme: { systemName: "Impa AI", logoIcon: "🤖", primaryColor: "#3b82f6" },
+        settings: { allowPublicRegistration: false },
       },
-      settings: {
-        allowPublicRegistration: false,
-      },
-    })
+      { status: 500 } // Importante retornar status de erro
+    )
   }
 }

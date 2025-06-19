@@ -1,27 +1,66 @@
-const makeRequest = async (url: string, options: RequestInit = {}) => {
-  const res = await fetch(url, options)
+// Adicionando tipo para a resposta da API para maior clareza
+interface ApiResponse<T = any> {
+  data?: T
+  error?: string
+}
 
-  if (!res.ok) {
-    const error = new Error("An error occurred while fetching the data.")
-    // @ts-ignore
-    error.status = res.status
-    throw error
+class PublicApiClient {
+  private baseUrl: string
+
+  constructor() {
+    this.baseUrl = typeof window !== "undefined" ? window.location.origin : ""
   }
 
-  const data = await res.json()
-  console.log("📡 [API-CLIENT] Dados a serem retornados por makeRequest:", data)
-  return data
+  async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+    try {
+      console.log(`📡 [API-CLIENT] Fazendo requisição para: ${this.baseUrl}${endpoint}`)
+
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...options.headers,
+        },
+        ...options,
+      })
+
+      // Tenta parsear JSON mesmo se !response.ok para obter a mensagem de erro do corpo
+      const responseData = await response.json().catch(e => {
+        console.warn(`⚠️ [API-CLIENT] Falha ao parsear JSON da resposta de ${endpoint} (status: ${response.status}). Corpo não era JSON?`, e)
+        return { error: `Erro no servidor (status: ${response.status}), resposta não é JSON válido.` } // Retorna um objeto de erro se o JSON falhar
+      });
+
+
+      if (!response.ok) {
+        console.error(`❌ [API-CLIENT] Erro na requisição para ${endpoint}:`, response.status, responseData)
+        // Usa o erro do responseData se existir, senão um genérico
+        return { error: responseData?.error || `Erro na requisição (status ${response.status})` }
+      }
+
+      console.log(`✅ [API-CLIENT] Requisição bem-sucedida para ${endpoint}. Dados recebidos:`, responseData)
+      return { data: responseData }
+    } catch (error: any) {
+      console.error(`💥 [API-CLIENT] Erro de rede ou inesperado para ${endpoint}:`, error.message)
+      return { error: "Erro de conexão ou processamento da resposta" }
+    }
+  }
+
+  async getConfig(): Promise<ApiResponse<{ theme: any; settings: any }>> {
+    console.log("📞 [API-CLIENT] Chamando getConfig...")
+    const result = await this.makeRequest<{ theme: any; settings: any }>("/api/config")
+    console.log("📦 [API-CLIENT] Resultado recebido por getConfig:", result)
+    return result
+  }
+
+  async login(email: string, password: string): Promise<ApiResponse<{ user: any }>> {
+    return this.makeRequest("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    })
+  }
+  // ... outros métodos ...
 }
 
-export const publicApi = {
-  getWhatsAppConnections: async (userId?: string, isAdmin = false) => {
-    const url = `/api/whatsapp-connections${userId ? `?userId=${userId}` : ""}${isAdmin ? `${userId ? "&" : "?"}isAdmin=true` : ""}`
-    return makeRequest(url)
-  },
-  // Configurações públicas via API (SEM variáveis de ambiente)
-  async getConfig(): Promise<any> {
-    const response = await makeRequest("/api/config")
-    console.log("📡 [API-CLIENT] Resposta de getConfig:", response)
-    return response
-  },
-}
+export const publicApi = new PublicApiClient()
+export const apiClient = publicApi // Compatibilidade
+// ... outros exports de conveniência ...
+export type { ApiResponse }
