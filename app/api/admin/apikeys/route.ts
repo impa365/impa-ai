@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server"
-import { getSupabaseServer } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 export async function GET() {
   try {
-    const supabase = await getSupabaseServer()
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
 
-    // Buscar API keys com informações do usuário
     const { data, error } = await supabase
       .from("user_api_keys")
       .select(`
@@ -30,14 +37,7 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to fetch API keys" }, { status: 500 })
     }
 
-    // Transformar os dados para o formato esperado
-    const transformedKeys =
-      data?.map((key: any) => ({
-        ...key,
-        user_profiles: key.user_profiles,
-      })) || []
-
-    return NextResponse.json(transformedKeys)
+    return NextResponse.json(data || [])
   } catch (error: any) {
     console.error("❌ API Route Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -52,7 +52,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "User ID and key name are required" }, { status: 400 })
     }
 
-    const supabase = await getSupabaseServer()
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
 
     // Gerar API Key
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
