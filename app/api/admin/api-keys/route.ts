@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
-import { supabase } from "@/lib/supabase"
 
 export async function GET() {
   try {
@@ -10,34 +9,23 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // 2. API faz requisição segura para o banco
-    const { data: apiKeysData, error: apiKeysError } = await supabase
-      .from("user_api_keys")
-      .select(`
-        id,
-        user_id,
-        name,
-        api_key,
-        description,
-        is_active,
-        last_used_at,
-        created_at,
-        user_profiles!inner(
-          full_name,
-          email,
-          role
-        )
-      `)
-      .order("created_at", { ascending: false })
+    // 2. API faz requisição para endpoint interno (seguindo padrão do projeto)
+    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/database/api-keys`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${user.id}`, // Usando ID do usuário admin
+      },
+    })
 
-    if (apiKeysError) {
-      console.error("❌ Erro ao buscar API keys:", apiKeysError)
-      return NextResponse.json({ error: "Erro ao buscar API keys" }, { status: 500 })
+    if (!response.ok) {
+      throw new Error(`Database API error: ${response.status}`)
     }
 
-    // 3. Banco entrega informações para API
-    // 4. API entrega para o painel (somente o necessário)
-    return NextResponse.json(apiKeysData || [])
+    const data = await response.json()
+
+    // 3. API entrega para o painel
+    return NextResponse.json(data)
   } catch (error) {
     console.error("❌ Erro interno:", error)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
@@ -65,28 +53,33 @@ export async function POST(request: NextRequest) {
       apiKey += chars.charAt(Math.floor(Math.random() * chars.length))
     }
 
-    // 2. API faz requisição segura para o banco
-    const { error } = await supabase.from("user_api_keys").insert({
-      user_id,
-      name: name.trim(),
-      api_key: apiKey,
-      description: description?.trim() || "API Key para integração",
-      permissions: ["read"],
-      rate_limit: 100,
-      is_active: true,
-      is_admin_key: false,
-      access_scope: "user",
-      allowed_ips: [],
-      usage_count: 0,
+    // 2. API faz requisição para endpoint interno
+    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/database/api-keys`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${user.id}`,
+      },
+      body: JSON.stringify({
+        user_id,
+        name: name.trim(),
+        api_key: apiKey,
+        description: description?.trim() || "API Key para integração",
+        permissions: ["read"],
+        rate_limit: 100,
+        is_active: true,
+        is_admin_key: false,
+        access_scope: "user",
+        allowed_ips: [],
+        usage_count: 0,
+      }),
     })
 
-    if (error) {
-      console.error("❌ Erro ao criar API key:", error)
-      return NextResponse.json({ error: "Erro ao criar API key" }, { status: 500 })
+    if (!response.ok) {
+      throw new Error(`Database API error: ${response.status}`)
     }
 
-    // 3. Banco confirma criação
-    // 4. API confirma para o painel
+    // 3. API confirma para o painel
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("❌ Erro interno:", error)
