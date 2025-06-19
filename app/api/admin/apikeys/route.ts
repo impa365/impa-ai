@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
-import { getSupabaseServer } from "@/lib/supabase-config"
+import { getSupabaseServer } from "@/lib/supabase"
 
 export async function GET() {
   try {
-    const supabase = getSupabaseServer()
+    const supabase = await getSupabaseServer()
 
     // Buscar API keys com informações do usuário
     const { data, error } = await supabase
@@ -39,7 +39,7 @@ export async function GET() {
 
     return NextResponse.json(transformedKeys)
   } catch (error: any) {
-    console.error("❌ API Route Error fetching API keys:", error)
+    console.error("❌ API Route Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
@@ -48,12 +48,18 @@ export async function POST(request: Request) {
   try {
     const { userId, name, description } = await request.json()
 
-    if (!userId || !name || !name.trim()) {
+    if (!userId || !name?.trim()) {
       return NextResponse.json({ error: "User ID and key name are required" }, { status: 400 })
     }
 
-    const supabase = getSupabaseServer()
-    const newApiKey = generateApiKeyInternal()
+    const supabase = await getSupabaseServer()
+
+    // Gerar API Key
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    let newApiKey = "impaai_"
+    for (let i = 0; i < 32; i++) {
+      newApiKey += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
 
     const { error } = await supabase.from("user_api_keys").insert({
       user_id: userId,
@@ -65,6 +71,8 @@ export async function POST(request: Request) {
       is_active: true,
       is_admin_key: false,
       access_scope: "user",
+      allowed_ips: [],
+      usage_count: 0,
     })
 
     if (error) {
@@ -74,16 +82,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ message: "API Key created successfully" }, { status: 201 })
   } catch (error: any) {
-    console.error("❌ API Route Error creating API key:", error)
+    console.error("❌ API Route Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
-
-const generateApiKeyInternal = (): string => {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-  let result = "impaai_"
-  for (let i = 0; i < 32; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return result
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getSupabaseServer } from "@/lib/supabase-config"
+import { getSupabaseServer } from "@/lib/supabase"
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
@@ -9,7 +9,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       return NextResponse.json({ error: "API Key ID is required" }, { status: 400 })
     }
 
-    const supabase = getSupabaseServer()
+    const supabase = await getSupabaseServer()
 
     const { error } = await supabase.from("user_api_keys").delete().eq("id", id)
 
@@ -20,7 +20,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
 
     return NextResponse.json({ message: "API Key deleted successfully" })
   } catch (error: any) {
-    console.error("❌ API Route Error deleting API key:", error)
+    console.error("❌ API Route Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
