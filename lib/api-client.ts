@@ -16,4 +16,8 @@ export const publicApi = {
     const url = `/api/whatsapp-connections${userId ? `?userId=${userId}` : ""}${isAdmin ? `${userId ? "&" : "?"}isAdmin=true` : ""}`
     return makeRequest(url)
   },
+  // Configurações públicas via API (SEM variáveis de ambiente)
+  async getConfig(): Promise<any> {
+    return makeRequest("/api/config")
+  },
 }
