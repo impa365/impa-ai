@@ -119,10 +119,18 @@ export default function AdminApiKeysPage() {
         throw new Error(`HTTP ${response.status}`)
       }
       const data = await response.json()
-      setApiKeys(data)
+
+      // Ensure data is always an array
+      if (Array.isArray(data)) {
+        setApiKeys(data)
+      } else {
+        console.error("❌ Invalid API keys data format:", data)
+        setApiKeys([])
+      }
     } catch (error) {
       console.error("❌ Erro ao buscar API keys:", error)
       setMessage("Erro ao buscar API keys")
+      setApiKeys([]) // Ensure apiKeys is always an array
     }
   }
 
@@ -133,10 +141,20 @@ export default function AdminApiKeysPage() {
         throw new Error(`HTTP ${response.status}`)
       }
       const data = await response.json()
-      setUsers(data)
+
+      // Ensure data is always an array
+      if (Array.isArray(data)) {
+        setUsers(data)
+      } else if (data && Array.isArray(data.users)) {
+        setUsers(data.users)
+      } else {
+        console.error("❌ Invalid users data format:", data)
+        setUsers([])
+      }
     } catch (error) {
       console.error("❌ Erro ao buscar usuários:", error)
       setMessage("Erro ao buscar usuários")
+      setUsers([]) // Ensure users is always an array
     }
   }
 
