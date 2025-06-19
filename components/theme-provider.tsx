@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
-import { publicApi } from "@/lib/api-client"
 
 // Definição do tipo ThemeConfig
 export interface ThemeConfig {
@@ -38,52 +37,6 @@ export function useTheme() {
   return context
 }
 
-// Temas predefinidos - usando nomes genéricos para white label
-export const themePresets: Record<string, ThemeConfig> = {
-  blue: {
-    systemName: "Sistema",
-    description: "Plataforma de gestão",
-    logoIcon: "🤖",
-    primaryColor: "#3b82f6",
-    secondaryColor: "#10b981",
-    accentColor: "#8b5cf6",
-  },
-  purple: {
-    systemName: "Sistema",
-    description: "Plataforma de gestão",
-    logoIcon: "🔮",
-    primaryColor: "#8b5cf6",
-    secondaryColor: "#ec4899",
-    accentColor: "#3b82f6",
-  },
-  green: {
-    systemName: "Sistema",
-    description: "Plataforma de gestão",
-    logoIcon: "🌱",
-    primaryColor: "#10b981",
-    secondaryColor: "#3b82f6",
-    accentColor: "#f59e0b",
-  },
-  orange: {
-    systemName: "Sistema",
-    description: "Plataforma de gestão",
-    logoIcon: "🔥",
-    primaryColor: "#f97316",
-    secondaryColor: "#8b5cf6",
-    accentColor: "#10b981",
-  },
-  dark: {
-    systemName: "Sistema",
-    description: "Plataforma de gestão",
-    logoIcon: "⚡",
-    primaryColor: "#6366f1",
-    secondaryColor: "#ec4899",
-    accentColor: "#f97316",
-    backgroundColor: "#1e293b",
-    textColor: "#f8fafc",
-  },
-}
-
 // Tema padrão genérico
 export const defaultTheme: ThemeConfig = {
   systemName: "Sistema",
@@ -92,39 +45,6 @@ export const defaultTheme: ThemeConfig = {
   primaryColor: "#3b82f6",
   secondaryColor: "#10b981",
   accentColor: "#8b5cf6",
-}
-
-// Função para validar se uma cor é um código hexadecimal válido
-export function isValidHexColor(color: string): boolean {
-  return /^#([A-Fa-f0-9]{3}){1,2}$/.test(color)
-}
-
-// Função para ajustar o brilho de uma cor
-export function adjustColorBrightness(color: string, percent: number): string {
-  if (!isValidHexColor(color)) return color
-
-  const num = Number.parseInt(color.replace("#", ""), 16)
-  const amt = Math.round(2.55 * percent)
-  const R = (num >> 16) + amt
-  const G = ((num >> 8) & 0x00ff) + amt
-  const B = (num & 0x0000ff) + amt
-
-  return (
-    "#" +
-    (
-      0x1000000 +
-      (R < 255 ? (R < 0 ? 0 : R) : 255) * 0x10000 +
-      (G < 255 ? (G < 0 ? 0 : G) : 255) * 0x100 +
-      (B < 255 ? (B < 0 ? 0 : B) : 255)
-    )
-      .toString(16)
-      .slice(1)
-  )
-}
-
-// Função para aplicar um preset de tema
-export function applyThemePreset(presetName: string): ThemeConfig {
-  return themePresets[presetName] || defaultTheme
 }
 
 // Função para aplicar as cores do tema no CSS
@@ -176,21 +96,24 @@ export function applyThemeColors(theme: ThemeConfig): void {
   }
 }
 
-// Função para carregar tema via API (SEM criar instâncias Supabase)
+// ✅ SEGURO: Carregar tema via API interna (NUNCA acessa Supabase diretamente)
 async function loadThemeFromApi(): Promise<ThemeConfig | null> {
   try {
-    const result = await publicApi.getConfig()
+    const response = await fetch("/api/theme", {
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
 
-    if (result.error) {
+    if (!response.ok) {
       return null
     }
 
-    if (result.data?.theme) {
-      return result.data.theme
-    }
-
-    return null
+    const themeData = await response.json()
+    return themeData as ThemeConfig
   } catch (error) {
+    console.error("Erro ao carregar tema via API:", error)
     return null
   }
 }
@@ -200,7 +123,7 @@ export function saveThemeToLocalStorage(theme: ThemeConfig): void {
   if (typeof window === "undefined") return
 
   try {
-    localStorage.setItem("impaai-theme", JSON.stringify(theme)) // Chave única
+    localStorage.setItem("impaai-theme", JSON.stringify(theme))
   } catch (error) {
     console.error("Erro ao salvar tema no localStorage:", error)
   }
@@ -211,7 +134,7 @@ export function loadThemeFromLocalStorage(): ThemeConfig | null {
   if (typeof window === "undefined") return null
 
   try {
-    const savedTheme = localStorage.getItem("impaai-theme") // Chave única
+    const savedTheme = localStorage.getItem("impaai-theme")
     if (!savedTheme) return null
 
     const parsedTheme = JSON.parse(savedTheme)
@@ -219,32 +142,6 @@ export function loadThemeFromLocalStorage(): ThemeConfig | null {
   } catch (error) {
     console.error("Erro ao carregar tema do localStorage:", error)
     return null
-  }
-}
-
-// Função para invalidar cache
-export function invalidateThemeCache(): void {
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("impaai-theme")
-  }
-}
-
-// Funções de carregamento e salvamento no banco (mantidas para compatibilidade)
-export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
-  return await loadThemeFromApi()
-}
-
-export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
-  try {
-    // TODO: Implementar API endpoint para salvar tema
-    // const result = await authApi.saveTheme(theme)
-
-    // Por enquanto, salvar apenas no localStorage
-    saveThemeToLocalStorage(theme)
-    return true
-  } catch (error) {
-    console.error("Erro ao salvar tema:", error)
-    return false
   }
 }
 
@@ -261,7 +158,7 @@ export function ThemeProvider({ children, serverFetchedTheme }: ThemeProviderPro
     try {
       setIsLoading(true)
 
-      // Tentar carregar via API (SEM criar instâncias Supabase)
+      // ✅ SEGURO: Carregar via API interna
       let loadedTheme = await loadThemeFromApi()
 
       // Fallback para localStorage
@@ -276,11 +173,9 @@ export function ThemeProvider({ children, serverFetchedTheme }: ThemeProviderPro
 
       setTheme(loadedTheme)
       applyThemeColors(loadedTheme)
-
-      // Salvar no localStorage para cache
       saveThemeToLocalStorage(loadedTheme)
     } catch (error) {
-      console.error("Client: Error loading theme, using default:", error)
+      console.error("Erro ao carregar tema, usando padrão:", error)
       setTheme(defaultTheme)
       applyThemeColors(defaultTheme)
     } finally {
@@ -299,26 +194,22 @@ export function ThemeProvider({ children, serverFetchedTheme }: ThemeProviderPro
       saveThemeToLocalStorage(newTheme)
 
       // TODO: Implementar API para salvar tema
-      // await authApi.updateTheme(newTheme)
     } catch (error) {
-      console.error("Error updating theme:", error)
+      console.error("Erro ao atualizar tema:", error)
     }
   }
 
   useEffect(() => {
     if (serverFetchedTheme) {
-      // Se tema foi fornecido pelo servidor, aplicar imediatamente
       setTheme(serverFetchedTheme)
       applyThemeColors(serverFetchedTheme)
       saveThemeToLocalStorage(serverFetchedTheme)
       setIsLoading(false)
     } else {
-      // Caso contrário, carregar do cliente (SEM criar instâncias Supabase)
       loadClientSideTheme()
     }
   }, [serverFetchedTheme])
 
-  // Aplicar cores sempre que o tema mudar
   useEffect(() => {
     if (theme && !isLoading) {
       applyThemeColors(theme)

@@ -1,9 +1,3 @@
-// IMPORTANTE: Este arquivo agora usa apenas APIs internas
-// NUNCA acessa Supabase diretamente no cliente
-// Todas as operações passam pelas APIs do Next.js
-
-import { apiClient } from "./api-client"
-
 // Para compatibilidade com código existente, mantemos as interfaces
 export interface UserProfile {
   id: string
@@ -21,44 +15,16 @@ export interface UserProfile {
   preferences?: any
 }
 
-// AVISO: Estas funções são mantidas apenas para compatibilidade
-// TODO: Remover quando todo o código migrar para APIs
-
-// Cliente "fake" que redireciona para APIs
+// ❌ NUNCA usar estas funções no cliente - apenas para compatibilidade
 export async function getSupabase() {
-  console.warn("⚠️ getSupabase() is deprecated. Use API endpoints instead.")
-
-  // Retorna um objeto que simula o cliente Supabase
-  // mas todas as operações passam pelas APIs
-  return {
-    from: (table: string) => ({
-      select: (columns = "*") => ({
-        eq: (column: string, value: any) => ({
-          single: async () => {
-            console.warn(`❌ Direct Supabase access attempted for table: ${table}`)
-            console.warn("Use API endpoints instead")
-            return { data: null, error: { message: "Use API endpoints instead" } }
-          },
-        }),
-      }),
-    }),
-    auth: {
-      getUser: async () => {
-        const result = await apiClient.getCurrentUser()
-        return {
-          data: { user: result.data?.user || null },
-          error: result.error ? { message: result.error } : null,
-        }
-      },
-    },
-  }
+  throw new Error("❌ getSupabase() não deve ser usado. Use APIs do Next.js!")
 }
 
-// Função para servidor (API routes) - esta SIM pode acessar Supabase diretamente
+// ✅ Função para servidor (API routes) - APENAS no servidor
 export function getSupabaseServer() {
-  // Esta função só deve ser usada em API routes do servidor
+  // Verificar se está no servidor
   if (typeof window !== "undefined") {
-    throw new Error("getSupabaseServer should only be used in API routes")
+    throw new Error("❌ getSupabaseServer deve ser usado APENAS em API routes do servidor!")
   }
 
   // Importar apenas quando necessário (servidor)
@@ -66,77 +32,56 @@ export function getSupabaseServer() {
   return getServerClient()
 }
 
-// Função auxiliar para acessar tabelas via API
+// ❌ DEPRECATED - Não usar
 export async function getTable(tableName: string) {
-  console.warn(`❌ Direct table access attempted for: ${tableName}`)
-  console.warn("Use specific API endpoints instead")
-  return null
+  throw new Error(`❌ Acesso direto à tabela ${tableName} não permitido. Use APIs!`)
 }
 
-// DEPRECATED: Manter compatibilidade com código existente mas redirecionar para APIs
+// ❌ DEPRECATED - Todas essas funções são inseguras no cliente
 export const supabase = {
-  from: async (table: string) => {
-    console.warn(`❌ Direct Supabase access attempted for table: ${table}`)
-    console.warn("Use API endpoints instead")
-    return {
-      select: () => ({
-        eq: () => ({
-          single: async () => ({ data: null, error: { message: "Use API endpoints instead" } }),
-        }),
-      }),
-    }
+  from: () => {
+    throw new Error("❌ Acesso direto ao Supabase não permitido no cliente!")
   },
 }
 
-// DEPRECATED: Todas essas funções agora redirecionam para APIs
 export const db = {
-  // Todas essas funções agora redirecionam para APIs
-  users: async () => {
-    console.warn("❌ Direct DB access deprecated. Use apiClient.getUsers() instead")
-    const result = await apiClient.getAdminDashboard()
-    return {
-      select: () => ({
-        order: () => result.data?.users || [],
-      }),
-    }
+  users: () => {
+    throw new Error("❌ Use apiClient.getUsers() em vez de acesso direto ao DB!")
   },
-  agents: async () => {
-    console.warn("❌ Direct DB access deprecated. Use apiClient.getAgents() instead")
-    const result = await apiClient.getAdminDashboard()
-    return {
-      select: () => ({
-        order: () => result.data?.agents || [],
-      }),
-    }
+  agents: () => {
+    throw new Error("❌ Use apiClient.getAgents() em vez de acesso direto ao DB!")
   },
-  whatsappConnections: async () => {
-    console.warn("❌ Direct DB access deprecated. Use apiClient.getWhatsAppConnections() instead")
-    const result = await apiClient.getAdminDashboard()
-    return {
-      select: () => ({
-        order: () => result.data?.whatsappConnections || [],
-      }),
-    }
+  whatsappConnections: () => {
+    throw new Error("❌ Use apiClient.getWhatsAppConnections() em vez de acesso direto ao DB!")
   },
-  systemSettings: async () => {
-    console.warn("❌ Direct DB access deprecated. Use apiClient.getSystemSettings() instead")
-    const result = await apiClient.getAdminDashboard()
-    return {
-      select: () => ({
-        eq: () => ({
-          single: async () => ({ data: result.data?.systemLimits }),
-        }),
-      }),
-    }
+  systemSettings: () => {
+    throw new Error("❌ Use apiClient.getSystemSettings() em vez de acesso direto ao DB!")
   },
-  // Outros métodos redirecionam para console.warn
-  activityLogs: () => console.warn("❌ Use API endpoints instead of direct DB access"),
-  userSettings: () => console.warn("❌ Use API endpoints instead of direct DB access"),
-  themes: () => console.warn("❌ Use API endpoints instead of direct DB access"),
-  integrations: () => console.warn("❌ Use API endpoints instead of direct DB access"),
-  vectorStores: () => console.warn("❌ Use API endpoints instead of direct DB access"),
-  vectorDocuments: () => console.warn("❌ Use API endpoints instead of direct DB access"),
-  apiKeys: () => console.warn("❌ Use API endpoints instead of direct DB access"),
-  organizations: () => console.warn("❌ Use API endpoints instead of direct DB access"),
-  dailyMetrics: () => console.warn("❌ Use API endpoints instead of direct DB access"),
+  activityLogs: () => {
+    throw new Error("❌ Use APIs em vez de acesso direto ao DB!")
+  },
+  userSettings: () => {
+    throw new Error("❌ Use APIs em vez de acesso direto ao DB!")
+  },
+  themes: () => {
+    throw new Error("❌ Use APIs em vez de acesso direto ao DB!")
+  },
+  integrations: () => {
+    throw new Error("❌ Use APIs em vez de acesso direto ao DB!")
+  },
+  vectorStores: () => {
+    throw new Error("❌ Use APIs em vez de acesso direto ao DB!")
+  },
+  vectorDocuments: () => {
+    throw new Error("❌ Use APIs em vez de acesso direto ao DB!")
+  },
+  apiKeys: () => {
+    throw new Error("❌ Use APIs em vez de acesso direto ao DB!")
+  },
+  organizations: () => {
+    throw new Error("❌ Use APIs em vez de acesso direto ao DB!")
+  },
+  dailyMetrics: () => {
+    throw new Error("❌ Use APIs em vez de acesso direto ao DB!")
+  },
 }
