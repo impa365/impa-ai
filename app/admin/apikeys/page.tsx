@@ -105,7 +105,7 @@ export default function AdminApiKeysPage() {
     try {
       await Promise.all([fetchApiKeys(), fetchUsers()])
     } catch (error) {
-      console.error("❌ Erro ao carregar dados:", error)
+      console.error("❌ [Frontend] Erro ao carregar dados:", error)
       setMessage("Erro ao carregar dados")
     } finally {
       setLoading(false)
@@ -114,21 +114,38 @@ export default function AdminApiKeysPage() {
 
   const fetchApiKeys = async () => {
     try {
+      console.log("🔍 [Frontend] Fetching API keys...")
+
       const response = await fetch("/api/admin/api-keys")
+      console.log("📡 [Frontend] API response status:", response.status)
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
+
       const data = await response.json()
+      console.log("📊 [Frontend] API response data:", {
+        isArray: Array.isArray(data),
+        length: data?.length || 0,
+        firstItem: data?.[0]
+          ? {
+              id: data[0].id,
+              name: data[0].name,
+              hasUserProfiles: !!data[0].user_profiles,
+            }
+          : null,
+      })
 
       // Ensure data is always an array
       if (Array.isArray(data)) {
         setApiKeys(data)
+        console.log("✅ [Frontend] API keys set successfully:", data.length)
       } else {
-        console.error("❌ Invalid API keys data format:", data)
+        console.error("❌ [Frontend] Invalid API keys data format:", data)
         setApiKeys([])
       }
     } catch (error) {
-      console.error("❌ Erro ao buscar API keys:", error)
+      console.error("❌ [Frontend] Erro ao buscar API keys:", error)
       setMessage("Erro ao buscar API keys")
       setApiKeys([]) // Ensure apiKeys is always an array
     }
@@ -156,15 +173,6 @@ export default function AdminApiKeysPage() {
       setMessage("Erro ao buscar usuários")
       setUsers([]) // Ensure users is always an array
     }
-  }
-
-  const generateApiKey = (): string => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    let result = "impaai_"
-    for (let i = 0; i < 32; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
-    return result
   }
 
   const handleCreateApiKey = async () => {
@@ -300,6 +308,8 @@ export default function AdminApiKeysPage() {
     )
   }
 
+  console.log("🎨 [Frontend] Rendering with apiKeys:", apiKeys.length)
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -321,6 +331,21 @@ export default function AdminApiKeysPage() {
           <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
+
+      {/* Debug Info */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <h3 className="font-medium text-yellow-800 mb-2">Debug Info:</h3>
+        <div className="text-sm text-yellow-700 space-y-1">
+          <div>API Keys carregadas: {apiKeys.length}</div>
+          <div>Usuários carregados: {users.length}</div>
+          <div>Loading: {loading ? "true" : "false"}</div>
+          {apiKeys.length > 0 && (
+            <div>
+              Primeira API Key: {apiKeys[0].name} (User: {apiKeys[0].user_profiles?.email || "sem usuário"})
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -403,7 +428,9 @@ export default function AdminApiKeysPage() {
                       <TableCell>
                         <div>
                           <div className="font-medium">{apiKey.user_profiles?.full_name || "Sem nome"}</div>
-                          <div className="text-sm text-gray-500">{apiKey.user_profiles?.email}</div>
+                          <div className="text-sm text-gray-500">
+                            {apiKey.user_profiles?.email || "Email não encontrado"}
+                          </div>
                           <Badge
                             variant="outline"
                             className={`text-xs mt-1 ${

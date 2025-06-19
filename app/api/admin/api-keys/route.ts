@@ -4,53 +4,109 @@ import { createClient } from "@supabase/supabase-js"
 
 export async function GET() {
   try {
+    console.log("🔍 [API Keys] Starting fetch...")
+
     const user = getCurrentUser()
+    console.log("👤 [API Keys] Current user:", user ? `${user.email} (${user.role})` : "null")
+
     if (!user || user.role !== "admin") {
+      console.log("❌ [API Keys] Unauthorized access")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Use the same environment variables as other working APIs
-    const supabaseUrl = process.env.SUPABASE_URL!
-    const supabaseKey = process.env.SUPABASE_ANON_KEY!
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    console.log("🔑 [API Keys] Environment check:", {
+      hasUrl: !!supabaseUrl,
+      hasKey: !!supabaseKey,
+    })
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ [API Keys] Missing environment variables")
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+    }
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // First, get API keys
+    console.log("📊 [API Keys] Fetching from user_api_keys table...")
+
+    // First, get API keys with detailed logging
     const { data: apiKeysData, error: apiKeysError } = await supabase
       .from("user_api_keys")
       .select("*")
       .order("created_at", { ascending: false })
 
+    console.log("📋 [API Keys] Raw query result:", {
+      success: !apiKeysError,
+      error: apiKeysError,
+      dataCount: apiKeysData?.length || 0,
+      firstItem: apiKeysData?.[0]
+        ? {
+            id: apiKeysData[0].id,
+            name: apiKeysData[0].name,
+            user_id: apiKeysData[0].user_id,
+            is_active: apiKeysData[0].is_active,
+          }
+        : null,
+    })
+
     if (apiKeysError) {
-      console.error("❌ Error fetching API keys:", apiKeysError)
+      console.error("❌ [API Keys] Error fetching API keys:", apiKeysError)
       return NextResponse.json({ error: "Failed to fetch API keys" }, { status: 500 })
     }
 
-    // If we have API keys, get user profiles
-    if (apiKeysData && apiKeysData.length > 0) {
-      const userIds = [...new Set(apiKeysData.map((key) => key.user_id))]
-
-      const { data: usersData, error: usersError } = await supabase
-        .from("user_profiles")
-        .select("id, full_name, email, role")
-        .in("id", userIds)
-
-      if (usersError) {
-        console.error("❌ Error fetching users:", usersError)
-      }
-
-      // Combine the data
-      const combinedData = apiKeysData.map((apiKey) => ({
-        ...apiKey,
-        user_profiles: usersData?.find((user) => user.id === apiKey.user_id) || null,
-      }))
-
-      return NextResponse.json(combinedData)
+    if (!apiKeysData || apiKeysData.length === 0) {
+      console.log("📝 [API Keys] No API keys found in database")
+      return NextResponse.json([])
     }
 
-    return NextResponse.json([])
+    // Get unique user IDs
+    const userIds = [...new Set(apiKeysData.map((key) => key.user_id))]
+    console.log("👥 [API Keys] Fetching user profiles for IDs:", userIds)
+
+    const { data: usersData, error: usersError } = await supabase
+      .from("user_profiles")
+      .select("id, full_name, email, role")
+      .in("id", userIds)
+
+    console.log("👤 [API Keys] User profiles result:", {
+      success: !usersError,
+      error: usersError,
+      userCount: usersData?.length || 0,
+      users: usersData?.map((u) => ({ id: u.id, email: u.email, role: u.role })) || [],
+    })
+
+    if (usersError) {
+      console.error("❌ [API Keys] Error fetching users:", usersError)
+      // Continue without user data rather than failing
+    }
+
+    // Combine the data
+    const combinedData = apiKeysData.map((apiKey) => {
+      const userProfile = usersData?.find((user) => user.id === apiKey.user_id) || null
+      console.log(`🔗 [API Keys] Combining data for key ${apiKey.name}:`, {
+        keyId: apiKey.id,
+        userId: apiKey.user_id,
+        foundUser: !!userProfile,
+        userEmail: userProfile?.email || "not found",
+      })
+
+      return {
+        ...apiKey,
+        user_profiles: userProfile,
+      }
+    })
+
+    console.log("✅ [API Keys] Final combined data:", {
+      totalKeys: combinedData.length,
+      keysWithUsers: combinedData.filter((k) => k.user_profiles).length,
+      keysWithoutUsers: combinedData.filter((k) => !k.user_profiles).length,
+    })
+
+    return NextResponse.json(combinedData)
   } catch (error) {
-    console.error("❌ Error in API keys route:", error)
+    console.error("❌ [API Keys] Unexpected error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
