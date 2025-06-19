@@ -32,7 +32,13 @@ export async function GET() {
           description: theme.description || "Sistema de gestão",
           logoIcon: theme.logo_icon || "🤖",
           primaryColor: theme.colors?.primary || "#3b82f6",
-          // ... (outras propriedades do tema)
+          secondaryColor: theme.colors?.secondary || "#10b981",
+          accentColor: theme.colors?.accent || "#8b5cf6",
+          textColor: theme.colors?.text,
+          backgroundColor: theme.colors?.background,
+          fontFamily: theme.fonts?.primary,
+          borderRadius: theme.borders?.radius,
+          customCss: theme.custom_css,
         }
       }
     } else {
@@ -41,7 +47,7 @@ export async function GET() {
 
     // Buscar configurações do sistema
     const settingsResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings`, { headers })
-    let processedSettings: Record<string, any> = {} // Tipagem para clareza
+    let processedSettings: Record<string, any> = {}
     if (settingsResponse.ok) {
       const settingsData = await settingsResponse.json()
       console.log("📊 [API /api/config] Dados brutos das configurações:", settingsData)
@@ -59,29 +65,44 @@ export async function GET() {
           ) {
             value = Number(value)
           }
-          acc[setting.setting_key] = value
+          acc[setting.setting_key] = value // Chaves aqui são snake_case, ex: allow_public_registration
           return acc
         }, {})
-        console.log("✅ [API /api/config] Configurações processadas internamente:", processedSettings)
+        console.log("✅ [API /api/config] Configurações processadas internamente (snake_case):", processedSettings)
       } else {
         console.log("⚠️ [API /api/config] Nenhuma configuração encontrada na tabela system_settings")
       }
     } else {
-      console.error("❌ [API /api/config] Erro ao buscar configurações:", settingsResponse.status, await settingsResponse.text())
+      console.error(
+        "❌ [API /api/config] Erro ao buscar configurações:",
+        settingsResponse.status,
+        await settingsResponse.text(),
+      )
     }
 
     if (!themeData) {
-      themeData = { systemName: "Impa AI", logoIcon: "🤖", primaryColor: "#3b82f6" }
+      themeData = {
+        systemName: "Impa AI",
+        description: "Tema padrão azul da plataforma", // Adicionando descrição padrão
+        logoIcon: "🤖",
+        primaryColor: "#3b82f6",
+      }
     }
 
-    // Construção do objeto final de settings para a resposta
-    // Garantir que allowPublicRegistration seja booleano e use o valor de processedSettings
+    // CORREÇÃO AQUI:
+    // 1. Remove a chave snake_case original do objeto processedSettings.
+    // 2. Adiciona a chave camelCase com o valor correto.
+    const { allow_public_registration, ...otherProcessedSettings } = processedSettings
+
     const finalResponseSettings = {
-      ...processedSettings, // Espalha primeiro
-      allowPublicRegistration: processedSettings.allowPublicRegistration === true, // Usa o valor processado e garante que seja booleano
+      ...otherProcessedSettings, // Espalha as outras configurações
+      allowPublicRegistration: allow_public_registration === true, // Usa a snake_case para definir a camelCase
     }
 
-    console.log("🔧 [API /api/config] Objeto settings FINAL a ser enviado na resposta:", finalResponseSettings)
+    console.log(
+      "🔧 [API /api/config] Objeto settings FINAL a ser enviado na resposta (camelCase):",
+      finalResponseSettings,
+    )
 
     const apiResponse = {
       theme: themeData,
@@ -90,7 +111,6 @@ export async function GET() {
 
     console.log("📤 [API /api/config] Resposta COMPLETA a ser enviada:", apiResponse)
     return NextResponse.json(apiResponse)
-
   } catch (error: any) {
     console.error("💥 [API /api/config] Erro GERAL:", error.message, error.stack)
     return NextResponse.json(
@@ -98,7 +118,7 @@ export async function GET() {
         theme: { systemName: "Impa AI", logoIcon: "🤖", primaryColor: "#3b82f6" },
         settings: { allowPublicRegistration: false },
       },
-      { status: 500 } // Importante retornar status de erro
+      { status: 500 },
     )
   }
 }
