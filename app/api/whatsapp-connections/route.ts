@@ -1,20 +1,23 @@
 import { NextResponse } from "next/server"
 
 export async function GET(request: Request) {
-  console.log("📡 API: /api/whatsapp-connections chamada")
-
   try {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("userId")
     const isAdmin = searchParams.get("isAdmin") === "true"
 
-    console.log("📝 Parâmetros recebidos:", { userId, isAdmin })
-
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
+    // Verificar variáveis de ambiente
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Configuração do banco não encontrada",
+        },
+        { status: 500 },
+      )
     }
 
     const headers = {
@@ -25,34 +28,43 @@ export async function GET(request: Request) {
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    let url = `${supabaseUrl}/rest/v1/whatsapp_connections?select=*&order=connection_name.asc`
+    let url = `${supabaseUrl}/rest/v1/whatsapp_connections?select=*,user_profiles(id,email,full_name)&order=connection_name.asc`
 
     // Se não for admin e tiver userId, filtrar por usuário
     if (!isAdmin && userId) {
       url += `&user_id=eq.${userId}`
     }
 
-    console.log("🔍 Buscando conexões WhatsApp:", url)
-    const response = await fetch(url, { headers })
+    const response = await fetch(url, {
+      headers,
+      cache: "no-store", // Evitar cache
+    })
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("❌ Erro ao buscar conexões:", response.status, errorText)
-      throw new Error(`Erro ao buscar conexões: ${response.status}`)
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Erro ao buscar conexões: ${response.status}`,
+        },
+        { status: response.status },
+      )
     }
 
     const connections = await response.json()
-    console.log("✅ Conexões encontradas:", connections.length)
 
     // Filtrar dados sensíveis
     const safeConnections = connections.map((conn: any) => ({
       id: conn.id,
       connection_name: conn.connection_name,
       instance_name: conn.instance_name,
-      status: conn.status,
+      status: conn.status || "disconnected",
       user_id: conn.user_id,
       phone_number: conn.phone_number,
       created_at: conn.created_at,
+      updated_at: conn.updated_at,
+      user_profiles: conn.user_profiles,
+      settings: conn.settings,
     }))
 
     return NextResponse.json({
@@ -60,9 +72,9 @@ export async function GET(request: Request) {
       connections: safeConnections,
     })
   } catch (error: any) {
-    console.error("❌ Erro na API whatsapp-connections:", error.message)
     return NextResponse.json(
       {
+        success: false,
         error: "Erro interno do servidor",
         details: error.message,
       },
