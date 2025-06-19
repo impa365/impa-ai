@@ -97,8 +97,13 @@ export default function WhatsAppSettingsModal({
         setSettings(newSettings)
         setDataSource(result.source)
 
+        // Mostrar aviso baseado na fonte dos dados
         if (result.source === "local_database") {
           setError("Configurações carregadas do cache local. A Evolution API pode estar indisponível.")
+        } else if (result.source === "default") {
+          setError("Evolution API indisponível. Usando configurações padrão.")
+        } else if (result.warning) {
+          setError(result.warning)
         }
       } else {
         setSettings(defaultSettings)
@@ -106,7 +111,7 @@ export default function WhatsAppSettingsModal({
       }
     } catch (error) {
       setSettings(defaultSettings)
-      setError("Erro ao carregar configurações. Usando valores padrão.")
+      setError("Erro de conexão. Verifique se a Evolution API está funcionando.")
     } finally {
       setLoadingSettings(false)
     }
