@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
-import { getSupabaseServer } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+const supabaseUrl = process.env.SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -9,9 +12,15 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const supabase = await getSupabaseServer()
+    const { id } = params
 
-    const { error } = await supabase.from("user_api_keys").delete().eq("id", params.id)
+    if (!id) {
+      return NextResponse.json({ error: "API key ID is required" }, { status: 400 })
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    const { error } = await supabase.from("user_api_keys").delete().eq("id", id)
 
     if (error) {
       console.error("❌ Error deleting API key:", error)

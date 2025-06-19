@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
-import { getSupabaseServer } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+const supabaseUrl = process.env.SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 export async function GET() {
   try {
@@ -9,7 +12,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const supabase = await getSupabaseServer()
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     const { data, error } = await supabase
       .from("user_api_keys")
@@ -56,7 +59,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User ID and name are required" }, { status: 400 })
     }
 
-    const supabase = await getSupabaseServer()
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // Generate API key
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
