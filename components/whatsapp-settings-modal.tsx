@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
-import { Settings, Save, Loader2, RefreshCw } from "lucide-react"
+import { Settings, Save, Loader2, RefreshCw, CheckCircle, AlertTriangle } from "lucide-react"
 
 interface WhatsAppSettingsModalProps {
   open: boolean
@@ -55,6 +55,7 @@ export default function WhatsAppSettingsModal({
   const [loadingSettings, setLoadingSettings] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [dataSource, setDataSource] = useState<"evolution_api" | "local_database" | null>(null)
 
   useEffect(() => {
     if (open && connection?.instance_name) {
@@ -67,6 +68,7 @@ export default function WhatsAppSettingsModal({
       setError("")
       setSuccess("")
       setSettings(defaultSettings)
+      setDataSource(null)
     }
   }, [open])
 
@@ -79,30 +81,28 @@ export default function WhatsAppSettingsModal({
 
     try {
       const response = await fetch(`/api/whatsapp/settings/${connection.instance_name}`)
+      const result = await response.json()
 
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success && result.settings) {
-          const apiSettings = result.settings
-          const newSettings: SettingsConfig = {
-            groupsIgnore: apiSettings.groupsIgnore ?? defaultSettings.groupsIgnore,
-            readMessages: apiSettings.readMessages ?? defaultSettings.readMessages,
-            alwaysOnline: apiSettings.alwaysOnline ?? defaultSettings.alwaysOnline,
-            readStatus: apiSettings.readStatus ?? defaultSettings.readStatus,
-            rejectCall: apiSettings.rejectCall ?? defaultSettings.rejectCall,
-            msgCall: apiSettings.msgCall || defaultSettings.msgCall,
-            syncFullHistory: apiSettings.syncFullHistory ?? defaultSettings.syncFullHistory,
-          }
-          setSettings(newSettings)
-        } else {
-          setSettings(defaultSettings)
-          if (result.error) {
-            setError(`Aviso: ${result.error}. Usando configurações padrão.`)
-          }
+      if (response.ok && result.success) {
+        const apiSettings = result.settings
+        const newSettings: SettingsConfig = {
+          groupsIgnore: apiSettings.groupsIgnore ?? defaultSettings.groupsIgnore,
+          readMessages: apiSettings.readMessages ?? defaultSettings.readMessages,
+          alwaysOnline: apiSettings.alwaysOnline ?? defaultSettings.alwaysOnline,
+          readStatus: apiSettings.readStatus ?? defaultSettings.readStatus,
+          rejectCall: apiSettings.rejectCall ?? defaultSettings.rejectCall,
+          msgCall: apiSettings.msgCall || defaultSettings.msgCall,
+          syncFullHistory: apiSettings.syncFullHistory ?? defaultSettings.syncFullHistory,
+        }
+        setSettings(newSettings)
+        setDataSource(result.source)
+
+        if (result.source === "local_database") {
+          setError("Configurações carregadas do cache local. A Evolution API pode estar indisponível.")
         }
       } else {
         setSettings(defaultSettings)
-        setError("Erro ao carregar configurações. Usando valores padrão.")
+        setError(result.error || "Erro ao carregar configurações. Usando valores padrão.")
       }
     } catch (error) {
       setSettings(defaultSettings)
@@ -144,9 +144,10 @@ export default function WhatsAppSettingsModal({
       const result = await response.json()
 
       if (result.success) {
-        setSuccess("Configurações salvas com sucesso!")
+        setSuccess("Configurações salvas com sucesso na Evolution API!")
         onSettingsSaved?.()
 
+        // Recarregar configurações após salvar
         setTimeout(() => {
           loadCurrentSettings()
         }, 1000)
@@ -190,12 +191,14 @@ export default function WhatsAppSettingsModal({
 
         {error && (
           <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
             <AlertDescription className="text-destructive-foreground">{error}</AlertDescription>
           </Alert>
         )}
 
         {success && (
           <Alert className="border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
+            <CheckCircle className="h-4 w-4 text-green-600" />
             <AlertDescription className="text-green-700 dark:text-green-300">{success}</AlertDescription>
           </Alert>
         )}
@@ -208,7 +211,13 @@ export default function WhatsAppSettingsModal({
         ) : (
           <div className="space-y-6 bg-background text-foreground py-4">
             <div className="flex justify-between items-center">
-              <p className="text-sm text-muted-foreground">Configurações salvas localmente</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Fonte: {dataSource === "evolution_api" ? "Evolution API" : "Cache Local"}
+                </p>
+                {dataSource === "evolution_api" && <CheckCircle className="w-4 h-4 text-green-600" />}
+                {dataSource === "local_database" && <AlertTriangle className="w-4 h-4 text-yellow-600" />}
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -335,12 +344,12 @@ export default function WhatsAppSettingsModal({
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Salvando...
+                Salvando na Evolution API...
               </>
             ) : (
               <>
                 <Save className="w-4 h-4 mr-2" />
-                Salvar Configurações
+                Salvar na Evolution API
               </>
             )}
           </Button>
