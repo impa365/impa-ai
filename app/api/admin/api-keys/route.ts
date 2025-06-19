@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
-import { getSupabaseServer } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 
 export async function GET() {
   try {
@@ -9,7 +9,11 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const supabase = getSupabaseServer()
+    // Use the same environment variables as other working APIs
+    const supabaseUrl = process.env.SUPABASE_URL!
+    const supabaseKey = process.env.SUPABASE_ANON_KEY!
+
+    const supabase = createClient(supabaseUrl, supabaseKey)
 
     // First, get API keys
     const { data: apiKeysData, error: apiKeysError } = await supabase
@@ -65,7 +69,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User ID and name are required" }, { status: 400 })
     }
 
-    const supabase = getSupabaseServer()
+    const supabaseUrl = process.env.SUPABASE_URL!
+    const supabaseKey = process.env.SUPABASE_ANON_KEY!
+
+    const supabase = createClient(supabaseUrl, supabaseKey)
 
     // Generate API key
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
