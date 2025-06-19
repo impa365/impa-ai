@@ -2,6 +2,23 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { createClient } from "@supabase/supabase-js"
 
+// Create admin Supabase client with service role key
+function createAdminSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error("Missing Supabase environment variables")
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+}
+
 export async function GET() {
   try {
     console.log("🔍 [API Keys] Starting fetch...")
@@ -14,20 +31,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    console.log("🔑 [API Keys] Environment check:", {
-      hasUrl: !!supabaseUrl,
-      hasKey: !!supabaseKey,
-    })
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ [API Keys] Missing environment variables")
-      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    const supabase = createAdminSupabaseClient()
 
     console.log("📊 [API Keys] Fetching from user_api_keys table...")
 
@@ -113,22 +117,27 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("➕ [API Keys] Starting creation...")
+
     const user = getCurrentUser()
+    console.log("👤 [API Keys] Current user:", user ? `${user.email} (${user.role})` : "null")
+
     if (!user || user.role !== "admin") {
+      console.log("❌ [API Keys] Unauthorized access")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await request.json()
     const { user_id, name, description } = body
 
+    console.log("📝 [API Keys] Create request:", { user_id, name, hasDescription: !!description })
+
     if (!user_id || !name) {
+      console.log("❌ [API Keys] Missing required fields")
       return NextResponse.json({ error: "User ID and name are required" }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL!
-    const supabaseKey = process.env.SUPABASE_ANON_KEY!
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    const supabase = createAdminSupabaseClient()
 
     // Generate API key
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
@@ -137,7 +146,10 @@ export async function POST(request: NextRequest) {
       apiKey += chars.charAt(Math.floor(Math.random() * chars.length))
     }
 
-    const { error } = await supabase.from("user_api_keys").insert({
+    console.log("🔑 [API Keys] Generated API key:", `${apiKey.substring(0, 15)}...`)
+
+    // Prepare insert data
+    const insertData = {
       user_id,
       name: name.trim(),
       api_key: apiKey,
@@ -147,16 +159,32 @@ export async function POST(request: NextRequest) {
       is_active: true,
       is_admin_key: false,
       access_scope: "user",
+      allowed_ips: [],
+      usage_count: 0,
+    }
+
+    console.log("💾 [API Keys] Insert data:", {
+      ...insertData,
+      api_key: `${insertData.api_key.substring(0, 15)}...`,
     })
 
+    const { data, error } = await supabase.from("user_api_keys").insert(insertData).select()
+
     if (error) {
-      console.error("❌ Error creating API key:", error)
+      console.error("❌ [API Keys] Error creating API key:", error)
+      console.error("❌ [API Keys] Error details:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      })
       return NextResponse.json({ error: "Failed to create API key" }, { status: 500 })
     }
 
+    console.log("✅ [API Keys] API key created successfully:", data)
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("❌ Error in create API key:", error)
+    console.error("❌ [API Keys] Unexpected error in creation:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
