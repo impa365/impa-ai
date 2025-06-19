@@ -13,8 +13,6 @@ class PublicApiClient {
 
   async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     try {
-      console.log(`📡 [API-CLIENT] Fazendo requisição para: ${this.baseUrl}${endpoint}`)
-
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         headers: {
           "Content-Type": "application/json",
@@ -24,11 +22,13 @@ class PublicApiClient {
       })
 
       // Tenta parsear JSON mesmo se !response.ok para obter a mensagem de erro do corpo
-      const responseData = await response.json().catch(e => {
-        console.warn(`⚠️ [API-CLIENT] Falha ao parsear JSON da resposta de ${endpoint} (status: ${response.status}). Corpo não era JSON?`, e)
+      const responseData = await response.json().catch((e) => {
+        console.warn(
+          `⚠️ [API-CLIENT] Falha ao parsear JSON da resposta de ${endpoint} (status: ${response.status}). Corpo não era JSON?`,
+          e,
+        )
         return { error: `Erro no servidor (status: ${response.status}), resposta não é JSON válido.` } // Retorna um objeto de erro se o JSON falhar
-      });
-
+      })
 
       if (!response.ok) {
         console.error(`❌ [API-CLIENT] Erro na requisição para ${endpoint}:`, response.status, responseData)
@@ -36,7 +36,6 @@ class PublicApiClient {
         return { error: responseData?.error || `Erro na requisição (status ${response.status})` }
       }
 
-      console.log(`✅ [API-CLIENT] Requisição bem-sucedida para ${endpoint}. Dados recebidos:`, responseData)
       return { data: responseData }
     } catch (error: any) {
       console.error(`💥 [API-CLIENT] Erro de rede ou inesperado para ${endpoint}:`, error.message)
@@ -45,9 +44,7 @@ class PublicApiClient {
   }
 
   async getConfig(): Promise<ApiResponse<{ theme: any; settings: any }>> {
-    console.log("📞 [API-CLIENT] Chamando getConfig...")
     const result = await this.makeRequest<{ theme: any; settings: any }>("/api/config")
-    console.log("📦 [API-CLIENT] Resultado recebido por getConfig:", result)
     return result
   }
 

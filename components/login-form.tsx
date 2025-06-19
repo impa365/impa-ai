@@ -30,12 +30,9 @@ function LoginForm() {
     const checkRegistrationSetting = async () => {
       try {
         setCheckingRegistration(true)
-        console.log("🔍 Verificando configuração de registro público via API...")
 
         // Usar a API pública ao invés de acessar Supabase diretamente
         const { data, error } = await publicApi.getConfig()
-
-        console.log("🔍 [CLIENT] Dados brutos recebidos de getConfig:", { data, error })
 
         if (error) {
           console.error("Erro ao buscar configuração via API:", error)
@@ -43,16 +40,12 @@ function LoginForm() {
           setAllowRegistration(false)
         } else if (data && data.settings) {
           // Verifique se data E data.settings existem
-          console.log("📊 [CLIENT] Configuração recebida da API:", data)
           // Certifique-se de que está comparando com booleano true
           const isAllowed = data.settings.allowPublicRegistration === true
-          console.log("✅ [CLIENT] Registro público permitido:", isAllowed)
           setAllowRegistration(isAllowed)
         } else if (data && !data.settings) {
-          console.log("⚠️ [CLIENT] 'data' recebido, mas 'data.settings' está faltando:", data)
           setAllowRegistration(false)
         } else {
-          console.log("⚠️ Nenhuma configuração retornada, desabilitando registro")
           setAllowRegistration(false)
         }
       } catch (error: any) {
@@ -196,15 +189,6 @@ function LoginForm() {
           {checkingRegistration && (
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-500">Verificando configurações...</p>
-            </div>
-          )}
-
-          {/* Debug info - só em desenvolvimento */}
-          {process.env.NODE_ENV === "development" && (
-            <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
-              <p>Debug: Registration allowed = {allowRegistration.toString()}</p>
-              <p>Debug: Checking = {checkingRegistration.toString()}</p>
-              <p>Debug: Show register button = {(!checkingRegistration && allowRegistration).toString()}</p>
             </div>
           )}
         </CardContent>
