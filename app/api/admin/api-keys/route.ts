@@ -2,16 +2,23 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { createClient } from "@supabase/supabase-js"
 
-// Create admin Supabase client with service role key
+// Create admin Supabase client with available environment variables
 function createAdminSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseKey = process.env.SUPABASE_ANON_KEY
 
-  if (!supabaseUrl || !supabaseServiceKey) {
+  console.log("🔑 [API Keys] Environment variables check:", {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseKey,
+    urlLength: supabaseUrl?.length || 0,
+    keyLength: supabaseKey?.length || 0,
+  })
+
+  if (!supabaseUrl || !supabaseKey) {
     throw new Error("Missing Supabase environment variables")
   }
 
-  return createClient(supabaseUrl, supabaseServiceKey, {
+  return createClient(supabaseUrl, supabaseKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -178,6 +185,19 @@ export async function POST(request: NextRequest) {
         details: error.details,
         hint: error.hint,
       })
+
+      // If it's an RLS error, try to provide more context
+      if (error.message?.includes("row-level security")) {
+        console.error("❌ [API Keys] RLS Policy violation - admin user may need different permissions")
+        return NextResponse.json(
+          {
+            error: "Permission denied - Row Level Security policy violation",
+            details: "Admin user may not have permission to create API keys",
+          },
+          { status: 403 },
+        )
+      }
+
       return NextResponse.json({ error: "Failed to create API key" }, { status: 500 })
     }
 
