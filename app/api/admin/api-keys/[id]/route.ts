@@ -2,8 +2,13 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { createClient } from "@supabase/supabase-js"
 
-const supabaseUrl = process.env.SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+// Create Supabase client for API routes
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+})
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -15,10 +20,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const { id } = params
 
     if (!id) {
-      return NextResponse.json({ error: "API key ID is required" }, { status: 400 })
+      return NextResponse.json({ error: "API Key ID is required" }, { status: 400 })
     }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     const { error } = await supabase.from("user_api_keys").delete().eq("id", id)
 
