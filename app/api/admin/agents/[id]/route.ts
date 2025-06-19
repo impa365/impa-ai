@@ -1,22 +1,26 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabaseConfig } from "@/lib/supabase-config"
-
-// Verificar se as variáveis de ambiente estão definidas
-if (!supabaseConfig.url || !supabaseConfig.serviceRoleKey) {
-  throw new Error("Configurações do Supabase não encontradas. Verifique as variáveis de ambiente.")
-}
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const agentId = params.id
     const body = await request.json()
 
+    // Verificar variáveis de ambiente em runtime
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
+    }
+
     // Fazer requisição direta para a API REST do Supabase
-    const response = await fetch(`${supabaseConfig.url}/rest/v1/ai_agents?id=eq.${agentId}`, {
+    const response = await fetch(`${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`, {
       method: "PATCH",
       headers: {
-        ...supabaseConfig.headers,
-        Authorization: `Bearer ${supabaseConfig.serviceRoleKey}`,
+        "Content-Type": "application/json",
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
+        Authorization: `Bearer ${supabaseKey}`,
         Prefer: "return=representation",
       },
       body: JSON.stringify(body),
@@ -41,12 +45,22 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   try {
     const agentId = params.id
 
+    // Verificar variáveis de ambiente em runtime
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
+    }
+
     // Fazer requisição direta para a API REST do Supabase
-    const response = await fetch(`${supabaseConfig.url}/rest/v1/ai_agents?id=eq.${agentId}`, {
+    const response = await fetch(`${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`, {
       method: "DELETE",
       headers: {
-        ...supabaseConfig.headers,
-        Authorization: `Bearer ${supabaseConfig.serviceRoleKey}`,
+        "Content-Type": "application/json",
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
+        Authorization: `Bearer ${supabaseKey}`,
       },
     })
 
