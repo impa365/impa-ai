@@ -66,13 +66,18 @@ export default function AdminWhatsAppPage() {
 
   const [syncing, setSyncing] = useState(false)
 
-  // Auto-sync a cada 30 segundos
-  const autoSync = useCallback(async () => {
+  // Auto-sync silencioso a cada 15 segundos + eventos
+  const autoSync = useCallback(async (showMessage = false) => {
     try {
       await fetch("/api/whatsapp/auto-sync", { method: "POST" })
       // Recarregar conexões silenciosamente
       const data = await fetchWhatsAppConnections(undefined, true)
       setConnections(data)
+
+      if (showMessage) {
+        setSaveMessage("Conexões sincronizadas!")
+        setTimeout(() => setSaveMessage(""), 2000)
+      }
     } catch (error) {
       // Silently handle auto-sync errors
     }
@@ -83,12 +88,32 @@ export default function AdminWhatsAppPage() {
     if (user) {
       setCurrentUser(user)
     }
-    loadConnections()
 
-    // Configurar auto-sync
-    const interval = setInterval(autoSync, 30000) // 30 segundos
+    // Sincronizar ao carregar a página
+    loadConnections().then(() => {
+      autoSync()
+    })
 
-    return () => clearInterval(interval)
+    // Configurar auto-sync a cada 15 segundos
+    const interval = setInterval(() => autoSync(), 15000)
+
+    // Sincronizar quando a página ganhar foco (usuário voltar para a aba)
+    const handleFocus = () => autoSync()
+    window.addEventListener("focus", handleFocus)
+
+    // Sincronizar quando a página ficar visível
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        autoSync()
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("focus", handleFocus)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
   }, [autoSync])
 
   const loadConnections = async () => {
@@ -238,10 +263,7 @@ export default function AdminWhatsAppPage() {
       <div className="flex justify-between items-start mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Conexões WhatsApp</h1>
-          <p className="text-gray-600">
-            Todas as conexões WhatsApp dos usuários
-            <span className="ml-2 text-xs text-green-600">• Auto-sync ativo (30s)</span>
-          </p>
+          <p className="text-gray-600">Todas as conexões WhatsApp dos usuários</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -490,14 +512,20 @@ export default function AdminWhatsAppPage() {
       {/* Modais */}
       <WhatsAppQRModal
         open={qrModalOpen}
-        onOpenChange={setQrModalOpen}
+        onOpenChange={(open) => {
+          setQrModalOpen(open)
+          if (open) autoSync()
+        }}
         connection={selectedConnection}
         onStatusChange={() => loadConnections()}
       />
 
       <WhatsAppSettingsModal
         open={settingsModalOpen}
-        onOpenChange={setSettingsModalOpen}
+        onOpenChange={(open) => {
+          setSettingsModalOpen(open)
+          if (open) autoSync()
+        }}
         connection={selectedConnection}
         onSettingsSaved={() => {
           setSaveMessage("Configurações salvas com sucesso!")
@@ -507,14 +535,20 @@ export default function AdminWhatsAppPage() {
 
       <WhatsAppInfoModal
         open={infoModalOpen}
-        onOpenChange={setInfoModalOpen}
+        onOpenChange={(open) => {
+          setInfoModalOpen(open)
+          if (open) autoSync()
+        }}
         connection={selectedConnection}
         onStatusChange={() => loadConnections()}
       />
 
       <AdminWhatsAppConnectionModal
         open={createModalOpen}
-        onOpenChange={setCreateModalOpen}
+        onOpenChange={(open) => {
+          setCreateModalOpen(open)
+          if (!open) autoSync()
+        }}
         adminId={currentUser?.id}
         onSuccess={() => {
           loadConnections()
@@ -525,7 +559,10 @@ export default function AdminWhatsAppPage() {
 
       <TransferConnectionModal
         open={transferModalOpen}
-        onOpenChange={setTransferModalOpen}
+        onOpenChange={(open) => {
+          setTransferModalOpen(open)
+          if (!open) autoSync()
+        }}
         connection={selectedConnection}
         onSuccess={() => {
           loadConnections()
