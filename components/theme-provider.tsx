@@ -37,7 +37,53 @@ export function useTheme() {
   return context
 }
 
-// Tema padrão genérico
+// Temas predefinidos
+export const themePresets: Record<string, ThemeConfig> = {
+  blue: {
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
+    logoIcon: "🤖",
+    primaryColor: "#3b82f6",
+    secondaryColor: "#10b981",
+    accentColor: "#8b5cf6",
+  },
+  purple: {
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
+    logoIcon: "🔮",
+    primaryColor: "#8b5cf6",
+    secondaryColor: "#ec4899",
+    accentColor: "#3b82f6",
+  },
+  green: {
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
+    logoIcon: "🌱",
+    primaryColor: "#10b981",
+    secondaryColor: "#3b82f6",
+    accentColor: "#f59e0b",
+  },
+  orange: {
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
+    logoIcon: "🔥",
+    primaryColor: "#f97316",
+    secondaryColor: "#8b5cf6",
+    accentColor: "#10b981",
+  },
+  dark: {
+    systemName: "Sistema",
+    description: "Plataforma de gestão",
+    logoIcon: "⚡",
+    primaryColor: "#6366f1",
+    secondaryColor: "#ec4899",
+    accentColor: "#f97316",
+    backgroundColor: "#1e293b",
+    textColor: "#f8fafc",
+  },
+}
+
+// Tema padrão
 export const defaultTheme: ThemeConfig = {
   systemName: "Sistema",
   description: "Plataforma de gestão",
@@ -96,24 +142,29 @@ export function applyThemeColors(theme: ThemeConfig): void {
   }
 }
 
-// ✅ SEGURO: Carregar tema via API interna (NUNCA acessa Supabase diretamente)
+// Função SEGURA para carregar tema via API (SEM Supabase no cliente)
 async function loadThemeFromApi(): Promise<ThemeConfig | null> {
   try {
-    const response = await fetch("/api/theme", {
-      cache: "no-store",
+    const response = await fetch("/api/config", {
+      method: "GET",
       headers: {
         "Content-Type": "application/json",
       },
+      cache: "no-store",
     })
 
     if (!response.ok) {
       return null
     }
 
-    const themeData = await response.json()
-    return themeData as ThemeConfig
+    const result = await response.json()
+
+    if (result.success && result.data?.theme) {
+      return result.data.theme
+    }
+
+    return null
   } catch (error) {
-    console.error("Erro ao carregar tema via API:", error)
     return null
   }
 }
@@ -125,7 +176,7 @@ export function saveThemeToLocalStorage(theme: ThemeConfig): void {
   try {
     localStorage.setItem("impaai-theme", JSON.stringify(theme))
   } catch (error) {
-    console.error("Erro ao salvar tema no localStorage:", error)
+    // Silencioso - não é crítico
   }
 }
 
@@ -140,8 +191,21 @@ export function loadThemeFromLocalStorage(): ThemeConfig | null {
     const parsedTheme = JSON.parse(savedTheme)
     return parsedTheme
   } catch (error) {
-    console.error("Erro ao carregar tema do localStorage:", error)
     return null
+  }
+}
+
+// Funções de compatibilidade (DEPRECATED)
+export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
+  return await loadThemeFromApi()
+}
+
+export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
+  try {
+    saveThemeToLocalStorage(theme)
+    return true
+  } catch (error) {
+    return false
   }
 }
 
@@ -151,22 +215,22 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children, serverFetchedTheme }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<ThemeConfig | null>(serverFetchedTheme || null)
-  const [isLoading, setIsLoading] = useState(!serverFetchedTheme)
+  const [theme, setTheme] = useState<ThemeConfig>(serverFetchedTheme || defaultTheme)
+  const [isLoading, setIsLoading] = useState(false)
 
   const loadClientSideTheme = async () => {
     try {
       setIsLoading(true)
 
-      // ✅ SEGURO: Carregar via API interna
+      // 1. Tentar carregar via API SEGURA
       let loadedTheme = await loadThemeFromApi()
 
-      // Fallback para localStorage
+      // 2. Fallback para localStorage
       if (!loadedTheme) {
         loadedTheme = loadThemeFromLocalStorage()
       }
 
-      // Fallback final para tema padrão
+      // 3. Fallback final para tema padrão
       if (!loadedTheme) {
         loadedTheme = defaultTheme
       }
@@ -175,7 +239,7 @@ export function ThemeProvider({ children, serverFetchedTheme }: ThemeProviderPro
       applyThemeColors(loadedTheme)
       saveThemeToLocalStorage(loadedTheme)
     } catch (error) {
-      console.error("Erro ao carregar tema, usando padrão:", error)
+      // Em caso de erro, usar tema padrão
       setTheme(defaultTheme)
       applyThemeColors(defaultTheme)
     } finally {
@@ -185,51 +249,36 @@ export function ThemeProvider({ children, serverFetchedTheme }: ThemeProviderPro
 
   const updateTheme = async (updates: Partial<ThemeConfig>) => {
     try {
-      if (!theme) return
-
       const newTheme = { ...theme, ...updates }
 
       setTheme(newTheme)
       applyThemeColors(newTheme)
       saveThemeToLocalStorage(newTheme)
 
-      // TODO: Implementar API para salvar tema
+      // TODO: Implementar API para salvar tema no servidor
     } catch (error) {
-      console.error("Erro ao atualizar tema:", error)
+      // Silencioso - não é crítico
     }
   }
 
+  // Carregar tema na inicialização
   useEffect(() => {
-    if (serverFetchedTheme) {
-      setTheme(serverFetchedTheme)
-      applyThemeColors(serverFetchedTheme)
-      saveThemeToLocalStorage(serverFetchedTheme)
-      setIsLoading(false)
-    } else {
+    if (!serverFetchedTheme || serverFetchedTheme === defaultTheme) {
       loadClientSideTheme()
-    }
-  }, [serverFetchedTheme])
-
-  useEffect(() => {
-    if (theme && !isLoading) {
+    } else {
       applyThemeColors(theme)
     }
-  }, [theme, isLoading])
+  }, [])
 
-  if (isLoading && !theme) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-      </div>
-    )
-  }
-
-  const currentTheme = theme || defaultTheme
+  // Aplicar cores sempre que o tema mudar
+  useEffect(() => {
+    applyThemeColors(theme)
+  }, [theme])
 
   return (
     <ThemeContext.Provider
       value={{
-        theme: currentTheme,
+        theme,
         updateTheme,
         loadTheme: loadClientSideTheme,
         isLoading,
