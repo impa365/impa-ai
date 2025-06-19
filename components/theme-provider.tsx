@@ -159,8 +159,9 @@ async function loadThemeFromApi(): Promise<ThemeConfig | null> {
 
     const result = await response.json()
 
-    if (result.success && result.data?.theme) {
-      return result.data.theme
+    // A API retorna { theme: ..., settings: ... } diretamente
+    if (result.theme) {
+      return result.theme
     }
 
     return null
