@@ -112,16 +112,44 @@ export default function AdminWhatsAppPage() {
 
     setSyncing(true)
     try {
-      // Simular sincronização
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-      await loadConnections()
-      setSaveMessage("Sincronização concluída!")
-      setTimeout(() => setSaveMessage(""), 3000)
+      const response = await fetch("/api/whatsapp/sync-all", {
+        method: "POST",
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        await loadConnections()
+        setSaveMessage(`Sincronização concluída! ${result.synced} conexões atualizadas`)
+      } else {
+        setSaveMessage(`Erro na sincronização: ${result.error}`)
+      }
+
+      setTimeout(() => setSaveMessage(""), 5000)
     } catch (error) {
       setSaveMessage("Erro na sincronização")
       setTimeout(() => setSaveMessage(""), 3000)
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const handleSyncConnection = async (connection: any) => {
+    try {
+      const response = await fetch(`/api/whatsapp/sync/${connection.instance_name}`, {
+        method: "POST",
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        await loadConnections()
+        setSaveMessage(`Status sincronizado: ${result.status}`)
+        setTimeout(() => setSaveMessage(""), 3000)
+      }
+    } catch (error) {
+      setSaveMessage("Erro ao sincronizar conexão")
+      setTimeout(() => setSaveMessage(""), 3000)
     }
   }
 
@@ -420,6 +448,15 @@ export default function AdminWhatsAppPage() {
                         className="border-red-200 text-red-600 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSyncConnection(connection)}
+                        title="Sincronizar Status"
+                        className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                      >
+                        <RefreshCw className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
