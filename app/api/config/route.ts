@@ -55,13 +55,27 @@ export async function GET() {
     let settings = {}
     if (settingsResponse.ok) {
       const settingsData = await settingsResponse.json()
+      console.log("📊 Dados brutos das configurações:", settingsData)
+
       if (settingsData && settingsData.length > 0) {
         // Converter array de configurações em objeto
         settings = settingsData.reduce((acc: any, setting: any) => {
-          acc[setting.setting_key] = setting.setting_value
+          // Converter string 'true'/'false' para boolean quando necessário
+          let value = setting.setting_value
+          if (value === "true") value = true
+          if (value === "false") value = false
+          if (!isNaN(Number(value)) && value !== "") value = Number(value)
+
+          acc[setting.setting_key] = value
           return acc
         }, {})
+
+        console.log("✅ Configurações processadas:", settings)
+      } else {
+        console.log("⚠️ Nenhuma configuração encontrada na tabela system_settings")
       }
+    } else {
+      console.error("❌ Erro ao buscar configurações:", settingsResponse.status, await settingsResponse.text())
     }
 
     // Tema padrão se não encontrar no banco
