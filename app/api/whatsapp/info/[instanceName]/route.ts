@@ -52,13 +52,14 @@ export async function GET(request: NextRequest, { params }: { params: { instance
       headers: {
         apikey: config.apiKey,
       },
+      signal: AbortSignal.timeout(8000), // 8 segundos timeout
     })
 
     if (!infoResponse.ok) {
-      return NextResponse.json({ success: false, error: "Erro ao buscar informações" }, { status: 500 })
+      return NextResponse.json({ success: false, error: "Erro ao buscar informações da instância" }, { status: 500 })
     }
 
-    const infoData = await infoResponse.json()
+    const instanceData = await infoResponse.json()
 
     // Buscar status da conexão
     const statusResponse = await fetch(`${config.apiUrl}/instance/connectionState/${instanceName}`, {
@@ -68,59 +69,61 @@ export async function GET(request: NextRequest, { params }: { params: { instance
       },
     })
 
-    const connectionInfo = {
-      status: "disconnected",
-      phoneNumber: null,
-      profileName: null,
-      lastSeen: null,
-      isOnline: false,
-      platform: null,
-    }
+    let connectionStatus = "disconnected"
+    let phoneNumber = null
+    let isOnline = false
 
     if (statusResponse.ok) {
       const statusData = await statusResponse.json()
 
-      if (statusData?.instance) {
-        connectionInfo.status =
-          statusData.instance.state === "open"
-            ? "connected"
-            : statusData.instance.state === "connecting"
-              ? "connecting"
-              : "disconnected"
-        connectionInfo.phoneNumber = statusData.instance.wuid || null
-        connectionInfo.profileName = statusData.instance.profileName || null
-        connectionInfo.isOnline = statusData.instance.state === "open"
-        connectionInfo.platform = statusData.instance.platform || null
+      if (statusData?.instance?.state) {
+        switch (statusData.instance.state) {
+          case "open":
+            connectionStatus = "connected"
+            isOnline = true
+            break
+          case "connecting":
+            connectionStatus = "connecting"
+            break
+          case "close":
+          default:
+            connectionStatus = "disconnected"
+            break
+        }
       }
+
+      phoneNumber = statusData?.instance?.wuid || statusData?.instance?.number || null
     }
 
-    // Buscar informações adicionais se conectado
-    if (connectionInfo.status === "connected") {
-      try {
-        const profileResponse = await fetch(`${config.apiUrl}/chat/whatsappProfile/${instanceName}`, {
-          method: "GET",
-          headers: {
-            apikey: config.apiKey,
-          },
-        })
-
-        if (profileResponse.ok) {
-          const profileData = await profileResponse.json()
-          if (profileData) {
-            connectionInfo.profileName = profileData.name || connectionInfo.profileName
-            connectionInfo.lastSeen = profileData.lastSeen || null
-          }
-        }
-      } catch (error) {
-        // Silently handle profile fetch errors
-      }
+    // Formatar informações para retorno
+    const info = {
+      status: connectionStatus,
+      phoneNumber: phoneNumber,
+      profileName: instanceData?.clientName || null,
+      isOnline: isOnline,
+      createdAt: instanceData?.createdAt || null,
+      updatedAt: instanceData?.updatedAt || null,
+      disconnectedAt: instanceData?.disconnectionAt || null,
+      disconnectionReason: instanceData?.disconnectionReasonCode || null,
+      settings: instanceData?.Setting || null,
+      stats: {
+        messages: instanceData?._count?.Message || 0,
+        contacts: instanceData?._count?.Contact || 0,
+        chats: instanceData?._count?.Chat || 0,
+      },
     }
 
     return NextResponse.json({
       success: true,
-      info: connectionInfo,
+      info: info,
     })
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Erro ao buscar informações:", error)
+
+    if (error.name === "TimeoutError") {
+      return NextResponse.json({ success: false, error: "Timeout ao buscar informações" }, { status: 408 })
+    }
+
     return NextResponse.json({ success: false, error: "Erro interno do servidor" }, { status: 500 })
   }
 }

@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Info, RefreshCw, Loader2, Smartphone, User, Calendar, Signal } from "lucide-react"
+import { Info, RefreshCw, Loader2, Smartphone, User, Calendar, Signal, MessageSquare, Users, Phone } from "lucide-react"
 
 interface WhatsAppInfoModalProps {
   open: boolean
@@ -18,16 +18,24 @@ interface ConnectionInfo {
   status: string
   phoneNumber?: string
   profileName?: string
-  lastSeen?: string
-  batteryLevel?: number
   isOnline?: boolean
-  platform?: string
+  createdAt?: string
+  updatedAt?: string
+  disconnectedAt?: string
+  disconnectionReason?: number
+  settings?: any
+  stats?: {
+    messages: number
+    contacts: number
+    chats: number
+  }
 }
 
 export default function WhatsAppInfoModal({ open, onOpenChange, connection, onStatusChange }: WhatsAppInfoModalProps) {
   const [info, setInfo] = useState<ConnectionInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [disconnecting, setDisconnecting] = useState(false)
 
   useEffect(() => {
     if (open && connection?.instance_name) {
@@ -60,6 +68,33 @@ export default function WhatsAppInfoModal({ open, onOpenChange, connection, onSt
     }
   }
 
+  const handleDisconnect = async () => {
+    if (!connection?.instance_name || disconnecting) return
+
+    setDisconnecting(true)
+    try {
+      const response = await fetch(`/api/whatsapp/disconnect/${connection.instance_name}`, {
+        method: "DELETE",
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Atualizar informações após desconectar
+        await fetchConnectionInfo()
+        if (onStatusChange) {
+          onStatusChange("disconnected")
+        }
+      } else {
+        setError(result.error || "Erro ao desconectar")
+      }
+    } catch (error) {
+      setError("Erro ao desconectar")
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
   const handleRefresh = () => {
     fetchConnectionInfo()
   }
@@ -77,43 +112,57 @@ export default function WhatsAppInfoModal({ open, onOpenChange, connection, onSt
     }
   }
 
-  const formatLastSeen = (lastSeen?: string) => {
-    if (!lastSeen) return "Não disponível"
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "Não disponível"
 
     try {
-      const date = new Date(lastSeen)
+      const date = new Date(dateString)
       return date.toLocaleString("pt-BR")
     } catch {
-      return lastSeen
+      return dateString
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-popover-foreground">
             <Info className="w-5 h-5" />
             Informações da Conexão - {connection?.connection_name}
           </DialogTitle>
           <DialogDescription className="text-popover-foreground/80">
-            Detalhes da conexão WhatsApp ativa
+            Detalhes completos da conexão WhatsApp
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h4 className="font-medium text-foreground">Status da Conexão</h4>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={loading}
-              className="text-foreground hover:text-foreground"
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-              Atualizar
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={loading}
+                className="text-foreground hover:text-foreground"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+                Atualizar
+              </Button>
+              {info?.status === "connected" && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDisconnect}
+                  disabled={disconnecting}
+                  className="text-white"
+                >
+                  <Phone className={`w-4 h-4 mr-2 ${disconnecting ? "animate-spin" : ""}`} />
+                  {disconnecting ? "Desconectando..." : "Desconectar"}
+                </Button>
+              )}
+            </div>
           </div>
 
           {error && (
@@ -154,55 +203,74 @@ export default function WhatsAppInfoModal({ open, onOpenChange, connection, onSt
                 <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-foreground">Nome do Perfil:</span>
+                    <span className="text-sm font-medium text-foreground">Cliente:</span>
                   </div>
                   <span className="text-sm text-foreground">{info.profileName}</span>
                 </div>
               )}
 
               {/* Online Status */}
-              {info.isOnline !== undefined && (
-                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${info.isOnline ? "bg-green-500" : "bg-gray-400"}`} />
-                    <span className="text-sm font-medium text-foreground">Online:</span>
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${info.isOnline ? "bg-green-500" : "bg-gray-400"}`} />
+                  <span className="text-sm font-medium text-foreground">Online:</span>
+                </div>
+                <span className="text-sm text-foreground">{info.isOnline ? "Sim" : "Não"}</span>
+              </div>
+
+              {/* Statistics */}
+              {info.stats && (
+                <div className="space-y-2">
+                  <h5 className="font-medium text-foreground">Estatísticas</h5>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
+                      <MessageSquare className="w-5 h-5 mx-auto mb-1 text-blue-600" />
+                      <div className="text-lg font-bold text-blue-600">{info.stats.messages.toLocaleString()}</div>
+                      <div className="text-xs text-blue-600">Mensagens</div>
+                    </div>
+                    <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-center">
+                      <Users className="w-5 h-5 mx-auto mb-1 text-green-600" />
+                      <div className="text-lg font-bold text-green-600">{info.stats.contacts.toLocaleString()}</div>
+                      <div className="text-xs text-green-600">Contatos</div>
+                    </div>
+                    <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-center">
+                      <MessageSquare className="w-5 h-5 mx-auto mb-1 text-purple-600" />
+                      <div className="text-lg font-bold text-purple-600">{info.stats.chats.toLocaleString()}</div>
+                      <div className="text-xs text-purple-600">Chats</div>
+                    </div>
                   </div>
-                  <span className="text-sm text-foreground">{info.isOnline ? "Sim" : "Não"}</span>
                 </div>
               )}
 
-              {/* Last Seen */}
-              {info.lastSeen && (
-                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-foreground">Última Atividade:</span>
+              {/* Dates */}
+              <div className="space-y-2">
+                <h5 className="font-medium text-foreground">Datas</h5>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">Criado em:</span>
+                    </div>
+                    <span className="text-sm text-foreground">{formatDate(info.createdAt)}</span>
                   </div>
-                  <span className="text-sm text-foreground">{formatLastSeen(info.lastSeen)}</span>
-                </div>
-              )}
-
-              {/* Battery Level */}
-              {info.batteryLevel !== undefined && (
-                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 text-muted-foreground">🔋</div>
-                    <span className="text-sm font-medium text-foreground">Bateria:</span>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">Atualizado em:</span>
+                    </div>
+                    <span className="text-sm text-foreground">{formatDate(info.updatedAt)}</span>
                   </div>
-                  <span className="text-sm text-foreground">{info.batteryLevel}%</span>
+                  {info.disconnectedAt && (
+                    <div className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-red-600" />
+                        <span className="text-sm font-medium text-red-600">Desconectado em:</span>
+                      </div>
+                      <span className="text-sm text-red-600">{formatDate(info.disconnectedAt)}</span>
+                    </div>
+                  )}
                 </div>
-              )}
-
-              {/* Platform */}
-              {info.platform && (
-                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Smartphone className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-foreground">Plataforma:</span>
-                  </div>
-                  <span className="text-sm text-foreground">{info.platform}</span>
-                </div>
-              )}
+              </div>
 
               {/* Instance Info */}
               <div className="pt-4 border-t">
@@ -214,9 +282,11 @@ export default function WhatsAppInfoModal({ open, onOpenChange, connection, onSt
                   <p>
                     <strong>Instância:</strong> {connection.instance_name}
                   </p>
-                  <p>
-                    <strong>Criado em:</strong> {new Date(connection.created_at).toLocaleString("pt-BR")}
-                  </p>
+                  {info.disconnectionReason && (
+                    <p>
+                      <strong>Código de Desconexão:</strong> {info.disconnectionReason}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

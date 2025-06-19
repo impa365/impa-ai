@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -66,13 +66,30 @@ export default function AdminWhatsAppPage() {
 
   const [syncing, setSyncing] = useState(false)
 
+  // Auto-sync a cada 30 segundos
+  const autoSync = useCallback(async () => {
+    try {
+      await fetch("/api/whatsapp/auto-sync", { method: "POST" })
+      // Recarregar conexões silenciosamente
+      const data = await fetchWhatsAppConnections(undefined, true)
+      setConnections(data)
+    } catch (error) {
+      // Silently handle auto-sync errors
+    }
+  }, [])
+
   useEffect(() => {
     const user = getCurrentUser()
     if (user) {
       setCurrentUser(user)
     }
     loadConnections()
-  }, [])
+
+    // Configurar auto-sync
+    const interval = setInterval(autoSync, 30000) // 30 segundos
+
+    return () => clearInterval(interval)
+  }, [autoSync])
 
   const loadConnections = async () => {
     try {
@@ -221,7 +238,10 @@ export default function AdminWhatsAppPage() {
       <div className="flex justify-between items-start mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Conexões WhatsApp</h1>
-          <p className="text-gray-600">Todas as conexões WhatsApp dos usuários</p>
+          <p className="text-gray-600">
+            Todas as conexões WhatsApp dos usuários
+            <span className="ml-2 text-xs text-green-600">• Auto-sync ativo (30s)</span>
+          </p>
         </div>
         <div className="flex gap-2">
           <Button
