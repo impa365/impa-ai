@@ -10,6 +10,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogClose,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Sparkles, Users, MessageSquare, Clock } from "lucide-react"
+import { Bot, Sparkles, Eye, EyeOff, Volume2, Users, MessageSquare, Clock } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
 import { fetchWhatsAppConnections, fetchUsers } from "@/lib/whatsapp-connections"
@@ -588,7 +589,7 @@ _______________________________________
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(agentPayload),
+          body: JSON.JSON.stringify(agentPayload),
         })
       }
 
@@ -1351,4 +1352,489 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
                         Conversa não expira automaticamente
                       </p>
-                    </div>\
+                    </div>
+                    <Switch
+                      id="keep_open"
+                      name="keep_open"
+                      checked={formData.keep_open || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, keep_open: checked }))}
+                      className={switchStyles}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="split_messages" className="text-gray-900 dark:text-gray-100">
+                        Dividir Mensagens Longas
+                      </Label>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Quebra mensagens muito longas
+                      </p>
+                    </div>
+                    <Switch
+                      id="split_messages"
+                      name="split_messages"
+                      checked={formData.split_messages || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, split_messages: checked }))}
+                      className={switchStyles}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
+                  <Volume2 className="w-5 h-5 mr-2" />
+                  Funcionalidades Extras
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="transcribe_audio" className="text-gray-900 dark:text-gray-100">
+                        Transcrever Áudios
+                      </Label>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Converte áudios em texto.
+                      </p>
+                    </div>
+                    <Switch
+                      id="transcribe_audio"
+                      name="transcribe_audio"
+                      checked={formData.transcribe_audio || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, transcribe_audio: checked }))}
+                      className={switchStyles}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="understand_images" className="text-gray-900 dark:text-gray-100">
+                        Analisar Imagens
+                      </Label>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Entende imagens enviadas.
+                      </p>
+                    </div>
+                    <Switch
+                      id="understand_images"
+                      name="understand_images"
+                      checked={formData.understand_images || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, understand_images: checked }))}
+                      className={switchStyles}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="voice_response_enabled" className="text-gray-900 dark:text-gray-100">
+                        Resposta por Voz
+                      </Label>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Envia respostas em áudio.
+                      </p>
+                    </div>
+                    <Switch
+                      id="voice_response_enabled"
+                      name="voice_response_enabled"
+                      checked={formData.voice_response_enabled || false}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => ({ ...prev, voice_response_enabled: checked }))
+                      }
+                      className={switchStyles}
+                    />
+                  </div>
+                  {formData.voice_response_enabled && (
+                    <div className="space-y-3 pl-4 border-l-2 border-blue-200 bg-blue-50 p-4 rounded dark:bg-gray-700 dark:border-blue-700">
+                      <div>
+                        <Label htmlFor="voice_provider" className="text-gray-900 dark:text-gray-100">
+                          Provedor de Voz
+                        </Label>
+                        <Select
+                          name="voice_provider"
+                          value={formData.voice_provider || ""}
+                          onValueChange={(value) => handleSelectChange("voice_provider", value)}
+                        >
+                          <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                            <SelectValue placeholder="Selecione o provedor" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                            <SelectItem value="fish_audio">Fish Audio (Recomendado)</SelectItem>
+                            <SelectItem value="eleven_labs">ElevenLabs</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="voice_api_key" className="text-gray-900 dark:text-gray-100">
+                          Chave API Provedor de Voz
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="voice_api_key"
+                            name="voice_api_key"
+                            type={showVoiceApiKey ? "text" : "password"}
+                            value={formData.voice_api_key || ""}
+                            onChange={handleInputChange}
+                            placeholder="Chave API do provedor de voz"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowVoiceApiKey(!showVoiceApiKey)}
+                          >
+                            {showVoiceApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="voice_id" className="text-gray-900 dark:text-gray-100">
+                          ID da Voz
+                        </Label>
+                        <Input
+                          id="voice_id"
+                          name="voice_id"
+                          value={formData.voice_id || ""}
+                          onChange={handleInputChange}
+                          placeholder="ID específico da voz do provedor"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          ID específico da voz no provedor selecionado
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="calendar_integration" className="text-gray-900 dark:text-gray-100">
+                        Agendamento de Reuniões
+                      </Label>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Permite agendar via calendário.
+                      </p>
+                    </div>
+                    <Switch
+                      id="calendar_integration"
+                      name="calendar_integration"
+                      checked={formData.calendar_integration || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, calendar_integration: checked }))}
+                      className={switchStyles}
+                    />
+                  </div>
+                  {formData.calendar_integration && (
+                    <div className="space-y-3 pl-4 border-l-2 border-green-200 bg-green-50 p-4 rounded dark:bg-gray-700 dark:border-green-700">
+                      <div>
+                        <Label htmlFor="calendar_api_key" className="text-gray-900 dark:text-gray-100">
+                          Chave API do Calendário
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="calendar_api_key"
+                            name="calendar_api_key"
+                            type={showCalendarApiKey ? "text" : "password"}
+                            value={formData.calendar_api_key || ""}
+                            onChange={handleInputChange}
+                            placeholder="Chave API (Cal.com, etc.)"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowCalendarApiKey(!showCalendarApiKey)}
+                          >
+                            {showCalendarApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="calendar_meeting_id" className="text-gray-900 dark:text-gray-100">
+                          ID da Reunião/Calendário
+                        </Label>
+                        <Input
+                          id="calendar_meeting_id"
+                          name="calendar_meeting_id"
+                          value={formData.calendar_meeting_id || ""}
+                          onChange={handleInputChange}
+                          placeholder="ID da reunião ou calendário"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          ID específico da reunião ou calendário para agendamentos
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="chatnode_integration" className="text-gray-900 dark:text-gray-100">
+                        Integração Chatnode
+                      </Label>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Conectar com plataforma Chatnode.
+                      </p>
+                    </div>
+                    <Switch
+                      id="chatnode_integration"
+                      name="chatnode_integration"
+                      checked={formData.chatnode_integration || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, chatnode_integration: checked }))}
+                      className={switchStyles}
+                    />
+                  </div>
+                  {formData.chatnode_integration && (
+                    <div className="space-y-3 pl-4 border-l-2 border-purple-200 bg-purple-50 p-4 rounded dark:bg-gray-700 dark:border-purple-700">
+                      <div>
+                        <Label htmlFor="chatnode_api_key" className="text-gray-900 dark:text-gray-100">
+                          Chave API Chatnode
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="chatnode_api_key"
+                            name="chatnode_api_key"
+                            type={showChatnodeApiKey ? "text" : "password"}
+                            value={formData.chatnode_api_key || ""}
+                            onChange={handleInputChange}
+                            placeholder="Chave API do Chatnode"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowChatnodeApiKey(!showChatnodeApiKey)}
+                          >
+                            {showChatnodeApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="chatnode_bot_id" className="text-gray-900 dark:text-gray-100">
+                          ID do Bot Chatnode
+                        </Label>
+                        <Input
+                          id="chatnode_bot_id"
+                          name="chatnode_bot_id"
+                          value={formData.chatnode_bot_id || ""}
+                          onChange={handleInputChange}
+                          placeholder="ID do bot no Chatnode"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          ID específico do bot na plataforma Chatnode
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="orimon_integration" className="text-gray-900 dark:text-gray-100">
+                        Integração Orimon
+                      </Label>
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        Conectar com plataforma Orimon.
+                      </p>
+                    </div>
+                    <Switch
+                      id="orimon_integration"
+                      name="orimon_integration"
+                      checked={formData.orimon_integration || false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, orimon_integration: checked }))}
+                      className={switchStyles}
+                    />
+                  </div>
+                  {formData.orimon_integration && (
+                    <div className="space-y-3 pl-4 border-l-2 border-orange-200 bg-orange-50 p-4 rounded dark:bg-gray-700 dark:border-orange-700">
+                      <div>
+                        <Label htmlFor="orimon_api_key" className="text-gray-900 dark:text-gray-100">
+                          Chave API Orimon
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="orimon_api_key"
+                            name="orimon_api_key"
+                            type={showOrimonApiKey ? "text" : "password"}
+                            value={formData.orimon_api_key || ""}
+                            onChange={handleInputChange}
+                            placeholder="Chave API do Orimon"
+                            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowOrimonApiKey(!showOrimonApiKey)}
+                          >
+                            {showOrimonApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="orimon_bot_id" className="text-gray-900 dark:text-gray-100">
+                          ID do Bot Orimon
+                        </Label>
+                        <Input
+                          id="orimon_bot_id"
+                          name="orimon_bot_id"
+                          value={formData.orimon_bot_id || ""}
+                          onChange={handleInputChange}
+                          placeholder="ID do bot no Orimon"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          ID específico do bot na plataforma Orimon
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Modal de Aviso para Remoção de @g.us */}
+          {showIgnoreJidsWarning && (
+            <Dialog open={showIgnoreJidsWarning} onOpenChange={setShowIgnoreJidsWarning}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-red-600 flex items-center">
+                    ⚠️ Atenção: Configuração Importante
+                  </DialogTitle>
+                  <DialogDescription className="text-gray-600">
+                    Você está tentando remover <strong>@g.us</strong> da lista de JIDs ignorados.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-yellow-800 mb-2">Por que isso é importante?</h4>
+                    <ul className="text-sm text-yellow-700 space-y-1">
+                      <li>
+                        • <strong>@g.us</strong> representa todos os grupos do WhatsApp
+                      </li>
+                      <li>• Sem essa proteção, sua IA será ativada em TODOS os grupos</li>
+                      <li>• Isso pode incomodar outros membros dos grupos</li>
+                      <li>• Pode gerar spam e prejudicar a experiência dos usuários</li>
+                      <li>• Sua conta pode ser banida por comportamento inadequado</li>
+                    </ul>
+                  </div>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-sm text-red-700">
+                      <strong>Recomendação:</strong> Mantenha sempre <strong>@g.us</strong> na lista para proteger sua
+                      conta e respeitar outros usuários.
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowIgnoreJidsWarning(false)}>
+                    Cancelar (Recomendado)
+                  </Button>
+                  <Button variant="destructive" onClick={confirmRemoveGroupsJid}>
+                    Remover Mesmo Assim
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* Modal de Aviso para Salvar sem Proteção de Grupos */}
+          {showGroupsProtectionWarning && (
+            <Dialog open={showGroupsProtectionWarning} onOpenChange={setShowGroupsProtectionWarning}>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="text-orange-600 flex items-center">
+                    🚨 Aviso: Proteção contra Grupos Desativada
+                  </DialogTitle>
+                  <DialogDescription className="text-gray-600">
+                    Você está tentando salvar o agente sem a proteção <strong>@g.us</strong> ativada.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-orange-800 mb-2">⚠️ Riscos de continuar sem proteção:</h4>
+                    <ul className="text-sm text-orange-700 space-y-1">
+                      <li>• Sua IA será ativada em TODOS os grupos do WhatsApp</li>
+                      <li>• Pode gerar spam massivo e incomodar outros usuários</li>
+                      <li>• Risco de banimento da sua conta WhatsApp</li>
+                      <li>• Violação das boas práticas de uso do WhatsApp</li>
+                      <li>• Experiência ruim para outros membros dos grupos</li>
+                    </ul>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="text-sm text-green-700">
+                      <strong>Recomendação:</strong> Clique em "Adicionar Proteção" para que o sistema adicione
+                      automaticamente <strong>@g.us</strong> à lista de JIDs ignorados.
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      // Adicionar @g.us automaticamente
+                      setFormData((prev) => ({
+                        ...prev,
+                        ignore_jids: ensureGroupsProtection(prev.ignore_jids),
+                      }))
+                      setShowGroupsProtectionWarning(false)
+                      setPendingSubmit(false)
+                    }}
+                  >
+                    Adicionar Proteção (Recomendado)
+                  </Button>
+                  <Button variant="destructive" onClick={proceedWithSubmit}>
+                    Continuar sem Proteção
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          <DialogFooter className="p-6 pt-4 border-t bg-gray-50 dark:bg-gray-800">
+            <DialogClose asChild>
+              <Button variant="outline" type="button">
+                Cancelar
+              </Button>
+            </DialogClose>
+            <Button
+              type="submit"
+              disabled={
+                loading ||
+                (maxAgentsReached && !isEditing) ||
+                (isAdmin && !selectedUserId) ||
+                (!formData.whatsapp_connection_id &&
+                  !!selectedUserId &&
+                  !loadingConnections &&
+                  whatsappConnections.length === 0) ||
+                loadingConnections
+              }
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {loading ? "Salvando..." : isEditing ? "Salvar Alterações" : "Criar Agente de IA"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export default AgentModal
