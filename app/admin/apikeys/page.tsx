@@ -36,7 +36,6 @@ import {
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { getSupabaseServer } from "@/lib/supabase"
 
 interface ApiKey {
   id: string
@@ -115,45 +114,12 @@ export default function AdminApiKeysPage() {
 
   const fetchApiKeys = async () => {
     try {
-      console.log("🔍 Fetching API keys...")
-
-      const supabase = await getSupabaseServer()
-
-      // Buscar API keys com informações do usuário
-      const { data, error } = await supabase
-        .from("user_api_keys")
-        .select(`
-        id,
-        user_id,
-        name,
-        api_key,
-        description,
-        is_active,
-        last_used_at,
-        created_at,
-        user_profiles!inner(
-          full_name,
-          email,
-          role
-        )
-      `)
-        .order("created_at", { ascending: false })
-
-      if (error) {
-        console.error("❌ Error fetching API keys:", error)
-        throw error
+      const response = await fetch("/api/admin/api-keys")
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
       }
-
-      console.log("✅ API keys fetched:", data?.length || 0)
-
-      // Transformar os dados para o formato esperado
-      const transformedKeys: ApiKey[] =
-        data?.map((key: any) => ({
-          ...key,
-          user_profiles: key.user_profiles,
-        })) || []
-
-      setApiKeys(transformedKeys)
+      const data = await response.json()
+      setApiKeys(data)
     } catch (error) {
       console.error("❌ Erro ao buscar API keys:", error)
       setMessage("Erro ao buscar API keys")
@@ -162,23 +128,12 @@ export default function AdminApiKeysPage() {
 
   const fetchUsers = async () => {
     try {
-      console.log("🔍 Fetching users...")
-
-      const supabase = await getSupabaseServer()
-
-      const { data, error } = await supabase
-        .from("user_profiles")
-        .select("id, full_name, email, role")
-        .eq("status", "active")
-        .order("full_name", { ascending: true })
-
-      if (error) {
-        console.error("❌ Error fetching users:", error)
-        throw error
+      const response = await fetch("/api/admin/users")
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
       }
-
-      console.log("✅ Users fetched:", data?.length || 0)
-      setUsers(data || [])
+      const data = await response.json()
+      setUsers(data)
     } catch (error) {
       console.error("❌ Erro ao buscar usuários:", error)
       setMessage("Erro ao buscar usuários")
@@ -204,29 +159,22 @@ export default function AdminApiKeysPage() {
     setMessage("")
 
     try {
-      console.log("🔧 Creating new API key...")
-
-      const supabase = await getSupabaseServer()
-      const newApiKey = generateApiKey()
-
-      const { error } = await supabase.from("user_api_keys").insert({
-        user_id: createForm.user_id,
-        name: createForm.name.trim(),
-        api_key: newApiKey,
-        description: createForm.description.trim() || "API Key para integração com sistemas externos",
-        permissions: ["read"],
-        rate_limit: 100,
-        is_active: true,
-        is_admin_key: false,
-        access_scope: "user",
+      const response = await fetch("/api/admin/api-keys", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: createForm.user_id,
+          name: createForm.name.trim(),
+          description: createForm.description.trim() || "API Key para integração com sistemas externos",
+        }),
       })
 
-      if (error) {
-        console.error("❌ Error creating API key:", error)
-        throw error
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
       }
 
-      console.log("✅ API key created successfully")
       await fetchApiKeys()
       setCreateModalOpen(false)
       setCreateForm({ user_id: "", name: "", description: "" })
@@ -244,18 +192,14 @@ export default function AdminApiKeysPage() {
 
     setSaving(true)
     try {
-      console.log("🗑️ Deleting API key:", selectedApiKey.id)
+      const response = await fetch(`/api/admin/api-keys/${selectedApiKey.id}`, {
+        method: "DELETE",
+      })
 
-      const supabase = await getSupabaseServer()
-
-      const { error } = await supabase.from("user_api_keys").delete().eq("id", selectedApiKey.id)
-
-      if (error) {
-        console.error("❌ Error deleting API key:", error)
-        throw error
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
       }
 
-      console.log("✅ API key deleted successfully")
       await fetchApiKeys()
       setDeleteModalOpen(false)
       setSelectedApiKey(null)
