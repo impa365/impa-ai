@@ -1,30 +1,53 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions)
+
+  if (!session) {
+    return new NextResponse(JSON.stringify({ message: "Unauthorized" }), {
+      status: 401,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+  }
+
+  const id = params.id
+
   try {
-    const user = getCurrentUser()
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { id } = params
-
-    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/database/api-keys/${id}`, {
+    const response = await fetch(`/api/database/api-keys/${id}`, {
+      // Caminho relativo
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${user.id}`,
       },
     })
 
     if (!response.ok) {
-      throw new Error(`Database API error: ${response.status}`)
+      console.error("Error deleting API key:", response.status, response.statusText)
+      return new NextResponse(JSON.stringify({ message: "Failed to delete API key" }), {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
     }
 
-    return NextResponse.json({ success: true })
+    return new NextResponse(JSON.stringify({ message: "API key deleted successfully" }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
   } catch (error) {
-    console.error("❌ Erro interno:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    console.error("Error deleting API key:", error)
+    return new NextResponse(JSON.stringify({ message: "Internal server error" }), {
+      status: 500,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
   }
 }

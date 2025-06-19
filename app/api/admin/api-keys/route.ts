@@ -10,7 +10,8 @@ export async function GET() {
     }
 
     // 2. API faz requisição para endpoint interno (seguindo padrão do projeto)
-    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/database/api-keys`, {
+    const response = await fetch(`/api/database/api-keys`, {
+      // Caminho relativo
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -54,7 +55,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. API faz requisição para endpoint interno
-    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/database/api-keys`, {
+    const response = await fetch(`/api/database/api-keys`, {
+      // Caminho relativo
       method: "POST",
       headers: {
         "Content-Type": "application/json",
