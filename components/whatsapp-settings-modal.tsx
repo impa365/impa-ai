@@ -16,7 +16,6 @@ import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { Settings, Save, Loader2, RefreshCw } from "lucide-react"
-import { getInstanceSettings, saveInstanceSettings } from "@/lib/whatsapp-settings-api" // Usando a função atualizada
 
 interface WhatsAppSettingsModalProps {
   open: boolean
@@ -58,13 +57,10 @@ export default function WhatsAppSettingsModal({
   const [success, setSuccess] = useState("")
 
   useEffect(() => {
-    if (open && connection?.instance_name) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("Modal aberto, carregando configurações para:", connection.instance_name)
-      }
+    if (open && connection?.id) {
       loadCurrentSettings()
     }
-  }, [open, connection?.instance_name])
+  }, [open, connection?.id])
 
   useEffect(() => {
     if (!open) {
@@ -75,29 +71,15 @@ export default function WhatsAppSettingsModal({
   }, [open])
 
   const loadCurrentSettings = async () => {
-    if (!connection?.instance_name) {
-      console.error("Nome da instância não encontrado")
-      return
-    }
+    if (!connection?.id) return
 
     setLoadingSettings(true)
     setError("")
     setSuccess("")
 
     try {
-      if (process.env.NODE_ENV === "development") {
-        console.log("Buscando configurações da API para:", connection.instance_name)
-      }
-
-      const result = await getInstanceSettings(connection.instance_name) // Usando a função atualizada
-      if (process.env.NODE_ENV === "development") {
-        // Não logar 'result' inteiro se contiver dados sensíveis da API.
-        // Logar apenas o que é seguro ou necessário para debug.
-        console.log("Resultado da busca de configurações (local):", result.success, result.error)
-        if (result.settings) {
-          console.log("Configurações recebidas (local):", result.settings)
-        }
-      }
+      const response = await fetch(`/api/whatsapp/settings/${connection.id}`)
+      const result = await response.json()
 
       if (result.success && result.settings) {
         const apiSettings = result.settings
@@ -110,22 +92,14 @@ export default function WhatsAppSettingsModal({
           msgCall: apiSettings.msgCall || defaultSettings.msgCall,
           syncFullHistory: apiSettings.syncFullHistory ?? defaultSettings.syncFullHistory,
         }
-        if (process.env.NODE_ENV === "development") {
-          console.log("Configurações mapeadas:", newSettings)
-        }
         setSettings(newSettings)
       } else {
-        if (process.env.NODE_ENV === "development") {
-          console.log("Usando configurações padrão devido a erro ou dados vazios")
-        }
         setSettings(defaultSettings)
-
         if (result.error) {
           setError(`Aviso: ${result.error}. Usando configurações padrão.`)
         }
       }
     } catch (error: any) {
-      console.error("Erro ao carregar configurações:", error)
       setError("Erro ao carregar configurações. Usando valores padrão.")
       setSettings(defaultSettings)
     } finally {
@@ -134,8 +108,8 @@ export default function WhatsAppSettingsModal({
   }
 
   const handleSaveSettings = async () => {
-    if (!connection?.instance_name) {
-      setError("Nome da instância não encontrado")
+    if (!connection?.id) {
+      setError("ID da conexão não encontrado")
       return
     }
 
@@ -144,10 +118,6 @@ export default function WhatsAppSettingsModal({
     setSuccess("")
 
     try {
-      if (process.env.NODE_ENV === "development") {
-        console.log("Salvando configurações:", settings)
-      }
-
       const settingsPayload = {
         groupsIgnore: settings.groupsIgnore,
         readMessages: settings.readMessages,
@@ -157,15 +127,16 @@ export default function WhatsAppSettingsModal({
         msgCall: settings.rejectCall ? settings.msgCall : "",
         syncFullHistory: settings.syncFullHistory,
       }
-      if (process.env.NODE_ENV === "development") {
-        console.log("Payload enviado:", settingsPayload)
-      }
 
-      const result = await saveInstanceSettings(connection.instance_name, settingsPayload) // Usando a função atualizada
-      if (process.env.NODE_ENV === "development") {
-        // Não logar 'result' inteiro se contiver dados sensíveis da API.
-        console.log("Resultado do salvamento (local):", result.success, result.error)
-      }
+      const response = await fetch(`/api/whatsapp/settings/${connection.id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(settingsPayload),
+      })
+
+      const result = await response.json()
 
       if (result.success) {
         setSuccess("Configurações salvas com sucesso!")
@@ -183,7 +154,6 @@ export default function WhatsAppSettingsModal({
         setError(result.error || "Erro ao salvar configurações")
       }
     } catch (error: any) {
-      console.error("Erro ao salvar configurações:", error)
       setError("Erro ao salvar configurações")
     } finally {
       setLoading(false)
@@ -195,9 +165,6 @@ export default function WhatsAppSettingsModal({
   }
 
   const handleRefresh = () => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("Botão refresh clicado")
-    }
     loadCurrentSettings()
   }
 
