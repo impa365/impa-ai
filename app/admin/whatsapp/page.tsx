@@ -162,9 +162,9 @@ export default function AdminWhatsAppPage() {
 
       if (result.success) {
         await loadConnections()
-        setSaveMessage(`Sincronização concluída! ${result.synced} conexões atualizadas`)
+        setSaveMessage(`✅ Sincronização concluída! ${result.synced} conexões atualizadas`)
       } else {
-        setSaveMessage(`Erro na sincronização: ${result.error}`)
+        setSaveMessage(`❌ Erro na sincronização: ${result.error}`)
       }
 
       setTimeout(() => setSaveMessage(""), 5000)
@@ -186,11 +186,11 @@ export default function AdminWhatsAppPage() {
 
       if (result.success) {
         await loadConnections()
-        setSaveMessage(`Status sincronizado: ${result.status}`)
+        setSaveMessage(`✅ Status sincronizado: ${result.status}`)
         setTimeout(() => setSaveMessage(""), 3000)
       }
     } catch (error) {
-      setSaveMessage("Erro ao sincronizar conexão")
+      setSaveMessage("❌ Erro ao sincronizar conexão")
       setTimeout(() => setSaveMessage(""), 3000)
     }
   }
@@ -286,7 +286,9 @@ export default function AdminWhatsAppPage() {
       {saveMessage && (
         <div
           className={`mb-6 px-4 py-2 rounded-lg text-sm ${
-            saveMessage.includes("sucesso") ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+            saveMessage.includes("✅") || saveMessage.includes("sucesso")
+              ? "bg-green-100 text-green-700"
+              : "bg-red-100 text-red-700"
           }`}
         >
           {saveMessage}
@@ -431,7 +433,7 @@ export default function AdminWhatsAppPage() {
                             : "Desconectado"}
                     </Badge>
                     <div className="flex gap-1">
-                      {connection.status === "connected" ? (
+                      {connection.status === "connected" || connection.status === "connecting" ? (
                         <Button
                           variant="outline"
                           size="sm"
