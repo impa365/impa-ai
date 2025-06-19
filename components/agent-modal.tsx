@@ -1351,5 +1351,4 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                       <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
                         Conversa não expira automaticamente
                       </p>
-                    </div>
-                    \
+                    </div>\
