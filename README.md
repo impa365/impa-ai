@@ -91,7 +91,7 @@ Para suporte e dúvidas, entre em contato com a Comunidade IMPA:
 
 - Site: [projetoimpa.com](https://projetoimpa.com)
 - Email: contato@projetoimpa.com
-
+- Pix: pix1@impa365.com
 ## 📄 Licença
 
 Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
