@@ -1,61 +1,44 @@
-// Biblioteca de autenticação do cliente
-// NUNCA expõe credenciais - apenas gerencia estado local
-
-interface User {
-  id: string
-  email: string
-  full_name: string
-  role: "admin" | "user"
-  status: "active" | "inactive"
-  created_at: string
-  updated_at: string
-  last_login_at?: string
-}
-
-// Chave para localStorage
-const USER_STORAGE_KEY = "impaai_user"
-
-export function getCurrentUser(): User | null {
+// Função para obter usuário atual do localStorage/cookies
+export function getCurrentUser() {
   try {
-    // Verificar se está no browser
+    // Verificar se estamos no lado do cliente
     if (typeof window === "undefined") {
-      console.log("🔍 getCurrentUser: Executando no servidor, retornando null")
+      console.log("⚠️ getCurrentUser chamado no servidor")
       return null
     }
 
     // Tentar buscar do localStorage primeiro
-    const storedUser = localStorage.getItem(USER_STORAGE_KEY)
-    if (storedUser) {
+    const userStr = localStorage.getItem("impaai_user")
+    if (userStr) {
       try {
-        const user = JSON.parse(storedUser) as User
+        const user = JSON.parse(userStr)
         console.log("✅ Usuário encontrado no localStorage:", user.email)
         return user
       } catch (error) {
         console.error("❌ Erro ao parsear usuário do localStorage:", error)
-        localStorage.removeItem(USER_STORAGE_KEY)
+        localStorage.removeItem("impaai_user")
       }
     }
 
-    // Tentar buscar do cookie como fallback
+    // Tentar buscar dos cookies como fallback
     const cookies = document.cookie.split(";")
-    const userCookie = cookies.find((cookie) => cookie.trim().startsWith(`${USER_STORAGE_KEY}=`))
+    const userCookie = cookies.find((cookie) => cookie.trim().startsWith("impaai_user="))
 
     if (userCookie) {
       try {
-        const cookieValue = userCookie.split("=")[1]
-        const decodedValue = decodeURIComponent(cookieValue)
-        const user = JSON.parse(decodedValue) as User
-        console.log("✅ Usuário encontrado no cookie:", user.email)
+        const userValue = userCookie.split("=")[1]
+        const user = JSON.parse(decodeURIComponent(userValue))
+        console.log("✅ Usuário encontrado nos cookies:", user.email)
 
         // Sincronizar com localStorage
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user))
+        localStorage.setItem("impaai_user", JSON.stringify(user))
         return user
       } catch (error) {
-        console.error("❌ Erro ao parsear usuário do cookie:", error)
+        console.error("❌ Erro ao parsear usuário dos cookies:", error)
       }
     }
 
-    console.log("❌ Usuário não encontrado em localStorage ou cookies")
+    console.log("❌ Usuário não encontrado")
     return null
   } catch (error) {
     console.error("💥 Erro ao buscar usuário atual:", error)
@@ -63,19 +46,18 @@ export function getCurrentUser(): User | null {
   }
 }
 
-export function setCurrentUser(user: User): void {
+// Função para fazer login
+export function setCurrentUser(user: any) {
   try {
     console.log("💾 Salvando usuário:", user.email)
 
     // Salvar no localStorage
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user))
+    localStorage.setItem("impaai_user", JSON.stringify(user))
 
-    // Salvar no cookie também para compatibilidade com servidor
-    const cookieValue = encodeURIComponent(JSON.stringify(user))
-    const expirationDate = new Date()
-    expirationDate.setDate(expirationDate.getDate() + 7) // 7 dias
-
-    document.cookie = `${USER_STORAGE_KEY}=${cookieValue}; expires=${expirationDate.toUTCString()}; path=/; SameSite=Lax`
+    // Salvar nos cookies também (para compatibilidade)
+    const expires = new Date()
+    expires.setTime(expires.getTime() + 24 * 60 * 60 * 1000) // 24 horas
+    document.cookie = `impaai_user=${encodeURIComponent(JSON.stringify(user))}; expires=${expires.toUTCString()}; path=/`
 
     console.log("✅ Usuário salvo com sucesso")
   } catch (error) {
@@ -83,15 +65,16 @@ export function setCurrentUser(user: User): void {
   }
 }
 
-export function clearCurrentUser(): void {
+// Função para fazer logout
+export function clearCurrentUser() {
   try {
-    console.log("🗑️ Removendo usuário atual")
+    console.log("🗑️ Removendo usuário")
 
     // Remover do localStorage
-    localStorage.removeItem(USER_STORAGE_KEY)
+    localStorage.removeItem("impaai_user")
 
-    // Remover do cookie
-    document.cookie = `${USER_STORAGE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+    // Remover dos cookies
+    document.cookie = "impaai_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
 
     console.log("✅ Usuário removido com sucesso")
   } catch (error) {
@@ -99,26 +82,14 @@ export function clearCurrentUser(): void {
   }
 }
 
+// Função para verificar se o usuário está logado
 export function isAuthenticated(): boolean {
   const user = getCurrentUser()
-  const isAuth = user !== null && user.status === "active"
-  console.log("🔐 Verificação de autenticação:", isAuth ? "✅ Autenticado" : "❌ Não autenticado")
-  return isAuth
+  return user !== null
 }
 
+// Função para verificar se o usuário é admin
 export function isAdmin(): boolean {
   const user = getCurrentUser()
-  const isAdminUser = user?.role === "admin"
-  console.log("👑 Verificação de admin:", isAdminUser ? "✅ É admin" : "❌ Não é admin")
-  return isAdminUser
-}
-
-// Função para debug - mostrar estado atual
-export function debugAuth(): void {
-  console.log("🔍 Debug da autenticação:")
-  console.log("- localStorage:", localStorage.getItem(USER_STORAGE_KEY))
-  console.log("- cookies:", document.cookie)
-  console.log("- usuário atual:", getCurrentUser())
-  console.log("- autenticado:", isAuthenticated())
-  console.log("- é admin:", isAdmin())
+  return user?.role === "admin"
 }

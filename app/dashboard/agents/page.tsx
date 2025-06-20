@@ -35,15 +35,23 @@ export default function UserAgentsPage() {
   const { toast } = useToast()
 
   useEffect(() => {
+    console.log("🔄 Verificando autenticação...")
     const user = getCurrentUser()
+    console.log("👤 Usuário encontrado:", user ? user.email : "Nenhum")
+
     if (!user) {
+      console.log("❌ Usuário não autenticado, redirecionando...")
       router.push("/")
       return
     }
+
     if (user.role === "admin") {
+      console.log("👑 Admin detectado, redirecionando...")
       router.push("/admin/agents")
       return
     }
+
+    console.log("✅ Usuário válido, carregando dados...")
     setCurrentUser(user)
     loadAgentsAndLimits()
   }, [router])
@@ -68,11 +76,22 @@ export default function UserAgentsPage() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include", // Incluir cookies
       })
 
+      console.log("📡 Resposta da API:", response.status, response.statusText)
+
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.details || "Erro ao carregar dados")
+        const errorData = await response.json().catch(() => ({ error: "Erro desconhecido" }))
+        console.error("❌ Erro na resposta:", errorData)
+
+        if (response.status === 401) {
+          console.log("🔐 Erro de autenticação, redirecionando para login...")
+          router.push("/")
+          return
+        }
+
+        throw new Error(errorData.details || errorData.error || "Erro ao carregar dados")
       }
 
       const data = await response.json()
@@ -134,11 +153,12 @@ export default function UserAgentsPage() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include", // Incluir cookies
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.details || "Erro ao deletar agente")
+        const errorData = await response.json().catch(() => ({ error: "Erro desconhecido" }))
+        throw new Error(errorData.details || errorData.error || "Erro ao deletar agente")
       }
 
       console.log("✅ Agente excluído com sucesso")

@@ -14,8 +14,6 @@ export interface ServerUser {
 
 export async function getCurrentServerUser(request?: NextRequest): Promise<ServerUser | null> {
   try {
-    console.log("🔍 getCurrentServerUser: Iniciando busca do usuário")
-
     // Tentar buscar do cookie primeiro
     const cookieStore = await cookies()
     const userCookie = cookieStore.get("impaai_user")
@@ -35,8 +33,8 @@ export async function getCurrentServerUser(request?: NextRequest): Promise<Serve
       const authHeader = request.headers.get("authorization")
       if (authHeader && authHeader.startsWith("Bearer ")) {
         const token = authHeader.substring(7)
-        console.log("🔍 Token encontrado no header:", token.substring(0, 10) + "...")
         // Aqui você pode implementar validação de JWT se necessário
+        console.log("🔍 Token encontrado no header:", token.substring(0, 10) + "...")
       }
     }
 
