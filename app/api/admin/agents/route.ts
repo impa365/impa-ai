@@ -233,8 +233,9 @@ export async function POST(request: Request) {
           timePerChar: agentData.time_per_char || 100,
         }
 
+        const baseUrl = process.env.NEXTAUTH_URL || `http://localhost:${process.env.PORT || 3000}`
         const createBotResponse = await fetch(
-          `/api/integrations/evolution/evolutionBot/create/${connection.instance_name}`,
+          `${baseUrl}/api/integrations/evolution/evolutionBot/create/${connection.instance_name}`,
           {
             method: "POST",
             headers: {
@@ -376,8 +377,9 @@ export async function PUT(request: Request) {
               timePerChar: agentData.time_per_char || 100,
             }
 
+            const baseUrl = process.env.NEXTAUTH_URL || `http://localhost:${process.env.PORT || 3000}`
             await fetch(
-              `/api/integrations/evolution/evolutionBot/update/${currentAgent.evolution_bot_id}/${currentAgent.whatsapp_connections.instance_name}`,
+              `${baseUrl}/api/integrations/evolution/evolutionBot/update/${currentAgent.evolution_bot_id}/${currentAgent.whatsapp_connections.instance_name}`,
               {
                 method: "PUT",
                 headers: {
@@ -488,8 +490,9 @@ export async function DELETE(request: Request) {
         if (agent.evolution_bot_id && agent.whatsapp_connections?.instance_name) {
           console.log("🤖 Deletando bot da Evolution API...")
           try {
+            const baseUrl = process.env.NEXTAUTH_URL || `http://localhost:${process.env.PORT || 3000}`
             await fetch(
-              `/api/integrations/evolution/evolutionBot/delete/${agent.evolution_bot_id}/${agent.whatsapp_connections.instance_name}`,
+              `${baseUrl}/api/integrations/evolution/evolutionBot/delete/${agent.evolution_bot_id}/${agent.whatsapp_connections.instance_name}`,
               {
                 method: "DELETE",
               },
