@@ -8,12 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ArrowLeft, Copy, MessageSquare, Settings, Trash2, Power, PowerOff } from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import { getCurrentUser } from "@/lib/auth"
 import AgentModal from "@/components/agent-modal"
 import AgentDuplicateDialog from "@/components/agent-duplicate-dialog"
 import AgentStats from "@/components/agent-stats"
-import { deleteEvolutionBot } from "@/lib/evolution-api"
 
 export default function AgentDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -27,34 +24,25 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
   const [userSettings, setUserSettings] = useState<any>(null)
 
   useEffect(() => {
-    const currentUser = getCurrentUser()
-    if (currentUser) {
-      fetchAgent()
-      fetchWhatsAppConnections()
-      fetchUserSettings()
-    } else {
-      router.push("/login")
-    }
+    fetchAgent()
+    fetchWhatsAppConnections()
+    fetchUserSettings()
   }, [params.id])
 
   const fetchAgent = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from("ai_agents")
-        .select(`
-          *,
-          whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(
-            connection_name,
-            status,
-            instance_name
-          )
-        `)
-        .eq("id", params.id)
-        .single()
+      const response = await fetch(`/api/user/agents/${params.id}`)
 
-      if (error) throw error
-      if (data) setAgent(data)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erro ao buscar agente")
+      }
+
+      const data = await response.json()
+      if (data.success && data.agent) {
+        setAgent(data.agent)
+      }
     } catch (error) {
       console.error("Erro ao buscar agente:", error)
       setError("Erro ao carregar dados do agente")
@@ -65,11 +53,17 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
 
   const fetchWhatsAppConnections = async () => {
     try {
-      const currentUser = getCurrentUser()
-      const { data, error } = await supabase.from("whatsapp_connections").select("*").eq("user_id", currentUser?.id)
+      const response = await fetch("/api/user/whatsapp-connections")
 
-      if (error) throw error
-      if (data) setWhatsappConnections(data)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erro ao buscar conexões")
+      }
+
+      const data = await response.json()
+      if (data.success && data.connections) {
+        setWhatsappConnections(data.connections)
+      }
     } catch (error) {
       console.error("Erro ao buscar conexões WhatsApp:", error)
     }
@@ -77,37 +71,17 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
 
   const fetchUserSettings = async () => {
     try {
-      const currentUser = getCurrentUser()
-      let { data, error } = await supabase
-        .from("user_agent_settings")
-        .select("*")
-        .eq("user_id", currentUser?.id)
-        .single()
+      const response = await fetch("/api/user/settings")
 
-      if (error && error.code === "PGRST116") {
-        // Criar configurações padrão se não existir
-        const { data: newSettings, error: insertError } = await supabase
-          .from("user_agent_settings")
-          .insert([
-            {
-              user_id: currentUser?.id,
-              agents_limit: 1,
-              transcribe_audio_enabled: true,
-              understand_images_enabled: true,
-              voice_response_enabled: false,
-              calendar_integration_enabled: false,
-            },
-          ])
-          .select()
-          .single()
-
-        if (insertError) throw insertError
-        data = newSettings
-      } else if (error) {
-        throw error
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erro ao buscar configurações")
       }
 
-      if (data) setUserSettings(data)
+      const data = await response.json()
+      if (data.success && data.settings) {
+        setUserSettings(data.settings)
+      }
     } catch (error) {
       console.error("Erro ao buscar configurações:", error)
     }
@@ -117,9 +91,18 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
     try {
       const newStatus = agent.status === "active" ? "inactive" : "active"
 
-      const { error } = await supabase.from("ai_agents").update({ status: newStatus }).eq("id", agent.id)
+      const response = await fetch(`/api/user/agents/${agent.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: newStatus }),
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erro ao alterar status")
+      }
 
       await fetchAgent()
       setMessage(`Agente ${newStatus === "active" ? "ativado" : "desativado"} com sucesso!`)
@@ -137,15 +120,14 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
     }
 
     try {
-      // Deletar bot na Evolution API
-      if (agent.evolution_bot_id && agent.whatsapp_connections?.instance_name) {
-        await deleteEvolutionBot(agent.whatsapp_connections.instance_name, agent.evolution_bot_id)
+      const response = await fetch(`/api/user/agents/${agent.id}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erro ao excluir agente")
       }
-
-      // Deletar agente no banco
-      const { error } = await supabase.from("ai_agents").delete().eq("id", agent.id)
-
-      if (error) throw error
 
       setMessage("Agente excluído com sucesso!")
       setTimeout(() => {

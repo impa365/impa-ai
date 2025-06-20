@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, ArrowLeft } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
-import { registerUser } from "@/lib/auth" // Importa a função registerUser manual
+import { publicApi } from "@/lib/api-client"
 
 interface RegisterFormProps {
   onBackToLogin: () => void
@@ -17,7 +17,7 @@ interface RegisterFormProps {
 
 function RegisterForm({ onBackToLogin }: RegisterFormProps) {
   const [formData, setFormData] = useState({
-    fullName: "",
+    full_name: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -26,95 +26,76 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const [success, setSuccess] = useState(false)
+  const [success, setSuccess] = useState("")
   const { theme } = useTheme()
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError("")
+    setSuccess("")
 
-    console.log("🚀 Iniciando submissão do formulário...")
-
-    // Validações básicas (algumas já estão em registerUser, mas manter aqui para feedback rápido)
-    if (!formData.fullName.trim()) {
-      setError("Nome completo é obrigatório")
-      setLoading(false)
-      return
-    }
-    if (!formData.email.trim()) {
-      setError("Email é obrigatório")
-      setLoading(false)
-      return
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(formData.email)) {
-      setError("Email inválido")
-      setLoading(false)
-      return
-    }
-    if (formData.password.length < 6) {
-      setError("Senha deve ter pelo menos 6 caracteres")
-      setLoading(false)
-      return
-    }
+    // Validações básicas
     if (formData.password !== formData.confirmPassword) {
-      setError("Senhas não coincidem")
+      setError("As senhas não coincidem")
+      setLoading(false)
+      return
+    }
+
+    if (formData.password.length < 6) {
+      setError("A senha deve ter pelo menos 6 caracteres")
       setLoading(false)
       return
     }
 
     try {
-      console.log("📡 Enviando dados para API...")
+      console.log("📝 Tentando registrar usuário via API...")
 
-      // Chama a função registerUser manual
-      const result = await registerUser({
-        full_name: formData.fullName.trim(),
-        email: formData.email.trim(),
+      // Usar a API de registro
+      const { data, error: registerError } = await publicApi.register({
+        full_name: formData.full_name,
+        email: formData.email,
         password: formData.password,
       })
 
-      console.log("📄 Dados da resposta:", result)
-
-      if (!result.success) {
-        throw new Error(result.error || "Erro ao criar conta")
+      if (registerError) {
+        console.error("❌ Erro no registro:", registerError)
+        setError(registerError)
+        setLoading(false)
+        return
       }
 
-      console.log("✅ Conta criada com sucesso!")
-      setSuccess(true)
+      if (data) {
+        console.log("✅ Registro realizado com sucesso")
+        setSuccess("Conta criada com sucesso! Você pode fazer login agora.")
 
-      setTimeout(() => {
-        onBackToLogin()
-      }, 2000)
+        // Limpar formulário
+        setFormData({
+          full_name: "",
+          email: "",
+          password: "",
+          confirmPassword: "",
+        })
+
+        // Voltar para login após 2 segundos
+        setTimeout(() => {
+          onBackToLogin()
+        }, 2000)
+      }
     } catch (error: any) {
-      console.error("❌ Erro ao criar conta:", error)
-      setError(error.message || "Erro ao criar conta. Tente novamente.")
+      console.error("💥 Erro inesperado no registro:", error)
+      setError("Erro ao criar conta. Tente novamente.")
     } finally {
       setLoading(false)
     }
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-8 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
-              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-lg">✓</span>
-              </div>
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Conta criada com sucesso!</h2>
-            <p className="text-gray-600 mb-4">
-              Sua conta foi criada. Você será redirecionado para o login em instantes.
-            </p>
-            <div className="w-8 h-8 mx-auto">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
   }
 
   return (
@@ -129,8 +110,8 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
               {theme.logoIcon || "🤖"}
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">{theme.systemName}</CardTitle>
-          <p className="text-gray-600">Criar nova conta</p>
+          <CardTitle className="text-2xl font-bold">Criar Conta</CardTitle>
+          <p className="text-gray-600">Preencha os dados para se cadastrar</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -140,16 +121,23 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
               </Alert>
             )}
 
+            {success && (
+              <Alert className="border-green-200 bg-green-50">
+                <AlertDescription className="text-green-800">{success}</AlertDescription>
+              </Alert>
+            )}
+
             <div className="space-y-2">
-              <Label htmlFor="fullName">Nome Completo</Label>
+              <Label htmlFor="full_name">Nome Completo</Label>
               <Input
-                id="fullName"
+                id="full_name"
+                name="full_name"
                 type="text"
-                value={formData.fullName}
-                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                value={formData.full_name}
+                onChange={handleInputChange}
                 placeholder="Seu nome completo"
                 required
-                disabled={loading}
+                className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
 
@@ -157,12 +145,13 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
+                name="email"
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={handleInputChange}
                 placeholder="seu@email.com"
                 required
-                disabled={loading}
+                className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
 
@@ -171,13 +160,13 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
               <div className="relative">
                 <Input
                   id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onChange={handleInputChange}
                   placeholder="••••••••"
                   required
-                  disabled={loading}
-                  minLength={6}
+                  className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500 pr-10"
                 />
                 <Button
                   type="button"
@@ -185,7 +174,6 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowPassword(!showPassword)}
-                  disabled={loading}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
@@ -197,13 +185,13 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
               <div className="relative">
                 <Input
                   id="confirmPassword"
+                  name="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
                   value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  onChange={handleInputChange}
                   placeholder="••••••••"
                   required
-                  disabled={loading}
-                  minLength={6}
+                  className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500 pr-10"
                 />
                 <Button
                   type="button"
@@ -211,7 +199,6 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  disabled={loading}
                 >
                   {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
@@ -229,20 +216,10 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
           </form>
 
           <div className="mt-6 text-center">
-            <Button
-              variant="ghost"
-              onClick={onBackToLogin}
-              disabled={loading}
-              className="gap-2 text-gray-600 hover:text-gray-800"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Voltar ao Login
+            <Button variant="ghost" onClick={onBackToLogin} className="text-sm" disabled={loading}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Voltar para Login
             </Button>
-
-            {/* Debug info - remover em produção */}
-            <div className="mt-4 text-xs text-gray-400">
-              Debug: Verifique o console do navegador para logs detalhados
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -250,6 +227,4 @@ function RegisterForm({ onBackToLogin }: RegisterFormProps) {
   )
 }
 
-// Named export para compatibilidade
-export { RegisterForm }
 export default RegisterForm

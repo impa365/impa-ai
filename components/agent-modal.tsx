@@ -22,17 +22,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Bot, Sparkles, Eye, EyeOff, Volume2, Users, MessageSquare, Clock } from "lucide-react"
-import { getSupabase } from "@/lib/supabase"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
 import { fetchWhatsAppConnections, fetchUsers } from "@/lib/whatsapp-connections"
-import {
-  createEvolutionBot,
-  updateEvolutionBot,
-  setEvolutionInstanceSettings,
-  type EvolutionBotIndividualConfig,
-  type EvolutionInstanceSettings,
-} from "@/lib/evolution-api"
+import { publicApi } from "@/lib/api-client"
 
 // Estilos customizados para os switches
 const switchStyles =
@@ -197,29 +190,21 @@ export function AgentModal({
       if (!open) return
 
       try {
-        console.log("🔄 [AgentModal] Carregando modelo padrão do sistema...")
+        console.log("🔄 [AgentModal] Carregando modelo padrão do sistema via API...")
         setSystemDefaultModel("carregando...")
 
-        // Busca direta no banco igual a API faz
-        const { getSupabaseServer } = await import("@/lib/supabase")
-        const supabaseClient = await getSupabaseServer()
+        // Usar API segura ao invés de Supabase direto
+        const response = await publicApi.getSystemDefaultModel()
 
-        const { data: defaultModelData, error: defaultModelError } = await supabaseClient
-          .from("system_settings")
-          .select("setting_value")
-          .eq("setting_key", "default_model")
-          .single()
-
-        let systemDefaultModel = null
-        if (defaultModelError) {
-          console.error("❌ [AgentModal] Erro ao buscar default_model:", defaultModelError)
+        if (response.error) {
+          console.error("❌ [AgentModal] Erro ao buscar default_model:", response.error)
           setSystemDefaultModel("Erro ao carregar")
-        } else if (defaultModelData && defaultModelData.setting_value) {
-          systemDefaultModel = defaultModelData.setting_value.toString().trim()
+        } else if (response.data?.defaultModel) {
+          const systemDefaultModel = response.data.defaultModel.toString().trim()
           console.log("✅ [AgentModal] Default model encontrado:", systemDefaultModel)
           setSystemDefaultModel(systemDefaultModel)
         } else {
-          console.error("❌ [AgentModal] default_model não encontrado no banco")
+          console.error("❌ [AgentModal] default_model não encontrado")
           setSystemDefaultModel("Não configurado")
         }
       } catch (error) {
@@ -268,10 +253,10 @@ export function AgentModal({
 
   async function loadN8nConfig() {
     try {
-      const client = await getSupabase()
-      const { data } = await client.from("integrations").select("config").eq("type", "n8n").single()
-      if (data && data.config) setN8nIntegrationConfig(data.config)
-      else console.warn("Configuração da integração n8n não encontrada.")
+      // Usar API ao invés de Supabase direto
+      console.log("🔄 [AgentModal] Carregando configuração N8N via API...")
+      // Por enquanto, vamos comentar esta funcionalidade até ter a API específica
+      console.warn("⚠️ [AgentModal] Configuração N8N temporariamente desabilitada - usar API específica")
     } catch (err) {
       console.error("Erro ao carregar configuração N8N:", err?.message || err)
     }
@@ -301,20 +286,77 @@ export function AgentModal({
   }
 
   useEffect(() => {
+    console.log("🔄 [AgentModal] useEffect - agent changed:", {
+      agentExists: !!agent,
+      agentId: agent?.id,
+      agentName: agent?.name,
+      currentUser: currentUser?.id,
+      selectedUserId,
+      isAdmin,
+    })
+
     if (agent) {
-      const agentData = {
-        ...initialFormData,
-        ...agent,
-        user_id: agent.user_id || selectedUserId || currentUser?.id || "",
+      console.log("📝 [AgentModal] Dados COMPLETOS do agente recebido:", agent)
+
+      // Processar ignore_jids se for string JSON
+      let processedIgnoreJids = agent.ignore_jids
+      if (typeof agent.ignore_jids === "string") {
+        try {
+          processedIgnoreJids = JSON.parse(agent.ignore_jids)
+          console.log("✅ [AgentModal] ignore_jids processado de string para array:", processedIgnoreJids)
+        } catch (e) {
+          console.warn("⚠️ [AgentModal] Erro ao processar ignore_jids:", e)
+          processedIgnoreJids = ["@g.us"]
+        }
       }
-      // Garantir que @g.us esteja sempre presente
-      agentData.ignore_jids = ensureGroupsProtection(agentData.ignore_jids)
+
+      // Carregar dados do agente existente
+      const agentData = {
+        ...agent, // Usar todos os dados do agente primeiro
+        user_id: agent.user_id || selectedUserId || currentUser?.id || "",
+        // Garantir que campos booleanos sejam tratados corretamente
+        transcribe_audio: Boolean(agent.transcribe_audio),
+        understand_images: Boolean(agent.understand_images),
+        voice_response_enabled: Boolean(agent.voice_response_enabled),
+        calendar_integration: Boolean(agent.calendar_integration),
+        chatnode_integration: Boolean(agent.chatnode_integration),
+        orimon_integration: Boolean(agent.orimon_integration),
+        is_default: Boolean(agent.is_default),
+        listening_from_me: Boolean(agent.listening_from_me),
+        stop_bot_from_me: Boolean(agent.stop_bot_from_me),
+        keep_open: Boolean(agent.keep_open),
+        split_messages: Boolean(agent.split_messages),
+        // Garantir que @g.us esteja sempre presente
+        ignore_jids: ensureGroupsProtection(processedIgnoreJids),
+      }
+
+      console.log("✅ [AgentModal] Dados processados para o formulário:", {
+        name: agentData.name,
+        identity_description: agentData.identity_description,
+        training_prompt: agentData.training_prompt,
+        voice_response_enabled: agentData.voice_response_enabled,
+        voice_provider: agentData.voice_provider,
+        voice_api_key: agentData.voice_api_key ? "***PRESENTE***" : "AUSENTE",
+        voice_id: agentData.voice_id,
+        calendar_integration: agentData.calendar_integration,
+        calendar_api_key: agentData.calendar_api_key ? "***PRESENTE***" : "AUSENTE",
+        calendar_meeting_id: agentData.calendar_meeting_id,
+        chatnode_integration: agentData.chatnode_integration,
+        orimon_integration: agentData.orimon_integration,
+      })
+
       setFormData(agentData)
+
       if (isAdmin && agent.user_id) {
         setSelectedUserId(agent.user_id)
       }
     } else {
-      setFormData({ ...initialFormData, user_id: selectedUserId || currentUser?.id || "" })
+      console.log("🆕 [AgentModal] Criando novo agente")
+      setFormData({
+        ...initialFormData,
+        user_id: selectedUserId || currentUser?.id || "",
+        ignore_jids: ["@g.us"], // Garantir proteção padrão
+      })
     }
   }, [agent, currentUser, selectedUserId, isAdmin])
 
@@ -461,11 +503,8 @@ _______________________________________
     setLoading(true)
     setError(null)
 
-    let currentAgentIdInDb = isEditing && agent?.id ? agent.id : null
-    let currentEvolutionBotId = formData.evolution_bot_id
-
     try {
-      const client = await getSupabase()
+      console.log("🔄 [AgentModal] Iniciando salvamento via API...")
 
       // Garantir que trigger_type tenha um valor válido
       const validTriggerType =
@@ -485,8 +524,8 @@ _______________________________________
       // Garantir que @g.us esteja sempre presente antes de salvar
       const finalIgnoreJids = ensureGroupsProtection(formData.ignore_jids)
 
-      // Payload completo com todos os campos necessários para Evolution API
-      const agentPayloadForDb = {
+      // Payload completo para a API
+      const agentPayload = {
         name: formData.name,
         identity_description: formData.identity_description,
         training_prompt: formData.training_prompt,
@@ -508,12 +547,12 @@ _______________________________________
         orimon_integration: formData.orimon_integration,
         orimon_api_key: formData.orimon_api_key,
         orimon_bot_id: formData.orimon_bot_id,
-        description: formData.description, // Adicionar esta linha
+        description: formData.description,
         status: formData.status,
         is_default: formData.is_default,
         user_id: formData.user_id,
         whatsapp_connection_id: formData.whatsapp_connection_id,
-        evolution_bot_id: currentEvolutionBotId,
+        evolution_bot_id: formData.evolution_bot_id,
         model: formData.model || systemDefaultModel,
         // Campos para sincronização Evolution API
         trigger_type: validTriggerType,
@@ -531,114 +570,43 @@ _______________________________________
         ignore_jids: finalIgnoreJids,
       }
 
-      if (isEditing && currentAgentIdInDb) {
-        const { error: updateDbError } = await client
-          .from("ai_agents")
-          .update(agentPayloadForDb)
-          .eq("id", currentAgentIdInDb)
-        if (updateDbError) throw updateDbError
+      let response
+      if (isEditing && agent?.id) {
+        // Atualizar agente existente
+        console.log("🔄 [AgentModal] Atualizando agente via API:", agent.id)
+        response = await fetch("/api/admin/agents", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ id: agent.id, ...agentPayload }),
+        })
       } else {
-        const { data: newAgent, error: insertDbError } = await client
-          .from("ai_agents")
-          .insert(agentPayloadForDb)
-          .select()
-          .single()
-        if (insertDbError) throw insertDbError
-        currentAgentIdInDb = newAgent.id
+        // Criar novo agente
+        console.log("🔄 [AgentModal] Criando novo agente via API")
+        response = await fetch("/api/admin/agents", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(agentPayload),
+        })
       }
 
-      // Configuração Evolution API
-      const { data: connection, error: connectionError } = await client
-        .from("whatsapp_connections")
-        .select("instance_name")
-        .eq("id", formData.whatsapp_connection_id)
-        .single()
-      if (connectionError) throw new Error(`Erro ao buscar conexão WhatsApp: ${connectionError.message}`)
-      if (!connection?.instance_name) throw new Error("Instância WhatsApp não encontrada.")
-      const instanceName = connection.instance_name
-
-      if (n8nIntegrationConfig?.flowUrl && currentAgentIdInDb) {
-        const webhookUrl = `${n8nIntegrationConfig.flowUrl}${n8nIntegrationConfig.flowUrl.includes("?") ? "&" : "?"}bot_token=AGENT_${currentAgentIdInDb}`
-
-        const evolutionBotIndividualData: EvolutionBotIndividualConfig = {
-          enabled: formData.status === "active",
-          description: formData.name,
-          apiUrl: webhookUrl,
-          apiKey: n8nIntegrationConfig.apiKey || "",
-          triggerType: formData.trigger_type || "keyword",
-          triggerOperator: formData.trigger_operator || "equals",
-          triggerValue: formData.trigger_value || "",
-          expire: formData.expire_time || 0,
-          keywordFinish: formData.keyword_finish || "#sair",
-          delayMessage: formData.delay_message || 1000,
-          unknownMessage: formData.unknown_message || "Desculpe, não entendi.",
-          listeningFromMe: formData.listening_from_me || false,
-          stopBotFromMe: formData.stop_bot_from_me || true,
-          keepOpen: formData.keep_open || false,
-          debounceTime: formData.debounce_time || 10,
-          ignoreJids: finalIgnoreJids || [],
-          splitMessages: formData.split_messages || true,
-          timePerChar: 100,
-        }
-
-        if (currentEvolutionBotId) {
-          const updateSuccess = await updateEvolutionBot(
-            instanceName,
-            currentEvolutionBotId,
-            evolutionBotIndividualData,
-          )
-          if (!updateSuccess) throw new Error("Falha ao atualizar bot na Evolution API.")
-        } else {
-          const createResult = await createEvolutionBot(instanceName, evolutionBotIndividualData)
-          if (!createResult.success || !createResult.botId) {
-            throw new Error(createResult.error || "Falha ao criar bot na Evolution API.")
-          }
-          currentEvolutionBotId = createResult.botId
-          const { error: updateEvoIdError } = await client
-            .from("ai_agents")
-            .update({ evolution_bot_id: currentEvolutionBotId })
-            .eq("id", currentAgentIdInDb)
-          if (updateEvoIdError) console.error("Erro ao salvar evolution_bot_id no DB ImpaAI:", updateEvoIdError.message)
-        }
-
-        // SEMPRE configurar as settings da instância para garantir proteção contra grupos
-        // Isso é feito independentemente de ser bot padrão ou não
-        const instanceSettingsPayload: EvolutionInstanceSettings = {
-          expire: formData.expire_time || 20,
-          keywordFinish: formData.keyword_finish || "#SAIR",
-          delayMessage: formData.delay_message || 1000,
-          unknownMessage: formData.unknown_message || "Mensagem não reconhecida",
-          listeningFromMe: formData.listening_from_me || false,
-          stopBotFromMe: formData.stop_bot_from_me || false,
-          keepOpen: formData.keep_open || false,
-          splitMessages: formData.split_messages || true,
-          timePerChar: 50,
-          debounceTime: formData.debounce_time || 0,
-          ignoreJids: finalIgnoreJids || ["@g.us"],
-        }
-
-        // Se for bot padrão, incluir o botIdFallback
-        if (formData.is_default && currentEvolutionBotId) {
-          const { error: uncheckError } = await client
-            .from("ai_agents")
-            .update({ is_default: false })
-            .eq("whatsapp_connection_id", formData.whatsapp_connection_id)
-            .not("id", "eq", currentAgentIdInDb)
-          if (uncheckError) console.error("Erro ao desmarcar outros bots padrão no DB:", uncheckError.message)
-
-          instanceSettingsPayload.botIdFallback = currentEvolutionBotId
-        }
-
-        const settingsSuccess = await setEvolutionInstanceSettings(instanceName, instanceSettingsPayload)
-        if (!settingsSuccess) {
-          console.warn("Falha ao definir configurações da instância na Evolution API, mas continuando...")
-        }
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("❌ [AgentModal] Erro na resposta da API:", response.status, errorText)
+        throw new Error(`Erro na API: ${response.status}`)
       }
+
+      const result = await response.json()
+      console.log("✅ [AgentModal] Agente salvo com sucesso:", result)
 
       toast({
         title: "Sucesso",
         description: isEditing ? "Agente atualizado com sucesso!" : "Agente criado com sucesso!",
       })
+
       if (typeof onSave === "function") onSave()
       else onOpenChange(false)
     } catch (err: any) {
@@ -808,7 +776,7 @@ _______________________________________
                     placeholder="Ex: Você é uma assistente de vendas..."
                     rows={6}
                     required
-                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-gray-300 dark:border-gray-600"
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                   />
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                     Instruções detalhadas sobre como a IA deve se comportar.
@@ -903,9 +871,9 @@ _______________________________________`}
                             placeholder={`Cole seu cURL aqui, exemplo:
 
 curl -X POST "https://api.exemplo.com/endpoint" \\
-  -H "Authorization: Bearer token" \\
-  -H "Content-Type: application/json" \\
-  -d '{"campo": "valor"}'`}
+-H "Authorization: Bearer token" \\
+-H "Content-Type: application/json" \\
+-d '{"campo": "valor"}'`}
                             rows={8}
                             className="font-mono text-sm"
                           />

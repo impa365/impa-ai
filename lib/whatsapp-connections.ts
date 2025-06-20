@@ -1,125 +1,63 @@
-import { getSupabase } from "@/lib/supabase"
-
+// Função simplificada para buscar conexões WhatsApp
 export async function fetchWhatsAppConnections(userId?: string, isAdmin = false) {
   try {
-    const client = await getSupabase()
-    let query = client.from("whatsapp_connections").select("*")
+    const params = new URLSearchParams()
 
-    // Se for admin e não especificou userId, buscar todas as conexões
-    if (isAdmin && !userId) {
-      console.log("Admin buscando todas as conexões")
-      // Não aplicar filtro de usuário
-    } else if (userId) {
-      // Filtrar por usuário específico (admin escolheu um usuário ou usuário comum)
-      console.log(`Filtrando conexões para usuário: ${userId}`)
-      query = query.eq("user_id", userId)
-    } else {
-      // Fallback: não retornar nenhuma conexão se não tiver userId e não for admin
-      // This case might occur if a non-admin calls this without a userId,
-      // or an admin calls it with isAdmin=false and no userId.
-      console.warn("Nenhum userId fornecido e/ou usuário não é admin sem userId específico. Retornando array vazio.")
-      return []
+    if (userId) {
+      params.append("userId", userId)
     }
 
-    // The previous version had:
-    // const validStatuses = ["connected", "Authenticated", "disconnected", "connecting", "error"]
-    // query = query.in("status", validStatuses)
-    // This filtering is not present in the new file, so it will fetch all statuses.
-
-    query = query.order("created_at", { ascending: false })
-
-    const { data, error } = await query
-
-    if (error) {
-      console.error("Erro ao buscar conexões WhatsApp:", error)
-      return []
+    if (isAdmin) {
+      params.append("isAdmin", "true")
     }
 
-    return data || []
-  } catch (error) {
-    console.error("Erro ao buscar conexões WhatsApp:", error)
+    const url = `/api/whatsapp-connections?${params.toString()}`
+
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store", // Evitar cache
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: "Erro desconhecido" }))
+      throw new Error(errorData.error || `HTTP ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    if (!data.success) {
+      throw new Error(data.error || "Erro na resposta da API")
+    }
+
+    return data.connections || []
+  } catch (error: any) {
+    console.error("Erro ao buscar conexões WhatsApp:", error.message)
     return []
   }
 }
 
+// Função simplificada para buscar usuários
 export async function fetchUsers() {
   try {
-    const client = await getSupabase()
-    const { data, error } = await client
-      .from("user_profiles")
-      .select("id, full_name, email, status, role") // Added role as per agent-modal usage
-      .eq("status", "active") // Fetches only active users
-      .order("full_name", { ascending: true })
+    const response = await fetch("/api/admin/users", {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
 
-    if (error) {
-      console.error("Erro ao buscar usuários:", error)
-      return []
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
     }
 
-    return data || []
-  } catch (error) {
-    console.error("Erro ao buscar usuários:", error)
+    const data = await response.json()
+    return data.users || []
+  } catch (error: any) {
+    console.error("Erro ao buscar usuários:", error.message)
     return []
-  }
-}
-
-export async function createWhatsAppConnection(connectionData: {
-  user_id: string
-  connection_name: string
-  instance_name: string
-  instance_token: string // This field was not in the previous ai_agents table schema for whatsapp_connections
-}) {
-  try {
-    const client = await getSupabase()
-    const { data, error } = await client.from("whatsapp_connections").insert([connectionData]).select().single()
-
-    if (error) {
-      console.error("Erro ao criar conexão WhatsApp:", error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, connection: data }
-  } catch (error: any) {
-    console.error("Erro ao criar conexão WhatsApp:", error)
-    return { success: false, error: error.message || "Erro interno do servidor" }
-  }
-}
-
-export async function updateWhatsAppConnection(connectionId: string, updates: any) {
-  try {
-    const client = await getSupabase()
-    const { data, error } = await client
-      .from("whatsapp_connections")
-      .update(updates)
-      .eq("id", connectionId)
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Erro ao atualizar conexão WhatsApp:", error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, connection: data }
-  } catch (error: any) {
-    console.error("Erro ao atualizar conexão WhatsApp:", error)
-    return { success: false, error: error.message || "Erro interno do servidor" }
-  }
-}
-
-export async function deleteWhatsAppConnection(connectionId: string) {
-  try {
-    const client = await getSupabase()
-    const { error } = await client.from("whatsapp_connections").delete().eq("id", connectionId)
-
-    if (error) {
-      console.error("Erro ao deletar conexão WhatsApp:", error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true }
-  } catch (error: any) {
-    console.error("Erro ao deletar conexão WhatsApp:", error)
-    return { success: false, error: error.message || "Erro interno do servidor" }
   }
 }

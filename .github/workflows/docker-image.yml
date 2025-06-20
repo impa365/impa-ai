@@ -28,5 +28,4 @@ jobs:
           context: .
           push: true
           tags: |
-            impa365/impa-ai:latest
             impa365/impa-ai:${{ github.ref_name }}

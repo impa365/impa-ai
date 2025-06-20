@@ -46,6 +46,7 @@ import { useTheme } from "@/components/theme-provider"
 import { themePresets, type ThemeConfig } from "@/lib/theme"
 import Image from "next/image"
 import { disconnectInstance } from "@/lib/whatsapp-settings-api"
+import { publicApi } from "@/lib/api-client"
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null)
@@ -103,32 +104,8 @@ export default function AdminDashboard() {
   const [adminProfileMessage, setAdminProfileMessage] = useState("")
 
   const [qrModalOpen, setQrModalOpen] = useState(false)
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [settingsModalOpen, setSettingsModalOpen] = useState<any>(false)
   const [selectedWhatsAppConnection, setSelectedWhatsAppConnection] = useState<any>(null)
-
-  const fetchWhatsAppConnections = async () => {
-    const { data } = await (await db.whatsappConnections())
-      .select(
-        `
-        *,
-        user_profiles!whatsapp_connections_user_id_fkey(full_name, email)
-      `,
-      )
-      .order("created_at", { ascending: false })
-
-    if (data) setWhatsappConnections(data)
-  }
-
-  const fetchSystemSettings = async () => {
-    const { data } = await (await db.systemSettings())
-      .select("setting_value")
-      .eq("setting_key", "default_whatsapp_connections_limit")
-      .single()
-
-    if (data) {
-      setSystemLimits({ defaultLimit: data.setting_value })
-    }
-  }
 
   const updateURL = (tab: string, subtab?: string) => {
     const params = new URLSearchParams()
@@ -137,49 +114,39 @@ export default function AdminDashboard() {
     router.push(`/admin?${params.toString()}`)
   }
 
-  const fetchUsers = async () => {
-    const { data, error } = await (await db.users()).select("*").order("created_at", { ascending: false })
-    if (error) console.error("Error fetching users:", error)
-    if (data) setUsersData(data)
-  }
+  const loadData = async () => {
+    try {
+      console.log("🔄 Carregando dados do dashboard admin...")
 
-  const fetchAgents = async () => {
-    const { data, error } = await (await db.agents())
-      .select(
-        `
-        *,
-        user_profiles!ai_agents_user_id_fkey(email)
-      `,
-      )
-      .order("created_at", { ascending: false })
-    if (error) console.error("Error fetching agents:", error)
-    if (data) setAgentsData(data)
-  }
+      // Buscar todos os dados via API
+      const result = await publicApi.getAdminDashboard()
 
-  const fetchMetrics = async () => {
-    const { count: userCount, error: userError } = await (await db.users()).select("*", {
-      count: "exact",
-      head: true,
-    })
-    if (userError) console.error("Error fetching user count:", userError)
+      if (result.error) {
+        console.error("❌ Erro ao carregar dados:", result.error)
+        return
+      }
 
-    const { count: agentCount, error: agentError } = await (await db.agents())
-      .select("*", { count: "exact", head: true })
-      .eq("status", "active")
-    if (agentError) console.error("Error fetching agent count:", agentError)
+      const data = result.data
 
-    setMetrics({
-      totalUsers: userCount || 0,
-      activeAgents: agentCount || 0,
-      totalRevenue: 0,
-      dailyMessages: 0,
-    })
-  }
+      // Atualizar estados com os dados recebidos
+      setUsersData(data.users || [])
+      setAgentsData(data.agents || [])
+      setWhatsappConnections(data.whatsappConnections || [])
+      setIntegrations(data.integrations || [])
+      setSystemLimits(data.systemLimits || { defaultLimit: 2 })
 
-  const fetchIntegrations = async () => {
-    const { data, error } = await (await db.integrations()).select("*").order("created_at", { ascending: false })
-    if (error) console.error("Error fetching integrations:", error)
-    if (data) setIntegrations(data)
+      // Calcular métricas
+      setMetrics({
+        totalUsers: data.users?.length || 0,
+        activeAgents: data.agents?.filter((agent: any) => agent.status === "active").length || 0,
+        totalRevenue: 0,
+        dailyMessages: 0,
+      })
+
+      console.log("✅ Dados carregados com sucesso")
+    } catch (error) {
+      console.error("💥 Erro ao carregar dados:", error)
+    }
   }
 
   useEffect(() => {
@@ -194,30 +161,57 @@ export default function AdminDashboard() {
     }
     setUser(currentUser)
 
-    const loadData = async () => {
-      try {
-        await Promise.all([
-          fetchUsers(),
-          fetchAgents(),
-          fetchMetrics(),
-          fetchIntegrations(),
-          fetchWhatsAppConnections(),
-          fetchSystemSettings(),
-        ])
-
-        setAdminProfileForm({
-          full_name: currentUser.full_name || "",
-          email: currentUser.email || "",
-          currentPassword: "",
-          newPassword: "",
-          confirmPassword: "",
-        })
-      } catch (error) {
-        console.error("Erro ao carregar dados:", error)
-      }
-    }
+    // Carregar dados via API
     loadData()
-  }, [router]) // Removed dependencies that might cause re-runs if not stable
+
+    // Configurar perfil do admin
+    setAdminProfileForm({
+      full_name: currentUser.full_name || "",
+      email: currentUser.email || "",
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    })
+  }, [router])
+
+  const fetchUsers = async () => {
+    try {
+      const result = await publicApi.getUsers()
+      if (result.error) {
+        console.error("Erro ao buscar usuários:", result.error)
+        return
+      }
+      setUsersData(result.data)
+    } catch (error) {
+      console.error("Erro ao buscar usuários:", error)
+    }
+  }
+
+  const fetchWhatsAppConnections = async () => {
+    try {
+      const result = await publicApi.getWhatsappConnections()
+      if (result.error) {
+        console.error("Erro ao buscar conexões WhatsApp:", result.error)
+        return
+      }
+      setWhatsappConnections(result.data)
+    } catch (error) {
+      console.error("Erro ao buscar conexões WhatsApp:", error)
+    }
+  }
+
+  const fetchIntegrations = async () => {
+    try {
+      const result = await publicApi.getIntegrations()
+      if (result.error) {
+        console.error("Erro ao buscar integrações:", result.error)
+        return
+      }
+      setIntegrations(result.data)
+    } catch (error) {
+      console.error("Erro ao buscar integrações:", error)
+    }
+  }
 
   const handleDeleteUser = async () => {
     if (!userToDelete) return

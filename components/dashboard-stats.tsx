@@ -2,42 +2,49 @@
 
 import { useEffect, useState } from "react"
 import { Bot, Smartphone } from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import { getCurrentUser } from "@/lib/auth"
+
+interface DashboardStats {
+  agentCount: number
+  connectionCount: number
+}
 
 export default function DashboardStats() {
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<DashboardStats>({
     agentCount: 0,
     connectionCount: 0,
   })
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchStats() {
       try {
-        const user = getCurrentUser()
-        if (!user) return
+        setLoading(true)
+        setError(null)
 
-        // Buscar quantidade real de agentes - CORRIGIDO: aguardar o from()
-        const agentsTable = await supabase.from("ai_agents")
-        const { data: agents, error: agentsError } = await agentsTable.select("id").eq("user_id", user.id)
+        const response = await fetch("/api/dashboard/stats", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
 
-        if (agentsError) throw agentsError
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || "Erro ao buscar estatísticas")
+        }
 
-        // Buscar quantidade real de conexões WhatsApp - CORRIGIDO: aguardar o from()
-        const connectionsTable = await supabase.from("whatsapp_connections")
-        const { data: connections, error: connectionsError } = await connectionsTable
-          .select("id")
-          .eq("user_id", user.id)
-
-        if (connectionsError) throw connectionsError
+        const data = await response.json()
 
         setStats({
-          agentCount: agents?.length || 0,
-          connectionCount: connections?.length || 0,
+          agentCount: data.stats.agentCount || 0,
+          connectionCount: data.stats.connectionCount || 0,
         })
-      } catch (error) {
-        console.error("Erro ao buscar estatísticas:", error)
+
+        console.log("✅ Estatísticas carregadas:", data.stats)
+      } catch (error: any) {
+        console.error("❌ Erro ao buscar estatísticas:", error.message)
+        setError(error.message)
       } finally {
         setLoading(false)
       }
@@ -46,9 +53,19 @@ export default function DashboardStats() {
     fetchStats()
   }, [])
 
+  if (error) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <p className="text-red-600 dark:text-red-400 text-sm">Erro ao carregar estatísticas: {error}</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {/* Conexões WhatsApp Card (substituindo Bots) */}
+      {/* Conexões WhatsApp Card */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
         <div className="flex items-center">
           <div className="flex-shrink-0">
@@ -59,7 +76,11 @@ export default function DashboardStats() {
               <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Conexões WhatsApp</dt>
               <dd>
                 <div className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                  {loading ? <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div> : stats.connectionCount}
+                  {loading ? (
+                    <div className="h-6 w-12 bg-gray-200 dark:bg-gray-700 animate-pulse rounded"></div>
+                  ) : (
+                    stats.connectionCount
+                  )}
                 </div>
               </dd>
             </dl>
@@ -67,7 +88,7 @@ export default function DashboardStats() {
         </div>
       </div>
 
-      {/* Agentes Criados Card - agora com dados reais */}
+      {/* Agentes Criados Card */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
         <div className="flex items-center">
           <div className="flex-shrink-0">
@@ -78,7 +99,11 @@ export default function DashboardStats() {
               <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Agentes Criados</dt>
               <dd>
                 <div className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                  {loading ? <div className="h-6 w-12 bg-gray-200 animate-pulse rounded"></div> : stats.agentCount}
+                  {loading ? (
+                    <div className="h-6 w-12 bg-gray-200 dark:bg-gray-700 animate-pulse rounded"></div>
+                  ) : (
+                    stats.agentCount
+                  )}
                 </div>
               </dd>
             </dl>

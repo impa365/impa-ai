@@ -10,9 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Bot, Plus, Search, Edit, Trash2, Eye, AlertTriangle, Loader2 } from "lucide-react"
 import { AgentModal, type Agent } from "@/components/agent-modal"
 import { getCurrentUser } from "@/lib/auth"
-import { supabase } from "@/lib/supabase"
 import { useToast } from "@/components/ui/use-toast"
-import { deleteEvolutionBot } from "@/lib/evolution-api"
 
 // Limites padrão caso não estejam definidos no banco
 const DEFAULT_LIMITS = {
@@ -47,8 +45,7 @@ export default function UserAgentsPage() {
       return
     }
     setCurrentUser(user)
-    loadUserLimits(user.id)
-    loadAgents(user.id)
+    loadAgentsAndLimits()
   }, [router])
 
   useEffect(() => {
@@ -61,114 +58,40 @@ export default function UserAgentsPage() {
     setFilteredAgents(filtered)
   }, [agents, searchTerm])
 
-  const loadUserLimits = async (userId: string) => {
-    try {
-      console.log("🔍 Carregando limites do usuário:", userId)
-
-      const supabaseClient = await supabase.from("user_profiles")
-      const { data: userData, error: userError } = await supabaseClient
-        .select("agents_limit, connections_limit, role")
-        .eq("id", userId)
-        .single()
-
-      if (userError) {
-        console.error("❌ Erro ao carregar dados do usuário:", userError)
-        setUserLimits(DEFAULT_LIMITS)
-        return
-      }
-
-      console.log("📊 Dados do usuário carregados:", userData)
-
-      // Usar os valores exatos da tabela user_profiles
-      let agentsLimit = DEFAULT_LIMITS.max_agents
-      let whatsappLimit = DEFAULT_LIMITS.max_whatsapp_connections
-
-      // Verificar agents_limit (valor configurado pelo admin)
-      if (userData.agents_limit !== undefined && userData.agents_limit !== null) {
-        // Se for string, converter para número
-        agentsLimit =
-          typeof userData.agents_limit === "string" ? Number.parseInt(userData.agents_limit) : userData.agents_limit
-        console.log("✅ Usando agents_limit do user_profiles:", agentsLimit)
-      }
-      // Se for admin, limite ilimitado
-      else if (userData.role === "admin") {
-        agentsLimit = 999
-        console.log("✅ Usuário admin - limite de agentes: 999")
-      }
-
-      // Verificar connections_limit (valor configurado pelo admin)
-      if (userData.connections_limit !== undefined && userData.connections_limit !== null) {
-        // Se for string, converter para número
-        whatsappLimit =
-          typeof userData.connections_limit === "string"
-            ? Number.parseInt(userData.connections_limit)
-            : userData.connections_limit
-        console.log("✅ Usando connections_limit do user_profiles:", whatsappLimit)
-      }
-      // Se for admin, limite ilimitado
-      else if (userData.role === "admin") {
-        whatsappLimit = 999
-        console.log("✅ Usuário admin - limite de WhatsApp: 999")
-      }
-
-      const limits = {
-        max_agents: agentsLimit,
-        max_whatsapp_connections: whatsappLimit,
-        max_integrations: DEFAULT_LIMITS.max_integrations,
-      }
-
-      console.log("📊 Limites finais aplicados:", limits)
-      setUserLimits(limits)
-    } catch (error) {
-      console.error("❌ Erro ao carregar limites:", error)
-      console.log("📊 Usando limites padrão por erro:", DEFAULT_LIMITS)
-      setUserLimits(DEFAULT_LIMITS)
-    }
-  }
-
-  const loadAgents = async (userId: string) => {
+  const loadAgentsAndLimits = async () => {
     setLoading(true)
     try {
-      console.log("🤖 Carregando agentes do usuário:", userId)
+      console.log("🔍 Carregando agentes e limites do usuário...")
 
-      const agentsTable = await supabase.from("ai_agents")
-      const { data, error } = await agentsTable
-        .select(`
-          *,
-          whatsapp_connections!inner(
-            id,
-            connection_name,
-            phone_number,
-            instance_name
-          )
-        `)
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
+      const response = await fetch("/api/user/agents", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
 
-      if (error) {
-        console.error("❌ Erro ao carregar agentes:", error)
-        toast({
-          title: "Erro",
-          description: "Falha ao carregar agentes",
-          variant: "destructive",
-        })
-        return
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.details || "Erro ao carregar dados")
       }
 
-      console.log("✅ Agentes carregados:", data?.length || 0)
-      setAgents(data || [])
+      const data = await response.json()
+      console.log("✅ Dados carregados:", { agents: data.agents?.length, limits: data.limits })
+
+      setAgents(data.agents || [])
+      setUserLimits(data.limits || DEFAULT_LIMITS)
 
       // Verificar se atingiu o limite máximo
-      const currentCount = data?.length || 0
-      const maxAllowed = userLimits?.max_agents || DEFAULT_LIMITS.max_agents
+      const currentCount = data.agents?.length || 0
+      const maxAllowed = data.limits?.max_agents || DEFAULT_LIMITS.max_agents
       setMaxAgentsReached(currentCount >= maxAllowed)
 
       console.log(`📊 Agentes: ${currentCount}/${maxAllowed} (limite atingido: ${currentCount >= maxAllowed})`)
-    } catch (error) {
-      console.error("❌ Erro ao carregar agentes:", error)
+    } catch (error: any) {
+      console.error("❌ Erro ao carregar dados:", error.message)
       toast({
         title: "Erro",
-        description: "Falha ao carregar agentes",
+        description: error.message || "Falha ao carregar dados",
         variant: "destructive",
       })
     } finally {
@@ -206,31 +129,16 @@ export default function UserAgentsPage() {
     try {
       console.log("🗑️ Iniciando exclusão do agente:", agent.name)
 
-      // Se o agente tem um bot na Evolution API, deletar primeiro
-      if (agent.evolution_bot_id && agent.whatsapp_connection_id) {
-        const whatsappTable = await supabase.from("whatsapp_connections")
-        const { data: connection } = await whatsappTable
-          .select("instance_name")
-          .eq("id", agent.whatsapp_connection_id)
-          .single()
+      const response = await fetch(`/api/user/agents/${agent.id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
 
-        if (connection?.instance_name) {
-          console.log("🗑️ Deletando bot da Evolution API...")
-          const evolutionDeleteSuccess = await deleteEvolutionBot(connection.instance_name, agent.evolution_bot_id)
-
-          if (!evolutionDeleteSuccess) {
-            console.warn("⚠️ Falha ao deletar bot da Evolution API, continuando com exclusão local")
-          }
-        }
-      }
-
-      // Deletar agente do banco de dados
-      const agentsTable = await supabase.from("ai_agents")
-      const { error } = await agentsTable.delete().eq("id", agent.id).eq("user_id", currentUser.id) // Garantir que só pode deletar seus próprios agentes
-
-      if (error) {
-        console.error("❌ Erro ao deletar agente:", error)
-        throw error
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.details || "Erro ao deletar agente")
       }
 
       console.log("✅ Agente excluído com sucesso")
@@ -240,9 +148,7 @@ export default function UserAgentsPage() {
       })
 
       // Recarregar lista
-      if (currentUser?.id) {
-        loadAgents(currentUser.id)
-      }
+      loadAgentsAndLimits()
     } catch (error: any) {
       console.error("❌ Erro ao deletar agente:", error)
       toast({
@@ -263,10 +169,7 @@ export default function UserAgentsPage() {
     })
 
     // Recarregar dados
-    if (currentUser?.id) {
-      loadAgents(currentUser.id)
-      loadUserLimits(currentUser.id)
-    }
+    loadAgentsAndLimits()
 
     // Fechar modal e limpar seleção
     setIsModalOpen(false)
@@ -414,7 +317,7 @@ export default function UserAgentsPage() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-500">Palavra-chave:</span>
                     <code className="text-xs bg-gray-100 px-2 py-1 rounded">
-                      {agent.model_config?.activation_keyword || "Não definida"}
+                      {agent.model_config?.activation_keyword || agent.trigger_value || "Não definida"}
                     </code>
                   </div>
 
@@ -470,6 +373,7 @@ export default function UserAgentsPage() {
         onSave={handleAgentSaved}
         maxAgentsReached={maxAgentsReached}
         isEditing={!!selectedAgent}
+        apiEndpoint="/api/user/agents" // Usar API do usuário
       />
     </div>
   )

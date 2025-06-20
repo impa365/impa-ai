@@ -32,11 +32,12 @@ import {
   Code,
   BookOpen,
   ExternalLink,
+  RefreshCw,
 } from "lucide-react"
-import { getCurrentUser } from "@/lib/auth"
+import { getCurrentUser } from "@/lib/auth" // Client-side auth check
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { getSupabaseServer } from "@/lib/supabase"
+// Removido: import { getSupabaseServer } from "@/lib/supabase"
 
 interface ApiKey {
   id: string
@@ -54,7 +55,8 @@ interface ApiKey {
   }
 }
 
-interface User {
+interface UserProfile {
+  // Renomeado de User para UserProfile para clareza
   id: string
   full_name: string
   email: string
@@ -62,12 +64,12 @@ interface User {
 }
 
 export default function AdminApiKeysPage() {
-  const [user, setUser] = useState<any>(null)
+  const [currentUser, setCurrentUser] = useState<any>(null) // Renomeado de user para currentUser
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
-  const [users, setUsers] = useState<User[]>([])
+  const [usersForSelect, setUsersForSelect] = useState<UserProfile[]>([]) // Renomeado de users para usersForSelect
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState("")
+  const [message, setMessage] = useState("") // Para mensagens de erro/sucesso gerais
   const router = useRouter()
 
   // Modal states
@@ -88,26 +90,28 @@ export default function AdminApiKeysPage() {
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
+    const userSession = getCurrentUser() // Client-side check
+    if (!userSession) {
       router.push("/")
       return
     }
-    if (currentUser.role !== "admin") {
+    if (userSession.role !== "admin") {
       router.push("/dashboard")
       return
     }
-    setUser(currentUser)
+    setCurrentUser(userSession)
     loadData()
   }, [router])
 
   const loadData = async () => {
     setLoading(true)
+    setMessage("")
     try {
-      await Promise.all([fetchApiKeys(), fetchUsers()])
+      await Promise.all([fetchApiKeys(), fetchUsersForSelect()])
     } catch (error) {
-      console.error("❌ Erro ao carregar dados:", error)
-      setMessage("Erro ao carregar dados")
+      console.error("Error loading data:", error) // Log de erro genérico
+      setMessage("Erro ao carregar dados. Tente novamente.")
+      toast.error("Erro ao carregar dados.")
     } finally {
       setLoading(false)
     }
@@ -115,88 +119,42 @@ export default function AdminApiKeysPage() {
 
   const fetchApiKeys = async () => {
     try {
-      console.log("🔍 Fetching API keys...")
-
-      const supabase = await getSupabaseServer()
-
-      // Buscar API keys com informações do usuário
-      const { data, error } = await supabase
-        .from("user_api_keys")
-        .select(`
-        id,
-        user_id,
-        name,
-        api_key,
-        description,
-        is_active,
-        last_used_at,
-        created_at,
-        user_profiles!inner(
-          full_name,
-          email,
-          role
-        )
-      `)
-        .order("created_at", { ascending: false })
-
-      if (error) {
-        console.error("❌ Error fetching API keys:", error)
-        throw error
+      const response = await fetch("/api/admin/apikeys")
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Failed to fetch API keys: ${response.statusText}`)
       }
-
-      console.log("✅ API keys fetched:", data?.length || 0)
-
-      // Transformar os dados para o formato esperado
-      const transformedKeys: ApiKey[] =
-        data?.map((key: any) => ({
-          ...key,
-          user_profiles: key.user_profiles,
-        })) || []
-
-      setApiKeys(transformedKeys)
-    } catch (error) {
-      console.error("❌ Erro ao buscar API keys:", error)
-      setMessage("Erro ao buscar API keys")
+      const data = await response.json()
+      setApiKeys(data)
+    } catch (error: any) {
+      console.error("Error fetching API keys:", error.message) // Log de erro específico
+      setMessage("Erro ao buscar API keys.")
+      toast.error("Erro ao buscar API keys.")
     }
   }
 
-  const fetchUsers = async () => {
+  const fetchUsersForSelect = async () => {
     try {
-      console.log("🔍 Fetching users...")
-
-      const supabase = await getSupabaseServer()
-
-      const { data, error } = await supabase
-        .from("user_profiles")
-        .select("id, full_name, email, role")
-        .eq("status", "active")
-        .order("full_name", { ascending: true })
-
-      if (error) {
-        console.error("❌ Error fetching users:", error)
-        throw error
+      const response = await fetch("/api/admin/users-for-apikey")
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Failed to fetch users: ${response.statusText}`)
       }
-
-      console.log("✅ Users fetched:", data?.length || 0)
-      setUsers(data || [])
-    } catch (error) {
-      console.error("❌ Erro ao buscar usuários:", error)
-      setMessage("Erro ao buscar usuários")
+      const data = await response.json()
+      setUsersForSelect(data)
+    } catch (error: any) {
+      console.error("Error fetching users for select:", error.message) // Log de erro específico
+      setMessage("Erro ao buscar usuários.")
+      toast.error("Erro ao buscar usuários.")
     }
   }
 
-  const generateApiKey = (): string => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    let result = "impaai_"
-    for (let i = 0; i < 32; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
-    return result
-  }
+  // generateApiKey foi movido para o backend (API route)
 
   const handleCreateApiKey = async () => {
     if (!createForm.user_id || !createForm.name.trim()) {
-      setMessage("Usuário e nome da chave são obrigatórios")
+      setMessage("Usuário e nome da chave são obrigatórios.")
+      toast.error("Usuário e nome da chave são obrigatórios.")
       return
     }
 
@@ -204,36 +162,29 @@ export default function AdminApiKeysPage() {
     setMessage("")
 
     try {
-      console.log("🔧 Creating new API key...")
-
-      const supabase = await getSupabaseServer()
-      const newApiKey = generateApiKey()
-
-      const { error } = await supabase.from("user_api_keys").insert({
-        user_id: createForm.user_id,
-        name: createForm.name.trim(),
-        api_key: newApiKey,
-        description: createForm.description.trim() || "API Key para integração com sistemas externos",
-        permissions: ["read"],
-        rate_limit: 100,
-        is_active: true,
-        is_admin_key: false,
-        access_scope: "user",
+      const response = await fetch("/api/admin/apikeys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: createForm.user_id,
+          name: createForm.name.trim(),
+          description: createForm.description.trim(),
+        }),
       })
 
-      if (error) {
-        console.error("❌ Error creating API key:", error)
-        throw error
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Failed to create API key: ${response.statusText}`)
       }
 
-      console.log("✅ API key created successfully")
-      await fetchApiKeys()
+      await fetchApiKeys() // Recarrega a lista
       setCreateModalOpen(false)
       setCreateForm({ user_id: "", name: "", description: "" })
       toast.success("API Key criada com sucesso!")
-    } catch (error) {
-      console.error("❌ Erro ao criar API key:", error)
-      setMessage("Erro ao criar API key")
+    } catch (error: any) {
+      console.error("Error creating API key:", error.message) // Log de erro específico
+      setMessage(`Erro ao criar API key: ${error.message}`)
+      toast.error(`Erro ao criar API key: ${error.message}`)
     } finally {
       setSaving(false)
     }
@@ -243,26 +194,25 @@ export default function AdminApiKeysPage() {
     if (!selectedApiKey) return
 
     setSaving(true)
+    setMessage("")
     try {
-      console.log("🗑️ Deleting API key:", selectedApiKey.id)
+      const response = await fetch(`/api/admin/apikeys/${selectedApiKey.id}`, {
+        method: "DELETE",
+      })
 
-      const supabase = await getSupabaseServer()
-
-      const { error } = await supabase.from("user_api_keys").delete().eq("id", selectedApiKey.id)
-
-      if (error) {
-        console.error("❌ Error deleting API key:", error)
-        throw error
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Failed to delete API key: ${response.statusText}`)
       }
 
-      console.log("✅ API key deleted successfully")
-      await fetchApiKeys()
+      await fetchApiKeys() // Recarrega a lista
       setDeleteModalOpen(false)
       setSelectedApiKey(null)
       toast.success("API Key excluída com sucesso!")
-    } catch (error) {
-      console.error("❌ Erro ao excluir API key:", error)
-      setMessage("Erro ao excluir API key")
+    } catch (error: any) {
+      console.error("Error deleting API key:", error.message) // Log de erro específico
+      setMessage(`Erro ao excluir API key: ${error.message}`)
+      toast.error(`Erro ao excluir API key: ${error.message}`)
     } finally {
       setSaving(false)
     }
@@ -283,27 +233,32 @@ export default function AdminApiKeysPage() {
       await navigator.clipboard.writeText(text)
       toast.success("API Key copiada para a área de transferência!")
     } catch (error) {
-      toast.error("Erro ao copiar API Key")
+      toast.error("Erro ao copiar API Key.")
     }
   }
 
   const maskApiKey = (apiKey: string): string => {
-    if (apiKey.length <= 12) return apiKey
+    if (!apiKey || apiKey.length <= 12) return apiKey || ""
     return `${apiKey.substring(0, 12)}${"*".repeat(apiKey.length - 12)}`
   }
 
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+  const formatDate = (dateString?: string): string => {
+    if (!dateString) return "N/A"
+    try {
+      return new Date(dateString).toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    } catch (e) {
+      return "Data inválida"
+    }
   }
 
   const generateCurlExamples = (apiKey: string) => {
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://your-domain.com"
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://your-domain.com" // Mantido como está
 
     return {
       listAgents: `curl -X GET "${baseUrl}/api/get-all/agent" \\
@@ -325,7 +280,8 @@ export default function AdminApiKeysPage() {
     }
   }
 
-  if (loading) {
+  if (loading && !apiKeys.length && !usersForSelect.length) {
+    // Condição de loading inicial
     return (
       <div className="p-6">
         <div className="flex items-center justify-center h-64">
@@ -346,15 +302,21 @@ export default function AdminApiKeysPage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Gerenciar API Keys</h1>
           <p className="text-gray-600">Controle as chaves de API de todos os usuários do sistema</p>
         </div>
-        <Button onClick={() => setCreateModalOpen(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
-          <Plus className="w-4 h-4" />
-          Nova API Key
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={loadData} variant="outline" className="gap-2" disabled={loading}>
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            Recarregar
+          </Button>
+          <Button onClick={() => setCreateModalOpen(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+            <Plus className="w-4 h-4" />
+            Nova API Key
+          </Button>
+        </div>
       </div>
 
-      {/* Message Alert */}
-      {message && (
-        <Alert variant={message.includes("sucesso") ? "default" : "destructive"} className="mb-6">
+      {/* Message Alert - Usar toast para a maioria das mensagens, este é para erros persistentes */}
+      {message && !message.toLowerCase().includes("sucesso") && (
+        <Alert variant="destructive" className="mb-6">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{message}</AlertDescription>
         </Alert>
@@ -405,7 +367,12 @@ export default function AdminApiKeysPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {apiKeys.length === 0 ? (
+          {loading && !apiKeys.length ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Carregando API Keys...</p>
+            </div>
+          ) : apiKeys.length === 0 ? (
             <div className="text-center py-12">
               <Key className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma API Key encontrada</h3>
@@ -426,7 +393,7 @@ export default function AdminApiKeysPage() {
                     <TableHead>Status</TableHead>
                     <TableHead>Último Uso</TableHead>
                     <TableHead>Criada em</TableHead>
-                    <TableHead className="w-32">Ações</TableHead>
+                    <TableHead className="w-32 text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -435,7 +402,11 @@ export default function AdminApiKeysPage() {
                       <TableCell>
                         <div>
                           <div className="font-medium">{apiKey.name}</div>
-                          {apiKey.description && <div className="text-sm text-gray-500">{apiKey.description}</div>}
+                          {apiKey.description && (
+                            <div className="text-sm text-gray-500 max-w-xs truncate" title={apiKey.description}>
+                              {apiKey.description}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -446,8 +417,8 @@ export default function AdminApiKeysPage() {
                             variant="outline"
                             className={`text-xs mt-1 ${
                               apiKey.user_profiles?.role === "admin"
-                                ? "border-purple-200 text-purple-700"
-                                : "border-gray-200 text-gray-700"
+                                ? "border-purple-200 text-purple-700 bg-purple-50"
+                                : "border-gray-200 text-gray-700 bg-gray-50"
                             }`}
                           >
                             {apiKey.user_profiles?.role === "admin" ? "Admin" : "Usuário"}
@@ -455,14 +426,24 @@ export default function AdminApiKeysPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                           <code className="text-sm bg-gray-100 px-2 py-1 rounded font-mono">
                             {visibleKeys.has(apiKey.id) ? apiKey.api_key : maskApiKey(apiKey.api_key)}
                           </code>
-                          <Button variant="ghost" size="sm" onClick={() => toggleApiKeyVisibility(apiKey.id)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => toggleApiKeyVisibility(apiKey.id)}
+                          >
                             {visibleKeys.has(apiKey.id) ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => copyToClipboard(apiKey.api_key)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => copyToClipboard(apiKey.api_key)}
+                          >
                             <Copy className="w-4 h-4" />
                           </Button>
                         </div>
@@ -480,11 +461,11 @@ export default function AdminApiKeysPage() {
                           {apiKey.last_used_at ? (
                             <div>
                               <div>{formatDate(apiKey.last_used_at)}</div>
-                              <div className="text-gray-500">
+                              {/* <div className="text-gray-500">
                                 {new Date(apiKey.last_used_at) > new Date(Date.now() - 24 * 60 * 60 * 1000)
                                   ? "Recente"
                                   : "Há mais de 1 dia"}
-                              </div>
+                              </div> */}
                             </div>
                           ) : (
                             <span className="text-gray-500">Nunca usada</span>
@@ -494,26 +475,28 @@ export default function AdminApiKeysPage() {
                       <TableCell>
                         <div className="text-sm">{formatDate(apiKey.created_at)}</div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="text-blue-600 hover:text-blue-700"
+                          size="icon"
+                          className="text-blue-600 hover:text-blue-700 h-8 w-8"
                           onClick={() => {
                             setSelectedApiKeyForExamples(apiKey)
                             setExamplesModalOpen(true)
                           }}
+                          title="Ver exemplos de uso"
                         >
                           <Code className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700"
+                          size="icon"
+                          className="text-red-600 hover:text-red-700 h-8 w-8"
                           onClick={() => {
                             setSelectedApiKey(apiKey)
                             setDeleteModalOpen(true)
                           }}
+                          title="Excluir API Key"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -535,37 +518,46 @@ export default function AdminApiKeysPage() {
               <Plus className="w-5 h-5" />
               Criar Nova API Key
             </DialogTitle>
-            <DialogDescription>Crie uma nova chave de API para um usuário específico</DialogDescription>
+            <DialogDescription>Crie uma nova chave de API para um usuário específico.</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-4 py-4">
             <div>
               <Label htmlFor="userId">Usuário *</Label>
               <Select
                 value={createForm.user_id}
                 onValueChange={(value) => setCreateForm({ ...createForm, user_id: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="userId">
                   <SelectValue placeholder="Selecione um usuário" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      <div className="flex items-center gap-2">
-                        <span>{user.full_name || user.email}</span>
-                        <Badge
-                          variant="outline"
-                          className={`text-xs ${
-                            user.role === "admin"
-                              ? "border-purple-200 text-purple-700"
-                              : "border-gray-200 text-gray-700"
-                          }`}
-                        >
-                          {user.role === "admin" ? "Admin" : "Usuário"}
-                        </Badge>
-                      </div>
+                  {usersForSelect.length === 0 && (
+                    <SelectItem value="loading" disabled>
+                      Carregando usuários...
                     </SelectItem>
-                  ))}
+                  )}
+                  {usersForSelect.map(
+                    (
+                      userItem, // Renomeado user para userItem para evitar conflito
+                    ) => (
+                      <SelectItem key={userItem.id} value={userItem.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{userItem.full_name || userItem.email}</span>
+                          <Badge
+                            variant="outline"
+                            className={`text-xs ${
+                              userItem.role === "admin"
+                                ? "border-purple-200 text-purple-700 bg-purple-50"
+                                : "border-gray-200 text-gray-700 bg-gray-50"
+                            }`}
+                          >
+                            {userItem.role === "admin" ? "Admin" : "Usuário"}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ),
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -598,7 +590,11 @@ export default function AdminApiKeysPage() {
             <Button variant="outline" onClick={() => setCreateModalOpen(false)} disabled={saving}>
               Cancelar
             </Button>
-            <Button onClick={handleCreateApiKey} disabled={saving} className="gap-2">
+            <Button
+              onClick={handleCreateApiKey}
+              disabled={saving || !createForm.user_id || !createForm.name.trim()}
+              className="gap-2"
+            >
               {saving ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -624,25 +620,26 @@ export default function AdminApiKeysPage() {
               Exemplos de Uso da API
             </DialogTitle>
             <DialogDescription>
-              Copie e cole estes exemplos no n8n ou outras ferramentas de integração
+              Copie e cole estes exemplos no n8n ou outras ferramentas de integração.
             </DialogDescription>
           </DialogHeader>
 
           {selectedApiKeyForExamples && (
-            <div className="space-y-6">
+            <div className="space-y-6 py-4">
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                 <div className="flex items-center gap-2 mb-2">
                   <Key className="w-4 h-4 text-blue-600" />
                   <span className="font-medium text-blue-900">API Key Selecionada:</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <code className="text-sm bg-white px-2 py-1 rounded border flex-1">
+                  <code className="text-sm bg-white px-2 py-1 rounded border flex-1 truncate">
                     {selectedApiKeyForExamples.name} - {maskApiKey(selectedApiKeyForExamples.api_key)}
                   </code>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => copyToClipboard(selectedApiKeyForExamples.api_key)}
+                    className="bg-white hover:bg-gray-50"
                   >
                     <Copy className="w-4 h-4" />
                   </Button>
@@ -656,72 +653,72 @@ export default function AdminApiKeysPage() {
                   <TabsTrigger value="webhook">Webhook</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="list-agents" className="space-y-4">
+                <TabsContent value="list-agents" className="space-y-4 pt-4">
                   <div>
                     <h4 className="font-medium mb-2">Listar todos os agentes</h4>
                     <p className="text-sm text-gray-600 mb-3">
-                      Retorna a lista de todos os agentes disponíveis para o usuário
+                      Retorna a lista de todos os agentes disponíveis para o usuário.
                     </p>
-                    <div className="relative">
+                    <div className="relative group">
                       <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
                         <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).listAgents}</code>
                       </pre>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="absolute top-2 right-2"
+                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
                         onClick={() =>
                           copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).listAgents)
                         }
                       >
-                        <Copy className="w-4 h-4" />
+                        <Copy className="w-4 h-4 mr-1" /> Copiar
                       </Button>
                     </div>
                   </div>
                 </TabsContent>
 
-                <TabsContent value="get-agent" className="space-y-4">
+                <TabsContent value="get-agent" className="space-y-4 pt-4">
                   <div>
                     <h4 className="font-medium mb-2">Obter detalhes de um agente específico</h4>
                     <p className="text-sm text-gray-600 mb-3">
                       Retorna os detalhes completos de um agente específico. Substitua AGENT_ID pelo ID do agente
                       desejado.
                     </p>
-                    <div className="relative">
+                    <div className="relative group">
                       <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
                         <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).getAgent}</code>
                       </pre>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="absolute top-2 right-2"
+                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
                         onClick={() =>
                           copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).getAgent)
                         }
                       >
-                        <Copy className="w-4 h-4" />
+                        <Copy className="w-4 h-4 mr-1" /> Copiar
                       </Button>
                     </div>
                   </div>
                 </TabsContent>
 
-                <TabsContent value="webhook" className="space-y-4">
+                <TabsContent value="webhook" className="space-y-4 pt-4">
                   <div>
                     <h4 className="font-medium mb-2">Enviar mensagem via webhook</h4>
                     <p className="text-sm text-gray-600 mb-3">
                       Envia uma mensagem através de um agente específico. Substitua os valores conforme necessário.
                     </p>
-                    <div className="relative">
+                    <div className="relative group">
                       <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
                         <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).webhook}</code>
                       </pre>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="absolute top-2 right-2"
+                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
                         onClick={() => copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).webhook)}
                       >
-                        <Copy className="w-4 h-4" />
+                        <Copy className="w-4 h-4 mr-1" /> Copiar
                       </Button>
                     </div>
                   </div>
@@ -729,16 +726,16 @@ export default function AdminApiKeysPage() {
               </Tabs>
 
               <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
                   <div>
                     <h4 className="font-medium text-amber-900 mb-1">Dicas para uso no n8n:</h4>
-                    <ul className="text-sm text-amber-800 space-y-1">
-                      <li>• Use o nó "HTTP Request" para fazer as chamadas</li>
-                      <li>• Configure o método HTTP correto (GET ou POST)</li>
-                      <li>• Adicione o header "Authorization" com o valor "Bearer SUA_API_KEY"</li>
-                      <li>• Para POST requests, configure o Content-Type como "application/json"</li>
-                      <li>• Teste sempre em ambiente de desenvolvimento primeiro</li>
+                    <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
+                      <li>Use o nó "HTTP Request" para fazer as chamadas.</li>
+                      <li>Configure o método HTTP correto (GET ou POST).</li>
+                      <li>Adicione o header "Authorization" com o valor "Bearer SUA_API_KEY".</li>
+                      <li>Para POST requests, configure o Content-Type como "application/json".</li>
+                      <li>Teste sempre em ambiente de desenvolvimento primeiro.</li>
                     </ul>
                   </div>
                 </div>
@@ -750,7 +747,12 @@ export default function AdminApiKeysPage() {
             <Button variant="outline" onClick={() => setExamplesModalOpen(false)}>
               Fechar
             </Button>
-            <Button onClick={() => window.open("/docs/api", "_blank")} className="gap-2">
+            <Button
+              onClick={() => window.open("https://docs.impa.ai/api-reference", "_blank")}
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {" "}
+              {/* Atualizar URL da documentação se necessário */}
               <ExternalLink className="w-4 h-4" />
               Ver Documentação Completa
             </Button>
@@ -773,18 +775,20 @@ export default function AdminApiKeysPage() {
           </DialogHeader>
 
           {selectedApiKey && (
-            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+            <div className="bg-red-50 p-4 rounded-lg space-y-2 my-4 border border-red-200">
               <div className="flex justify-between">
-                <span className="font-medium">Nome:</span>
-                <span>{selectedApiKey.name}</span>
+                <span className="font-medium text-red-900">Nome:</span>
+                <span className="text-red-700">{selectedApiKey.name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-medium">Usuário:</span>
-                <span>{selectedApiKey.user_profiles?.full_name || "Sem nome"}</span>
+                <span className="font-medium text-red-900">Usuário:</span>
+                <span className="text-red-700">{selectedApiKey.user_profiles?.full_name || "Sem nome"}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="font-medium">API Key:</span>
-                <code className="text-sm bg-white px-2 py-1 rounded">{maskApiKey(selectedApiKey.api_key)}</code>
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-red-900">API Key:</span>
+                <code className="text-sm bg-white px-2 py-1 rounded border border-red-200 text-red-700">
+                  {maskApiKey(selectedApiKey.api_key)}
+                </code>
               </div>
             </div>
           )}

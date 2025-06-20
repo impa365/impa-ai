@@ -10,7 +10,6 @@ import {
   Trash2,
   QrCode,
   Smartphone,
-  PowerOff,
   UserPlus,
   Plus,
   Search,
@@ -18,12 +17,12 @@ import {
   X,
   RefreshCw,
   Info,
+  AlertCircle,
 } from "lucide-react"
-import { getSupabase } from "@/lib/supabase"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
 import WhatsAppInfoModal from "@/components/whatsapp-info-modal"
-import { syncInstanceStatus, disconnectInstance } from "@/lib/whatsapp-settings-api"
 import { getCurrentUser } from "@/lib/auth"
 import AdminWhatsAppConnectionModal from "@/components/admin-whatsapp-connection-modal"
 import TransferConnectionModal from "@/components/transfer-connection-modal"
@@ -37,10 +36,12 @@ import {
 } from "@/components/ui/dialog"
 import { deleteEvolutionInstance } from "@/lib/whatsapp-api"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { fetchWhatsAppConnections } from "@/lib/whatsapp-connections"
 
 export default function AdminWhatsAppPage() {
   const [connections, setConnections] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
   const [qrModalOpen, setQrModalOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [infoModalOpen, setInfoModalOpen] = useState(false)
@@ -65,28 +66,66 @@ export default function AdminWhatsAppPage() {
 
   const [syncing, setSyncing] = useState(false)
 
+  // Auto-sync silencioso a cada 15 segundos + eventos
+  const autoSync = useCallback(async (showMessage = false) => {
+    try {
+      await fetch("/api/whatsapp/auto-sync", { method: "POST" })
+      // Recarregar conexões silenciosamente
+      const data = await fetchWhatsAppConnections(undefined, true)
+      setConnections(data)
+
+      if (showMessage) {
+        setSaveMessage("Conexões sincronizadas!")
+        setTimeout(() => setSaveMessage(""), 2000)
+      }
+    } catch (error) {
+      // Silently handle auto-sync errors
+    }
+  }, [])
+
   useEffect(() => {
     const user = getCurrentUser()
     if (user) {
       setCurrentUser(user)
     }
-    fetchConnections()
-  }, [])
 
-  const fetchConnections = async () => {
+    // Sincronizar ao carregar a página
+    loadConnections().then(() => {
+      autoSync()
+    })
+
+    // Configurar auto-sync a cada 15 segundos
+    const interval = setInterval(() => autoSync(), 15000)
+
+    // Sincronizar quando a página ganhar foco (usuário voltar para a aba)
+    const handleFocus = () => autoSync()
+    window.addEventListener("focus", handleFocus)
+
+    // Sincronizar quando a página ficar visível
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        autoSync()
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("focus", handleFocus)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [autoSync])
+
+  const loadConnections = async () => {
     try {
-      const client = await getSupabase()
-      const { data } = await client
-        .from("whatsapp_connections")
-        .select(`
-          *,
-          user_profiles!whatsapp_connections_user_id_fkey(full_name, email)
-        `)
-        .order("created_at", { ascending: false })
+      setLoading(true)
+      setError("")
 
-      if (data) setConnections(data)
-    } catch (error) {
+      const data = await fetchWhatsAppConnections(undefined, true)
+      setConnections(data)
+    } catch (error: any) {
       console.error("Erro ao buscar conexões:", error)
+      setError("Erro ao carregar conexões WhatsApp")
     } finally {
       setLoading(false)
     }
@@ -94,8 +133,8 @@ export default function AdminWhatsAppPage() {
 
   // Filtrar conexões baseado nos critérios de busca
   const filteredConnections = useMemo(() => {
-    return connections.filter((connection) => {
-      // Filtro por termo de busca (nome do usuário, email, nome da conexão, instância)
+    return connections.filter((connection: any) => {
+      // Filtro por termo de busca
       const searchMatch =
         searchTerm === "" ||
         connection.user_profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -110,56 +149,26 @@ export default function AdminWhatsAppPage() {
     })
   }, [connections, searchTerm, statusFilter])
 
-  // Função para sincronizar status de uma conexão específica
-  const syncConnection = useCallback(
-    async (connectionId: string) => {
-      if (syncing) return
-
-      setSyncing(true)
-      try {
-        const result = await syncInstanceStatus(connectionId)
-        if (result.success) {
-          await fetchConnections()
-          console.log("Sincronização realizada:", result)
-        } else {
-          console.error("Erro na sincronização:", result.error)
-        }
-      } catch (error) {
-        console.error("Erro ao sincronizar:", error)
-      } finally {
-        setSyncing(false)
-      }
-    },
-    [syncing],
-  )
-
-  // Função de sincronização manual melhorada
   const handleManualSync = async () => {
-    if (syncing || !connections.length) return
+    if (syncing) return
 
     setSyncing(true)
     try {
-      console.log(`[MANUAL-SYNC] Iniciando sincronização de ${connections.length} conexões`)
+      const response = await fetch("/api/whatsapp/sync-all", {
+        method: "POST",
+      })
 
-      // Sincronizar conexões uma por vez para evitar sobrecarga
-      for (const connection of connections) {
-        try {
-          console.log(`[MANUAL-SYNC] Sincronizando: ${connection.instance_name}`)
-          await syncInstanceStatus(connection.id)
-          // Pequena pausa entre sincronizações
-          await new Promise((resolve) => setTimeout(resolve, 500))
-        } catch (error) {
-          console.error(`[MANUAL-SYNC] Erro na conexão ${connection.instance_name}:`, error)
-          // Continuar com as outras conexões mesmo se uma falhar
-        }
+      const result = await response.json()
+
+      if (result.success) {
+        await loadConnections()
+        setSaveMessage(`✅ Sincronização concluída! ${result.synced} conexões atualizadas`)
+      } else {
+        setSaveMessage(`❌ Erro na sincronização: ${result.error}`)
       }
 
-      // Recarregar conexões após sincronização
-      await fetchConnections()
-      setSaveMessage("Sincronização concluída!")
-      setTimeout(() => setSaveMessage(""), 3000)
+      setTimeout(() => setSaveMessage(""), 5000)
     } catch (error) {
-      console.error("Erro na sincronização manual:", error)
       setSaveMessage("Erro na sincronização")
       setTimeout(() => setSaveMessage(""), 3000)
     } finally {
@@ -167,43 +176,21 @@ export default function AdminWhatsAppPage() {
     }
   }
 
-  // Remover sincronização automática silenciosa que estava causando erro
-  // useEffect(() => {
-  //   if (connections.length > 0) {
-  //     // Sincronização silenciosa removida para evitar erros
-  //   }
-  // }, [connections.length])
-
-  // Quando o modal QR é aberto, sincronizar a conexão selecionada
-  useEffect(() => {
-    if (qrModalOpen && selectedConnection) {
-      syncConnection(selectedConnection.id)
-    }
-  }, [qrModalOpen, selectedConnection, syncConnection])
-
-  // Quando o modal de configurações é aberto, sincronizar a conexão selecionada
-  useEffect(() => {
-    if (settingsModalOpen && selectedConnection) {
-      syncConnection(selectedConnection.id)
-    }
-  }, [settingsModalOpen, selectedConnection, syncConnection])
-
-  const handleDisconnectConnection = async (connection: any) => {
+  const handleSyncConnection = async (connection: any) => {
     try {
-      const result = await disconnectInstance(connection.instance_name)
+      const response = await fetch(`/api/whatsapp/sync/${connection.instance_name}`, {
+        method: "POST",
+      })
+
+      const result = await response.json()
 
       if (result.success) {
-        // Recarregar conexões após desconectar
-        await fetchConnections()
-        setSaveMessage("Conexão desconectada com sucesso!")
-        setTimeout(() => setSaveMessage(""), 3000)
-      } else {
-        setSaveMessage("Erro ao desconectar conexão")
+        await loadConnections()
+        setSaveMessage(`✅ Status sincronizado: ${result.status}`)
         setTimeout(() => setSaveMessage(""), 3000)
       }
     } catch (error) {
-      console.error("Erro ao desconectar:", error)
-      setSaveMessage("Erro ao desconectar conexão")
+      setSaveMessage("❌ Erro ao sincronizar conexão")
       setTimeout(() => setSaveMessage(""), 3000)
     }
   }
@@ -220,19 +207,13 @@ export default function AdminWhatsAppPage() {
       // Deletar da Evolution API
       await deleteEvolutionInstance(connectionToDelete.instance_name)
 
-      // Deletar do banco
-      const client = await getSupabase()
-      const { error } = await client.from("whatsapp_connections").delete().eq("id", connectionToDelete.id)
-
-      if (error) throw error
-
-      await fetchConnections()
+      // Recarregar conexões
+      await loadConnections()
       setDeleteConfirmOpen(false)
       setConnectionToDelete(null)
       setSaveMessage("Conexão excluída com sucesso!")
       setTimeout(() => setSaveMessage(""), 3000)
     } catch (error) {
-      console.error("Erro ao deletar conexão:", error)
       setSaveMessage("Erro ao excluir conexão")
       setTimeout(() => setSaveMessage(""), 3000)
     }
@@ -261,28 +242,20 @@ export default function AdminWhatsAppPage() {
     )
   }
 
-  const handleQRStatusChange = async (status: string) => {
-    if (selectedConnection) {
-      try {
-        const client = await getSupabase()
-        await client.from("whatsapp_connections").update({ status }).eq("id", selectedConnection.id)
-        fetchConnections() // Re-fetch after update
-      } catch (err) {
-        console.error("Error updating connection status:", err)
-      }
-    }
-  }
-
-  const handleInfoStatusChange = async (status: string) => {
-    if (selectedConnection) {
-      try {
-        const client = await getSupabase()
-        await client.from("whatsapp_connections").update({ status }).eq("id", selectedConnection.id)
-        fetchConnections() // Re-fetch after update
-      } catch (err) {
-        console.error("Error updating connection status:", err)
-      }
-    }
+  if (error) {
+    return (
+      <div className="p-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {error}
+            <Button variant="outline" size="sm" onClick={loadConnections} className="ml-4">
+              Tentar Novamente
+            </Button>
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
   }
 
   return (
@@ -313,7 +286,9 @@ export default function AdminWhatsAppPage() {
       {saveMessage && (
         <div
           className={`mb-6 px-4 py-2 rounded-lg text-sm ${
-            saveMessage.includes("sucesso") ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+            saveMessage.includes("✅") || saveMessage.includes("sucesso")
+              ? "bg-green-100 text-green-700"
+              : "bg-red-100 text-red-700"
           }`}
         >
           {saveMessage}
@@ -417,7 +392,7 @@ export default function AdminWhatsAppPage() {
                 )}
               </div>
             ) : (
-              filteredConnections.map((connection) => (
+              filteredConnections.map((connection: any) => (
                 <div key={connection.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
@@ -458,7 +433,7 @@ export default function AdminWhatsAppPage() {
                             : "Desconectado"}
                     </Badge>
                     <div className="flex gap-1">
-                      {connection.status === "connected" ? (
+                      {connection.status === "connected" || connection.status === "connecting" ? (
                         <Button
                           variant="outline"
                           size="sm"
@@ -509,17 +484,6 @@ export default function AdminWhatsAppPage() {
                       >
                         <UserPlus className="w-4 h-4" />
                       </Button>
-                      {(connection.status === "connected" || connection.status === "connecting") && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDisconnectConnection(connection)}
-                          title="Desconectar"
-                          className="border-orange-200 text-orange-600 hover:bg-orange-50"
-                        >
-                          <PowerOff className="w-4 h-4" />
-                        </Button>
-                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -528,6 +492,15 @@ export default function AdminWhatsAppPage() {
                         className="border-red-200 text-red-600 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSyncConnection(connection)}
+                        title="Sincronizar Status"
+                        className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                      >
+                        <RefreshCw className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
@@ -541,14 +514,20 @@ export default function AdminWhatsAppPage() {
       {/* Modais */}
       <WhatsAppQRModal
         open={qrModalOpen}
-        onOpenChange={setQrModalOpen}
+        onOpenChange={(open) => {
+          setQrModalOpen(open)
+          if (open) autoSync()
+        }}
         connection={selectedConnection}
-        onStatusChange={handleQRStatusChange}
+        onStatusChange={() => loadConnections()}
       />
 
       <WhatsAppSettingsModal
         open={settingsModalOpen}
-        onOpenChange={setSettingsModalOpen}
+        onOpenChange={(open) => {
+          setSettingsModalOpen(open)
+          if (open) autoSync()
+        }}
         connection={selectedConnection}
         onSettingsSaved={() => {
           setSaveMessage("Configurações salvas com sucesso!")
@@ -558,17 +537,23 @@ export default function AdminWhatsAppPage() {
 
       <WhatsAppInfoModal
         open={infoModalOpen}
-        onOpenChange={setInfoModalOpen}
+        onOpenChange={(open) => {
+          setInfoModalOpen(open)
+          if (open) autoSync()
+        }}
         connection={selectedConnection}
-        onStatusChange={handleInfoStatusChange}
+        onStatusChange={() => loadConnections()}
       />
 
       <AdminWhatsAppConnectionModal
         open={createModalOpen}
-        onOpenChange={setCreateModalOpen}
+        onOpenChange={(open) => {
+          setCreateModalOpen(open)
+          if (!open) autoSync()
+        }}
         adminId={currentUser?.id}
         onSuccess={() => {
-          fetchConnections()
+          loadConnections()
           setSaveMessage("Conexão criada com sucesso!")
           setTimeout(() => setSaveMessage(""), 3000)
         }}
@@ -576,10 +561,13 @@ export default function AdminWhatsAppPage() {
 
       <TransferConnectionModal
         open={transferModalOpen}
-        onOpenChange={setTransferModalOpen}
+        onOpenChange={(open) => {
+          setTransferModalOpen(open)
+          if (!open) autoSync()
+        }}
         connection={selectedConnection}
         onSuccess={() => {
-          fetchConnections()
+          loadConnections()
           setSaveMessage("Conexão transferida com sucesso!")
           setTimeout(() => setSaveMessage(""), 3000)
         }}

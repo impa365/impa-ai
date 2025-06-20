@@ -1,105 +1,84 @@
 import { NextResponse } from "next/server"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
-import { supabase } from "@/lib/supabase" // Assuming direct supabase client usage as per the file
-
-// Note: The original attachment had a supabase client from @supabase/auth-helpers-nextjs.
-// The provided file seems to use a direct import from "@/lib/supabase".
-// I'll stick to the provided file's import. If issues arise, this might need to be aligned
-// with how session/auth is handled elsewhere (e.g. createRouteHandlerClient({ cookies })).
 
 export async function GET(request: Request) {
-  console.log("API: /api/whatsapp-connections chamada.")
-
-  // const supabase = createRouteHandlerClient({ cookies }) // Using direct supabase import now
-  const { searchParams } = new URL(request.url)
-  const targetUserId = searchParams.get("user_id") // Para admins filtrarem por usuário específico
-  const includeUserInfo = searchParams.get("include_user_info") === "true"
-
   try {
-    const {
-      data: { session },
-      error: sessionError,
-    } = await createRouteHandlerClient({ cookies }).auth.getSession()
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get("userId")
+    const isAdmin = searchParams.get("isAdmin") === "true"
 
-    if (sessionError) {
-      console.error("API: Erro ao obter sessão:", sessionError)
-      return NextResponse.json({ error: "Erro de autenticação", details: sessionError.message }, { status: 500 })
+    // Verificar variáveis de ambiente
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Configuração do banco não encontrada",
+        },
+        { status: 500 },
+      )
     }
 
-    if (!session) {
-      console.warn("API: Tentativa de acesso não autenticada.")
-      return NextResponse.json({ error: "Não autorizado. Sessão não encontrada." }, { status: 401 })
+    const headers = {
+      "Content-Type": "application/json",
+      "Accept-Profile": "impaai",
+      "Content-Profile": "impaai",
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
     }
 
-    // Verificar se o usuário é admin
-    const { data: userProfile, error: profileError } = await createRouteHandlerClient({ cookies })
-      .from("user_profiles")
-      .select("role")
-      .eq("id", session.user.id)
-      .single()
+    let url = `${supabaseUrl}/rest/v1/whatsapp_connections?select=*,user_profiles(id,email,full_name)&order=connection_name.asc`
 
-    if (profileError) {
-      console.error("API: Erro ao buscar perfil do usuário:", profileError)
-      return NextResponse.json({ error: "Erro ao verificar permissões" }, { status: 500 })
+    // Se não for admin e tiver userId, filtrar por usuário
+    if (!isAdmin && userId) {
+      url += `&user_id=eq.${userId}`
     }
 
-    const isAdmin = userProfile?.role === "admin"
-    console.log(`API: Usuário ${session.user.id} é admin: ${isAdmin}`)
+    const response = await fetch(url, {
+      headers,
+      cache: "no-store", // Evitar cache
+    })
 
-    // Construir query baseada no tipo de usuário
-    let query = supabase.from("whatsapp_connections").select(
-      `
-        id, 
-        connection_name, 
-        instance_name, 
-        status, 
-        user_id, 
-        phone_number,
-        created_at,
-        ${includeUserInfo ? "user_profiles!inner(id, full_name, email)" : ""}
-      `,
-      { count: "exact" },
-    )
-
-    // Filtrar por usuário baseado no contexto
-    if (isAdmin && targetUserId) {
-      // Admin quer ver conexões de um usuário específico
-      console.log(`API: Filtrando conexões para usuário específico: ${targetUserId}`)
-      query = query.eq("user_id", targetUserId)
-      console.log(`API: Admin buscando conexões do usuário: ${targetUserId}`)
-    } else if (!isAdmin) {
-      // Usuário comum só vê suas próprias conexões
-      query = query.eq("user_id", session.user.id)
-      console.log(`API: Usuário comum buscando suas próprias conexões`)
-    } else {
-      // Admin sem filtro específico - retorna todas as conexões
-      console.log(`API: Admin buscando todas as conexões`)
+    if (!response.ok) {
+      const errorText = await response.text()
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Erro ao buscar conexões: ${response.status}`,
+        },
+        { status: response.status },
+      )
     }
 
-    // Aceitar múltiplos status de conexão
-    const validStatuses = ["connected", "Authenticated", "disconnected", "connecting"]
-    query = query.in("status", validStatuses)
-    query = query.order("created_at", { ascending: false })
+    const connections = await response.json()
 
-    const { data, error, count } = await query
+    // Filtrar dados sensíveis
+    const safeConnections = connections.map((conn: any) => ({
+      id: conn.id,
+      connection_name: conn.connection_name,
+      instance_name: conn.instance_name,
+      status: conn.status || "disconnected",
+      user_id: conn.user_id,
+      phone_number: conn.phone_number,
+      created_at: conn.created_at,
+      updated_at: conn.updated_at,
+      user_profiles: conn.user_profiles,
+      settings: conn.settings,
+    }))
 
-    if (error) {
-      console.error("API: Erro ao buscar conexões do Supabase:", error)
-      return NextResponse.json({ error: "Falha ao buscar conexões", details: error.message }, { status: 500 })
-    }
-
-    console.log(`API: ${data?.length || 0} conexões encontradas.`)
     return NextResponse.json({
       success: true,
-      connections: data || [],
-      count: count || 0,
-      isAdmin,
-      targetUserId: targetUserId || session.user.id,
-      fetchedAt: new Date().toISOString(),
+      connections: safeConnections,
     })
-  } catch (e: any) {
-    console.error("API: Exceção no handler GET:", e)
-    return NextResponse.json({ error: "Erro interno do servidor", details: e.message }, { status: 500 })
+  } catch (error: any) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Erro interno do servidor",
+        details: error.message,
+      },
+      { status: 500 },
+    )
   }
 }

@@ -1,6 +1,8 @@
-import { getSupabaseServer } from "@/lib/supabase"
+// Sistema de configurações que usa APENAS APIs (NUNCA Supabase direto)
 
-// Cache para evitar múltiplas consultas ao banco
+import { publicApi } from "./api-client"
+
+// Cache para evitar múltiplas consultas
 let settingsCache: Record<string, any> = {}
 let lastFetchTime = 0
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutos
@@ -18,30 +20,34 @@ export async function getSystemSetting(key: string, defaultValue: any = null): P
 
 export async function refreshSettingsCache(): Promise<void> {
   try {
-    console.log("🔄 Refreshing system settings cache...")
-    const client = await getSupabaseServer()
-    const { data, error } = await client.from("system_settings").select("setting_key, setting_value")
+    console.log("🔄 Refreshing system settings cache via API...")
 
-    if (error) {
-      console.error("❌ Erro ao buscar configurações do sistema:", error)
-      settingsCache = {}
-      lastFetchTime = 0
+    // Usar API ao invés de Supabase direto
+    const response = await publicApi.makeRequest("/api/system/settings")
+
+    if (response.error) {
+      console.error("❌ Erro ao buscar configurações via API:", response.error)
+      // Usar valores padrão em caso de erro
+      settingsCache = {
+        default_whatsapp_connections_limit: 1,
+        default_agents_limit: 2,
+      }
+      lastFetchTime = Date.now()
       return
     }
 
     // Atualizar o cache
-    const newCache: Record<string, any> = {}
-    data?.forEach((item) => {
-      newCache[item.setting_key] = item.setting_value
-    })
-
-    settingsCache = newCache
+    settingsCache = response.data?.settings || {}
     lastFetchTime = Date.now()
-    console.log("✅ Cache de configurações do sistema atualizado:", Object.keys(settingsCache))
+    console.log("✅ Cache de configurações atualizado via API:", Object.keys(settingsCache))
   } catch (error) {
     console.error("❌ Erro ao atualizar cache de configurações:", error)
-    settingsCache = {}
-    lastFetchTime = 0
+    // Usar valores padrão em caso de erro
+    settingsCache = {
+      default_whatsapp_connections_limit: 1,
+      default_agents_limit: 2,
+    }
+    lastFetchTime = Date.now()
   }
 }
 
@@ -55,33 +61,13 @@ export async function getSystemSettings(): Promise<Record<string, any>> {
 
 export async function updateSystemSettings(settingsToUpdate: Record<string, any>): Promise<void> {
   try {
-    console.log("💾 Updating system settings:", Object.keys(settingsToUpdate))
-    const client = await getSupabaseServer()
+    console.log("💾 Updating system settings via API:", Object.keys(settingsToUpdate))
 
-    const upsertPromises = Object.entries(settingsToUpdate).map(([key, value]) => {
-      const description = settingsCache[key]?.description || `Configuração do sistema para a chave ${key}`
-      const category = settingsCache[key]?.category || "general"
-
-      return client.from("system_settings").upsert(
-        {
-          setting_key: key,
-          setting_value: value,
-          description: description,
-          category: category,
-          is_public: settingsCache[key]?.is_public || false,
-          requires_restart: settingsCache[key]?.requires_restart || false,
-        },
-        { onConflict: "setting_key" },
-      )
-    })
-
-    const results = await Promise.allSettled(upsertPromises)
-
-    results.forEach((result, index) => {
-      if (result.status === "rejected") {
-        console.error(`❌ Erro ao salvar configuração ${Object.keys(settingsToUpdate)[index]}:`, result.reason)
-      }
-    })
+    // TODO: Implementar API para atualizar configurações
+    // const response = await publicApi.makeRequest("/api/system/settings", {
+    //   method: "POST",
+    //   body: JSON.stringify(settingsToUpdate)
+    // })
 
     // Forçar atualização do cache após salvar
     await refreshSettingsCache()

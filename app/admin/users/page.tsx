@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Edit, Trash2, Users, Key } from "lucide-react"
-import { getSupabase } from "@/lib/supabase"
+import { publicApi } from "@/lib/api-client"
 import UserModal from "@/components/user-modal"
 import ChangePasswordModal from "@/components/change-password-modal"
 import {
@@ -35,43 +35,25 @@ export default function AdminUsersPage() {
 
   const fetchUsers = async () => {
     try {
-      // Buscar usuários com suas configurações diretamente de user_profiles
-      const client = await getSupabase()
-      const { data: usersData, error } = await client
-        .from("user_profiles")
-        .select(`
-    id,
-    full_name,
-    email,
-    role,
-    status,
-    last_login_at,
-    created_at,
-    agents_limit,
-    connections_limit
-  `)
-        .order("created_at", { ascending: false })
+      console.log("🔍 Buscando usuários via API...")
+      setLoading(true)
 
-      if (error) {
-        console.error("Erro ao buscar usuários:", error)
-        setSaveMessage("Erro ao buscar usuários: " + error.message)
+      const response = await publicApi.getUsers()
+
+      if (response.error) {
+        console.error("❌ Erro ao buscar usuários:", response.error)
+        setSaveMessage("Erro ao buscar usuários: " + response.error)
         setUsers([])
-        setLoading(false)
         return
       }
 
-      if (usersData) {
-        // Mapear os dados para usar os nomes corretos das colunas
-        const mappedUsers = usersData.map((user) => ({
-          ...user,
-          // Usar os valores diretamente da tabela user_profiles
-          whatsapp_connections_limit: user.connections_limit || 2,
-          agents_limit: user.agents_limit || 5,
-        }))
-        setUsers(mappedUsers)
+      if (response.data?.users) {
+        console.log("✅ Usuários carregados:", response.data.users.length)
+        setUsers(response.data.users)
       }
-    } catch (error) {
-      console.error("Erro ao buscar usuários:", error)
+    } catch (error: any) {
+      console.error("💥 Erro ao buscar usuários:", error.message)
+      setSaveMessage("Erro ao buscar usuários: " + error.message)
     } finally {
       setLoading(false)
     }
@@ -82,21 +64,25 @@ export default function AdminUsersPage() {
 
     setSaving(true)
     try {
-      const client = await getSupabase()
-      await client.from("whatsapp_connections").delete().eq("user_id", userToDelete.id)
-      await client.from("user_agent_settings").delete().eq("user_id", userToDelete.id)
-      const { error } = await client.from("user_profiles").delete().eq("id", userToDelete.id)
+      console.log("🗑️ Deletando usuário:", userToDelete.email)
 
-      if (error) throw error
+      const response = await publicApi.deleteUser(userToDelete.id)
 
+      if (response.error) {
+        console.error("❌ Erro ao deletar usuário:", response.error)
+        setSaveMessage("Erro ao deletar usuário: " + response.error)
+        return
+      }
+
+      console.log("✅ Usuário deletado com sucesso")
       await fetchUsers()
       setDeleteUserModal(false)
       setUserToDelete(null)
       setSaveMessage("Usuário deletado com sucesso!")
       setTimeout(() => setSaveMessage(""), 3000)
-    } catch (error) {
-      console.error("Erro ao deletar usuário:", error)
-      setSaveMessage("Erro ao deletar usuário")
+    } catch (error: any) {
+      console.error("💥 Erro ao deletar usuário:", error.message)
+      setSaveMessage("Erro ao deletar usuário: " + error.message)
       setTimeout(() => setSaveMessage(""), 3000)
     } finally {
       setSaving(false)
@@ -150,91 +136,100 @@ export default function AdminUsersPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Usuários do Sistema</CardTitle>
+          <CardTitle>Usuários do Sistema ({users.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {users.map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <Users className="w-5 h-5 text-blue-600" />
+            {users.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhum usuário encontrado</p>
+              </div>
+            ) : (
+              users.map((user: any) => (
+                <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <Users className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <div className="font-medium">{user.full_name || "Sem nome"}</div>
+                      <div className="text-sm text-gray-600">{user.email}</div>
+                      <div className="text-xs text-gray-500">
+                        Último login: {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : "Nunca"}
+                        {" • "}
+                        Limite WhatsApp: {user.whatsapp_connections_limit} conexões
+                        {" • "}
+                        Logins: {user.login_count || 0}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-medium">{user.full_name || "Sem nome"}</div>
-                    <div className="text-sm text-gray-600">{user.email}</div>
-                    <div className="text-xs text-gray-500">
-                      Último login: {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : "Nunca"}
-                      {" • "}
-                      Limite WhatsApp: {user.whatsapp_connections_limit} conexões
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={user.status === "active" ? "default" : "secondary"}
+                      className={
+                        user.status === "active"
+                          ? "bg-green-100 text-green-700"
+                          : user.status === "inactive"
+                            ? "bg-gray-100 text-gray-700"
+                            : user.status === "suspended"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-yellow-100 text-yellow-700"
+                      }
+                    >
+                      {user.status === "active"
+                        ? "Ativo"
+                        : user.status === "inactive"
+                          ? "Inativo"
+                          : user.status === "suspended"
+                            ? "Suspenso"
+                            : "Hibernado"}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {user.role === "admin" ? "Admin" : "Usuário"}
+                    </Badge>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                        onClick={() => {
+                          setSelectedUserForEdit(user)
+                          setUserModalOpen(true)
+                        }}
+                        title="Editar usuário"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-orange-600 border-orange-200 hover:bg-orange-50"
+                        onClick={() => {
+                          setSelectedUserForPassword(user)
+                          setPasswordModalOpen(true)
+                        }}
+                        title="Alterar senha"
+                      >
+                        <Key className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={() => {
+                          setUserToDelete(user)
+                          setDeleteUserModal(true)
+                        }}
+                        title="Excluir usuário"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant={user.status === "active" ? "default" : "secondary"}
-                    className={
-                      user.status === "active"
-                        ? "bg-green-100 text-green-700"
-                        : user.status === "inactive"
-                          ? "bg-gray-100 text-gray-700"
-                          : user.status === "suspended"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-yellow-100 text-yellow-700"
-                    }
-                  >
-                    {user.status === "active"
-                      ? "Ativo"
-                      : user.status === "inactive"
-                        ? "Inativo"
-                        : user.status === "suspended"
-                          ? "Suspenso"
-                          : "Hibernado"}
-                  </Badge>
-                  <Badge variant="outline" className="text-xs">
-                    {user.role === "admin" ? "Admin" : "Usuário"}
-                  </Badge>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                      onClick={() => {
-                        setSelectedUserForEdit(user)
-                        setUserModalOpen(true)
-                      }}
-                      title="Editar usuário"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-orange-600 border-orange-200 hover:bg-orange-50"
-                      onClick={() => {
-                        setSelectedUserForPassword(user)
-                        setPasswordModalOpen(true)
-                      }}
-                      title="Alterar senha"
-                    >
-                      <Key className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600 border-red-200 hover:bg-red-50"
-                      onClick={() => {
-                        setUserToDelete(user)
-                        setDeleteUserModal(true)
-                      }}
-                      title="Excluir usuário"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </CardContent>
       </Card>

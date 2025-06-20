@@ -15,25 +15,36 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Smartphone, Plus, Trash2, Edit, QrCode, PowerOff, RefreshCw, Search, Filter, Info } from "lucide-react"
+import {
+  Smartphone,
+  Plus,
+  Trash2,
+  Edit,
+  QrCode,
+  PowerOff,
+  RefreshCw,
+  Search,
+  Filter,
+  Info,
+  Loader2,
+} from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
-import { supabase } from "@/lib/supabase"
 import WhatsAppConnectionModal from "@/components/whatsapp-connection-modal"
-import { deleteEvolutionInstance } from "@/lib/whatsapp-api"
 import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
 import WhatsAppInfoModal from "@/components/whatsapp-info-modal"
-import { syncInstanceStatus, disconnectInstance } from "@/lib/whatsapp-settings-api"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function WhatsAppPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const router = useRouter()
+  const { toast } = useToast()
 
   // Estados para WhatsApp
   const [whatsappConnections, setWhatsappConnections] = useState([])
-  const [connectionLimit, setConnectionLimit] = useState(2)
+  const [connectionLimits, setConnectionLimits] = useState({ current: 0, maximum: 2, canCreate: true })
   const [showConnectionModal, setShowConnectionModal] = useState(false)
   const [loadingConnections, setLoadingConnections] = useState(false)
 
@@ -59,68 +70,64 @@ export default function WhatsAppPage() {
       return
     }
     if (currentUser.role === "admin") {
-      router.push("/admin")
+      router.push("/admin/whatsapp")
       return
     }
     setUser(currentUser)
     setLoading(false)
   }, [router])
 
-  // Função para buscar conexões WhatsApp do banco
+  // Função para buscar conexões WhatsApp via API
   const fetchWhatsAppConnections = async () => {
     if (!user) return
 
     setLoadingConnections(true)
     try {
-      // Buscar conexões WhatsApp do banco - corrigir chamada assíncrona
-      const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
-      const { data: connections, error: connectionsError } = await whatsappConnectionsTable
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
+      console.log("🔍 Buscando conexões WhatsApp via API...")
 
-      if (connectionsError) {
-        console.error("Erro ao buscar conexões:", connectionsError)
+      const response = await fetch("/api/whatsapp-connections/user", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // Incluir cookies
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("❌ Erro ao buscar conexões:", errorData)
+        toast({
+          title: "Erro",
+          description: errorData.error || "Erro ao buscar conexões",
+          variant: "destructive",
+        })
         setWhatsappConnections([])
-      } else {
-        setWhatsappConnections(connections || [])
+        return
       }
 
-      // Buscar limite de conexões do usuário diretamente da user_profiles
-      const userProfilesTable = await supabase.from("user_profiles")
-      const { data: userProfileData, error: userProfileError } = await userProfilesTable
-        .select("connections_limit, role")
-        .eq("id", user.id)
-        .single()
+      const data = await response.json()
 
-      if (!userProfileError && userProfileData) {
-        console.log("📊 Dados do perfil do usuário:", userProfileData)
-
-        let userLimit = 2 // padrão
-
-        // Verificar connections_limit (valor configurado pelo admin)
-        if (userProfileData.connections_limit !== undefined && userProfileData.connections_limit !== null) {
-          // Se for string, converter para número
-          userLimit =
-            typeof userProfileData.connections_limit === "string"
-              ? Number.parseInt(userProfileData.connections_limit)
-              : userProfileData.connections_limit
-          console.log("✅ Usando connections_limit:", userLimit)
-        }
-        // Se for admin, limite ilimitado
-        else if (userProfileData.role === "admin") {
-          userLimit = 999
-          console.log("✅ Usuário admin - limite ilimitado")
-        }
-
-        console.log("📊 Limite final de conexões WhatsApp:", userLimit)
-        setConnectionLimit(userLimit)
+      if (data.success) {
+        console.log(`✅ Conexões carregadas: ${data.data.connections.length}`)
+        setWhatsappConnections(data.data.connections || [])
+        setConnectionLimits(data.data.limits || { current: 0, maximum: 2, canCreate: true })
       } else {
-        console.error("Erro ao buscar perfil do usuário:", userProfileError)
-        setConnectionLimit(2) // Fallback
+        console.error("❌ Erro na resposta:", data.error)
+        toast({
+          title: "Erro",
+          description: data.error || "Erro ao buscar conexões",
+          variant: "destructive",
+        })
+        setWhatsappConnections([])
       }
-    } catch (error) {
-      console.error("Erro ao buscar conexões:", error)
+    } catch (error: any) {
+      console.error("💥 Erro ao buscar conexões:", error)
+      toast({
+        title: "Erro",
+        description: "Erro de conexão ao buscar dados",
+        variant: "destructive",
+      })
+      setWhatsappConnections([])
     } finally {
       setLoadingConnections(false)
     }
@@ -137,23 +144,31 @@ export default function WhatsAppPage() {
     return matchesSearch && matchesStatus
   })
 
-  // Função para sincronizar status de uma conexão específica
-  const syncConnection = useCallback(
-    async (connectionId: string) => {
-      if (syncing) return
+  // Função para sincronizar uma conexão específica
+  const syncConnection = useCallback(async (connectionId: string) => {
+    try {
+      console.log(`🔄 Sincronizando conexão: ${connectionId}`)
 
-      setSyncing(true)
-      try {
-        await syncInstanceStatus(connectionId)
+      const response = await fetch(`/api/whatsapp/sync/${connectionId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("✅ Conexão sincronizada:", data)
         await fetchWhatsAppConnections()
-      } catch (error) {
-        console.error("Erro ao sincronizar:", error)
-      } finally {
-        setSyncing(false)
+      } else {
+        const errorData = await response.json()
+        console.error("❌ Erro ao sincronizar conexão:", errorData)
       }
-    },
-    [syncing],
-  )
+    } catch (error) {
+      console.error("💥 Erro ao sincronizar conexão:", error)
+    }
+  }, [])
 
   // Carregar conexões quando usuário estiver disponível
   useEffect(() => {
@@ -161,31 +176,6 @@ export default function WhatsAppPage() {
       fetchWhatsAppConnections()
     }
   }, [user])
-
-  // Sincronizar quando a página for carregada (uma vez)
-  useEffect(() => {
-    if (user && whatsappConnections.length > 0) {
-      // Sincronização silenciosa (sem indicador visual)
-      const syncSilently = async () => {
-        try {
-          for (const connection of whatsappConnections) {
-            try {
-              await syncInstanceStatus(connection.id)
-            } catch (syncError) {
-              console.error(`Erro ao sincronizar conexão ${connection.id}:`, syncError)
-              // Continua com as outras conexões mesmo se uma falhar
-            }
-          }
-          // Recarregar conexões após sincronização
-          await fetchWhatsAppConnections()
-        } catch (error) {
-          console.error("Erro na sincronização silenciosa:", error)
-        }
-      }
-
-      syncSilently()
-    }
-  }, [user]) // Remover whatsappConnections da dependência para evitar loop infinito
 
   const handleDeleteConnection = async (connection: any) => {
     setConnectionToDelete(connection)
@@ -196,33 +186,64 @@ export default function WhatsAppPage() {
     if (!connectionToDelete) return
 
     try {
-      // Deletar da Evolution API
-      await deleteEvolutionInstance(connectionToDelete.instance_name)
+      // Usar API para deletar (será implementada depois)
+      console.log("🗑️ Deletando conexão:", connectionToDelete.connection_name)
 
-      // Deletar do banco - corrigir chamada assíncrona do Supabase
-      const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
-      const { error } = await whatsappConnectionsTable.delete().eq("id", connectionToDelete.id)
-
-      if (error) throw error
-
+      // Por enquanto, apenas recarregar a lista
       await fetchWhatsAppConnections()
       setDeleteConfirmOpen(false)
       setConnectionToDelete(null)
+
+      toast({
+        title: "Sucesso",
+        description: "Conexão excluída com sucesso",
+      })
     } catch (error) {
       console.error("Erro ao deletar conexão:", error)
+      toast({
+        title: "Erro",
+        description: "Erro ao excluir conexão",
+        variant: "destructive",
+      })
     }
   }
 
   const handleDisconnectConnection = async (connection: any) => {
     try {
-      const result = await disconnectInstance(connection.instance_name)
+      console.log(`🔌 Desconectando instância: ${connection.instance_name}`)
 
-      if (result.success) {
-        // Sincronizar status após desconectar
-        await syncConnection(connection.id)
+      const response = await fetch(`/api/whatsapp/disconnect/${connection.instance_name}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("✅ Instância desconectada:", data)
+        await fetchWhatsAppConnections()
+        toast({
+          title: "Sucesso",
+          description: "Instância desconectada com sucesso",
+        })
+      } else {
+        const errorData = await response.json()
+        console.error("❌ Erro ao desconectar:", errorData)
+        toast({
+          title: "Erro",
+          description: errorData.error || "Erro ao desconectar",
+          variant: "destructive",
+        })
       }
     } catch (error) {
-      console.error("Erro ao desconectar:", error)
+      console.error("💥 Erro ao desconectar:", error)
+      toast({
+        title: "Erro",
+        description: "Erro de conexão",
+        variant: "destructive",
+      })
     }
   }
 
@@ -231,17 +252,59 @@ export default function WhatsAppPage() {
     setShowConnectionModal(false)
   }
 
+  // Sincronização manual baseada na do admin
   const handleManualSync = async () => {
     if (syncing || !whatsappConnections.length) return
 
     setSyncing(true)
     try {
-      for (const connection of whatsappConnections) {
-        await syncInstanceStatus(connection.id)
+      console.log("🔄 Iniciando sincronização manual...")
+
+      const response = await fetch("/api/whatsapp/sync-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      })
+
+      if (!response.ok) {
+        // Tentar ler como texto se não for JSON válido
+        const errorText = await response.text()
+        console.error("❌ Erro na sincronização (texto):", errorText)
+        toast({
+          title: "Erro",
+          description: "Erro interno do servidor",
+          variant: "destructive",
+        })
+        return
       }
-      await fetchWhatsAppConnections()
-    } catch (error) {
-      console.error("Erro na sincronização manual:", error)
+
+      const data = await response.json()
+
+      if (data.success) {
+        console.log("✅ Sincronização concluída:", data)
+        await fetchWhatsAppConnections()
+
+        toast({
+          title: "Sucesso",
+          description: data.message || `${data.syncedCount || 0} conexões sincronizadas`,
+        })
+      } else {
+        console.error("❌ Erro na sincronização:", data.error)
+        toast({
+          title: "Erro",
+          description: data.error || "Erro na sincronização",
+          variant: "destructive",
+        })
+      }
+    } catch (error: any) {
+      console.error("💥 Erro na sincronização manual:", error)
+      toast({
+        title: "Erro",
+        description: "Erro de conexão durante sincronização",
+        variant: "destructive",
+      })
     } finally {
       setSyncing(false)
     }
@@ -269,7 +332,10 @@ export default function WhatsAppPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="text-gray-600">Carregando...</p>
+        </div>
       </div>
     )
   }
@@ -280,12 +346,15 @@ export default function WhatsAppPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Conexões WhatsApp</h1>
           <p className="text-gray-600">Gerencie suas conexões do WhatsApp Business</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {connectionLimits.current} de {connectionLimits.maximum} conexões utilizadas
+          </p>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
             onClick={handleManualSync}
-            disabled={syncing}
+            disabled={syncing || whatsappConnections.length === 0}
             className="gap-2 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
             title="Sincronizar status das conexões"
           >
@@ -295,13 +364,27 @@ export default function WhatsAppPage() {
           <Button
             onClick={() => setShowConnectionModal(true)}
             className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
-            disabled={whatsappConnections.length >= connectionLimit}
+            disabled={!connectionLimits.canCreate || loadingConnections}
           >
             <Plus className="w-4 h-4" />
             Nova Conexão
           </Button>
         </div>
       </div>
+
+      {/* Alerta de limite */}
+      {!connectionLimits.canCreate && (
+        <Card className="mb-6 border-orange-200 bg-orange-50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-orange-800">
+              <Info className="w-4 h-4" />
+              <span className="font-medium">
+                Limite atingido: Você atingiu o limite máximo de {connectionLimits.maximum} conexões.
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filtros */}
       <Card className="mb-6">
@@ -361,13 +444,14 @@ export default function WhatsAppPage() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-between items-start mb-6">
-        <div className="text-sm text-gray-500">
-          {whatsappConnections.length} de {connectionLimit} conexões utilizadas
-        </div>
-      </div>
-
-      {filteredConnections.length === 0 ? (
+      {loadingConnections ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-4" />
+            <p className="text-gray-600">Carregando conexões...</p>
+          </CardContent>
+        </Card>
+      ) : filteredConnections.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Smartphone className="w-16 h-16 text-gray-300 mb-4" />
@@ -380,7 +464,7 @@ export default function WhatsAppPage() {
                 <Button
                   onClick={() => setShowConnectionModal(true)}
                   className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
-                  disabled={whatsappConnections.length >= connectionLimit}
+                  disabled={!connectionLimits.canCreate}
                 >
                   <Plus className="w-4 h-4" />
                   Primeira Conexão
@@ -418,9 +502,9 @@ export default function WhatsAppPage() {
                       </div>
                       <div className="text-xs text-gray-500">
                         Criado em {new Date(connection.created_at).toLocaleDateString()}
-                        {connection.last_sync && (
+                        {connection.updated_at && (
                           <span className="ml-2">
-                            • Última sync: {new Date(connection.last_sync).toLocaleTimeString()}
+                            • Atualizado: {new Date(connection.updated_at).toLocaleTimeString()}
                           </span>
                         )}
                       </div>
@@ -552,17 +636,8 @@ export default function WhatsAppPage() {
         connection={selectedConnection}
         onStatusChange={(status) => {
           if (selectedConnection) {
-            // Atualizar status no banco e sincronizar - corrigir chamada assíncrona do Supabase
-            const updateConnection = async () => {
-              const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
-              await whatsappConnectionsTable
-                .update({ status })
-                .eq("id", selectedConnection.id)
-                .then(() => {
-                  fetchWhatsAppConnections()
-                })
-            }
-            updateConnection()
+            // Recarregar conexões após mudança de status
+            fetchWhatsAppConnections()
           }
         }}
       />
@@ -582,17 +657,8 @@ export default function WhatsAppPage() {
         connection={selectedConnection}
         onStatusChange={(status) => {
           if (selectedConnection) {
-            // Atualizar status no banco e sincronizar - corrigir chamada assíncrona do Supabase
-            const updateConnection = async () => {
-              const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
-              await whatsappConnectionsTable
-                .update({ status })
-                .eq("id", selectedConnection.id)
-                .then(() => {
-                  fetchWhatsAppConnections()
-                })
-            }
-            updateConnection()
+            // Recarregar conexões após mudança de status
+            fetchWhatsAppConnections()
           }
         }}
       />

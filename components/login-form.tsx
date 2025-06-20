@@ -9,10 +9,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff } from "lucide-react"
-import { signIn } from "@/lib/auth" // Importa a função signIn manual
 import { useTheme } from "@/components/theme-provider"
 import RegisterForm from "./register-form"
-import { getSupabase } from "@/lib/supabase"
+import { publicApi } from "@/lib/api-client"
 
 function LoginForm() {
   const [email, setEmail] = useState("")
@@ -27,47 +26,28 @@ function LoginForm() {
   const { theme } = useTheme()
 
   useEffect(() => {
-    // Verificar se o cadastro público está habilitado
+    // Verificar se o cadastro público está habilitado usando a API
     const checkRegistrationSetting = async () => {
       try {
         setCheckingRegistration(true)
-        console.log("🔍 Verificando configuração de registro público...")
 
-        // Buscar a configuração específica da tabela system_settings
-        const client = await getSupabase()
-        const { data, error } = await client
-          .from("system_settings")
-          .select("setting_value")
-          .eq("setting_key", "allow_public_registration")
-          .single()
-
-        console.log("📊 Dados retornados:", data)
-        console.log("❌ Erro (se houver):", error)
+        // Usar a API pública ao invés de acessar Supabase diretamente
+        const { data, error } = await publicApi.getConfig()
 
         if (error) {
-          console.error("Erro ao buscar configuração:", error)
           // Se houver erro, assumir que o registro está desabilitado por segurança
           setAllowRegistration(false)
-        } else if (data) {
-          // Verificar o valor retornado - pode ser boolean, string ou number
-          let isAllowed = false
-
-          if (typeof data.setting_value === "boolean") {
-            isAllowed = data.setting_value
-          } else if (typeof data.setting_value === "string") {
-            isAllowed = data.setting_value.toLowerCase() === "true" || data.setting_value === "1"
-          } else if (typeof data.setting_value === "number") {
-            isAllowed = data.setting_value === 1
-          }
-
-          console.log("✅ Registro público permitido:", isAllowed)
+        } else if (data && data.settings) {
+          // Verifique se data E data.settings existem
+          // Certifique-se de que está comparando com booleano true
+          const isAllowed = data.settings.allowPublicRegistration === true
           setAllowRegistration(isAllowed)
+        } else if (data && !data.settings) {
+          setAllowRegistration(false)
         } else {
-          console.log("⚠️ Configuração não encontrada, desabilitando registro")
           setAllowRegistration(false)
         }
-      } catch (error) {
-        console.error("💥 Erro inesperado ao verificar configuração:", error.message)
+      } catch (error: any) {
         setAllowRegistration(false)
       } finally {
         setCheckingRegistration(false)
@@ -83,25 +63,30 @@ function LoginForm() {
     setError("")
 
     try {
-      const { user, error: authError } = await signIn(email, password) // Chama a função signIn manual
+      // Usar a API de login ao invés de função manual
+      const { data, error: loginError } = await publicApi.login(email, password)
 
-      if (authError) {
-        setError(authError.message)
+      if (loginError) {
+        setError(loginError)
         setLoading(false)
         return
       }
 
-      if (user) {
-        localStorage.setItem("user", JSON.stringify(user))
+      if (data?.user) {
+        // Salvar dados do usuário no localStorage
+        localStorage.setItem("user", JSON.stringify(data.user))
+        localStorage.setItem("isAuthenticated", "true")
 
-        if (user.role === "admin") {
+        // Redirecionar baseado no role do usuário
+        if (data.user.role === "admin") {
           router.push("/admin")
         } else {
           router.push("/dashboard")
         }
+      } else {
+        setError("Dados de login inválidos")
       }
-    } catch (error) {
-      console.error("Login error:", error)
+    } catch (error: any) {
       setError("Erro ao fazer login. Tente novamente.")
     } finally {
       setLoading(false)
@@ -196,15 +181,6 @@ function LoginForm() {
           {checkingRegistration && (
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-500">Verificando configurações...</p>
-            </div>
-          )}
-
-          {/* Debug info - só em desenvolvimento */}
-          {process.env.NODE_ENV === "development" && (
-            <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
-              <p>Debug: Registration allowed = {allowRegistration.toString()}</p>
-              <p>Debug: Checking = {checkingRegistration.toString()}</p>
-              <p>Debug: Show register button = {(!checkingRegistration && allowRegistration).toString()}</p>
             </div>
           )}
         </CardContent>
