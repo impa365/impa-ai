@@ -117,22 +117,53 @@ export async function changePassword(
 // Funções de gerenciamento de sessão local (mantidas)
 export function getCurrentUser(): UserProfile | null {
   if (typeof window === "undefined") return null
+
   try {
+    // Primeiro, tentar localStorage
     const userStr = localStorage.getItem("user")
-    if (!userStr) return null
-    return JSON.parse(userStr) as UserProfile
+    if (userStr) {
+      const user = JSON.parse(userStr) as UserProfile
+      console.log("✅ Usuário encontrado no localStorage:", user.email)
+      return user
+    }
+
+    // Se não encontrou no localStorage, tentar cookie do cliente
+    const cookies = document.cookie.split(";")
+    const userCookie = cookies.find((cookie) => cookie.trim().startsWith("impaai_user_client="))
+
+    if (userCookie) {
+      const cookieValue = userCookie.split("=")[1]
+      if (cookieValue) {
+        const user = JSON.parse(decodeURIComponent(cookieValue)) as UserProfile
+        console.log("✅ Usuário encontrado no cookie do cliente:", user.email)
+        // Sincronizar com localStorage
+        localStorage.setItem("user", JSON.stringify(user))
+        return user
+      }
+    }
+
+    console.log("❌ Usuário não encontrado em localStorage nem cookies")
+    return null
   } catch (error) {
-    console.error("Erro ao obter usuário:", error)
+    console.error("❌ Erro ao obter usuário:", error)
     return null
   }
 }
 
 export function setCurrentUser(user: UserProfile): void {
   if (typeof window === "undefined") return
+
   try {
+    // Salvar no localStorage
     localStorage.setItem("user", JSON.stringify(user))
+
+    // Salvar também no cookie do cliente para Docker
+    const cookieValue = encodeURIComponent(JSON.stringify(user))
+    document.cookie = `impaai_user_client=${cookieValue}; path=/; max-age=${60 * 60 * 24 * 7}; samesite=lax; secure=${window.location.protocol === "https:"}`
+
+    console.log("✅ Usuário salvo no localStorage e cookie:", user.email)
   } catch (error) {
-    console.error("Erro ao salvar usuário:", error)
+    console.error("❌ Erro ao salvar usuário:", error)
   }
 }
 
