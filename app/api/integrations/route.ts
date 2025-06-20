@@ -23,6 +23,7 @@ export async function GET() {
     if (!response.ok) {
       if (response.status === 404) {
         return NextResponse.json({
+          success: true,
           integrations: [],
           message: "Tabela 'integrations' não encontrada. Execute o script SQL para criar a estrutura.",
         })
@@ -31,10 +32,18 @@ export async function GET() {
     }
 
     const integrations = await response.json()
-    return NextResponse.json({ integrations })
+
+    // Garantir que sempre retornamos um array
+    const integrationsArray = Array.isArray(integrations) ? integrations : []
+
+    return NextResponse.json({
+      success: true,
+      integrations: integrationsArray,
+    })
   } catch (error: any) {
     console.error("Erro ao buscar integrações:", error.message)
     return NextResponse.json({
+      success: false,
       integrations: [],
       error: "Erro ao conectar com o banco de dados. Verifique se as tabelas foram criadas.",
     })
@@ -46,11 +55,28 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { type, name, config } = body
 
+    // Validação dos dados
+    if (!type || !config) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Tipo e configuração são obrigatórios",
+        },
+        { status: 400 },
+      )
+    }
+
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Configuração do servidor incompleta",
+        },
+        { status: 500 },
+      )
     }
 
     // Verificar se já existe uma integração deste tipo
@@ -67,7 +93,7 @@ export async function POST(request: Request) {
     if (checkResponse.ok) {
       const existing = await checkResponse.json()
 
-      if (existing.length > 0) {
+      if (Array.isArray(existing) && existing.length > 0) {
         // Atualizar integração existente
         const updateResponse = await fetch(`${supabaseUrl}/rest/v1/integrations?id=eq.${existing[0].id}`, {
           method: "PATCH",
@@ -79,17 +105,23 @@ export async function POST(request: Request) {
             "Content-Profile": "impaai",
           },
           body: JSON.stringify({
-            config,
+            name: name || existing[0].name,
+            config: config,
             is_active: true,
             updated_at: new Date().toISOString(),
           }),
         })
 
         if (!updateResponse.ok) {
-          throw new Error(`Erro ao atualizar integração: ${updateResponse.status}`)
+          const errorText = await updateResponse.text()
+          throw new Error(`Erro ao atualizar integração: ${updateResponse.status} - ${errorText}`)
         }
 
-        return NextResponse.json({ success: true, message: "Integração atualizada com sucesso!" })
+        return NextResponse.json({
+          success: true,
+          message: "Integração atualizada com sucesso!",
+          action: "updated",
+        })
       }
     }
 
@@ -114,12 +146,23 @@ export async function POST(request: Request) {
     })
 
     if (!createResponse.ok) {
-      throw new Error(`Erro ao criar integração: ${createResponse.status}`)
+      const errorText = await createResponse.text()
+      throw new Error(`Erro ao criar integração: ${createResponse.status} - ${errorText}`)
     }
 
-    return NextResponse.json({ success: true, message: "Integração criada com sucesso!" })
+    return NextResponse.json({
+      success: true,
+      message: "Integração criada com sucesso!",
+      action: "created",
+    })
   } catch (error: any) {
     console.error("Erro ao salvar integração:", error.message)
-    return NextResponse.json({ error: `Erro ao salvar integração: ${error.message}` }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: `Erro ao salvar integração: ${error.message}`,
+      },
+      { status: 500 },
+    )
   }
 }

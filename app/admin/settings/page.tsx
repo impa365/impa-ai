@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, ImageIcon, Eye, EyeOff, Plus } from "lucide-react"
+import { Eye, EyeOff, Plus } from "lucide-react"
 import { useTheme, themePresets, type ThemeConfig } from "@/components/theme-provider"
 import Image from "next/image"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -25,16 +25,14 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
-import { getSystemSettings, updateSystemSettings } from "@/lib/system-settings"
 import { DynamicTitle } from "@/components/dynamic-title"
 
 export default function AdminSettingsPage() {
-  const [settingsSubTab, setSettingsSubTab] = useState("profile")
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState("")
   const { theme, updateTheme } = useTheme()
   const [user, setUser] = useState<any>(null)
-  const [integrations, setIntegrations] = useState([])
+  const [integrations, setIntegrations] = useState<any[]>([])
   const [selectedIntegration, setSelectedIntegration] = useState<any>(null)
   const [integrationModalOpen, setIntegrationModalOpen] = useState(false)
   const [integrationForm, setIntegrationForm] = useState({
@@ -44,36 +42,13 @@ export default function AdminSettingsPage() {
     n8nApiKey: "",
   })
 
-  // Estados para perfil do admin
-  const [adminProfileForm, setAdminProfileForm] = useState({
-    full_name: "",
-    email: "",
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  })
-  const [showAdminPasswords, setShowAdminPasswords] = useState({
-    current: false,
-    new: false,
-    confirm: false,
-  })
-  const [savingAdminProfile, setSavingAdminProfile] = useState(false)
-  const [adminProfileMessage, setAdminProfileMessage] = useState("")
-
-  // Estados para configurações do sistema
-  const [systemSettings, setSystemSettings] = useState({
-    defaultWhatsAppLimit: 2,
-    defaultAgentsLimit: 5,
-    allowPublicRegistration: false,
-  })
-
   // Estados para upload de arquivos
   const logoInputRef = useRef<HTMLInputElement>(null)
   const faviconInputRef = useRef<HTMLInputElement>(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingFavicon, setUploadingFavicon] = useState(false)
 
-  // Estados para branding
+  // Estados para branding - CORRIGIDO para usar apenas campos existentes
   const [brandingForm, setBrandingForm] = useState<ThemeConfig>({
     systemName: "",
     description: "",
@@ -81,12 +56,10 @@ export default function AdminSettingsPage() {
     primaryColor: "",
     secondaryColor: "",
     accentColor: "",
-    logoUrl: "",
-    faviconUrl: "",
-    sidebarStyle: "",
     brandingEnabled: true,
   })
   const [brandingChanged, setBrandingChanged] = useState(false)
+  const [brandingLoaded, setBrandingLoaded] = useState(false)
 
   const [loading, setLoading] = useState(true)
   const router = useRouter()
@@ -109,9 +82,14 @@ export default function AdminSettingsPage() {
   const [profileMessage, setProfileMessage] = useState("")
 
   // Estados para Configurações do Sistema
-  const [systemSettings2, setSystemSettings2] = useState<any>({})
+  const [systemSettings, setSystemSettings] = useState<any>({
+    default_whatsapp_connections_limit: 1,
+    default_agents_limit: 2,
+    allow_public_registration: false,
+  })
   const [loadingSettings, setLoadingSettings] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   useEffect(() => {
     const currentUser = getCurrentUser()
@@ -127,17 +105,58 @@ export default function AdminSettingsPage() {
       newPassword: "",
       confirmPassword: "",
     })
-    loadSystemSettings()
-    setLoading(false)
+
+    // Carregar dados iniciais
+    loadInitialData()
   }, [router])
 
+  const loadInitialData = async () => {
+    setLoading(true)
+    try {
+      await Promise.all([loadSystemSettings(), fetchIntegrations(), loadBrandingFromServer()])
+    } catch (error) {
+      // Log apenas erro genérico, sem dados sensíveis
+      console.error("Erro ao carregar dados iniciais")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // FUNÇÃO SEGURA - SEM LOGS DE DADOS SENSÍVEIS
   const loadSystemSettings = async () => {
+    if (settingsLoaded) return
+
     setLoadingSettings(true)
     try {
-      const settings = await getSystemSettings()
-      setSystemSettings2(settings)
+      const response = await fetch("/api/system/settings", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      if (data.success && data.settings) {
+        // Garantir que os valores sejam do tipo correto
+        const settings = {
+          default_whatsapp_connections_limit: Number(data.settings.default_whatsapp_connections_limit) || 1,
+          default_agents_limit: Number(data.settings.default_agents_limit) || 2,
+          allow_public_registration: Boolean(data.settings.allow_public_registration),
+          ...data.settings,
+        }
+
+        setSystemSettings(settings)
+        setSettingsLoaded(true)
+        // ✅ LOG SEGURO - apenas confirmação sem dados
+        console.log("Configurações do sistema carregadas com sucesso")
+      }
     } catch (error) {
-      console.error("Erro ao carregar configurações do sistema:", error)
+      console.error("Erro ao buscar configurações do sistema")
       toast({
         title: "Erro ao carregar configurações",
         description: "Não foi possível carregar as configurações do sistema.",
@@ -148,19 +167,40 @@ export default function AdminSettingsPage() {
     }
   }
 
-  const handleUpdateSystemSettings = async () => {
+  // FUNÇÃO SEGURA - SEM LOGS DE DADOS SENSÍVEIS
+  const saveSystemSettings = async () => {
     setSavingSettings(true)
     try {
-      await updateSystemSettings(systemSettings2)
-      toast({
-        title: "Configurações salvas!",
-        description: "As configurações do sistema foram atualizadas com sucesso.",
+      const response = await fetch("/api/system/settings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(systemSettings),
       })
-    } catch (error) {
-      console.error("Erro ao salvar configurações do sistema:", error)
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast({
+          title: "Configurações salvas!",
+          description: "As configurações do sistema foram atualizadas com sucesso.",
+        })
+        // Recarregar configurações após salvar para garantir sincronização
+        setSettingsLoaded(false)
+        await loadSystemSettings()
+      } else {
+        throw new Error(data.error || "Erro desconhecido")
+      }
+    } catch (error: any) {
+      console.error("Erro ao salvar configurações do sistema")
       toast({
         title: "Erro ao salvar configurações",
-        description: "Não foi possível salvar as configurações do sistema.",
+        description: "Não foi possível salvar as configurações.",
         variant: "destructive",
       })
     } finally {
@@ -204,7 +244,7 @@ export default function AdminSettingsPage() {
         confirmPassword: "",
       })
     } catch (error) {
-      console.error("Erro ao atualizar perfil:", error)
+      console.error("Erro ao atualizar perfil")
       setProfileMessage("Erro ao atualizar perfil")
     } finally {
       setSavingProfile(false)
@@ -212,121 +252,7 @@ export default function AdminSettingsPage() {
     }
   }
 
-  useEffect(() => {
-    const currentUser = getCurrentUser()
-    setUser(currentUser)
-    fetchIntegrations()
-    fetchSystemSettings2()
-
-    // Inicializar formulário de branding com o tema atual
-    setBrandingForm(theme)
-
-    if (currentUser) {
-      setAdminProfileForm({
-        full_name: currentUser.full_name || "",
-        email: currentUser.email || "",
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      })
-    }
-  }, [theme])
-
-  // ✅ FUNÇÃO CORRIGIDA - USA APENAS API
-  const fetchSystemSettings2 = async () => {
-    try {
-      const response = await fetch("/api/system/settings", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
-      setSystemSettings2(data.settings)
-    } catch (error) {
-      console.error("Erro ao buscar configurações do sistema:", error)
-      setSaveMessage("Erro ao carregar configurações. Verifique se as tabelas foram criadas.")
-    }
-  }
-
-  // ✅ FUNÇÃO CORRIGIDA - USA APENAS API
-  const saveSystemSettings2 = async () => {
-    setSaving(true)
-    try {
-      const response = await fetch("/api/system/settings", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(systemSettings2),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
-      setSaveMessage(data.message || "Configurações do sistema salvas com sucesso!")
-      setTimeout(() => setSaveMessage(""), 3000)
-    } catch (error: any) {
-      console.error("Erro ao salvar configurações:", error)
-      setSaveMessage("Erro ao salvar configurações do sistema")
-      setTimeout(() => setSaveMessage(""), 3000)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleUpdateAdminProfile = async () => {
-    setSavingAdminProfile(true)
-    setAdminProfileMessage("")
-
-    try {
-      if (!adminProfileForm.full_name.trim()) {
-        setAdminProfileMessage("Nome é obrigatório")
-        return
-      }
-
-      if (!adminProfileForm.email.trim()) {
-        setAdminProfileMessage("Email é obrigatório")
-        return
-      }
-
-      if (adminProfileForm.newPassword && adminProfileForm.newPassword !== adminProfileForm.confirmPassword) {
-        setAdminProfileMessage("Senhas não coincidem")
-        return
-      }
-
-      if (adminProfileForm.newPassword && adminProfileForm.newPassword.length < 6) {
-        setAdminProfileMessage("Nova senha deve ter pelo menos 6 caracteres")
-        return
-      }
-
-      // TODO: Implementar via API
-      setAdminProfileMessage("Perfil atualizado com sucesso!")
-
-      // Limpar campos de senha após sucesso
-      setAdminProfileForm({
-        ...adminProfileForm,
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      })
-    } catch (error) {
-      console.error("Erro ao atualizar perfil:", error)
-      setAdminProfileMessage("Erro ao atualizar perfil")
-    } finally {
-      setSavingAdminProfile(false)
-      setTimeout(() => setAdminProfileMessage(""), 3000)
-    }
-  }
-
-  // ✅ FUNÇÃO CORRIGIDA - USA APENAS API
+  // FUNÇÃO SEGURA - SEM LOGS DE DADOS SENSÍVEIS
   const handleIntegrationSave = async (type: string) => {
     setSaving(true)
     try {
@@ -377,21 +303,39 @@ export default function AdminSettingsPage() {
 
       const data = await response.json()
 
-      // Recarregar lista de integrações
-      await fetchIntegrations()
-      setIntegrationModalOpen(false)
-      setSaveMessage(data.message || "Integração salva com sucesso!")
-      setTimeout(() => setSaveMessage(""), 3000)
+      if (data.success) {
+        // Recarregar lista de integrações
+        await fetchIntegrations()
+        setIntegrationModalOpen(false)
+
+        // Limpar formulário
+        setIntegrationForm({
+          evolutionApiUrl: "",
+          evolutionApiKey: "",
+          n8nFlowUrl: "",
+          n8nApiKey: "",
+        })
+
+        toast({
+          title: "Integração salva!",
+          description: data.message || "Integração salva com sucesso!",
+        })
+      } else {
+        throw new Error(data.error || "Erro desconhecido")
+      }
     } catch (error: any) {
-      console.error("Erro ao salvar integração:", error)
-      setSaveMessage(`Erro ao salvar integração: ${error.message}`)
-      setTimeout(() => setSaveMessage(""), 5000)
+      console.error("Erro ao salvar integração")
+      toast({
+        title: "Erro ao salvar integração",
+        description: error.message,
+        variant: "destructive",
+      })
     } finally {
       setSaving(false)
     }
   }
 
-  // ✅ FUNÇÃO CORRIGIDA - USA APENAS API
+  // FUNÇÃO SEGURA - SEM LOGS DE DADOS SENSÍVEIS
   const fetchIntegrations = async () => {
     try {
       const response = await fetch("/api/integrations", {
@@ -407,14 +351,16 @@ export default function AdminSettingsPage() {
 
       const data = await response.json()
 
-      if (data.message) {
-        setSaveMessage(data.message)
+      if (data.success) {
+        const integrationsData = Array.isArray(data.integrations) ? data.integrations : []
+        setIntegrations(integrationsData)
+        // ✅ LOG SEGURO - apenas quantidade, sem dados sensíveis
+        console.log(`${integrationsData.length} integrações carregadas`)
+      } else {
+        throw new Error(data.error || "Erro desconhecido")
       }
-
-      setIntegrations(data.integrations || [])
     } catch (err: any) {
-      console.error("Erro ao buscar integrações:", err)
-      setSaveMessage("Erro ao conectar com o banco de dados. Verifique se as tabelas foram criadas.")
+      console.error("Erro ao buscar integrações")
       setIntegrations([])
     }
   }
@@ -464,7 +410,6 @@ export default function AdminSettingsPage() {
     if (!file) return
 
     setUploadingLogo(true)
-    setSaveMessage("")
 
     try {
       await validateImageFile(file, "logo")
@@ -472,11 +417,16 @@ export default function AdminSettingsPage() {
       // TODO: Implementar upload real para Supabase Storage
       await new Promise((resolve) => setTimeout(resolve, 2000))
 
-      setSaveMessage("Logo enviado com sucesso!")
-      setTimeout(() => setSaveMessage(""), 3000)
+      toast({
+        title: "Logo enviado!",
+        description: "Logo enviado com sucesso!",
+      })
     } catch (error: any) {
-      setSaveMessage(error.message)
-      setTimeout(() => setSaveMessage(""), 3000)
+      toast({
+        title: "Erro no upload",
+        description: error.message,
+        variant: "destructive",
+      })
     } finally {
       setUploadingLogo(false)
       if (logoInputRef.current) {
@@ -490,7 +440,6 @@ export default function AdminSettingsPage() {
     if (!file) return
 
     setUploadingFavicon(true)
-    setSaveMessage("")
 
     try {
       await validateImageFile(file, "favicon")
@@ -498,11 +447,16 @@ export default function AdminSettingsPage() {
       // TODO: Implementar upload real para Supabase Storage
       await new Promise((resolve) => setTimeout(resolve, 2000))
 
-      setSaveMessage("Favicon enviado com sucesso!")
-      setTimeout(() => setSaveMessage(""), 3000)
+      toast({
+        title: "Favicon enviado!",
+        description: "Favicon enviado com sucesso!",
+      })
     } catch (error: any) {
-      setSaveMessage(error.message)
-      setTimeout(() => setSaveMessage(""), 3000)
+      toast({
+        title: "Erro no upload",
+        description: error.message,
+        variant: "destructive",
+      })
     } finally {
       setUploadingFavicon(false)
       if (faviconInputRef.current) {
@@ -511,155 +465,18 @@ export default function AdminSettingsPage() {
     }
   }
 
-  const renderAdminProfileSettings = () => (
-    <div>
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Perfil do Administrador</h3>
-        <p className="text-gray-600 dark:text-gray-400">Gerencie suas informações pessoais e senha</p>
-      </div>
-
-      {adminProfileMessage && (
-        <Alert variant={adminProfileMessage.includes("sucesso") ? "default" : "destructive"} className="mb-6">
-          <AlertDescription>{adminProfileMessage}</AlertDescription>
-        </Alert>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-gray-900 dark:text-gray-100">Informações Pessoais</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="adminFullName" className="text-gray-900 dark:text-gray-100">
-                Nome Completo
-              </Label>
-              <Input
-                id="adminFullName"
-                value={adminProfileForm.full_name}
-                onChange={(e) => setAdminProfileForm({ ...adminProfileForm, full_name: e.target.value })}
-                placeholder="Seu nome completo"
-                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-              />
-            </div>
-            <div>
-              <Label htmlFor="adminEmail" className="text-gray-900 dark:text-gray-100">
-                Email
-              </Label>
-              <Input
-                id="adminEmail"
-                type="email"
-                value={adminProfileForm.email}
-                onChange={(e) => setAdminProfileForm({ ...adminProfileForm, email: e.target.value })}
-                placeholder="seu@email.com"
-                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-gray-900 dark:text-gray-100">Alterar Senha</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="adminCurrentPassword" className="text-gray-900 dark:text-gray-100">
-                Senha Atual (opcional para admin)
-              </Label>
-              <div className="relative">
-                <Input
-                  id="adminCurrentPassword"
-                  type={showAdminPasswords.current ? "text" : "password"}
-                  value={adminProfileForm.currentPassword}
-                  onChange={(e) => setAdminProfileForm({ ...adminProfileForm, currentPassword: e.target.value })}
-                  placeholder="Senha atual (não obrigatória para admin)"
-                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3"
-                  onClick={() => setShowAdminPasswords({ ...showAdminPasswords, current: !showAdminPasswords.current })}
-                >
-                  {showAdminPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Como administrador, você pode alterar sua senha sem informar a atual
-              </p>
-            </div>
-            <div>
-              <Label htmlFor="adminNewPassword" className="text-gray-900 dark:text-gray-100">
-                Nova Senha
-              </Label>
-              <div className="relative">
-                <Input
-                  id="adminNewPassword"
-                  type={showAdminPasswords.new ? "text" : "password"}
-                  value={adminProfileForm.newPassword}
-                  onChange={(e) => setAdminProfileForm({ ...adminProfileForm, newPassword: e.target.value })}
-                  placeholder="Nova senha"
-                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3"
-                  onClick={() => setShowAdminPasswords({ ...showAdminPasswords, new: !showAdminPasswords.new })}
-                >
-                  {showAdminPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="adminConfirmPassword" className="text-gray-900 dark:text-gray-100">
-                Confirmar Nova Senha
-              </Label>
-              <div className="relative">
-                <Input
-                  id="adminConfirmPassword"
-                  type={showAdminPasswords.confirm ? "text" : "password"}
-                  value={adminProfileForm.confirmPassword}
-                  onChange={(e) => setAdminProfileForm({ ...adminProfileForm, confirmPassword: e.target.value })}
-                  placeholder="Confirme a nova senha"
-                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3"
-                  onClick={() => setShowAdminPasswords({ ...showAdminPasswords, confirm: !showAdminPasswords.confirm })}
-                >
-                  {showAdminPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="flex justify-end mt-6">
-        <Button
-          onClick={handleUpdateAdminProfile}
-          disabled={savingAdminProfile}
-          className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
-        >
-          {savingAdminProfile ? "Salvando..." : "Salvar Alterações"}
-        </Button>
-      </div>
-    </div>
-  )
-
   const renderSystemSettings = () => (
     <div>
       <div className="mb-6">
         <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Configurações do Sistema</h3>
         <p className="text-gray-600 dark:text-gray-400">Configure parâmetros globais da plataforma</p>
       </div>
+
+      {saveMessage && (
+        <Alert variant={saveMessage.includes("sucesso") ? "default" : "destructive"} className="mb-6">
+          <AlertDescription>{saveMessage}</AlertDescription>
+        </Alert>
+      )}
 
       <div className="space-y-6">
         <Card>
@@ -674,13 +491,14 @@ export default function AdminSettingsPage() {
               <Input
                 id="defaultWhatsAppLimit"
                 type="number"
-                value={systemSettings2.default_whatsapp_connections_limit || 2}
-                onChange={(e) =>
-                  setSystemSettings2({
-                    ...systemSettings2,
-                    default_whatsapp_connections_limit: Number.parseInt(e.target.value) || 2,
-                  })
-                }
+                value={systemSettings.default_whatsapp_connections_limit}
+                onChange={(e) => {
+                  const value = Number.parseInt(e.target.value) || 1
+                  setSystemSettings((prev) => ({
+                    ...prev,
+                    default_whatsapp_connections_limit: value,
+                  }))
+                }}
                 min="1"
                 max="50"
                 className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
@@ -696,13 +514,14 @@ export default function AdminSettingsPage() {
               <Input
                 id="defaultAgentsLimit"
                 type="number"
-                value={systemSettings2.default_agents_limit || 5}
-                onChange={(e) =>
-                  setSystemSettings2({
-                    ...systemSettings2,
-                    default_agents_limit: Number.parseInt(e.target.value) || 5,
-                  })
-                }
+                value={systemSettings.default_agents_limit}
+                onChange={(e) => {
+                  const value = Number.parseInt(e.target.value) || 2
+                  setSystemSettings((prev) => ({
+                    ...prev,
+                    default_agents_limit: value,
+                  }))
+                }}
                 min="1"
                 max="100"
                 className="w-32 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
@@ -731,16 +550,16 @@ export default function AdminSettingsPage() {
               <div className="flex items-center space-x-2">
                 <Switch
                   id="allowRegistration"
-                  checked={systemSettings2.allow_public_registration === true}
-                  onCheckedChange={(checked) =>
-                    setSystemSettings2({
-                      ...systemSettings2,
+                  checked={Boolean(systemSettings.allow_public_registration)}
+                  onCheckedChange={(checked) => {
+                    setSystemSettings((prev) => ({
+                      ...prev,
                       allow_public_registration: checked,
-                    })
-                  }
+                    }))
+                  }}
                 />
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {systemSettings2.allow_public_registration ? "Habilitado" : "Desabilitado"}
+                  {systemSettings.allow_public_registration ? "Habilitado" : "Desabilitado"}
                 </span>
               </div>
             </div>
@@ -749,16 +568,42 @@ export default function AdminSettingsPage() {
 
         <div className="flex justify-end">
           <Button
-            onClick={saveSystemSettings2}
-            disabled={saving}
+            onClick={saveSystemSettings}
+            disabled={savingSettings || loadingSettings}
             className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
           >
-            {saving ? "Salvando..." : "Salvar Configurações"}
+            {savingSettings ? "Salvando..." : "Salvar Configurações"}
           </Button>
         </div>
       </div>
     </div>
   )
+
+  // FUNÇÃO SEGURA - SEM LOGS DE DADOS SENSÍVEIS
+  const loadBrandingFromServer = async () => {
+    if (brandingLoaded) return
+
+    try {
+      const response = await fetch("/api/admin/branding")
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.theme) {
+          setBrandingForm(data.theme)
+          setBrandingLoaded(true)
+          // ✅ LOG SEGURO - apenas confirmação
+          console.log("Configurações de branding carregadas")
+        } else {
+          // Usar tema atual como fallback
+          setBrandingForm(theme)
+          setBrandingLoaded(true)
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar branding")
+      setBrandingForm(theme)
+      setBrandingLoaded(true)
+    }
+  }
 
   const renderBrandingSettings = () => {
     const handleBrandingChange = (updates: Partial<ThemeConfig>) => {
@@ -768,16 +613,40 @@ export default function AdminSettingsPage() {
 
     const handleSaveBranding = async () => {
       setSaving(true)
-      setSaveMessage("")
 
       try {
-        await updateTheme(brandingForm)
-        setBrandingChanged(false)
-        setSaveMessage("Configurações de branding salvas com sucesso!")
-        setTimeout(() => setSaveMessage(""), 3000)
-      } catch (error) {
-        setSaveMessage("Erro ao salvar configurações de branding")
-        setTimeout(() => setSaveMessage(""), 3000)
+        const response = await fetch("/api/admin/branding", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(brandingForm),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || `HTTP ${response.status}`)
+        }
+
+        const data = await response.json()
+
+        if (data.success) {
+          await updateTheme(brandingForm)
+          setBrandingChanged(false)
+          toast({
+            title: "Branding salvo!",
+            description: "Configurações de branding salvas com sucesso!",
+          })
+        } else {
+          throw new Error(data.error || "Failed to save branding")
+        }
+      } catch (error: any) {
+        console.error("Erro ao salvar branding")
+        toast({
+          title: "Erro ao salvar branding",
+          description: "Não foi possível salvar as configurações de branding.",
+          variant: "destructive",
+        })
       } finally {
         setSaving(false)
       }
@@ -834,68 +703,6 @@ export default function AdminSettingsPage() {
                   maxLength={2}
                   className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                 />
-              </div>
-
-              <div>
-                <Label htmlFor="logoUpload" className="text-gray-900 dark:text-gray-100">
-                  Upload de Logo
-                </Label>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      className="gap-2"
-                      disabled={saving || uploadingLogo}
-                      onClick={() => logoInputRef.current?.click()}
-                    >
-                      <Upload className="w-4 h-4" />
-                      {uploadingLogo ? "Enviando..." : "Escolher Logo"}
-                    </Button>
-                    <input
-                      ref={logoInputRef}
-                      type="file"
-                      accept="image/png,image/jpeg,image/jpg"
-                      onChange={handleLogoUpload}
-                      className="hidden"
-                    />
-                  </div>
-                  <div className="text-xs text-gray-500 space-y-1">
-                    <p>• Formatos: PNG, JPG</p>
-                    <p>• Tamanho: 100x100 até 500x500 pixels</p>
-                    <p>• Máximo: 2MB</p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="faviconUpload" className="text-gray-900 dark:text-gray-100">
-                  Upload de Favicon
-                </Label>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      className="gap-2"
-                      disabled={saving || uploadingFavicon}
-                      onClick={() => faviconInputRef.current?.click()}
-                    >
-                      <ImageIcon className="w-4 h-4" />
-                      {uploadingFavicon ? "Enviando..." : "Escolher Favicon"}
-                    </Button>
-                    <input
-                      ref={faviconInputRef}
-                      type="file"
-                      accept="image/x-icon,image/vnd.microsoft.icon,image/png"
-                      onChange={handleFaviconUpload}
-                      className="hidden"
-                    />
-                  </div>
-                  <div className="text-xs text-gray-500 space-y-1">
-                    <p>• Formatos: ICO, PNG</p>
-                    <p>• Tamanho: exatamente 32x32 pixels</p>
-                    <p>• Máximo: 1MB</p>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -1062,6 +869,9 @@ export default function AdminSettingsPage() {
 
   const renderIntegrationsSettings = () => {
     const getIntegrationConfig = (type: string) => {
+      if (!Array.isArray(integrations)) {
+        return {}
+      }
       const integration = integrations.find((int: any) => int.type === type)
       return integration?.config || {}
     }
@@ -1070,18 +880,27 @@ export default function AdminSettingsPage() {
       setSelectedIntegration({ type, name })
       const config = getIntegrationConfig(type)
 
+      // Limpar formulário primeiro
+      setIntegrationForm({
+        evolutionApiUrl: "",
+        evolutionApiKey: "",
+        n8nFlowUrl: "",
+        n8nApiKey: "",
+      })
+
+      // Depois preencher com dados existentes (SEM LOGS)
       if (type === "evolution_api") {
-        setIntegrationForm({
-          ...integrationForm,
+        setIntegrationForm((prev) => ({
+          ...prev,
           evolutionApiUrl: config.apiUrl || "",
           evolutionApiKey: config.apiKey || "",
-        })
+        }))
       } else if (type === "n8n") {
-        setIntegrationForm({
-          ...integrationForm,
+        setIntegrationForm((prev) => ({
+          ...prev,
           n8nFlowUrl: config.flowUrl || "",
           n8nApiKey: config.apiKey || "",
-        })
+        }))
       }
 
       setIntegrationModalOpen(true)
@@ -1094,22 +913,6 @@ export default function AdminSettingsPage() {
           <p className="text-gray-600 dark:text-gray-400">
             Configure as integrações para expandir as funcionalidades da plataforma
           </p>
-
-          {saveMessage.includes("Tabela") && (
-            <Alert className="mt-4" variant="destructive">
-              <AlertDescription>
-                {saveMessage}
-                <br />
-                <strong>Execute este script SQL no seu Supabase:</strong>
-                <code className="block mt-2 p-2 bg-gray-100 rounded text-xs">
-                  CREATE TABLE IF NOT EXISTS impaai.integrations ( id UUID DEFAULT gen_random_uuid() PRIMARY KEY, name
-                  VARCHAR(255) NOT NULL, type VARCHAR(100) NOT NULL, config JSONB DEFAULT '{}', is_active BOOLEAN
-                  DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE
-                  DEFAULT NOW() );
-                </code>
-              </AlertDescription>
-            </Alert>
-          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1134,7 +937,6 @@ export default function AdminSettingsPage() {
                     : "w-full"
                 }
                 variant={getIntegrationConfig("evolution_api").apiUrl ? undefined : "outline"}
-                disabled={saveMessage.includes("Tabela")}
               >
                 {getIntegrationConfig("evolution_api").apiUrl ? "Configurado" : "Configurar"}
               </Button>
@@ -1154,7 +956,6 @@ export default function AdminSettingsPage() {
                   getIntegrationConfig("n8n").flowUrl ? "w-full bg-green-600 text-white hover:bg-green-700" : "w-full"
                 }
                 variant={getIntegrationConfig("n8n").flowUrl ? undefined : "outline"}
-                disabled={saveMessage.includes("Tabela")}
               >
                 {getIntegrationConfig("n8n").flowUrl ? "Configurado" : "Configurar"}
               </Button>
@@ -1274,7 +1075,14 @@ export default function AdminSettingsPage() {
   }
 
   if (loading) {
-    return <div className="p-6">Carregando...</div>
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p>Carregando configurações...</p>
+        </div>
+      </div>
+    )
   }
 
   return (

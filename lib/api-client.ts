@@ -110,6 +110,11 @@ class PublicApiClient {
     return this.makeRequest(`/api/whatsapp-connections?userId=${userId || ""}&isAdmin=${isAdmin}`)
   }
 
+  // Buscar estatísticas do dashboard do usuário
+  async getDashboardUserStats(): Promise<ApiResponse<{ stats: { agentCount: number; connectionCount: number } }>> {
+    return this.makeRequest("/api/dashboard/stats")
+  }
+
   // Buscar estatísticas do dashboard
   async getDashboardStats(): Promise<ApiResponse<{ stats: any }>> {
     return this.makeRequest("/api/dashboard/stats")
@@ -189,6 +194,7 @@ export const themeApi = {
 
 export const dashboardApi = {
   getStats: () => publicApi.getDashboardStats(),
+  getUserStats: () => publicApi.getDashboardUserStats(),
   getAgents: () => publicApi.getAgents(),
   getAdminDashboard: () => publicApi.getAdminDashboard(),
 }

@@ -9,10 +9,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Plus, AlertCircle } from "lucide-react"
-import { createEvolutionInstance } from "@/lib/whatsapp-api"
+import { createEvolutionInstance } from "@/lib/whatsapp-api-client"
 import InstanceCreationModal from "./instance-creation-modal"
-import { supabase } from "@/lib/supabase"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { adminApi } from "@/lib/api-client"
 
 interface AdminWhatsAppConnectionModalProps {
   open: boolean
@@ -46,11 +46,15 @@ export default function AdminWhatsAppConnectionModal({
   const fetchUsers = async () => {
     setLoadingUsers(true)
     try {
-      const userProfilesTable = await supabase.from("user_profiles")
-      const { data } = await userProfilesTable.select("id, email, full_name").order("full_name", { ascending: true })
+      const response = await adminApi.getUsers()
 
-      if (data) {
-        setUsers(data)
+      if (response.error) {
+        console.error("Erro ao buscar usuários:", response.error)
+        return
+      }
+
+      if (response.data?.users) {
+        setUsers(response.data.users)
         setSelectedUserId(adminId)
       }
     } catch (error) {

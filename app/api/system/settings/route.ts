@@ -9,7 +9,7 @@ export async function GET() {
       return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
     }
 
-    // Buscar configurações via REST API
+    // Buscar configurações da tabela system_settings
     const response = await fetch(`${supabaseUrl}/rest/v1/system_settings?select=*`, {
       headers: {
         apikey: supabaseKey,
@@ -23,6 +23,7 @@ export async function GET() {
     if (!response.ok) {
       // Retornar valores padrão se a tabela não existir
       return NextResponse.json({
+        success: true,
         settings: {
           default_whatsapp_connections_limit: 1,
           default_agents_limit: 2,
@@ -31,32 +32,53 @@ export async function GET() {
       })
     }
 
-    const settings = await response.json()
+    const settingsArray = await response.json()
 
-    // Converter array de configurações em objeto
-    const settingsObj: Record<string, any> = {}
-    settings.forEach((setting: any) => {
-      settingsObj[setting.setting_key] = setting.setting_value
-    })
+    // Converter array de configurações para objeto
+    const settings: Record<string, any> = {}
+
+    if (Array.isArray(settingsArray)) {
+      settingsArray.forEach((setting: any) => {
+        // Converter string para tipo apropriado
+        let value = setting.setting_value
+
+        // Tentar converter para número
+        if (!isNaN(value) && !isNaN(Number.parseFloat(value))) {
+          value = Number.parseFloat(value)
+        }
+        // Tentar converter para boolean
+        else if (value === "true" || value === "false") {
+          value = value === "true"
+        }
+
+        settings[setting.setting_key] = value
+      })
+    }
 
     // Garantir valores padrão
     const finalSettings = {
-      default_whatsapp_connections_limit: settingsObj.default_whatsapp_connections_limit || 1,
-      default_agents_limit: settingsObj.default_agents_limit || 2,
-      allow_public_registration: settingsObj.allow_public_registration || false,
-      ...settingsObj,
+      default_whatsapp_connections_limit: settings.default_whatsapp_connections_limit || 1,
+      default_agents_limit: settings.default_agents_limit || 2,
+      allow_public_registration: settings.allow_public_registration || false,
+      app_name: settings.app_name || "Impa AI",
+      app_version: settings.app_version || "1.0.0",
+      ...settings,
     }
 
-    return NextResponse.json({ settings: finalSettings })
+    return NextResponse.json({
+      success: true,
+      settings: finalSettings,
+    })
   } catch (error: any) {
     console.error("Erro ao buscar configurações:", error.message)
-    // Retornar valores padrão em caso de erro
     return NextResponse.json({
+      success: false,
       settings: {
         default_whatsapp_connections_limit: 1,
         default_agents_limit: 2,
         allow_public_registration: false,
       },
+      error: error.message,
     })
   }
 }
@@ -69,43 +91,27 @@ export async function POST(request: Request) {
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Configuração do servidor incompleta",
+        },
+        { status: 500 },
+      )
     }
 
-    // Preparar configurações para upsert
-    const settingsToUpsert = [
-      {
-        setting_key: "default_whatsapp_connections_limit",
-        setting_value: body.default_whatsapp_connections_limit || 1,
-        category: "limits",
-        description: "Limite padrão de conexões WhatsApp para novos usuários",
-        is_public: false,
-        requires_restart: false,
-      },
-      {
-        setting_key: "default_agents_limit",
-        setting_value: body.default_agents_limit || 2,
-        category: "limits",
-        description: "Limite padrão de agentes IA para novos usuários",
-        is_public: false,
-        requires_restart: false,
-      },
-      {
-        setting_key: "allow_public_registration",
-        setting_value: body.allow_public_registration || false,
-        category: "auth",
-        description: "Permitir cadastro público de usuários",
-        is_public: true,
-        requires_restart: false,
-      },
-    ]
+    // Processar cada configuração individualmente
+    const updates = []
 
-    // Salvar cada configuração usando estratégia de upsert segura
-    for (const setting of settingsToUpsert) {
-      // Primeiro, tentar buscar se já existe
-      const checkResponse = await fetch(
-        `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${setting.setting_key}&select=setting_key`,
-        {
+    for (const [key, value] of Object.entries(body)) {
+      // Pular chaves que não são configurações
+      if (key.startsWith("theme_") || key === "success" || key === "settings") {
+        continue
+      }
+
+      try {
+        // Verificar se a configuração já existe
+        const checkResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings?select=id&setting_key=eq.${key}`, {
           headers: {
             apikey: supabaseKey,
             Authorization: `Bearer ${supabaseKey}`,
@@ -113,17 +119,14 @@ export async function POST(request: Request) {
             "Accept-Profile": "impaai",
             "Content-Profile": "impaai",
           },
-        },
-      )
+        })
 
-      const existingSettings = await checkResponse.json()
-      const exists = existingSettings && existingSettings.length > 0
+        const existing = await checkResponse.json()
+        const settingExists = Array.isArray(existing) && existing.length > 0
 
-      if (exists) {
-        // UPDATE se já existe
-        const updateResponse = await fetch(
-          `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${setting.setting_key}`,
-          {
+        if (settingExists) {
+          // Atualizar configuração existente
+          const updateResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${key}`, {
             method: "PATCH",
             headers: {
               apikey: supabaseKey,
@@ -133,44 +136,65 @@ export async function POST(request: Request) {
               "Content-Profile": "impaai",
             },
             body: JSON.stringify({
-              setting_value: setting.setting_value,
+              setting_value: String(value),
               updated_at: new Date().toISOString(),
             }),
-          },
-        )
+          })
 
-        if (!updateResponse.ok) {
-          const errorText = await updateResponse.text()
-          throw new Error(`Erro ao atualizar ${setting.setting_key}: ${updateResponse.status} - ${errorText}`)
-        }
-      } else {
-        // INSERT se não existe
-        const insertResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings`, {
-          method: "POST",
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-          },
-          body: JSON.stringify({
-            ...setting,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }),
-        })
+          if (updateResponse.ok) {
+            updates.push(`${key}: atualizado`)
+          } else {
+            const errorText = await updateResponse.text()
+            console.error(`Erro ao atualizar ${key}:`, errorText)
+          }
+        } else {
+          // Criar nova configuração
+          const createResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings`, {
+            method: "POST",
+            headers: {
+              apikey: supabaseKey,
+              Authorization: `Bearer ${supabaseKey}`,
+              "Content-Type": "application/json",
+              "Accept-Profile": "impaai",
+              "Content-Profile": "impaai",
+            },
+            body: JSON.stringify({
+              setting_key: key,
+              setting_value: String(value),
+              category: key.includes("limit") ? "limits" : "general",
+              description: `Configuração do sistema para a chave ${key}`,
+              is_public: false,
+              requires_restart: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }),
+          })
 
-        if (!insertResponse.ok) {
-          const errorText = await insertResponse.text()
-          throw new Error(`Erro ao inserir ${setting.setting_key}: ${insertResponse.status} - ${errorText}`)
+          if (createResponse.ok) {
+            updates.push(`${key}: criado`)
+          } else {
+            const errorText = await createResponse.text()
+            console.error(`Erro ao criar ${key}:`, errorText)
+          }
         }
+      } catch (settingError: any) {
+        console.error(`Erro ao processar configuração ${key}:`, settingError.message)
       }
     }
 
-    return NextResponse.json({ success: true, message: "Configurações salvas com sucesso!" })
+    return NextResponse.json({
+      success: true,
+      message: `Configurações salvas com sucesso! (${updates.length} atualizações)`,
+      updates: updates,
+    })
   } catch (error: any) {
     console.error("Erro ao salvar configurações:", error.message)
-    return NextResponse.json({ error: `Erro ao salvar configurações: ${error.message}` }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: `Erro ao salvar configurações: ${error.message}`,
+      },
+      { status: 500 },
+    )
   }
 }

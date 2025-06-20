@@ -589,7 +589,7 @@ _______________________________________
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.JSON.stringify(agentPayload),
+          body: JSON.stringify(agentPayload),
         })
       }
 

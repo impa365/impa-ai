@@ -1,6 +1,7 @@
-import { publicApi } from "@/lib/api-client"
+// Biblioteca de autenticação do cliente
+// NUNCA expõe credenciais - apenas gerencia estado local
 
-export interface UserProfile {
+interface User {
   id: string
   email: string
   full_name: string
@@ -11,184 +12,113 @@ export interface UserProfile {
   last_login_at?: string
 }
 
-export interface LoginCredentials {
-  email: string
-  password: string
-}
+// Chave para localStorage
+const USER_STORAGE_KEY = "impaai_user"
 
-export interface RegisterData {
-  email: string
-  password: string
-  full_name: string
-}
-
-// Função de login usando API
-export async function signIn(email: string, password: string) {
+export function getCurrentUser(): User | null {
   try {
-    console.log("🔐 Iniciando login via API para:", email)
+    // Verificar se está no browser
+    if (typeof window === "undefined") {
+      console.log("🔍 getCurrentUser: Executando no servidor, retornando null")
+      return null
+    }
 
-    const result = await publicApi.login(email, password)
-
-    if (result.error) {
-      console.error("❌ Erro no login:", result.error)
-      return {
-        user: null,
-        error: { message: result.error },
+    // Tentar buscar do localStorage primeiro
+    const storedUser = localStorage.getItem(USER_STORAGE_KEY)
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser) as User
+        console.log("✅ Usuário encontrado no localStorage:", user.email)
+        return user
+      } catch (error) {
+        console.error("❌ Erro ao parsear usuário do localStorage:", error)
+        localStorage.removeItem(USER_STORAGE_KEY)
       }
     }
 
-    if (result.data?.user) {
-      console.log("✅ Login bem-sucedido via API")
-      setCurrentUser(result.data.user)
-      return {
-        user: result.data.user,
-        error: null,
+    // Tentar buscar do cookie como fallback
+    const cookies = document.cookie.split(";")
+    const userCookie = cookies.find((cookie) => cookie.trim().startsWith(`${USER_STORAGE_KEY}=`))
+
+    if (userCookie) {
+      try {
+        const cookieValue = userCookie.split("=")[1]
+        const decodedValue = decodeURIComponent(cookieValue)
+        const user = JSON.parse(decodedValue) as User
+        console.log("✅ Usuário encontrado no cookie:", user.email)
+
+        // Sincronizar com localStorage
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user))
+        return user
+      } catch (error) {
+        console.error("❌ Erro ao parsear usuário do cookie:", error)
       }
     }
 
-    return {
-      user: null,
-      error: { message: "Resposta inválida do servidor" },
-    }
-  } catch (error: any) {
-    console.error("💥 Erro crítico no login:", error.message)
-    return {
-      user: null,
-      error: { message: "Erro de conexão" },
-    }
-  }
-}
-
-// Função de registro usando API
-export async function registerUser(userData: RegisterData) {
-  try {
-    const result = await publicApi.register(userData)
-
-    if (result.error) {
-      return {
-        success: false,
-        error: result.error,
-      }
-    }
-
-    return {
-      success: true,
-      user: result.data?.user,
-    }
-  } catch (error: any) {
-    console.error("💥 Erro no registro:", error.message)
-    return {
-      success: false,
-      error: "Erro de conexão",
-    }
-  }
-}
-
-// Função para trocar a senha via API
-export async function changePassword(
-  userId: string,
-  oldPassword: string,
-  newPassword: string,
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    console.log("🔐 Iniciando troca de senha via API para usuário:", userId)
-
-    // TODO: Implementar API endpoint para mudança de senha
-    // const result = await authApi.changePassword(userId, oldPassword, newPassword)
-
-    // Por enquanto, retornar erro informando que precisa ser implementado
-    return {
-      success: false,
-      error: "Funcionalidade de mudança de senha será implementada em breve",
-    }
-  } catch (error: any) {
-    console.error("💥 Erro inesperado ao trocar senha:", error.message)
-    return {
-      success: false,
-      error: "Erro interno do servidor: " + error.message,
-    }
-  }
-}
-
-// Funções de gerenciamento de sessão local (mantidas)
-export function getCurrentUser(): UserProfile | null {
-  if (typeof window === "undefined") return null
-  try {
-    const userStr = localStorage.getItem("user")
-    if (!userStr) return null
-    return JSON.parse(userStr) as UserProfile
+    console.log("❌ Usuário não encontrado em localStorage ou cookies")
+    return null
   } catch (error) {
-    console.error("Erro ao obter usuário:", error)
+    console.error("💥 Erro ao buscar usuário atual:", error)
     return null
   }
 }
 
-export function setCurrentUser(user: UserProfile): void {
-  if (typeof window === "undefined") return
+export function setCurrentUser(user: User): void {
   try {
-    localStorage.setItem("user", JSON.stringify(user))
+    console.log("💾 Salvando usuário:", user.email)
+
+    // Salvar no localStorage
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user))
+
+    // Salvar no cookie também para compatibilidade com servidor
+    const cookieValue = encodeURIComponent(JSON.stringify(user))
+    const expirationDate = new Date()
+    expirationDate.setDate(expirationDate.getDate() + 7) // 7 dias
+
+    document.cookie = `${USER_STORAGE_KEY}=${cookieValue}; expires=${expirationDate.toUTCString()}; path=/; SameSite=Lax`
+
+    console.log("✅ Usuário salvo com sucesso")
   } catch (error) {
-    console.error("Erro ao salvar usuário:", error)
+    console.error("❌ Erro ao salvar usuário:", error)
   }
 }
 
 export function clearCurrentUser(): void {
-  if (typeof window === "undefined") return
   try {
-    localStorage.removeItem("user")
+    console.log("🗑️ Removendo usuário atual")
+
+    // Remover do localStorage
+    localStorage.removeItem(USER_STORAGE_KEY)
+
+    // Remover do cookie
+    document.cookie = `${USER_STORAGE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+
+    console.log("✅ Usuário removido com sucesso")
   } catch (error) {
-    console.error("Erro ao limpar usuário:", error)
+    console.error("❌ Erro ao remover usuário:", error)
   }
 }
 
-export async function signOut() {
-  console.log("🚪 Realizando logout")
-  clearCurrentUser()
-  return { success: true, error: null }
+export function isAuthenticated(): boolean {
+  const user = getCurrentUser()
+  const isAuth = user !== null && user.status === "active"
+  console.log("🔐 Verificação de autenticação:", isAuth ? "✅ Autenticado" : "❌ Não autenticado")
+  return isAuth
 }
 
-// Função para verificar se registro público está habilitado
-export async function isPublicRegistrationEnabled(): Promise<boolean> {
-  try {
-    const result = await publicApi.getConfig()
-    return result.data?.settings?.allowPublicRegistration || false
-  } catch (error) {
-    console.error("Erro ao verificar registro público:", error)
-    return false
-  }
+export function isAdmin(): boolean {
+  const user = getCurrentUser()
+  const isAdminUser = user?.role === "admin"
+  console.log("👑 Verificação de admin:", isAdminUser ? "✅ É admin" : "❌ Não é admin")
+  return isAdminUser
 }
 
-// Funções adicionais que podem ser necessárias (mantidas para compatibilidade)
-export async function updateUserProfile(
-  userId: string,
-  updates: Partial<Omit<UserProfile, "id" | "email" | "created_at" | "role">>,
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    // TODO: Implementar API endpoint para atualização de perfil
-    // const result = await authApi.updateProfile(userId, updates)
-
-    return {
-      success: false,
-      error: "Funcionalidade de atualização de perfil será implementada em breve",
-    }
-  } catch (error: any) {
-    console.error("💥 Erro inesperado ao atualizar perfil:", error.message)
-    return { success: false, error: "Erro interno do servidor" }
-  }
-}
-
-export async function getUser(): Promise<any | null> {
-  // Esta função pode não ser necessária com a nova arquitetura
-  // mas mantida para compatibilidade
-  return getCurrentUser()
-}
-
-export async function isUserAdmin(): Promise<boolean> {
-  try {
-    const user = getCurrentUser()
-    return user?.role === "admin" || false
-  } catch (error) {
-    console.error("Error checking admin status:", error)
-    return false
-  }
+// Função para debug - mostrar estado atual
+export function debugAuth(): void {
+  console.log("🔍 Debug da autenticação:")
+  console.log("- localStorage:", localStorage.getItem(USER_STORAGE_KEY))
+  console.log("- cookies:", document.cookie)
+  console.log("- usuário atual:", getCurrentUser())
+  console.log("- autenticado:", isAuthenticated())
+  console.log("- é admin:", isAdmin())
 }
