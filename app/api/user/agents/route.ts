@@ -1,26 +1,9 @@
 import { NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth"
 
 export async function GET() {
   console.log("📡 API: /api/user/agents chamada")
 
   try {
-    // Verificação de autenticação mais robusta
-    const currentUser = getCurrentUser()
-    console.log("🔍 Usuário atual:", currentUser ? currentUser.email : "Não encontrado")
-
-    if (!currentUser) {
-      console.log("❌ Usuário não autenticado")
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
-    console.log("✅ Usuário autenticado:", currentUser.email, "Role:", currentUser.role)
-
-    if (currentUser.role === "admin") {
-      console.log("⚠️ Admin detectado, redirecionando para API admin")
-      return NextResponse.json({ error: "Use /api/admin/agents para admin" }, { status: 403 })
-    }
-
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
@@ -36,10 +19,10 @@ export async function GET() {
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    console.log("🔍 Buscando agentes do usuário:", currentUser.id)
-    // Buscar apenas agentes do usuário atual
+    console.log("🔍 Buscando agentes...")
+    // Buscar agentes com joins - IGUAL AO ADMIN
     const agentsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!inner(id,connection_name,phone_number,instance_name)&user_id=eq.${currentUser.id}&order=created_at.desc`,
+      `${supabaseUrl}/rest/v1/ai_agents?select=*,user_profiles!ai_agents_user_id_fkey(id,email,full_name),whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(connection_name,status)&order=created_at.desc`,
       { headers },
     )
 
@@ -52,30 +35,44 @@ export async function GET() {
     const agents = await agentsResponse.json()
     console.log("✅ Agentes encontrados:", agents.length)
 
-    // Buscar limites do usuário
-    console.log("🔍 Buscando limites do usuário...")
-    const userResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?select=agents_limit,connections_limit,role&id=eq.${currentUser.id}`,
+    console.log("🔍 Buscando usuários...")
+    // Buscar usuários - IGUAL AO ADMIN
+    const usersResponse = await fetch(
+      `${supabaseUrl}/rest/v1/user_profiles?select=id,email,full_name&order=full_name.asc`,
       { headers },
     )
 
-    let userLimits = { max_agents: 5, max_whatsapp_connections: 3 }
-    if (userResponse.ok) {
-      const userData = await userResponse.json()
-      if (userData && userData.length > 0) {
-        const user = userData[0]
-        userLimits = {
-          max_agents: user.role === "admin" ? 999 : user.agents_limit || 5,
-          max_whatsapp_connections: user.role === "admin" ? 999 : user.connections_limit || 3,
-        }
-      }
+    if (!usersResponse.ok) {
+      const errorText = await usersResponse.text()
+      console.error("❌ Erro ao buscar usuários:", usersResponse.status, errorText)
+      throw new Error(`Erro ao buscar usuários: ${usersResponse.status}`)
     }
+
+    const users = await usersResponse.json()
+    console.log("✅ Usuários encontrados:", users.length)
+
+    console.log("🔍 Buscando conexões WhatsApp...")
+    // Buscar conexões WhatsApp - IGUAL AO ADMIN
+    const connectionsResponse = await fetch(
+      `${supabaseUrl}/rest/v1/whatsapp_connections?select=*&order=connection_name.asc`,
+      { headers },
+    )
+
+    if (!connectionsResponse.ok) {
+      const errorText = await connectionsResponse.text()
+      console.error("❌ Erro ao buscar conexões:", connectionsResponse.status, errorText)
+      throw new Error(`Erro ao buscar conexões: ${connectionsResponse.status}`)
+    }
+
+    const connections = await connectionsResponse.json()
+    console.log("✅ Conexões encontradas:", connections.length)
 
     console.log("✅ Dados processados com sucesso")
     return NextResponse.json({
       success: true,
       agents: agents || [],
-      limits: userLimits,
+      users: users || [],
+      connections: connections || [],
     })
   } catch (error: any) {
     console.error("❌ Erro na API user/agents:", error.message)
@@ -93,118 +90,16 @@ export async function POST(request: Request) {
   console.log("📡 API: POST /api/user/agents chamada")
 
   try {
-    // Verificação de autenticação mais robusta
-    const currentUser = getCurrentUser()
-    console.log("🔍 Usuário atual:", currentUser ? currentUser.email : "Não encontrado")
-
-    if (!currentUser) {
-      console.log("❌ Usuário não autenticado")
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
-    console.log("✅ Usuário autenticado:", currentUser.email, "Role:", currentUser.role)
-
-    if (currentUser.role === "admin") {
-      console.log("⚠️ Admin detectado, redirecionando para API admin")
-      return NextResponse.json({ error: "Use /api/admin/agents para admin" }, { status: 403 })
-    }
-
     const agentData = await request.json()
-    console.log("📝 Dados do agente recebidos:", { name: agentData.name, user_id: currentUser.id })
+    console.log("📝 Dados do agente recebidos:", { name: agentData.name, user_id: agentData.user_id })
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
-    // VALIDAR LIMITES PRIMEIRO
-    console.log("🔍 Verificando limites do usuário...")
-
-    // Contar agentes atuais do usuário
-    const countResponse = await fetch(`${supabaseUrl}/rest/v1/ai_agents?select=id&user_id=eq.${currentUser.id}`, {
-      headers,
-    })
-
-    if (!countResponse.ok) {
-      throw new Error("Erro ao verificar agentes existentes")
-    }
-
-    const existingAgents = await countResponse.json()
-    const currentCount = existingAgents.length
-
-    // Buscar limite do usuário
-    const userResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?select=agents_limit,role&id=eq.${currentUser.id}`,
-      { headers },
-    )
-
-    let maxAgents = 5 // Padrão
-    if (userResponse.ok) {
-      const userData = await userResponse.json()
-      if (userData && userData.length > 0) {
-        const user = userData[0]
-        maxAgents = user.role === "admin" ? 999 : user.agents_limit || 5
-      }
-    }
-
-    // VALIDAR LIMITE
-    if (currentCount >= maxAgents) {
-      console.log(`❌ Limite atingido: ${currentCount}/${maxAgents}`)
-      return NextResponse.json(
-        {
-          error: "Limite de agentes atingido",
-          details: `Você atingiu o limite máximo de ${maxAgents} agentes.`,
-          currentCount,
-          maxAgents,
-        },
-        { status: 400 },
-      )
-    }
-
-    console.log(`✅ Limite OK: ${currentCount}/${maxAgents}`)
-
-    // Buscar conexão WhatsApp (deve pertencer ao usuário)
-    console.log("🔍 Verificando conexão WhatsApp...")
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=*&id=eq.${agentData.whatsapp_connection_id}&user_id=eq.${currentUser.id}`,
-      { headers },
-    )
-
-    if (!connectionResponse.ok) {
-      throw new Error("Erro ao buscar conexão WhatsApp")
-    }
-
-    const connections = await connectionResponse.json()
-    if (!connections || connections.length === 0) {
-      return NextResponse.json({ error: "Conexão WhatsApp não encontrada ou não pertence ao usuário" }, { status: 400 })
-    }
-
-    const connection = connections[0]
-    console.log("✅ Conexão encontrada:", connection.connection_name)
-
-    // Forçar user_id para segurança
-    const secureAgentData = {
-      ...agentData,
-      user_id: currentUser.id, // FORÇAR o ID do usuário atual
-    }
-
-    // Criar agente usando a mesma lógica do admin
+    // Usar a mesma lógica do admin - SIMPLES E DIRETO
     const createResponse = await fetch(`${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/admin/agents`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(secureAgentData),
+      body: JSON.stringify(agentData),
     })
 
     if (!createResponse.ok) {
