@@ -1,95 +1,208 @@
-// Função para obter usuário atual do localStorage/cookies
-export function getCurrentUser() {
-  try {
-    // Verificar se estamos no lado do cliente
-    if (typeof window === "undefined") {
-      console.log("⚠️ getCurrentUser chamado no servidor")
-      return null
-    }
+import { publicApi } from "@/lib/api-client"
 
-    // Tentar buscar do localStorage primeiro
-    const userStr = localStorage.getItem("impaai_user")
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr)
-        console.log("✅ Usuário encontrado no localStorage:", user.email)
-        return user
-      } catch (error) {
-        console.error("❌ Erro ao parsear usuário do localStorage:", error)
-        localStorage.removeItem("impaai_user")
+export interface UserProfile {
+  id: string
+  email: string
+  full_name: string
+  role: "admin" | "user"
+  status: "active" | "inactive"
+  created_at: string
+  updated_at: string
+  last_login_at?: string
+}
+
+export interface LoginCredentials {
+  email: string
+  password: string
+}
+
+export interface RegisterData {
+  email: string
+  password: string
+  full_name: string
+}
+
+// Função de login usando API
+export async function signIn(email: string, password: string) {
+  try {
+    console.log("🔐 Iniciando login via API para:", email)
+
+    const result = await publicApi.login(email, password)
+
+    if (result.error) {
+      console.error("❌ Erro no login:", result.error)
+      return {
+        user: null,
+        error: { message: result.error },
       }
     }
 
-    // Tentar buscar dos cookies como fallback
-    const cookies = document.cookie.split(";")
-    const userCookie = cookies.find((cookie) => cookie.trim().startsWith("impaai_user="))
+    if (result.data?.user) {
+      console.log("✅ Login bem-sucedido via API")
+      setCurrentUser(result.data.user)
 
-    if (userCookie) {
-      try {
-        const userValue = userCookie.split("=")[1]
-        const user = JSON.parse(decodeURIComponent(userValue))
-        console.log("✅ Usuário encontrado nos cookies:", user.email)
+      // Definir cookie no lado do cliente também (para compatibilidade)
+      document.cookie = `impaai_user_client=${JSON.stringify(result.data.user)}; path=/; max-age=${60 * 60 * 24 * 7}; samesite=lax`
 
-        // Sincronizar com localStorage
-        localStorage.setItem("impaai_user", JSON.stringify(user))
-        return user
-      } catch (error) {
-        console.error("❌ Erro ao parsear usuário dos cookies:", error)
+      return {
+        user: result.data.user,
+        error: null,
       }
     }
 
-    console.log("❌ Usuário não encontrado")
-    return null
-  } catch (error) {
-    console.error("💥 Erro ao buscar usuário atual:", error)
-    return null
+    return {
+      user: null,
+      error: { message: "Resposta inválida do servidor" },
+    }
+  } catch (error: any) {
+    console.error("💥 Erro crítico no login:", error.message)
+    return {
+      user: null,
+      error: { message: "Erro de conexão" },
+    }
   }
 }
 
-// Função para fazer login
-export function setCurrentUser(user: any) {
+// Função de registro usando API
+export async function registerUser(userData: RegisterData) {
   try {
-    console.log("💾 Salvando usuário:", user.email)
+    const result = await publicApi.register(userData)
 
-    // Salvar no localStorage
-    localStorage.setItem("impaai_user", JSON.stringify(user))
+    if (result.error) {
+      return {
+        success: false,
+        error: result.error,
+      }
+    }
 
-    // Salvar nos cookies também (para compatibilidade)
-    const expires = new Date()
-    expires.setTime(expires.getTime() + 24 * 60 * 60 * 1000) // 24 horas
-    document.cookie = `impaai_user=${encodeURIComponent(JSON.stringify(user))}; expires=${expires.toUTCString()}; path=/`
-
-    console.log("✅ Usuário salvo com sucesso")
-  } catch (error) {
-    console.error("❌ Erro ao salvar usuário:", error)
+    return {
+      success: true,
+      user: result.data?.user,
+    }
+  } catch (error: any) {
+    console.error("💥 Erro no registro:", error.message)
+    return {
+      success: false,
+      error: "Erro de conexão",
+    }
   }
 }
 
-// Função para fazer logout
-export function clearCurrentUser() {
+// Função para trocar a senha via API
+export async function changePassword(
+  userId: string,
+  oldPassword: string,
+  newPassword: string,
+): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log("🗑️ Removendo usuário")
+    console.log("🔐 Iniciando troca de senha via API para usuário:", userId)
 
-    // Remover do localStorage
-    localStorage.removeItem("impaai_user")
+    // TODO: Implementar API endpoint para mudança de senha
+    // const result = await authApi.changePassword(userId, oldPassword, newPassword)
 
-    // Remover dos cookies
-    document.cookie = "impaai_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
-
-    console.log("✅ Usuário removido com sucesso")
-  } catch (error) {
-    console.error("❌ Erro ao remover usuário:", error)
+    // Por enquanto, retornar erro informando que precisa ser implementado
+    return {
+      success: false,
+      error: "Funcionalidade de mudança de senha será implementada em breve",
+    }
+  } catch (error: any) {
+    console.error("💥 Erro inesperado ao trocar senha:", error.message)
+    return {
+      success: false,
+      error: "Erro interno do servidor: " + error.message,
+    }
   }
 }
 
-// Função para verificar se o usuário está logado
-export function isAuthenticated(): boolean {
-  const user = getCurrentUser()
-  return user !== null
+// Funções de gerenciamento de sessão local (mantidas)
+export function getCurrentUser(): UserProfile | null {
+  if (typeof window === "undefined") return null
+  try {
+    const userStr = localStorage.getItem("user")
+    if (!userStr) return null
+    return JSON.parse(userStr) as UserProfile
+  } catch (error) {
+    console.error("Erro ao obter usuário:", error)
+    return null
+  }
 }
 
-// Função para verificar se o usuário é admin
-export function isAdmin(): boolean {
-  const user = getCurrentUser()
-  return user?.role === "admin"
+export function setCurrentUser(user: UserProfile): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem("user", JSON.stringify(user))
+  } catch (error) {
+    console.error("Erro ao salvar usuário:", error)
+  }
+}
+
+export function clearCurrentUser(): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.removeItem("user")
+    // Limpar cookie também
+    document.cookie = "impaai_user_client=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
+  } catch (error) {
+    console.error("Erro ao limpar usuário:", error)
+  }
+}
+
+export async function signOut() {
+  console.log("🚪 Realizando logout")
+  clearCurrentUser()
+
+  // Limpar cookie do servidor também
+  try {
+    await fetch("/api/auth/logout", { method: "POST" })
+  } catch (error) {
+    console.error("Erro ao fazer logout no servidor:", error)
+  }
+
+  return { success: true, error: null }
+}
+
+// Função para verificar se registro público está habilitado
+export async function isPublicRegistrationEnabled(): Promise<boolean> {
+  try {
+    const result = await publicApi.getConfig()
+    return result.data?.settings?.allowPublicRegistration || false
+  } catch (error) {
+    console.error("Erro ao verificar registro público:", error)
+    return false
+  }
+}
+
+// Funções adicionais que podem ser necessárias (mantidas para compatibilidade)
+export async function updateUserProfile(
+  userId: string,
+  updates: Partial<Omit<UserProfile, "id" | "email" | "created_at" | "role">>,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // TODO: Implementar API endpoint para atualização de perfil
+    // const result = await authApi.updateProfile(userId, updates)
+
+    return {
+      success: false,
+      error: "Funcionalidade de atualização de perfil será implementada em breve",
+    }
+  } catch (error: any) {
+    console.error("💥 Erro inesperado ao atualizar perfil:", error.message)
+    return { success: false, error: "Erro interno do servidor" }
+  }
+}
+
+export async function getUser(): Promise<any | null> {
+  // Esta função pode não ser necessária com a nova arquitetura
+  // mas mantida para compatibilidade
+  return getCurrentUser()
+}
+
+export async function isUserAdmin(): Promise<boolean> {
+  try {
+    const user = getCurrentUser()
+    return user?.role === "admin" || false
+  } catch (error) {
+    console.error("Error checking admin status:", error)
+    return false
+  }
 }

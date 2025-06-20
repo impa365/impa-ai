@@ -5,6 +5,7 @@ export async function GET() {
   console.log("📡 API: /api/user/agents chamada")
 
   try {
+    // Verificação de autenticação mais robusta
     const currentUser = getCurrentUser()
     console.log("🔍 Usuário atual:", currentUser ? currentUser.email : "Não encontrado")
 
@@ -13,8 +14,10 @@ export async function GET() {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
+    console.log("✅ Usuário autenticado:", currentUser.email, "Role:", currentUser.role)
+
     if (currentUser.role === "admin") {
-      console.log("⚠️ Admin tentando usar API de usuário")
+      console.log("⚠️ Admin detectado, redirecionando para API admin")
       return NextResponse.json({ error: "Use /api/admin/agents para admin" }, { status: 403 })
     }
 
@@ -22,10 +25,6 @@ export async function GET() {
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ Variáveis de ambiente não configuradas:", {
-        supabaseUrl: !!supabaseUrl,
-        supabaseKey: !!supabaseKey,
-      })
       throw new Error("Variáveis de ambiente do Supabase não configuradas")
     }
 
@@ -70,8 +69,6 @@ export async function GET() {
           max_whatsapp_connections: user.role === "admin" ? 999 : user.connections_limit || 3,
         }
       }
-    } else {
-      console.warn("⚠️ Não foi possível buscar limites do usuário, usando padrão")
     }
 
     console.log("✅ Dados processados com sucesso")
@@ -96,6 +93,7 @@ export async function POST(request: Request) {
   console.log("📡 API: POST /api/user/agents chamada")
 
   try {
+    // Verificação de autenticação mais robusta
     const currentUser = getCurrentUser()
     console.log("🔍 Usuário atual:", currentUser ? currentUser.email : "Não encontrado")
 
@@ -104,8 +102,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
+    console.log("✅ Usuário autenticado:", currentUser.email, "Role:", currentUser.role)
+
     if (currentUser.role === "admin") {
-      console.log("⚠️ Admin tentando usar API de usuário")
+      console.log("⚠️ Admin detectado, redirecionando para API admin")
       return NextResponse.json({ error: "Use /api/admin/agents para admin" }, { status: 403 })
     }
 
@@ -116,10 +116,6 @@ export async function POST(request: Request) {
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ Variáveis de ambiente não configuradas:", {
-        supabaseUrl: !!supabaseUrl,
-        supabaseKey: !!supabaseKey,
-      })
       throw new Error("Variáveis de ambiente do Supabase não configuradas")
     }
 
