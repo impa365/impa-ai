@@ -1,9 +1,28 @@
 import { NextResponse } from "next/server"
+import { cookies } from "next/headers"
 
 export async function GET() {
   console.log("📡 API: /api/user/agents chamada")
 
   try {
+    // Buscar usuário atual do cookie (igual ao admin)
+    const cookieStore = await cookies()
+    const userCookie = cookieStore.get("impaai_user")
+
+    if (!userCookie) {
+      console.log("❌ Cookie de usuário não encontrado")
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    }
+
+    let currentUser
+    try {
+      currentUser = JSON.parse(userCookie.value)
+      console.log("✅ Usuário encontrado:", currentUser.email)
+    } catch (error) {
+      console.log("❌ Erro ao parsear cookie do usuário")
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    }
+
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
@@ -19,10 +38,10 @@ export async function GET() {
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    console.log("🔍 Buscando agentes...")
-    // Buscar agentes com joins - IGUAL AO ADMIN
+    console.log("🔍 Buscando agentes do usuário:", currentUser.id)
+    // FILTRAR NO BACKEND - apenas agentes do usuário atual
     const agentsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,user_profiles!ai_agents_user_id_fkey(id,email,full_name),whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(connection_name,status)&order=created_at.desc`,
+      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(id,connection_name,phone_number,instance_name,status)&user_id=eq.${currentUser.id}&order=created_at.desc`,
       { headers },
     )
 
@@ -33,28 +52,12 @@ export async function GET() {
     }
 
     const agents = await agentsResponse.json()
-    console.log("✅ Agentes encontrados:", agents.length)
+    console.log("✅ Agentes do usuário encontrados:", agents.length)
 
-    console.log("🔍 Buscando usuários...")
-    // Buscar usuários - IGUAL AO ADMIN
-    const usersResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?select=id,email,full_name&order=full_name.asc`,
-      { headers },
-    )
-
-    if (!usersResponse.ok) {
-      const errorText = await usersResponse.text()
-      console.error("❌ Erro ao buscar usuários:", usersResponse.status, errorText)
-      throw new Error(`Erro ao buscar usuários: ${usersResponse.status}`)
-    }
-
-    const users = await usersResponse.json()
-    console.log("✅ Usuários encontrados:", users.length)
-
-    console.log("🔍 Buscando conexões WhatsApp...")
-    // Buscar conexões WhatsApp - IGUAL AO ADMIN
+    console.log("🔍 Buscando conexões WhatsApp do usuário...")
+    // FILTRAR NO BACKEND - apenas conexões do usuário atual
     const connectionsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=*&order=connection_name.asc`,
+      `${supabaseUrl}/rest/v1/whatsapp_connections?select=*&user_id=eq.${currentUser.id}&order=connection_name.asc`,
       { headers },
     )
 
@@ -65,14 +68,34 @@ export async function GET() {
     }
 
     const connections = await connectionsResponse.json()
-    console.log("✅ Conexões encontradas:", connections.length)
+    console.log("✅ Conexões do usuário encontradas:", connections.length)
 
-    console.log("✅ Dados processados com sucesso")
+    // Buscar limites do usuário
+    console.log("🔍 Buscando limites do usuário...")
+    const userResponse = await fetch(
+      `${supabaseUrl}/rest/v1/user_profiles?select=agents_limit,connections_limit,role&id=eq.${currentUser.id}`,
+      { headers },
+    )
+
+    let userLimits = { max_agents: 5, max_whatsapp_connections: 3 }
+    if (userResponse.ok) {
+      const userData = await userResponse.json()
+      if (userData && userData.length > 0) {
+        const user = userData[0]
+        userLimits = {
+          max_agents: user.role === "admin" ? 999 : user.agents_limit || 5,
+          max_whatsapp_connections: user.role === "admin" ? 999 : user.connections_limit || 3,
+        }
+      }
+    }
+
+    console.log("✅ Dados processados com sucesso - APENAS DO USUÁRIO")
     return NextResponse.json({
       success: true,
       agents: agents || [],
-      users: users || [],
       connections: connections || [],
+      limits: userLimits,
+      // NÃO enviamos dados de outros usuários
     })
   } catch (error: any) {
     console.error("❌ Erro na API user/agents:", error.message)
@@ -90,16 +113,37 @@ export async function POST(request: Request) {
   console.log("📡 API: POST /api/user/agents chamada")
 
   try {
-    const agentData = await request.json()
-    console.log("📝 Dados do agente recebidos:", { name: agentData.name, user_id: agentData.user_id })
+    // Buscar usuário atual do cookie
+    const cookieStore = await cookies()
+    const userCookie = cookieStore.get("impaai_user")
 
-    // Usar a mesma lógica do admin - SIMPLES E DIRETO
+    if (!userCookie) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    }
+
+    let currentUser
+    try {
+      currentUser = JSON.parse(userCookie.value)
+    } catch (error) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    }
+
+    const agentData = await request.json()
+    console.log("📝 Dados do agente recebidos:", { name: agentData.name, user_id: currentUser.id })
+
+    // FORÇAR user_id para segurança - não confiar no frontend
+    const secureAgentData = {
+      ...agentData,
+      user_id: currentUser.id, // SEMPRE usar o ID do usuário logado
+    }
+
+    // Usar a API do admin para criar (reutilizar lógica)
     const createResponse = await fetch(`${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/admin/agents`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(agentData),
+      body: JSON.stringify(secureAgentData),
     })
 
     if (!createResponse.ok) {
