@@ -72,17 +72,3 @@ export const supabaseConfig = {
   schema: "impaai",
   storageKey: "impaai-auth-token",
 }
-
-// Definição das tabelas do banco de dados
-export const TABLES = {
-  USERS: "users",
-  AGENTS: "agents",
-  API_KEYS: "api_keys",
-  WHATSAPP_CONNECTIONS: "whatsapp_connections",
-  AGENT_LOGS: "agent_logs",
-  SYSTEM_SETTINGS: "system_settings",
-  BRANDING: "branding",
-} as const
-
-// Tipo para as tabelas
-export type TableName = (typeof TABLES)[keyof typeof TABLES]
