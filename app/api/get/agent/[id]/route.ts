@@ -1,26 +1,32 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { validateApiKey, canAccessAgent } from "@/lib/api-auth"
-import { createClient } from "@supabase/supabase-js"
+import { getSupabaseServer } from "@/lib/supabase-config"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    console.log("🔍 GET /api/get/agent/[id] - Starting request")
+    console.log("📋 Agent ID:", params.id)
+
+    // Validate API key
     const validation = await validateApiKey(request)
+    console.log("🔐 API Key validation:", validation.isValid ? "✅ Valid" : "❌ Invalid")
 
     if (!validation.isValid || !validation.user) {
+      console.log("❌ Authentication failed:", validation.error)
       return NextResponse.json({ error: validation.error || "Falha na autenticação da API key" }, { status: 401 })
     }
 
     const { user } = validation
     const agentId = params.id
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    console.log("👤 User:", { id: user.id, role: user.role, email: user.email })
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    })
+    // Get Supabase client
+    const supabase = await getSupabaseServer()
+    console.log("🗄️ Supabase client initialized")
 
-    // Buscar agente específico
+    // Fetch agent with user profile
+    console.log("🔍 Fetching agent from database...")
     const { data: agent, error: agentError } = await supabase
       .from("ai_agents")
       .select(`
@@ -34,38 +40,69 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .eq("id", agentId)
       .single()
 
-    if (agentError || !agent) {
-      console.error(`Agente não encontrado com ID: ${agentId}. Erro: ${agentError?.message}`)
+    if (agentError) {
+      console.error("❌ Database error fetching agent:", agentError)
+      return NextResponse.json({ error: "Erro ao buscar agente no banco de dados" }, { status: 500 })
+    }
+
+    if (!agent) {
+      console.log("❌ Agent not found with ID:", agentId)
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    // Verificar permissões
+    console.log("✅ Agent found:", { id: agent.id, name: agent.name, user_id: agent.user_id })
+
+    // Check permissions
     const isAdminAccess = user.role === "admin"
-    if (!canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)) {
+    const hasAccess = canAccessAgent(user.role, isAdminAccess, agent.user_id, user.id)
+
+    console.log("🔒 Access check:", {
+      userRole: user.role,
+      isAdmin: isAdminAccess,
+      agentUserId: agent.user_id,
+      requestUserId: user.id,
+      hasAccess,
+    })
+
+    if (!hasAccess) {
+      console.log("❌ Access denied")
       return NextResponse.json({ error: "Sem permissão para acessar este agente" }, { status: 403 })
     }
 
-    // Buscar default model
-    const { data: defaultModelData } = await supabase
+    // Get default model
+    console.log("🔍 Fetching default model...")
+    const { data: defaultModelData, error: modelError } = await supabase
       .from("system_settings")
       .select("setting_value")
       .eq("setting_key", "default_model")
       .single()
 
-    const systemDefaultModel = defaultModelData?.setting_value || "gpt-4o-mini"
+    if (modelError) {
+      console.log("⚠️ Warning: Could not fetch default model:", modelError.message)
+    }
 
-    // Buscar conexão WhatsApp se existir
+    const systemDefaultModel = defaultModelData?.setting_value || "gpt-4o-mini"
+    console.log("🤖 Default model:", systemDefaultModel)
+
+    // Get WhatsApp connection if exists
     let whatsappConnection = null
     if (agent.whatsapp_connection_id) {
-      const { data: connectionData } = await supabase
+      console.log("📱 Fetching WhatsApp connection...")
+      const { data: connectionData, error: connError } = await supabase
         .from("whatsapp_connections")
         .select("id, instance_name, status, phone_number, connection_name")
         .eq("id", agent.whatsapp_connection_id)
         .single()
 
-      whatsappConnection = connectionData
+      if (connError) {
+        console.log("⚠️ Warning: Could not fetch WhatsApp connection:", connError.message)
+      } else {
+        whatsappConnection = connectionData
+        console.log("📱 WhatsApp connection found:", connectionData?.instance_name)
+      }
     }
 
+    // Build response
     const response = {
       success: true,
       default_model: systemDefaultModel,
@@ -133,15 +170,33 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         access_scope: user.role === "admin" ? "admin" : "user",
         requester: {
           id: user.id,
-          name: user.full_name,
+          name: user.full_name || user.email,
           role: user.role,
         },
       },
     }
 
+    console.log("✅ Response prepared successfully")
     return NextResponse.json(response)
   } catch (error) {
-    console.error("Erro na API get agent:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    console.error("💥 Critical error in GET /api/get/agent/[id]:", error)
+    console.error("📊 Error details:", {
+      message: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+      params: params,
+    })
+
+    return NextResponse.json(
+      {
+        error: "Erro interno do servidor",
+        details:
+          process.env.NODE_ENV === "development"
+            ? error instanceof Error
+              ? error.message
+              : "Unknown error"
+            : undefined,
+      },
+      { status: 500 },
+    )
   }
 }
