@@ -207,22 +207,12 @@ export async function POST(request: Request) {
     let evolutionBotId = null
     if (connection.instance_name) {
       console.log("🤖 Criando bot na Evolution API com agentId:", agentId)
-      console.log("🔗 Connection instance_name:", connection.instance_name)
-      console.log("🌐 NEXTAUTH_URL:", process.env.NEXTAUTH_URL)
-      console.log("🐳 Docker environment check:", {
-        NODE_ENV: process.env.NODE_ENV,
-        HOSTNAME: process.env.HOSTNAME,
-        DOCKER: process.env.DOCKER,
-      })
-
       try {
-        // CORRIGIDO: Usar URL interna do Docker se estiver em container
-        const baseUrl =
-          process.env.DOCKER === "true"
-            ? "http://localhost:3000" // URL interna do container
-            : process.env.NEXTAUTH_URL || "http://localhost:3000"
+        // PROBLEMA IDENTIFICADO: Usar URL absoluta ao invés de relativa no Docker
+        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+        const evolutionApiUrl = `${baseUrl}/api/integrations/evolution/evolutionBot/create/${connection.instance_name}`
 
-        console.log("🔗 Base URL para Evolution API:", baseUrl)
+        console.log("🔗 URL da Evolution API:", evolutionApiUrl)
 
         // Preparar dados para Evolution API no formato correto
         const evolutionBotData = {
@@ -249,24 +239,17 @@ export async function POST(request: Request) {
           timePerChar: agentData.time_per_char || 100,
         }
 
-        console.log("📤 Dados enviados para Evolution API:", JSON.stringify(evolutionBotData, null, 2))
+        console.log("📤 Enviando dados para Evolution API:", evolutionBotData)
 
-        const createBotResponse = await fetch(
-          `${baseUrl}/api/integrations/evolution/evolutionBot/create/${connection.instance_name}`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(evolutionBotData),
+        const createBotResponse = await fetch(evolutionApiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        )
-
-        console.log("📥 Resposta da Evolution API:", {
-          status: createBotResponse.status,
-          statusText: createBotResponse.statusText,
-          ok: createBotResponse.ok,
+          body: JSON.stringify(evolutionBotData),
         })
+
+        console.log("📥 Resposta da Evolution API:", createBotResponse.status)
 
         if (createBotResponse.ok) {
           const botResult = await createBotResponse.json()
@@ -288,12 +271,10 @@ export async function POST(request: Request) {
           }
         } else {
           const errorText = await createBotResponse.text()
-          console.error("❌ Erro detalhado da Evolution API:", errorText)
-          console.warn("⚠️ Falha ao criar bot na Evolution API:", errorText)
+          console.warn("⚠️ Falha ao criar bot na Evolution API:", createBotResponse.status, errorText)
           // Continuar sem o bot da Evolution API
         }
       } catch (evolutionError) {
-        console.error("❌ Erro de conexão com Evolution API:", evolutionError)
         console.warn("⚠️ Erro ao criar bot na Evolution API:", evolutionError)
         // Continuar sem o bot da Evolution API
       }
@@ -355,6 +336,12 @@ export async function PUT(request: Request) {
         if (currentAgent.evolution_bot_id && currentAgent.whatsapp_connections?.instance_name) {
           console.log("🤖 Atualizando bot na Evolution API...")
           try {
+            // PROBLEMA IDENTIFICADO: Usar URL absoluta ao invés de relativa no Docker
+            const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+            const evolutionApiUrl = `${baseUrl}/api/integrations/evolution/evolutionBot/update/${currentAgent.evolution_bot_id}/${currentAgent.whatsapp_connections.instance_name}`
+
+            console.log("🔗 URL da Evolution API para update:", evolutionApiUrl)
+
             // Buscar configuração do N8N para incluir no webhook
             let n8nWebhookUrl = null
             let n8nIntegrations = null
@@ -382,9 +369,7 @@ export async function PUT(request: Request) {
               enabled: true,
               description: agentData.name,
               // CORRIGIDO: Usar o ID real do agente
-              apiUrl: n8nWebhookUrl
-                ? `${n8nWebhookUrl}?agentId=${id}`
-                : `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/agents/webhook?agentId=${id}`,
+              apiUrl: n8nWebhookUrl ? `${n8nWebhookUrl}?agentId=${id}` : `${baseUrl}/api/agents/webhook?agentId=${id}`,
               apiKey: n8nWebhookUrl && n8nIntegrations?.[0]?.api_key ? n8nIntegrations[0].api_key : undefined,
               triggerType: agentData.trigger_type || "keyword",
               triggerOperator: agentData.trigger_operator || "equals",
@@ -402,17 +387,24 @@ export async function PUT(request: Request) {
               timePerChar: agentData.time_per_char || 100,
             }
 
-            await fetch(
-              `/api/integrations/evolution/evolutionBot/update/${currentAgent.evolution_bot_id}/${currentAgent.whatsapp_connections.instance_name}`,
-              {
-                method: "PUT",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify(evolutionBotData),
+            console.log("📤 Enviando dados de update para Evolution API:", evolutionBotData)
+
+            const updateBotResponse = await fetch(evolutionApiUrl, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
               },
-            )
-            console.log("✅ Bot atualizado na Evolution API")
+              body: JSON.stringify(evolutionBotData),
+            })
+
+            console.log("📥 Resposta do update da Evolution API:", updateBotResponse.status)
+
+            if (updateBotResponse.ok) {
+              console.log("✅ Bot atualizado na Evolution API")
+            } else {
+              const errorText = await updateBotResponse.text()
+              console.warn("⚠️ Erro ao atualizar bot na Evolution API:", updateBotResponse.status, errorText)
+            }
           } catch (evolutionError) {
             console.warn("⚠️ Erro ao atualizar bot na Evolution API:", evolutionError)
           }
@@ -514,13 +506,24 @@ export async function DELETE(request: Request) {
         if (agent.evolution_bot_id && agent.whatsapp_connections?.instance_name) {
           console.log("🤖 Deletando bot da Evolution API...")
           try {
-            await fetch(
-              `/api/integrations/evolution/evolutionBot/delete/${agent.evolution_bot_id}/${agent.whatsapp_connections.instance_name}`,
-              {
-                method: "DELETE",
-              },
-            )
-            console.log("✅ Bot deletado da Evolution API")
+            // PROBLEMA IDENTIFICADO: Usar URL absoluta ao invés de relativa no Docker
+            const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+            const evolutionApiUrl = `${baseUrl}/api/integrations/evolution/evolutionBot/delete/${agent.evolution_bot_id}/${agent.whatsapp_connections.instance_name}`
+
+            console.log("🔗 URL da Evolution API para delete:", evolutionApiUrl)
+
+            const deleteBotResponse = await fetch(evolutionApiUrl, {
+              method: "DELETE",
+            })
+
+            console.log("📥 Resposta do delete da Evolution API:", deleteBotResponse.status)
+
+            if (deleteBotResponse.ok) {
+              console.log("✅ Bot deletado da Evolution API")
+            } else {
+              const errorText = await deleteBotResponse.text()
+              console.warn("⚠️ Erro ao deletar bot da Evolution API:", deleteBotResponse.status, errorText)
+            }
           } catch (evolutionError) {
             console.warn("⚠️ Erro ao deletar bot da Evolution API:", evolutionError)
           }
