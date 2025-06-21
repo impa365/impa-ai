@@ -7,7 +7,13 @@ export async function POST(request: NextRequest) {
     // Validar API key
     const authResult = await validateApiKey(request)
     if (!authResult.isValid) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 })
+      return NextResponse.json(
+        {
+          error: "Invalid or missing API key",
+          details: authResult.error,
+        },
+        { status: 401 },
+      )
     }
 
     const user = authResult.user
@@ -17,20 +23,82 @@ export async function POST(request: NextRequest) {
     const userIdHeader = request.headers.get("user_id")
 
     if (!instanceName) {
-      return NextResponse.json({ error: "instance_name header is required" }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Missing required header",
+          details: "instance_name header is required",
+        },
+        { status: 400 },
+      )
     }
 
-    const body = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: "Invalid JSON body",
+          details: "Request body must be valid JSON",
+        },
+        { status: 400 },
+      )
+    }
+
     const { remoteJid, name, dia } = body
 
-    if (!remoteJid || !name || dia === undefined) {
-      return NextResponse.json({ error: "remoteJid, name, and dia are required" }, { status: 400 })
+    // Validações mais específicas
+    if (!remoteJid) {
+      return NextResponse.json(
+        {
+          error: "Missing required field",
+          details: "remoteJid is required",
+        },
+        { status: 400 },
+      )
+    }
+
+    if (!name) {
+      return NextResponse.json(
+        {
+          error: "Missing required field",
+          details: "name is required",
+        },
+        { status: 400 },
+      )
+    }
+
+    if (dia === undefined || dia === null) {
+      return NextResponse.json(
+        {
+          error: "Missing required field",
+          details: "dia is required",
+        },
+        { status: 400 },
+      )
     }
 
     // Validar que dia é um número válido (1-30)
     const dayNumber = Number.parseInt(dia.toString())
     if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
-      return NextResponse.json({ error: "dia must be a number between 1 and 30" }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Invalid field value",
+          details: "dia must be a number between 1 and 30",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Validar formato do remoteJid (deve ser um número)
+    if (!/^\d+$/.test(remoteJid)) {
+      return NextResponse.json(
+        {
+          error: "Invalid field format",
+          details: "remoteJid must contain only numbers",
+        },
+        { status: 400 },
+      )
     }
 
     // Determinar user_id (admin pode especificar, usuário comum usa o próprio)
@@ -46,7 +114,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Verificar se o lead já existe
-    const { data: existingLead } = await supabase
+    const { data: existingLead, error: selectError } = await supabase
       .from("lead_follow24hs")
       .select("id, is_active")
       .eq("user_id", targetUserId)
@@ -54,16 +122,34 @@ export async function POST(request: NextRequest) {
       .eq("remote_jid", remoteJid)
       .single()
 
+    if (selectError && selectError.code !== "PGRST116") {
+      // PGRST116 = no rows found
+      console.error("Error checking existing lead:", selectError)
+      return NextResponse.json(
+        {
+          error: "Database error",
+          details: "Failed to check existing lead",
+        },
+        { status: 500 },
+      )
+    }
+
     if (existingLead) {
       if (existingLead.is_active) {
-        return NextResponse.json({ error: "Lead already exists and is active" }, { status: 409 })
+        return NextResponse.json(
+          {
+            error: "Lead already exists",
+            details: "Lead already exists and is active for this instance",
+          },
+          { status: 409 },
+        )
       } else {
         // Reativar lead existente
         const { data: updatedLead, error: updateError } = await supabase
           .from("lead_follow24hs")
           .update({
             name,
-            start_date: new Date().toISOString().split("T")[0], // Data atual
+            start_date: new Date().toISOString().split("T")[0],
             current_day: dayNumber,
             is_active: true,
             last_message_sent_day: 0,
@@ -76,7 +162,13 @@ export async function POST(request: NextRequest) {
 
         if (updateError) {
           console.error("Error reactivating lead:", updateError)
-          return NextResponse.json({ error: "Failed to reactivate lead" }, { status: 500 })
+          return NextResponse.json(
+            {
+              error: "Database error",
+              details: "Failed to reactivate lead",
+            },
+            { status: 500 },
+          )
         }
 
         return NextResponse.json({
@@ -95,7 +187,7 @@ export async function POST(request: NextRequest) {
         instance_name: instanceName,
         remote_jid: remoteJid,
         name,
-        start_date: new Date().toISOString().split("T")[0], // Data atual
+        start_date: new Date().toISOString().split("T")[0],
         current_day: dayNumber,
         is_active: true,
         last_message_sent_day: 0,
@@ -105,7 +197,13 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       console.error("Error creating lead:", insertError)
-      return NextResponse.json({ error: "Failed to create lead" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Database error",
+          details: "Failed to create lead: " + insertError.message,
+        },
+        { status: 500 },
+      )
     }
 
     return NextResponse.json({
@@ -115,6 +213,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error in add-lead-follow:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: "An unexpected error occurred",
+      },
+      { status: 500 },
+    )
   }
 }
