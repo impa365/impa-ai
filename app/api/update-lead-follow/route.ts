@@ -59,31 +59,31 @@ export async function POST(request: NextRequest) {
 
     if (name) updateData.name = name
 
-    if (dia) {
-      // Validar formato da data
-      const dateRegex = /^\d{2}\/\d{2}\/\d{4}$/
-      if (!dateRegex.test(dia)) {
-        return NextResponse.json({ error: "dia must be in format DD/MM/YYYY" }, { status: 400 })
+    if (dia !== undefined) {
+      // Validar que dia é um número válido (1-30)
+      const dayNumber = Number.parseInt(dia.toString())
+      if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
+        return NextResponse.json({ error: "dia must be a number between 1 and 30" }, { status: 400 })
       }
-
-      // Converter data para formato ISO
-      const [day, month, year] = dia.split("/")
-      const startDate = new Date(`${year}-${month}-${day}`)
-
-      if (isNaN(startDate.getTime())) {
-        return NextResponse.json({ error: "Invalid date format" }, { status: 400 })
-      }
-
-      updateData.start_date = startDate.toISOString().split("T")[0]
+      updateData.current_day = dayNumber
     }
 
     if (currentDay !== undefined) {
-      updateData.current_day = currentDay
+      const dayNumber = Number.parseInt(currentDay.toString())
+      if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
+        return NextResponse.json({ error: "currentDay must be a number between 1 and 30" }, { status: 400 })
+      }
+      updateData.current_day = dayNumber
     }
 
     // Marcar dia como enviado
     if (markDayAsSent !== undefined) {
-      updateData.last_message_sent_day = markDayAsSent
+      const dayNumber = Number.parseInt(markDayAsSent.toString())
+      if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
+        return NextResponse.json({ error: "markDayAsSent must be a number between 1 and 30" }, { status: 400 })
+      }
+
+      updateData.last_message_sent_day = dayNumber
       updateData.last_message_sent_at = new Date().toISOString()
 
       // Buscar configuração de mensagem para este dia
@@ -99,14 +99,14 @@ export async function POST(request: NextRequest) {
           .from("followup_messages")
           .select("*")
           .eq("followup_config_id", followupConfig.id)
-          .eq("day_number", markDayAsSent)
+          .eq("day_number", dayNumber)
           .single()
 
         if (messageConfig) {
           // Registrar no histórico
           await supabase.from("followup_message_history").upsert({
             lead_id: existingLead.id,
-            day_number: markDayAsSent,
+            day_number: dayNumber,
             message_text: messageConfig.message_text,
             media_url: messageConfig.media_url,
             media_type: messageConfig.media_type,

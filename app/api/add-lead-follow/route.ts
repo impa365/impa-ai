@@ -23,22 +23,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { remoteJid, name, dia } = body
 
-    if (!remoteJid || !name || !dia) {
+    if (!remoteJid || !name || dia === undefined) {
       return NextResponse.json({ error: "remoteJid, name, and dia are required" }, { status: 400 })
     }
 
-    // Validar formato da data
-    const dateRegex = /^\d{2}\/\d{2}\/\d{4}$/
-    if (!dateRegex.test(dia)) {
-      return NextResponse.json({ error: "dia must be in format DD/MM/YYYY" }, { status: 400 })
-    }
-
-    // Converter data para formato ISO
-    const [day, month, year] = dia.split("/")
-    const startDate = new Date(`${year}-${month}-${day}`)
-
-    if (isNaN(startDate.getTime())) {
-      return NextResponse.json({ error: "Invalid date format" }, { status: 400 })
+    // Validar que dia é um número válido (1-30)
+    const dayNumber = Number.parseInt(dia.toString())
+    if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
+      return NextResponse.json({ error: "dia must be a number between 1 and 30" }, { status: 400 })
     }
 
     // Determinar user_id (admin pode especificar, usuário comum usa o próprio)
@@ -71,8 +63,8 @@ export async function POST(request: NextRequest) {
           .from("lead_follow24hs")
           .update({
             name,
-            start_date: startDate.toISOString().split("T")[0],
-            current_day: 1,
+            start_date: new Date().toISOString().split("T")[0], // Data atual
+            current_day: dayNumber,
             is_active: true,
             last_message_sent_day: 0,
             last_message_sent_at: null,
@@ -103,8 +95,8 @@ export async function POST(request: NextRequest) {
         instance_name: instanceName,
         remote_jid: remoteJid,
         name,
-        start_date: startDate.toISOString().split("T")[0],
-        current_day: 1,
+        start_date: new Date().toISOString().split("T")[0], // Data atual
+        current_day: dayNumber,
         is_active: true,
         last_message_sent_day: 0,
       })
