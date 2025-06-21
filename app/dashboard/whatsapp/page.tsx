@@ -110,7 +110,7 @@ export default function WhatsAppPage() {
       if (data.success) {
         console.log(`✅ Conexões carregadas: ${data.data.connections.length}`)
         setWhatsappConnections(data.data.connections || [])
-        setConnectionLimits(data.data.limits || { current: 0, maximum: 2, canCreate: true })
+        setConnectionLimits(data.data.limits)
       } else {
         console.error("❌ Erro na resposta:", data.error)
         toast({

@@ -1,0 +1,86 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Referência Rápida - Impa AI
+
+## 🚀 Comandos Essenciais
+```bash
+# Desenvolvimento
+pnpm dev                    # Iniciar desenvolvimento
+pnpm build                  # Build para produção
+pnpm lint                   # Verificar código
+
+# Docker
+docker build -t impa-ai .   # Build da imagem
+docker-compose up -d        # Executar com compose
+```
+
+## 📁 Navegação Rápida
+
+### Arquivos Principais
+- [package.json](mdc:package.json) - Dependências e scripts
+- [next.config.mjs](mdc:next.config.mjs) - Configuração Next.js
+- [middleware.ts](mdc:middleware.ts) - Middleware de autenticação
+- [tailwind.config.ts](mdc:tailwind.config.ts) - Configuração Tailwind
+
+### Configurações
+- [lib/config.ts](mdc:lib/config.ts) - Configurações centralizadas
+- [lib/supabase.ts](mdc:lib/supabase.ts) - Cliente Supabase
+- [lib/evolution-api.ts](mdc:lib/evolution-api.ts) - Cliente Evolution API
+
+### Componentes Key
+- [components/ui/](mdc:components/ui/) - Componentes base shadcn/ui
+- [components/theme-provider.tsx](mdc:components/theme-provider.tsx) - Provider de temas
+- [components/data-table.tsx](mdc:components/data-table.tsx) - Tabela reutilizável
+
+## 🗂️ Estrutura de Pastas
+```
+impa-ai/
+├── app/                    # Next.js App Router
+│   ├── admin/             # Área administrativa
+│   ├── dashboard/         # Dashboard usuário
+│   ├── api/              # API Routes
+│   └── globals.css       # Estilos globais
+├── components/            # Componentes React
+├── lib/                  # Utilitários e configs
+├── types/               # Tipos TypeScript
+├── database/            # Scripts SQL
+└── hooks/              # Custom hooks
+```
+
+## 🔌 APIs Importantes
+```
+# Autenticação
+POST /api/auth/login
+POST /api/auth/register
+
+# Agentes
+GET /api/user/agents
+POST /api/user/agents
+PUT /api/user/agents/[id]
+
+# WhatsApp
+GET /api/whatsapp/status/[instance]
+GET /api/whatsapp/qr/[instance]
+POST /api/whatsapp/create-instance
+```
+
+## 🛠️ Utilitários
+- [lib/utils.ts](mdc:lib/utils.ts) - Funções utilitárias
+- [lib/api-client.ts](mdc:lib/api-client.ts) - Cliente HTTP
+- [lib/auth.ts](mdc:lib/auth.ts) - Utilitários de autenticação
+
+## 🎨 Padrões de UI
+- **Modais**: Usar Dialog do shadcn/ui
+- **Formulários**: React Hook Form + Zod
+- **Tabelas**: TanStack Table
+- **Temas**: next-themes + CSS variables
+- **Ícones**: lucide-react
+
+## 🔍 Debugging
+- `console.log` com prefixos: 🔧 Config, 🌐 API, ❌ Error
+- Supabase Dashboard para logs de banco
+- Evolution API logs para WhatsApp
+- Browser DevTools para frontend

@@ -1,0 +1,102 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Integração WhatsApp e Evolution API
+
+## Visão Geral
+A integração com WhatsApp é feita através da **Evolution API**, permitindo conexão com múltiplas instâncias do WhatsApp.
+
+## Componentes Principais
+
+### API Client
+- [lib/evolution-api.ts](mdc:lib/evolution-api.ts): Client principal da Evolution API
+- [lib/whatsapp-api.ts](mdc:lib/whatsapp-api.ts): Wrapper para WhatsApp
+- [lib/whatsapp-api-client.ts](mdc:lib/whatsapp-api-client.ts): Client HTTP
+
+### Endpoints WhatsApp
+```
+GET /api/whatsapp/status/[instanceName]     # Status da instância
+GET /api/whatsapp/qr/[instanceName]         # QR Code
+GET /api/whatsapp/info/[instanceName]       # Informações
+POST /api/whatsapp/create-instance          # Criar instância
+DELETE /api/whatsapp/disconnect/[instanceName] # Desconectar
+```
+
+### Configurações
+- [lib/whatsapp-settings-api.ts](mdc:lib/whatsapp-settings-api.ts): Configurações server
+- [lib/whatsapp-settings-client.ts](mdc:lib/whatsapp-settings-client.ts): Configurações client
+
+## Fluxo de Conexão
+
+### 1. Criar Instância
+```typescript
+POST /api/whatsapp/create-instance
+{
+  instanceName: string,
+  userId: string
+}
+```
+
+### 2. Obter QR Code
+```typescript
+GET /api/whatsapp/qr/[instanceName]
+// Retorna base64 do QR Code
+```
+
+### 3. Verificar Status
+```typescript
+GET /api/whatsapp/status/[instanceName]
+// Retorna: connected | disconnected | connecting
+```
+
+## Componentes UI
+
+### Modais
+- [components/whatsapp-qr-modal.tsx](mdc:components/whatsapp-qr-modal.tsx): Modal QR Code
+- [components/whatsapp-connection-modal.tsx](mdc:components/whatsapp-connection-modal.tsx): Modal de conexão
+- [components/whatsapp-settings-modal.tsx](mdc:components/whatsapp-settings-modal.tsx): Configurações
+
+### Páginas
+- [app/dashboard/whatsapp/page.tsx](mdc:app/dashboard/whatsapp/page.tsx): Dashboard WhatsApp
+- [app/admin/whatsapp/page.tsx](mdc:app/admin/whatsapp/page.tsx): Admin WhatsApp
+
+## Webhook e Mensagens
+- `POST /api/agents/webhook`: Recebe mensagens do WhatsApp
+- Processamento de mensagens em tempo real
+- Integração com agentes de IA
+- Logs de conversas
+
+## Sincronização
+- [lib/whatsapp-sync-direct.ts](mdc:lib/whatsapp-sync-direct.ts): Sincronização direta
+- Sincronização automática de instâncias
+- Atualização de status em tempo real
+
+## Configurações Evolution API
+```typescript
+// Configurações base
+{
+  baseURL: string,
+  apiKey: string,
+  instanceName: string
+}
+
+// Configurações de instância
+{
+  webhook: string,
+  webhookByEvents: boolean,
+  webhookBase64: boolean
+}
+```
+
+## Tipos TypeScript
+- [types/whatsapp.ts](mdc:types/whatsapp.ts): Interfaces WhatsApp
+- Status de conexão
+- Dados de instância
+- Configurações
+
+## Gerenciamento de Estado
+- Zustand para estado de conexões
+- Context para configurações
+- Polling para status em tempo real

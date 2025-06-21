@@ -5,11 +5,17 @@ export async function POST() {
   try {
     console.log("🚪 Realizando logout...")
 
-    // Limpar cookie do usuário
+    // Limpar todos os cookies de autenticação
     const cookieStore = await cookies()
+    
+    // Limpar cookies JWT
+    cookieStore.delete("impaai_access_token")
+    cookieStore.delete("impaai_refresh_token")
+    
+    // Limpar cookie tradicional (compatibilidade)
     cookieStore.delete("impaai_user")
 
-    console.log("✅ Logout realizado com sucesso")
+    console.log("✅ Logout realizado com sucesso - todos os cookies limpos")
 
     return NextResponse.json({ success: true, message: "Logout realizado com sucesso" })
   } catch (error: any) {

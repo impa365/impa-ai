@@ -1,0 +1,92 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Banco de Dados e Integração
+
+## Tecnologia
+- **Banco**: PostgreSQL hospedado no Supabase
+- **ORM**: Supabase client com SQL direto
+- **Migrations**: Scripts SQL em [database/](mdc:database/)
+
+## Estrutura Principal
+
+### Tabelas Principais
+```sql
+-- Usuários
+users (id, email, name, role, created_at)
+
+-- Agentes
+agents (id, name, prompt, user_id, settings, created_at)
+
+-- Conexões WhatsApp
+whatsapp_connections (id, name, instance_name, user_id, status)
+
+-- API Keys
+api_keys (id, key, user_id, permissions, created_at)
+
+-- Logs
+agent_logs (id, agent_id, message, response, created_at)
+```
+
+## Client Supabase
+Configurado em [lib/supabase.ts](mdc:lib/supabase.ts) e [lib/supabase-config.ts](mdc:lib/supabase-config.ts):
+
+### Instâncias
+- **Server**: Para API routes e server components
+- **Client**: Para componentes client-side
+- **Admin**: Para operações administrativas
+
+### Configuração
+```typescript
+// Server-side
+import { createClient } from '@supabase/supabase-js'
+
+// Client-side
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+```
+
+## Patterns de Uso
+
+### Queries
+```typescript
+// Buscar dados
+const { data, error } = await supabase
+  .from('agents')
+  .select('*')
+  .eq('user_id', userId)
+
+// Inserir dados
+const { data, error } = await supabase
+  .from('agents')
+  .insert([{ name, prompt, user_id }])
+```
+
+### RLS (Row Level Security)
+- Políticas de acesso baseadas em usuário
+- Isolamento de dados por tenant
+- Configurações em scripts SQL
+
+## Scripts de Banco
+Localizados em [database/](mdc:database/):
+- [etapa-1-schema-principal.sql](mdc:database/etapa-1-schema-principal.sql): Schema principal
+- [etapa-2-colunas-evolution-api.sql](mdc:database/etapa-2-colunas-evolution-api.sql): Colunas Evolution API
+- [etapa-4-funcoes-procedures.sql](mdc:database/etapa-4-funcoes-procedures.sql): Funções e procedures
+- [etapa-7-politicas-acesso-publico.sql](mdc:database/etapa-7-politicas-acesso-publico.sql): Políticas RLS
+
+## Configuração de Ambiente
+- `SUPABASE_URL`: URL do projeto Supabase
+- `SUPABASE_ANON_KEY`: Chave anônima
+- `SUPABASE_SERVICE_ROLE_KEY`: Chave de serviço (admin)
+
+## Helpers e Utilities
+- [lib/api-helpers.ts](mdc:lib/api-helpers.ts): Helpers para API
+- Validação de dados
+- Tratamento de erros
+- Transformação de dados
+
+## Autenticação
+- JWT baseado em Supabase Auth
+- Middleware de validação
+- Refresh tokens automático

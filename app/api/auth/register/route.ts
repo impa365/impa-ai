@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     // Usar fetch direto para o Supabase REST API
     const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY // Usar service role para criar usuário
+    const supabaseKey = process.env.SUPABASE_ANON_KEY // Usar service role para criar usuário
 
     if (!supabaseUrl || !supabaseKey) {
       console.error("❌ Configuração do Supabase não encontrada")
@@ -51,11 +51,13 @@ export async function POST(request: NextRequest) {
         Authorization: `Bearer ${supabaseKey}`,
         "Content-Type": "application/json",
         Prefer: "return=representation",
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
       },
       body: JSON.stringify({
         email,
         full_name,
-        password_hash: passwordHash,
+        password: passwordHash, // Corrigido: usar 'password' ao invés de 'password_hash'
         role: "user",
         status: "active",
         created_at: new Date().toISOString(),

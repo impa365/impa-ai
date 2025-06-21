@@ -6,7 +6,10 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -43,6 +46,7 @@
     "autoprefixer": "^10.4.20",
     "bcryptjs": "latest",
     "class-variance-authority": "^0.7.1",
+    "jsonwebtoken": "^9.0.2",
     "clsx": "^2.1.1",
     "cmdk": "latest",
     "date-fns": "4.1.0",
@@ -67,11 +71,17 @@
     "zustand": "latest"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.1.0",
+    "@types/jest": "^29.5.0",
+    "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "jest": "^29.5.0",
+    "jest-environment-jsdom": "^29.5.0",
     "postcss": "^8.5",
     "tailwindcss": "^3.4.17",
+    "ts-jest": "^29.1.0",
     "typescript": "^5"
   }
 }

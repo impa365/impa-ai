@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import bcrypt from "bcryptjs"
+import { generateTokenPair, logJWTOperation } from "@/lib/jwt"
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,8 +48,9 @@ export async function POST(request: NextRequest) {
 
     const user = users[0]
 
-    // Verificar senha (assumindo que está em texto plano por enquanto)
-    if (user.password !== password) {
+    // Verificar senha usando bcrypt
+    const isPasswordValid = await bcrypt.compare(password, user.password)
+    if (!isPasswordValid) {
       console.log("❌ Senha incorreta para:", email)
       return NextResponse.json({ error: "Credenciais inválidas" }, { status: 401 })
     }
@@ -86,20 +89,75 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ Login bem-sucedido para:", email, "- Role:", user.role)
 
-    // Definir cookie com dados do usuário
-    const cookieStore = await cookies()
-    cookieStore.set("impaai_user", JSON.stringify(userData), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 dias
-      path: "/",
-    })
+    try {
+      // Gerar tokens JWT
+      const tokens = generateTokenPair({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        full_name: user.full_name,
+      })
 
-    return NextResponse.json({
-      user: userData,
-      message: "Login realizado com sucesso",
-    })
+      // Log de auditoria JWT
+      logJWTOperation('LOGIN', user.email, true, `Role: ${user.role}`)
+
+      // Definir cookies - tanto JWT quanto dados do usuário para compatibilidade
+      const cookieStore = await cookies()
+      
+      // Cookie com JWT (para APIs)
+      cookieStore.set("impaai_access_token", tokens.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 15, // 15 minutos (mesmo tempo do JWT)
+        path: "/",
+      })
+
+      // Cookie com refresh token
+      cookieStore.set("impaai_refresh_token", tokens.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7, // 7 dias
+        path: "/",
+      })
+
+      // Cookie com dados do usuário (para compatibilidade com sistema existente)
+      cookieStore.set("impaai_user", JSON.stringify(userData), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7, // 7 dias
+        path: "/",
+      })
+
+      return NextResponse.json({
+        user: userData,
+        tokens: {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        },
+        message: "Login realizado com sucesso",
+      })
+    } catch (jwtError) {
+      console.error("❌ Erro ao gerar tokens JWT:", jwtError)
+      logJWTOperation('LOGIN', user.email, false, 'Erro ao gerar tokens')
+      
+      // Fallback: usar apenas cookie tradicional se JWT falhar
+      const cookieStore = await cookies()
+      cookieStore.set("impaai_user", JSON.stringify(userData), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7,
+        path: "/",
+      })
+
+      return NextResponse.json({
+        user: userData,
+        message: "Login realizado com sucesso (modo compatibilidade)",
+      })
+    }
   } catch (error: any) {
     console.error("💥 Erro crítico no login:", error.message)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
