@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { validateApiKey, canAccessAgent } from "@/lib/api-auth"
-import { getSupabaseServer } from "@/lib/supabase-config"
+import { createClient } from "@supabase/supabase-js"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -13,7 +13,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const { user } = validation
     const agentId = params.id
 
-    const supabase = await getSupabaseServer()
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      db: { schema: "impaai" },
+    })
 
     // Buscar agente específico
     const { data: agent, error: agentError } = await supabase
@@ -128,7 +133,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         access_scope: user.role === "admin" ? "admin" : "user",
         requester: {
           id: user.id,
-          name: user.name,
+          name: user.full_name,
           role: user.role,
         },
       },
@@ -136,17 +141,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     return NextResponse.json(response)
   } catch (error) {
-    console.error("Erro detalhado na API get agent:", {
-      error: error.message,
-      stack: error.stack,
-      agentId: params.id,
-    })
-    return NextResponse.json(
-      {
-        error: "Erro interno do servidor",
-        details: process.env.NODE_ENV === "development" ? error.message : undefined,
-      },
-      { status: 500 },
-    )
+    console.error("Erro na API get agent:", error)
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }
