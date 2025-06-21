@@ -1,19 +1,9 @@
 import { NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth"
 
 export async function GET() {
   console.log("📡 API: GET /api/user/whatsapp-connections chamada")
 
   try {
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
-    if (currentUser.role === "admin") {
-      return NextResponse.json({ error: "Use /api/admin/whatsapp para admin" }, { status: 403 })
-    }
-
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
@@ -29,11 +19,10 @@ export async function GET() {
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    // Buscar conexões WhatsApp do usuário
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=*&user_id=eq.${currentUser.id}&order=created_at.desc`,
-      { headers },
-    )
+    // Buscar todas as conexões WhatsApp (o frontend filtra depois)
+    const response = await fetch(`${supabaseUrl}/rest/v1/whatsapp_connections?select=*&order=created_at.desc`, {
+      headers,
+    })
 
     if (!response.ok) {
       throw new Error("Erro ao buscar conexões WhatsApp")

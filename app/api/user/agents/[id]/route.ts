@@ -1,19 +1,9 @@
 import { NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth"
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   console.log("📡 API: GET /api/user/agents/[id] chamada")
 
   try {
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
-    if (currentUser.role === "admin") {
-      return NextResponse.json({ error: "Use /api/admin/agents para admin" }, { status: 403 })
-    }
-
     const agentId = params.id
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
@@ -30,9 +20,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    // Buscar agente (apenas se pertencer ao usuário)
+    // Buscar agente com conexão WhatsApp
     const agentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!inner(id,connection_name,phone_number,instance_name)&id=eq.${agentId}&user_id=eq.${currentUser.id}`,
+      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!inner(id,connection_name,phone_number,instance_name)&id=eq.${agentId}`,
       { headers },
     )
 
@@ -65,49 +55,10 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   console.log("📡 API: PUT /api/user/agents/[id] chamada")
 
   try {
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
-    if (currentUser.role === "admin") {
-      return NextResponse.json({ error: "Use /api/admin/agents para admin" }, { status: 403 })
-    }
-
     const agentId = params.id
     const agentData = await request.json()
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
-    // Verificar se o agente pertence ao usuário
-    const checkResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=id&id=eq.${agentId}&user_id=eq.${currentUser.id}`,
-      { headers },
-    )
-
-    if (!checkResponse.ok) {
-      throw new Error("Erro ao verificar agente")
-    }
-
-    const existingAgents = await checkResponse.json()
-    if (!existingAgents || existingAgents.length === 0) {
-      return NextResponse.json({ error: "Agente não encontrado ou não pertence ao usuário" }, { status: 404 })
-    }
-
-    // Usar a API do admin para atualizar (com segurança)
+    // Usar a API do admin para atualizar
     const updateResponse = await fetch(`${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/admin/agents`, {
       method: "PUT",
       headers: {
@@ -116,7 +67,6 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       body: JSON.stringify({
         id: agentId,
         ...agentData,
-        user_id: currentUser.id, // FORÇAR o ID do usuário atual
       }),
     })
 
@@ -145,47 +95,9 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   console.log("📡 API: DELETE /api/user/agents/[id] chamada")
 
   try {
-    const currentUser = getCurrentUser()
-    if (!currentUser) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
-    if (currentUser.role === "admin") {
-      return NextResponse.json({ error: "Use /api/admin/agents para admin" }, { status: 403 })
-    }
-
     const agentId = params.id
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
-    // Verificar se o agente pertence ao usuário
-    const checkResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=id&id=eq.${agentId}&user_id=eq.${currentUser.id}`,
-      { headers },
-    )
-
-    if (!checkResponse.ok) {
-      throw new Error("Erro ao verificar agente")
-    }
-
-    const existingAgents = await checkResponse.json()
-    if (!existingAgents || existingAgents.length === 0) {
-      return NextResponse.json({ error: "Agente não encontrado ou não pertence ao usuário" }, { status: 404 })
-    }
-
-    // Usar a API do admin para deletar (com segurança)
+    // Usar a API do admin para deletar
     const deleteResponse = await fetch(
       `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/admin/agents?id=${agentId}`,
       {
