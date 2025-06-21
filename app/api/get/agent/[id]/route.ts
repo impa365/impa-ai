@@ -128,7 +128,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         access_scope: user.role === "admin" ? "admin" : "user",
         requester: {
           id: user.id,
-          name: user.full_name,
+          name: user.name,
           role: user.role,
         },
       },
@@ -136,7 +136,17 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     return NextResponse.json(response)
   } catch (error) {
-    console.error("Erro na API get agent:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    console.error("Erro detalhado na API get agent:", {
+      error: error.message,
+      stack: error.stack,
+      agentId: params.id,
+    })
+    return NextResponse.json(
+      {
+        error: "Erro interno do servidor",
+        details: process.env.NODE_ENV === "development" ? error.message : undefined,
+      },
+      { status: 500 },
+    )
   }
 }
