@@ -207,7 +207,23 @@ export async function POST(request: Request) {
     let evolutionBotId = null
     if (connection.instance_name) {
       console.log("🤖 Criando bot na Evolution API com agentId:", agentId)
+      console.log("🔗 Connection instance_name:", connection.instance_name)
+      console.log("🌐 NEXTAUTH_URL:", process.env.NEXTAUTH_URL)
+      console.log("🐳 Docker environment check:", {
+        NODE_ENV: process.env.NODE_ENV,
+        HOSTNAME: process.env.HOSTNAME,
+        DOCKER: process.env.DOCKER,
+      })
+
       try {
+        // CORRIGIDO: Usar URL interna do Docker se estiver em container
+        const baseUrl =
+          process.env.DOCKER === "true"
+            ? "http://localhost:3000" // URL interna do container
+            : process.env.NEXTAUTH_URL || "http://localhost:3000"
+
+        console.log("🔗 Base URL para Evolution API:", baseUrl)
+
         // Preparar dados para Evolution API no formato correto
         const evolutionBotData = {
           enabled: true,
@@ -215,7 +231,7 @@ export async function POST(request: Request) {
           // CORRIGIDO: Usar o ID real do agente
           apiUrl: n8nWebhookUrl
             ? `${n8nWebhookUrl}?agentId=${agentId}`
-            : `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/agents/webhook?agentId=${agentId}`,
+            : `${baseUrl}/api/agents/webhook?agentId=${agentId}`,
           apiKey: n8nWebhookUrl && n8nIntegrations?.[0]?.api_key ? n8nIntegrations[0].api_key : undefined,
           triggerType: agentData.trigger_type || "keyword",
           triggerOperator: agentData.trigger_operator || "equals",
@@ -233,7 +249,8 @@ export async function POST(request: Request) {
           timePerChar: agentData.time_per_char || 100,
         }
 
-        const baseUrl = process.env.NEXTAUTH_URL || `http://localhost:${process.env.PORT || 3000}`
+        console.log("📤 Dados enviados para Evolution API:", JSON.stringify(evolutionBotData, null, 2))
+
         const createBotResponse = await fetch(
           `${baseUrl}/api/integrations/evolution/evolutionBot/create/${connection.instance_name}`,
           {
@@ -244,6 +261,12 @@ export async function POST(request: Request) {
             body: JSON.stringify(evolutionBotData),
           },
         )
+
+        console.log("📥 Resposta da Evolution API:", {
+          status: createBotResponse.status,
+          statusText: createBotResponse.statusText,
+          ok: createBotResponse.ok,
+        })
 
         if (createBotResponse.ok) {
           const botResult = await createBotResponse.json()
@@ -265,10 +288,12 @@ export async function POST(request: Request) {
           }
         } else {
           const errorText = await createBotResponse.text()
+          console.error("❌ Erro detalhado da Evolution API:", errorText)
           console.warn("⚠️ Falha ao criar bot na Evolution API:", errorText)
           // Continuar sem o bot da Evolution API
         }
       } catch (evolutionError) {
+        console.error("❌ Erro de conexão com Evolution API:", evolutionError)
         console.warn("⚠️ Erro ao criar bot na Evolution API:", evolutionError)
         // Continuar sem o bot da Evolution API
       }
@@ -377,9 +402,8 @@ export async function PUT(request: Request) {
               timePerChar: agentData.time_per_char || 100,
             }
 
-            const baseUrl = process.env.NEXTAUTH_URL || `http://localhost:${process.env.PORT || 3000}`
             await fetch(
-              `${baseUrl}/api/integrations/evolution/evolutionBot/update/${currentAgent.evolution_bot_id}/${currentAgent.whatsapp_connections.instance_name}`,
+              `/api/integrations/evolution/evolutionBot/update/${currentAgent.evolution_bot_id}/${currentAgent.whatsapp_connections.instance_name}`,
               {
                 method: "PUT",
                 headers: {
@@ -490,9 +514,8 @@ export async function DELETE(request: Request) {
         if (agent.evolution_bot_id && agent.whatsapp_connections?.instance_name) {
           console.log("🤖 Deletando bot da Evolution API...")
           try {
-            const baseUrl = process.env.NEXTAUTH_URL || `http://localhost:${process.env.PORT || 3000}`
             await fetch(
-              `${baseUrl}/api/integrations/evolution/evolutionBot/delete/${agent.evolution_bot_id}/${agent.whatsapp_connections.instance_name}`,
+              `/api/integrations/evolution/evolutionBot/delete/${agent.evolution_bot_id}/${agent.whatsapp_connections.instance_name}`,
               {
                 method: "DELETE",
               },

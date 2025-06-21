@@ -2,21 +2,19 @@ import { NextResponse } from "next/server"
 
 export async function PUT(request: Request, { params }: { params: { botId: string; instanceName: string } }) {
   console.log("📡 API: PUT /api/integrations/evolution/evolutionBot/update chamada")
-  console.log("🔧 Bot ID:", params.botId, "Instance:", params.instanceName)
 
   try {
+    const { botId, instanceName } = params
     const botData = await request.json()
-    console.log("📝 Dados de atualização do bot:", {
-      description: botData.description,
-      enabled: botData.enabled,
-    })
 
-    // Buscar configuração da Evolution API
+    console.log("🤖 Atualizando bot na Evolution API:", botId, "instância:", instanceName)
+
+    // Buscar configurações da Evolution API do banco de forma segura
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
+      throw new Error("Configurações do Supabase não encontradas")
     }
 
     const headers = {
@@ -27,56 +25,58 @@ export async function PUT(request: Request, { params }: { params: { botId: strin
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    console.log("🔍 Buscando configuração da Evolution API...")
-    const configResponse = await fetch(
+    // Buscar configurações da Evolution API na tabela integrations
+    console.log("🔍 Buscando configurações da Evolution API...")
+
+    const integrationsResponse = await fetch(
       `${supabaseUrl}/rest/v1/integrations?select=*&type=eq.evolution_api&is_active=eq.true`,
       { headers },
     )
 
-    if (!configResponse.ok) {
-      throw new Error("Erro ao buscar configuração da Evolution API")
+    if (!integrationsResponse.ok) {
+      throw new Error("Erro ao buscar configurações da Evolution API")
     }
 
-    const integrations = await configResponse.json()
+    const integrations = await integrationsResponse.json()
+
     if (!integrations || integrations.length === 0) {
       throw new Error("Evolution API não configurada")
     }
 
-    const evolutionConfig = integrations[0]
-    let config = evolutionConfig.config
-    if (typeof config === "string") {
-      config = JSON.parse(config)
+    const evolutionIntegration = integrations[0]
+    const evolutionConfig =
+      typeof evolutionIntegration.config === "string"
+        ? JSON.parse(evolutionIntegration.config)
+        : evolutionIntegration.config
+
+    const evolutionUrl = evolutionConfig.apiUrl
+    const evolutionKey = evolutionConfig.apiKey
+
+    if (!evolutionUrl || !evolutionKey) {
+      throw new Error("Configurações da Evolution API incompletas")
     }
 
-    if (!config?.baseUrl || !config?.apiKey) {
-      throw new Error("Configuração da Evolution API incompleta")
-    }
+    // Fazer requisição para a Evolution API
+    const evolutionApiUrl = `${evolutionUrl}/evolutionBot/update/${botId}/${instanceName}`
+    console.log("🌐 Fazendo requisição para Evolution API...")
 
-    console.log("🌐 Fazendo requisição para Evolution API:", config.baseUrl)
-
-    // Fazer requisição para Evolution API
-    const evolutionUrl = `${config.baseUrl}/bot/update/${params.botId}/${params.instanceName}`
-    console.log("📡 URL completa:", evolutionUrl)
-
-    const evolutionResponse = await fetch(evolutionUrl, {
+    const evolutionResponse = await fetch(evolutionApiUrl, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        apikey: config.apiKey,
+        apikey: evolutionKey,
       },
       body: JSON.stringify(botData),
     })
 
-    console.log("📊 Status da resposta Evolution:", evolutionResponse.status)
-
     if (!evolutionResponse.ok) {
       const errorText = await evolutionResponse.text()
-      console.error("❌ Erro da Evolution API:", evolutionResponse.status, errorText)
-      throw new Error(`Evolution API retornou erro ${evolutionResponse.status}: ${errorText}`)
+      console.error("❌ Erro na Evolution API:", evolutionResponse.status, errorText)
+      throw new Error(`Erro na Evolution API: ${evolutionResponse.status} - ${errorText}`)
     }
 
     const result = await evolutionResponse.json()
-    console.log("✅ Bot atualizado com sucesso na Evolution API")
+    console.log("✅ Bot atualizado na Evolution API:", result.id)
 
     return NextResponse.json(result)
   } catch (error: any) {
