@@ -99,4 +99,4 @@ Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICE
 
 ---
 
-Desenvolvido com 💙 pela [Comunidade IMPA](https://projetoimpa.com) - A maior comunidade de Marketing Digital e IA do Brasil!
+Desenvolvido com amor 💙 pela [Comunidade IMPA](https://projetoimpa.com) - A maior comunidade de Marketing Digital e IA do Brasil!
