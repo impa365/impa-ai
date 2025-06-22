@@ -1,19 +1,29 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server";
 
-export async function GET(request: NextRequest, { params }: { params: { instanceName: string } }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { instanceName: string } }
+) {
   try {
-    const { instanceName } = params
+    const { instanceName } = params;
 
     if (!instanceName) {
-      return NextResponse.json({ success: false, error: "Nome da instância é obrigatório" }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: "Nome da instância é obrigatório" },
+        { status: 400 }
+      );
     }
 
     // Buscar configuração da Evolution API
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ success: false, error: "Configuração não encontrada" }, { status: 500 })
+      return NextResponse.json(
+        { success: false, error: "Configuração não encontrada" },
+        { status: 500 }
+      );
     }
 
     // Buscar configuração da Evolution API
@@ -27,72 +37,91 @@ export async function GET(request: NextRequest, { params }: { params: { instance
           apikey: supabaseKey,
           Authorization: `Bearer ${supabaseKey}`,
         },
-      },
-    )
+      }
+    );
 
     if (!integrationResponse.ok) {
-      return NextResponse.json({ success: false, error: "Erro ao buscar configuração da API" }, { status: 500 })
+      return NextResponse.json(
+        { success: false, error: "Erro ao buscar configuração da API" },
+        { status: 500 }
+      );
     }
 
-    const integrations = await integrationResponse.json()
+    const integrations = await integrationResponse.json();
 
     if (!integrations || integrations.length === 0) {
-      return NextResponse.json({ success: false, error: "Evolution API não configurada" }, { status: 500 })
+      return NextResponse.json(
+        { success: false, error: "Evolution API não configurada" },
+        { status: 500 }
+      );
     }
 
-    const config = integrations[0].config
+    const config = integrations[0].config;
 
     if (!config?.apiUrl || !config?.apiKey) {
-      return NextResponse.json({ success: false, error: "Configuração da Evolution API incompleta" }, { status: 500 })
+      return NextResponse.json(
+        { success: false, error: "Configuração da Evolution API incompleta" },
+        { status: 500 }
+      );
     }
 
     // Buscar informações da instância
-    const infoResponse = await fetch(`${config.apiUrl}/instance/fetchInstances?instanceName=${instanceName}`, {
-      method: "GET",
-      headers: {
-        apikey: config.apiKey,
-      },
-      signal: AbortSignal.timeout(8000), // 8 segundos timeout
-    })
+    const infoResponse = await fetch(
+      `${config.apiUrl}/instance/fetchInstances?instanceName=${instanceName}`,
+      {
+        method: "GET",
+        headers: {
+          apikey: config.apiKey,
+        },
+        signal: AbortSignal.timeout(8000), // 8 segundos timeout
+      }
+    );
 
     if (!infoResponse.ok) {
-      return NextResponse.json({ success: false, error: "Erro ao buscar informações da instância" }, { status: 500 })
+      return NextResponse.json(
+        { success: false, error: "Erro ao buscar informações da instância" },
+        { status: 500 }
+      );
     }
 
-    const instanceData = await infoResponse.json()
+    const instanceData = await infoResponse.json();
 
     // Buscar status da conexão
-    const statusResponse = await fetch(`${config.apiUrl}/instance/connectionState/${instanceName}`, {
-      method: "GET",
-      headers: {
-        apikey: config.apiKey,
-      },
-    })
+    const statusResponse = await fetch(
+      `${config.apiUrl}/instance/connectionState/${instanceName}`,
+      {
+        method: "GET",
+        headers: {
+          apikey: config.apiKey,
+        },
+      }
+    );
 
-    let connectionStatus = "disconnected"
-    let phoneNumber = null
-    let isOnline = false
+    let connectionStatus = "disconnected";
+    let phoneNumber = null;
+    let isOnline = false;
 
     if (statusResponse.ok) {
-      const statusData = await statusResponse.json()
+      const statusData = await statusResponse.json();
 
       if (statusData?.instance?.state) {
         switch (statusData.instance.state) {
           case "open":
-            connectionStatus = "connected"
-            isOnline = true
-            break
+            connectionStatus = "connected";
+            isOnline = true;
+            break;
           case "connecting":
-            connectionStatus = "connecting"
-            break
+            connectionStatus = "connecting";
+            break;
           case "close":
           default:
-            connectionStatus = "disconnected"
-            break
+            connectionStatus = "disconnected";
+            break;
         }
       }
 
-      phoneNumber = statusData?.instance?.wuid || statusData?.instance?.number || null
+      phoneNumber =
+        statusData?.instance?.wuid || statusData?.instance?.number || null;
     }
 
     // Formatar informações para retorno
@@ -111,19 +140,25 @@ export async function GET(request: NextRequest, { params }: { params: { instance
         contacts: instanceData?._count?.Contact || 0,
         chats: instanceData?._count?.Chat || 0,
       },
-    }
+    };
 
     return NextResponse.json({
       success: true,
       info: info,
-    })
+    });
   } catch (error: any) {
-    console.error("Erro ao buscar informações:", error)
+    console.error("Erro ao buscar informações:", error);
 
     if (error.name === "TimeoutError") {
-      return NextResponse.json({ success: false, error: "Timeout ao buscar informações" }, { status: 408 })
+      return NextResponse.json(
+        { success: false, error: "Timeout ao buscar informações" },
+        { status: 408 }
+      );
     }
 
-    return NextResponse.json({ success: false, error: "Erro interno do servidor" }, { status: 500 })
+    return NextResponse.json(
+      { success: false, error: "Erro interno do servidor" },
+      { status: 500 }
+    );
   }
 }

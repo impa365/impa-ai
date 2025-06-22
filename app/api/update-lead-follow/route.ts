@@ -1,43 +1,49 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-import { validateApiKey } from "@/lib/api-auth"
+import { type NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { validateApiKey } from "@/lib/api-auth";
 
 export async function POST(request: NextRequest) {
   try {
     // Validar API key
-    const authResult = await validateApiKey(request)
+    const authResult = await validateApiKey(request);
     if (!authResult.isValid) {
-      return NextResponse.json({ error: authResult.error }, { status: 401 })
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
 
-    const user = authResult.user
+    const user = authResult.user;
 
     // Obter dados do header e body
-    const instanceName = request.headers.get("instance_name")
-    const userIdHeader = request.headers.get("user_id")
+    const instanceName = request.headers.get("instance_name");
+    const userIdHeader = request.headers.get("user_id");
 
     if (!instanceName) {
-      return NextResponse.json({ error: "instance_name header is required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "instance_name header is required" },
+        { status: 400 }
+      );
     }
 
-    const body = await request.json()
-    const { remoteJid, name, dia, currentDay, markDayAsSent } = body
+    const body = await request.json();
+    const { remoteJid, name, dia, currentDay, markDayAsSent } = body;
 
     if (!remoteJid) {
-      return NextResponse.json({ error: "remoteJid is required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "remoteJid is required" },
+        { status: 400 }
+      );
     }
 
     // Determinar user_id (admin pode especificar, usuário comum usa o próprio)
-    let targetUserId = user.id
+    let targetUserId = user.id;
     if (user.role === "admin" && userIdHeader) {
-      targetUserId = userIdHeader
+      targetUserId = userIdHeader;
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    const supabaseUrl = process.env.SUPABASE_URL!;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       db: { schema: "impaai" },
-    })
+    });
 
     // Buscar lead existente
     const { data: existingLead, error: findError } = await supabase
@@ -46,45 +52,54 @@ export async function POST(request: NextRequest) {
       .eq("user_id", targetUserId)
       .eq("instance_name", instanceName)
       .eq("remote_jid", remoteJid)
-      .single()
+      .single();
 
     if (findError || !existingLead) {
-      return NextResponse.json({ error: "Lead not found" }, { status: 404 })
+      return NextResponse.json({ error: "Lead not found" }, { status: 404 });
     }
 
     // Preparar dados para atualização
     const updateData: any = {
       updated_at: new Date().toISOString(),
-    }
+    };
 
-    if (name) updateData.name = name
+    if (name) updateData.name = name;
 
     if (dia !== undefined) {
       // Validar que dia é um número válido (1-30)
-      const dayNumber = Number.parseInt(dia.toString())
+      const dayNumber = Number.parseInt(dia.toString());
       if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
-        return NextResponse.json({ error: "dia must be a number between 1 and 30" }, { status: 400 })
+        return NextResponse.json(
+          { error: "dia must be a number between 1 and 30" },
+          { status: 400 }
+        );
       }
-      updateData.current_day = dayNumber
+      updateData.current_day = dayNumber;
     }
 
     if (currentDay !== undefined) {
-      const dayNumber = Number.parseInt(currentDay.toString())
+      const dayNumber = Number.parseInt(currentDay.toString());
       if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
-        return NextResponse.json({ error: "currentDay must be a number between 1 and 30" }, { status: 400 })
+        return NextResponse.json(
+          { error: "currentDay must be a number between 1 and 30" },
+          { status: 400 }
+        );
       }
-      updateData.current_day = dayNumber
+      updateData.current_day = dayNumber;
     }
 
     // Marcar dia como enviado
     if (markDayAsSent !== undefined) {
-      const dayNumber = Number.parseInt(markDayAsSent.toString())
+      const dayNumber = Number.parseInt(markDayAsSent.toString());
       if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
-        return NextResponse.json({ error: "markDayAsSent must be a number between 1 and 30" }, { status: 400 })
+        return NextResponse.json(
+          { error: "markDayAsSent must be a number between 1 and 30" },
+          { status: 400 }
+        );
       }
 
-      updateData.last_message_sent_day = dayNumber
-      updateData.last_message_sent_at = new Date().toISOString()
+      updateData.last_message_sent_day = dayNumber;
+      updateData.last_message_sent_at = new Date().toISOString();
 
       // Buscar configuração de mensagem para este dia
       const { data: followupConfig } = await supabase
@@ -92,7 +107,7 @@ export async function POST(request: NextRequest) {
         .select("id")
         .eq("user_id", targetUserId)
         .eq("instance_name", instanceName)
-        .single()
+        .single();
 
       if (followupConfig) {
         const { data: messageConfig } = await supabase
@@ -100,7 +115,7 @@ export async function POST(request: NextRequest) {
           .select("*")
           .eq("followup_config_id", followupConfig.id)
           .eq("day_number", dayNumber)
-          .single()
+          .single();
 
         if (messageConfig) {
           // Registrar no histórico
@@ -112,7 +127,7 @@ export async function POST(request: NextRequest) {
             media_type: messageConfig.media_type,
             sent_at: new Date().toISOString(),
             status: "sent",
-          })
+          });
         }
       }
     }
@@ -123,20 +138,26 @@ export async function POST(request: NextRequest) {
       .update(updateData)
       .eq("id", existingLead.id)
       .select()
-      .single()
+      .single();
 
     if (updateError) {
-      console.error("Error updating lead:", updateError)
-      return NextResponse.json({ error: "Failed to update lead" }, { status: 500 })
+      console.error("Error updating lead:", updateError);
+      return NextResponse.json(
+        { error: "Failed to update lead" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       success: true,
       message: "Lead updated successfully",
       data: updatedLead,
-    })
+    });
   } catch (error) {
-    console.error("Error in update-lead-follow:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Error in update-lead-follow:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

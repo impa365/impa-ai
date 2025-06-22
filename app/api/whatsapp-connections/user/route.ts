@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       { headers },
     )
 
-    let userLimit = 2 // padrão
+    let userLimit = 0 // padrão
     if (userProfileResponse.ok) {
       const userProfileData = await userProfileResponse.json()
       if (userProfileData && userProfileData.length > 0) {

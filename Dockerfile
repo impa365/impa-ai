@@ -16,7 +16,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# NÃO definir variáveis NEXT_PUBLIC_ aqui - elas serão carregadas dinamicamente
+# NÃO definir variáveis  aqui - elas serão carregadas dinamicamente
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build da aplicação SEM variáveis específicas

@@ -18,6 +18,7 @@
 ---
 
 ### 1. 🔐 AUTENTICAÇÃO COMPLETAMENTE QUEBRADA
+
 - [ ] **Implementar middleware de autenticação**
   - [ ] Verificação de JWT em rotas da API (`middleware.ts` linha 22)
   - [ ] Verificação de sessão em páginas (`middleware.ts` linha 31)
@@ -32,6 +33,7 @@
 ---
 
 ### 2. 🔑 SENHAS EM TEXTO PLANO
+
 - [ ] **Implementar hash de senhas**
   - [ ] Modificar `app/api/auth/login/route.ts` para usar bcrypt.compare()
   - [ ] Atualizar função de registro para hash automático
@@ -50,6 +52,7 @@
 ---
 
 ### 3. 🌐 WEBHOOK PÚBLICO SEM AUTENTICAÇÃO
+
 - [ ] **Proteger webhook com autenticação**
   - [ ] Implementar verificação de API key ou token
   - [ ] Validar origem das requisições
@@ -67,8 +70,9 @@
 ---
 
 ### 4. 🔐 EXPOSIÇÃO DE CHAVES SECRETAS
+
 - [ ] **Corrigir configuração de environment variables**
-  - [ ] Remover `NEXT_PUBLIC_` de chaves sensíveis
+  - [ ] Remover `` de chaves sensíveis
   - [ ] Usar apenas variáveis server-side para dados privados
   - [ ] Implementar validação de configuração obrigatória
 - [ ] **Revisar uso de SERVICE_ROLE_KEY**
@@ -87,6 +91,7 @@
 ## 🟠 VULNERABILIDADES ALTAS (PRIORIDADE ALTA)
 
 ### 5. 🗄️ PERMISSÕES EXCESSIVAS NO BANCO
+
 - [ ] **Configurar Row Level Security (RLS)**
   - [ ] Habilitar RLS em todas as tabelas
   - [ ] Criar políticas específicas por tipo de usuário
@@ -101,6 +106,7 @@
 ---
 
 ### 6. ✅ VALIDAÇÃO DE ENTRADA AUSENTE
+
 - [ ] **Implementar validação com Zod**
   - [ ] Criar schemas para todas as rotas API
   - [ ] Validar payloads JSON antes do processamento
@@ -119,6 +125,7 @@
 ---
 
 ### 7. 🕵️ VAZAMENTO DE INFORMAÇÕES SENSÍVEIS
+
 - [ ] **Configurar logging produção**
   - [ ] Remover logs de emails e IDs de usuários
   - [ ] Implementar níveis de log (dev vs prod)
@@ -135,6 +142,7 @@
 ## 🟡 VULNERABILIDADES MÉDIAS (PRIORIDADE MÉDIA)
 
 ### 8. 🛡️ HEADERS DE SEGURANÇA AUSENTES
+
 - [ ] **Implementar headers de segurança**
   - [ ] `X-Frame-Options: DENY`
   - [ ] `X-Content-Type-Options: nosniff`
@@ -154,6 +162,7 @@
 ---
 
 ### 9. 🚦 RATE LIMITING NÃO IMPLEMENTADO
+
 - [ ] **Implementar rate limiting**
   - [ ] Usar biblioteca adequada (ex: `@upstash/ratelimit`)
   - [ ] Configurar limites por endpoint
@@ -174,6 +183,7 @@
 ## 📝 CHECKLIST DE VALIDAÇÃO
 
 ### Testes de Segurança Obrigatórios
+
 - [ ] **Teste de autenticação**
   - [ ] Tentar acessar rotas protegidas sem autenticação
   - [ ] Validar expiração de tokens
@@ -192,6 +202,7 @@
   - [ ] Testar rate limiting
 
 ### Documentação Obrigatória
+
 - [ ] **Documentar arquitetura de segurança**
 - [ ] **Criar guia de configuração segura**
 - [ ] **Documentar processo de autenticação**
@@ -201,34 +212,38 @@
 
 ## 🎯 STATUS POR CATEGORIA
 
-| Categoria | Total | Concluído | Pendente | Status |
-|-----------|-------|-----------|----------|--------|
-| **Críticas** | 4 | 0 | 4 | 🔴 |
-| **Altas** | 3 | 0 | 3 | 🟠 |
-| **Médias** | 2 | 0 | 2 | 🟡 |
-| **TOTAL** | **9** | **0** | **9** | **🔴** |
+| Categoria    | Total | Concluído | Pendente | Status |
+| ------------ | ----- | --------- | -------- | ------ |
+| **Críticas** | 4     | 0         | 4        | 🔴     |
+| **Altas**    | 3     | 0         | 3        | 🟠     |
+| **Médias**   | 2     | 0         | 2        | 🟡     |
+| **TOTAL**    | **9** | **0**     | **9**    | **🔴** |
 
 ---
 
 ## 📅 CRONOGRAMA SUGERIDO
 
 ### Semana 1 (URGENTE)
+
 - [ ] Parar produção
 - [ ] Implementar autenticação básica
 - [ ] Corrigir senhas em texto plano
 - [ ] Proteger webhook crítico
 
 ### Semana 2
+
 - [ ] Corrigir exposição de chaves
 - [ ] Implementar validação de entrada
 - [ ] Configurar permissões do banco
 
 ### Semana 3
+
 - [ ] Headers de segurança
 - [ ] Rate limiting
 - [ ] Logging seguro
 
 ### Semana 4
+
 - [ ] Testes de segurança completos
 - [ ] Auditoria final
 - [ ] Documentação
@@ -240,7 +255,7 @@
 Para que a aplicação seja considerada **SEGURA PARA PRODUÇÃO**:
 
 - [ ] ✅ Todas as vulnerabilidades **CRÍTICAS** corrigidas
-- [ ] ✅ Todas as vulnerabilidades **ALTAS** corrigidas  
+- [ ] ✅ Todas as vulnerabilidades **ALTAS** corrigidas
 - [ ] ✅ Pelo menos 80% das vulnerabilidades **MÉDIAS** corrigidas
 - [ ] ✅ Testes de segurança passando 100%
 - [ ] ✅ Auditoria externa aprovada
@@ -248,5 +263,5 @@ Para que a aplicação seja considerada **SEGURA PARA PRODUÇÃO**:
 
 ---
 
-*Atualizar este checklist conforme as correções forem implementadas*  
-*Data da última atualização: 21/12/2024* 
+_Atualizar este checklist conforme as correções forem implementadas_  
+_Data da última atualização: 21/12/2024_
