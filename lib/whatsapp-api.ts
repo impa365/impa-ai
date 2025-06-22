@@ -413,36 +413,43 @@ export async function getInstanceQRCode(instanceName: string): Promise<{
   }
 }
 
-// Remover a função deleteEvolutionInstance que está causando o erro
-// Substituir por uma função que chama o endpoint de API
-
 // Função para deletar instância (usando endpoint de API)
-export async function deleteEvolutionInstance(instanceName: string): Promise<{
-  success: boolean
-  error?: string
-}> {
+export async function deleteEvolutionInstance(
+  instanceName: string,
+): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
+    console.log(`[CLIENT] Iniciando deleção da instância: ${instanceName}`)
+
     const response = await fetch(`/api/whatsapp/delete/${instanceName}`, {
       method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
     })
 
-    const result = await response.json()
+    console.log(`[CLIENT] Resposta da API:`, {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+    })
+
+    const data = await response.json()
+    console.log(`[CLIENT] Dados da resposta:`, data)
 
     if (!response.ok) {
+      console.error(`[CLIENT] Erro na resposta:`, data)
       return {
         success: false,
-        error: result.error || `Erro ${response.status}`,
+        error: data.error || `Erro ${response.status}: ${response.statusText}`,
       }
     }
 
-    return {
-      success: true,
-    }
+    return data
   } catch (error: any) {
-    console.error("Erro ao deletar instância:", error)
+    console.error(`[CLIENT] Erro ao deletar instância:`, error)
     return {
       success: false,
-      error: `Erro interno: ${error.message || "Erro desconhecido"}`,
+      error: `Erro de conexão: ${error.message}`,
     }
   }
 }
