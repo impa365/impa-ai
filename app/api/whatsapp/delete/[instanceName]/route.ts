@@ -8,12 +8,20 @@ export async function DELETE(request: NextRequest, { params }: { params: { insta
       return NextResponse.json({ success: false, error: "Nome da instância é obrigatório" }, { status: 400 })
     }
 
-    // Buscar configuração da Evolution API
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    // Buscar configuração da Evolution API - USAR VARIÁVEIS SEGURAS
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ success: false, error: "Configuração não encontrada" }, { status: 500 })
+      console.error("Variáveis de ambiente não encontradas:", {
+        hasSupabaseUrl: !!process.env.SUPABASE_URL,
+        hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        hasAnonKey: !!process.env.SUPABASE_ANON_KEY,
+      })
+      return NextResponse.json(
+        { success: false, error: "Configuração do banco de dados não encontrada" },
+        { status: 500 },
+      )
     }
 
     // Buscar configuração da Evolution API
@@ -31,6 +39,10 @@ export async function DELETE(request: NextRequest, { params }: { params: { insta
     )
 
     if (!integrationResponse.ok) {
+      console.error("Erro ao buscar configuração da API:", {
+        status: integrationResponse.status,
+        statusText: integrationResponse.statusText,
+      })
       return NextResponse.json({ success: false, error: "Erro ao buscar configuração da API" }, { status: 500 })
     }
 
