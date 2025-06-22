@@ -1,11 +1,11 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { validateApiKey } from "@/lib/api-auth"
-import { createClient } from "@supabase/supabase-js"
+import { type NextRequest, NextResponse } from "next/server";
+import { validateApiKey } from "@/lib/api-auth";
+import { createClient } from "@supabase/supabase-js";
 
 export async function GET(request: NextRequest) {
   try {
     // Validar API key
-    const authResult = await validateApiKey(request)
+    const authResult = await validateApiKey(request);
 
     if (!authResult.isValid || !authResult.user) {
       return NextResponse.json(
@@ -13,43 +13,48 @@ export async function GET(request: NextRequest) {
           error: authResult.error || "Unauthorized",
           message: "API key validation failed",
         },
-        { status: 401 },
-      )
+        { status: 401 }
+      );
     }
 
-    const user = authResult.user
+    const user = authResult.user;
 
     // Configurar Supabase
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.error("Server configuration error: Supabase URL or Anon Key is missing.")
-      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+      console.error(
+        "Server configuration error: Supabase URL or Anon Key is missing."
+      );
+      return NextResponse.json(
+        { error: "Server configuration error" },
+        { status: 500 }
+      );
     }
 
     // Logo após validar a API key, adicione:
-    console.log("🔍 Iniciando busca do default_model...")
+    console.log("🔍 Iniciando busca do default_model...");
 
     // Buscar modelo padrão diretamente
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       db: { schema: "impaai" },
-    })
+    });
 
     const { data: defaultModelData, error: defaultModelError } = await supabase
       .from("system_settings")
       .select("setting_value")
       .eq("setting_key", "default_model")
-      .single()
+      .single();
 
-    let systemDefaultModel = null
+    let systemDefaultModel = null;
     if (defaultModelError) {
-      console.error("❌ Erro ao buscar default_model:", defaultModelError)
+      console.error("❌ Erro ao buscar default_model:", defaultModelError);
     } else if (defaultModelData && defaultModelData.setting_value) {
-      systemDefaultModel = defaultModelData.setting_value.toString().trim()
-      console.log("✅ Default model encontrado:", systemDefaultModel)
+      systemDefaultModel = defaultModelData.setting_value.toString().trim();
+      console.log("✅ Default model encontrado:", systemDefaultModel);
     } else {
-      console.error("❌ default_model não encontrado")
+      console.error("❌ default_model não encontrado");
     }
 
     // Remova a linha: const systemDefaultModel = await getDefaultModel()
@@ -58,7 +63,8 @@ export async function GET(request: NextRequest) {
     // Buscar agentes do usuário
     let query = supabase
       .from("ai_agents")
-      .select(`
+      .select(
+        `
         id,
         name,
         description,
@@ -76,29 +82,35 @@ export async function GET(request: NextRequest) {
         performance_score,
         type,
         calendar_api_key
-      `)
-      .eq("status", "active")
+      `
+      )
+      .eq("status", "active");
 
     if (user.role !== "admin") {
       if (!user.id) {
-        console.error("User ID is missing for non-admin role.")
-        return NextResponse.json({ error: "User identification failed for non-admin." }, { status: 400 })
+        console.error("User ID is missing for non-admin role.");
+        return NextResponse.json(
+          { error: "User identification failed for non-admin." },
+          { status: 400 }
+        );
       }
-      query = query.eq("user_id", user.id)
+      query = query.eq("user_id", user.id);
     }
 
-    const { data: agents, error: dbError } = await query.order("created_at", { ascending: false })
+    const { data: agents, error: dbError } = await query.order("created_at", {
+      ascending: false,
+    });
 
     if (dbError) {
-      console.error("Error fetching agents from Supabase:", dbError)
+      console.error("Error fetching agents from Supabase:", dbError);
       return NextResponse.json(
         {
           error: "Failed to fetch agents",
           details: dbError.message,
           hint: dbError.hint,
         },
-        { status: 500 },
-      )
+        { status: 500 }
+      );
     }
 
     const formattedAgents =
@@ -122,7 +134,7 @@ export async function GET(request: NextRequest) {
           total_messages: agent.total_messages || 0,
           performance_score: agent.performance_score || 0,
         },
-      })) || []
+      })) || [];
 
     return NextResponse.json({
       success: true,
@@ -134,15 +146,15 @@ export async function GET(request: NextRequest) {
         name: user.full_name,
         role: user.role,
       },
-    })
+    });
   } catch (error: any) {
-    console.error("API Route Error in /api/get-all/agent:", error)
+    console.error("API Route Error in /api/get-all/agent:", error);
     return NextResponse.json(
       {
         error: "Internal server error",
         message: error.message,
       },
-      { status: 500 },
-    )
+      { status: 500 }
+    );
   }
 }

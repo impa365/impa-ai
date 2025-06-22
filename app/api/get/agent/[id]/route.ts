@@ -1,11 +1,14 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { validateApiKey } from "@/lib/api-auth"
-import { createClient } from "@supabase/supabase-js"
+import { type NextRequest, NextResponse } from "next/server";
+import { validateApiKey } from "@/lib/api-auth";
+import { createClient } from "@supabase/supabase-js";
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
     // Validar API key
-    const authResult = await validateApiKey(request)
+    const authResult = await validateApiKey(request);
 
     if (!authResult.isValid || !authResult.user) {
       return NextResponse.json(
@@ -13,80 +16,92 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           error: authResult.error || "Unauthorized",
           message: "API key validation failed",
         },
-        { status: 401 },
-      )
+        { status: 401 }
+      );
     }
 
-    const user = authResult.user
-    const agentId = params.id
+    const user = authResult.user;
+    const agentId = params.id;
 
     // Configurar Supabase
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.error("Server configuration error: Supabase URL or Anon Key is missing.")
-      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+      console.error(
+        "Server configuration error: Supabase URL or Anon Key is missing."
+      );
+      return NextResponse.json(
+        { error: "Server configuration error" },
+        { status: 500 }
+      );
     }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       db: { schema: "impaai" },
-    })
+    });
 
     // Buscar modelo padrão
     const { data: defaultModelData, error: defaultModelError } = await supabase
       .from("system_settings")
       .select("setting_value")
       .eq("setting_key", "default_model")
-      .single()
+      .single();
 
-    let systemDefaultModel = null
+    let systemDefaultModel = null;
     if (defaultModelError) {
-      console.error("❌ Erro ao buscar default_model:", defaultModelError)
+      console.error("❌ Erro ao buscar default_model:", defaultModelError);
     } else if (defaultModelData && defaultModelData.setting_value) {
-      systemDefaultModel = defaultModelData.setting_value.toString().trim()
-      console.log("✅ Default model encontrado:", systemDefaultModel)
+      systemDefaultModel = defaultModelData.setting_value.toString().trim();
+      console.log("✅ Default model encontrado:", systemDefaultModel);
     }
 
     // Buscar agente específico
     let query = supabase
       .from("ai_agents")
-      .select(`
+      .select(
+        `
         *,
         user_profiles (
           id,
           full_name,
           email
         )
-      `)
+      `
+      )
       .eq("id", agentId)
-      .eq("status", "active")
+      .eq("status", "active");
 
     // Se não for admin, verificar se o agente pertence ao usuário
     if (user.role !== "admin") {
-      query = query.eq("user_id", user.id)
+      query = query.eq("user_id", user.id);
     }
 
-    const { data: agent, error: agentError } = await query.single()
+    const { data: agent, error: agentError } = await query.single();
 
     if (agentError || !agent) {
-      console.error(`Agente não encontrado com ID: ${agentId}. Erro: ${agentError?.message}`)
-      return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
+      console.error(
+        `Agente não encontrado com ID: ${agentId}. Erro: ${agentError?.message}`
+      );
+      return NextResponse.json(
+        { error: "Agente não encontrado" },
+        { status: 404 }
+      );
     }
 
     // Buscar conexão WhatsApp se existir
-    let whatsappConnection = null
+    let whatsappConnection = null;
     if (agent.whatsapp_connection_id) {
       const { data: connectionData, error: connError } = await supabase
         .from("whatsapp_connections")
         .select("id, instance_name, status, phone_number, connection_name")
         .eq("id", agent.whatsapp_connection_id)
-        .single()
+        .single();
 
       if (connError && connError.code !== "PGRST116") {
-        console.error("Erro ao buscar conexão WhatsApp:", connError?.message)
+        console.error("Erro ao buscar conexão WhatsApp:", connError?.message);
       }
-      whatsappConnection = connectionData
+      whatsappConnection = connectionData;
     }
 
     const response = {
@@ -173,17 +188,17 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           role: user.role,
         },
       },
-    }
+    };
 
-    return NextResponse.json(response)
+    return NextResponse.json(response);
   } catch (error: any) {
-    console.error("API Route Error in /api/get/agent/[id]:", error)
+    console.error("API Route Error in /api/get/agent/[id]:", error);
     return NextResponse.json(
       {
         error: "Internal server error",
         message: error.message,
       },
-      { status: 500 },
-    )
+      { status: 500 }
+    );
   }
 }

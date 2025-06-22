@@ -19,8 +19,8 @@ export async function POST(request: NextRequest) {
     console.log("🔄 Criando conexão WhatsApp para usuário:", user.email, "- Nome:", connectionName)
 
     // Configuração do Supabase (apenas no servidor)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseKey) {
       return NextResponse.json({ success: false, error: "Configuração do banco não encontrada" }, { status: 500 })

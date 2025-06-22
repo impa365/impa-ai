@@ -1,53 +1,62 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient } from "@supabase/supabase-js";
 
-export async function validateApiKey(request: Request): Promise<{ isValid: boolean; user?: any; error?: string }> {
+export async function validateApiKey(
+  request: Request
+): Promise<{ isValid: boolean; user?: any; error?: string }> {
   try {
-    const authHeader = request.headers.get("authorization")
+    const authHeader = request.headers.get("authorization");
 
     // Debug log (apenas em desenvolvimento)
     if (process.env.NODE_ENV === "development") {
-      console.log("Auth header received:", authHeader ? "Present" : "Missing")
+      console.log("Auth header received:", authHeader ? "Present" : "Missing");
     }
 
     if (!authHeader) {
-      return { isValid: false, error: "Authorization header missing" }
+      return { isValid: false, error: "Authorization header missing" };
     }
 
     // Verificar se o header está no formato correto
     if (!authHeader.startsWith("Bearer ")) {
-      return { isValid: false, error: "Invalid authorization format. Use: Bearer YOUR_API_KEY" }
+      return {
+        isValid: false,
+        error: "Invalid authorization format. Use: Bearer YOUR_API_KEY",
+      };
     }
 
-    const apiKey = authHeader.replace("Bearer ", "").trim()
+    const apiKey = authHeader.replace("Bearer ", "").trim();
 
     if (process.env.NODE_ENV === "development") {
-      console.log("API key extracted:", apiKey ? `${apiKey.substring(0, 12)}...` : "Empty")
+      console.log(
+        "API key extracted:",
+        apiKey ? `${apiKey.substring(0, 12)}...` : "Empty"
+      );
     }
 
     if (!apiKey) {
-      return { isValid: false, error: "API key é obrigatória" }
+      return { isValid: false, error: "API key é obrigatória" };
     }
 
     // Verificar se a API key tem o formato esperado
     if (!apiKey.startsWith("impaai_")) {
-      return { isValid: false, error: "Invalid API key format" }
+      return { isValid: false, error: "Invalid API key format" };
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      return { isValid: false, error: "Server configuration error" }
+      return { isValid: false, error: "Server configuration error" };
     }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       db: { schema: "impaai" },
-    })
+    });
 
     // Buscar a API key no banco
     const { data: apiKeyData, error: apiKeyError } = await supabase
       .from("user_api_keys")
-      .select(`
+      .select(
+        `
         id,
         user_id,
         name,
@@ -62,21 +71,25 @@ export async function validateApiKey(request: Request): Promise<{ isValid: boole
           role,
           status
         )
-      `)
+      `
+      )
       .eq("api_key", apiKey)
       .eq("is_active", true)
-      .single()
+      .single();
 
     if (apiKeyError || !apiKeyData) {
       if (process.env.NODE_ENV === "development") {
-        console.log("API key lookup error:", apiKeyError?.message || "Key not found")
+        console.log(
+          "API key lookup error:",
+          apiKeyError?.message || "Key not found"
+        );
       }
-      return { isValid: false, error: "Invalid or inactive API key" }
+      return { isValid: false, error: "Invalid or inactive API key" };
     }
 
     // Verificar se o usuário está ativo
     if (apiKeyData.user_profiles.status !== "active") {
-      return { isValid: false, error: "User account is not active" }
+      return { isValid: false, error: "User account is not active" };
     }
 
     // Atualizar o último uso da API key (sem aguardar)
@@ -86,12 +99,12 @@ export async function validateApiKey(request: Request): Promise<{ isValid: boole
       .eq("id", apiKeyData.id)
       .then(() => {
         if (process.env.NODE_ENV === "development") {
-          console.log("API key last_used_at updated")
+          console.log("API key last_used_at updated");
         }
       })
       .catch((error) => {
-        console.error("Error updating last_used_at:", error)
-      })
+        console.error("Error updating last_used_at:", error);
+      });
 
     return {
       isValid: true,
@@ -104,37 +117,43 @@ export async function validateApiKey(request: Request): Promise<{ isValid: boole
         api_key_name: apiKeyData.name,
         permissions: apiKeyData.permissions || ["read"],
       },
-    }
+    };
   } catch (error) {
-    console.error("Error validating API key:", error)
-    return { isValid: false, error: "Internal server error during authentication" }
+    console.error("Error validating API key:", error);
+    return {
+      isValid: false,
+      error: "Internal server error during authentication",
+    };
   }
 }
 
 export function hasPermission(user: any, requiredPermission: string): boolean {
   if (!user || !user.permissions) {
-    return false
+    return false;
   }
 
   // Admin sempre tem todas as permissões
   if (user.role === "admin") {
-    return true
+    return true;
   }
 
-  return user.permissions.includes(requiredPermission) || user.permissions.includes("all")
+  return (
+    user.permissions.includes(requiredPermission) ||
+    user.permissions.includes("all")
+  );
 }
 
 export function canAccessAgent(
   userRole: string,
   isAdminKey: boolean,
   agentUserId: string,
-  requestUserId: string,
+  requestUserId: string
 ): boolean {
   // Admin ou chave admin pode acessar qualquer agente
   if (userRole === "admin" || isAdminKey) {
-    return true
+    return true;
   }
 
   // Usuário comum só pode acessar seus próprios agentes
-  return agentUserId === requestUserId
+  return agentUserId === requestUserId;
 }

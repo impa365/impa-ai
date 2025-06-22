@@ -277,6 +277,37 @@ export default function AdminApiKeysPage() {
       "phone": "5511999999999",
       "agent_id": "AGENT_ID"
     }'`,
+
+      addLead: `curl -X POST "${baseUrl}/api/add-lead-follow" \\
+    -H "Authorization: Bearer ${apiKey}" \\
+    -H "Content-Type: application/json" \\
+    -H "instance_name: INSTANCE_NAME" \\
+    -H "user_id: USER_ID" \\
+    -d '{
+      "remoteJid": "5511999999999",
+      "name": "Nome do Lead",
+      "dia": "21/06/2025"
+    }'`,
+
+      updateLead: `curl -X POST "${baseUrl}/api/update-lead-follow" \\
+    -H "Authorization: Bearer ${apiKey}" \\
+    -H "Content-Type: application/json" \\
+    -d '{
+      "id": "LEAD_ID",
+      "name": "Novo Nome",
+      "markDayAsSent": 1
+    }'`,
+
+      listLeads: `curl -X GET "${baseUrl}/api/list-leads-follow?instance_name=INSTANCE_NAME&user_id=USER_ID" \\
+    -H "Authorization: Bearer ${apiKey}" \\
+    -H "Content-Type: application/json"`,
+
+      deactivateLead: `curl -X POST "${baseUrl}/api/deactivate-lead-follow" \\
+    -H "Authorization: Bearer ${apiKey}" \\
+    -H "Content-Type: application/json" \\
+    -d '{
+      "id": "LEAD_ID"
+    }'`,
     }
   }
 
@@ -647,10 +678,13 @@ export default function AdminApiKeysPage() {
               </div>
 
               <Tabs defaultValue="list-agents" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-6">
                   <TabsTrigger value="list-agents">Listar Agentes</TabsTrigger>
                   <TabsTrigger value="get-agent">Obter Agente</TabsTrigger>
                   <TabsTrigger value="webhook">Webhook</TabsTrigger>
+                  <TabsTrigger value="add-lead">Adicionar Lead</TabsTrigger>
+                  <TabsTrigger value="update-lead">Atualizar Lead</TabsTrigger>
+                  <TabsTrigger value="list-leads">Listar Leads</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="list-agents" className="space-y-4 pt-4">
@@ -720,6 +754,78 @@ export default function AdminApiKeysPage() {
                       >
                         <Copy className="w-4 h-4 mr-1" /> Copiar
                       </Button>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="add-lead" className="space-y-4 pt-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Adicionar lead ao follow-up</h4>
+                    <p className="text-sm text-gray-600 mb-3">Adiciona um novo lead ao processo de follow-up 24hs.</p>
+                    <div className="relative group">
+                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
+                        <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).addLead}</code>
+                      </pre>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
+                        onClick={() => copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).addLead)}
+                      >
+                        <Copy className="w-4 h-4 mr-1" /> Copiar
+                      </Button>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="update-lead" className="space-y-4 pt-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Atualizar lead do follow-up</h4>
+                    <p className="text-sm text-gray-600 mb-3">Atualiza dados do lead ou marca um dia como enviado.</p>
+                    <div className="relative group">
+                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
+                        <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).updateLead}</code>
+                      </pre>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
+                        onClick={() =>
+                          copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).updateLead)
+                        }
+                      >
+                        <Copy className="w-4 h-4 mr-1" /> Copiar
+                      </Button>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="list-leads" className="space-y-4 pt-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Listar leads do follow-up</h4>
+                    <p className="text-sm text-gray-600 mb-3">Lista todos os leads de uma instância específica.</p>
+                    <div className="relative group">
+                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
+                        <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).listLeads}</code>
+                      </pre>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
+                        onClick={() =>
+                          copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).listLeads)
+                        }
+                      >
+                        <Copy className="w-4 h-4 mr-1" /> Copiar
+                      </Button>
+                    </div>
+
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 mt-3">
+                      <h5 className="font-medium text-blue-900 mb-1">Endpoint adicional:</h5>
+                      <p className="text-sm text-blue-800 mb-2">Para desativar um lead:</p>
+                      <code className="text-xs bg-white px-2 py-1 rounded border text-blue-700">
+                        {generateCurlExamples(selectedApiKeyForExamples.api_key).deactivateLead}
+                      </code>
                     </div>
                   </div>
                 </TabsContent>

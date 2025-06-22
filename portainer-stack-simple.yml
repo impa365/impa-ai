@@ -1,27 +1,26 @@
 version: "3.7"
 services:
-
-## --------------------------- IMPA AI --------------------------- ##
+  ## --------------------------- IMPA AI --------------------------- ##
   impa-ai:
     image: impa365/impa-ai:latest # Exemplo: seuusuario/impa-ai-app:latest
-    
+
     networks:
       - ServerIpa
     environment:
-      # Configuração do Supabase (SEM NEXT_PUBLIC_ - apenas para runtime)
+      # Configuração do Supabase (SEM  - apenas para runtime)
       - SUPABASE_URL=https://supabaseteste.impa365.com
       - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.0w0daMEG_Z8srUfzUgH5uEixdjJYp0Xyh_12su0L07Q
-      
+
       # Configuração do NextAuth
       - NEXTAUTH_URL=https://aiteste.impa365.com
       - NEXTAUTH_SECRET=dfdghoiuAHSIASDA9859aHNUH
-      
+
       # Chaves de Aplicação Personalizadas
       - CUSTOM_KEY=DJD233@CFKKJID897fSF8F
 
       # Ambiente da Aplicação
       - NODE_ENV=production
-      
+
     deploy:
       mode: replicated
       replicas: 1

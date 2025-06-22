@@ -1,0 +1,62 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Padrões Arquiteturais e Convenções
+
+## Estrutura de Pastas
+```
+app/
+├── admin/           # Área administrativa
+├── dashboard/       # Dashboard do usuário
+├── api/            # API endpoints
+├── globals.css     # Estilos globais
+└── layout.tsx      # Layout raiz
+```
+
+## Convenções de Nomenclatura
+- **Componentes**: PascalCase (ex: `AgentModal`)
+- **Arquivos**: kebab-case (ex: `agent-modal.tsx`)
+- **Hooks**: camelCase com prefixo 'use' (ex: `useModal`)
+- **Utilitários**: camelCase (ex: `apiClient`)
+- **Tipos**: PascalCase (ex: `WhatsappConnection`)
+
+## Padrões de Código
+
+### Componentes React
+- Usar TypeScript com tipagem strict
+- Componentes funcionais com hooks
+- Props interface definida
+- Exportação default
+
+### API Routes
+- Estrutura RESTful
+- Validação de dados com Zod
+- Tratamento de erros padronizado
+- Middleware de autenticação
+
+### Banco de Dados
+- Supabase como cliente principal
+- Queries via [lib/supabase.ts](mdc:lib/supabase.ts)
+- Migrations em [database/](mdc:database)
+- Row Level Security (RLS) habilitado
+
+### Configurações
+- Environment variables centralizadas
+- Cache de configurações
+- Validação de configurações obrigatórias
+- Fallbacks para desenvolvimento
+
+## Autenticação e Segurança
+- JWT para autenticação de API
+- Middleware de proteção de rotas
+- Validação de permissões por endpoint
+- Sanitização de dados de entrada
+
+## Estado e Gerenciamento
+- Zustand para estado global
+- React Hook Form para formulários
+- TanStack Table para tabelas de dados
+- Context API para temas
+
