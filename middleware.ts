@@ -15,6 +15,8 @@ export async function middleware(req: NextRequest) {
     "/api/agents/webhook", // Webhooks (TODO: implementar autenticação específica)
     "/api/system/version", // Versão do sistema
     "/api/integrations/evolution/evolutionBot/create",
+    "/api/get/agent",
+    "/api/get-all/agent"
   ];
 
   // Lista de páginas públicas
