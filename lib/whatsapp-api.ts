@@ -414,12 +414,11 @@ export async function getInstanceQRCode(instanceName: string): Promise<{
 }
 
 // Função para deletar instância (usando endpoint de API)
-export async function deleteEvolutionInstance(
-  instanceName: string,
-): Promise<{ success: boolean; message?: string; error?: string }> {
+export async function deleteEvolutionInstance(instanceName: string): Promise<{
+  success: boolean
+  error?: string
+}> {
   try {
-    console.log(`[CLIENT] Iniciando deleção da instância: ${instanceName}`)
-
     const response = await fetch(`/api/whatsapp/delete/${instanceName}`, {
       method: "DELETE",
       headers: {
@@ -427,29 +426,30 @@ export async function deleteEvolutionInstance(
       },
     })
 
-    console.log(`[CLIENT] Resposta da API:`, {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-    })
-
-    const data = await response.json()
-    console.log(`[CLIENT] Dados da resposta:`, data)
-
     if (!response.ok) {
-      console.error(`[CLIENT] Erro na resposta:`, data)
+      let errorMessage = `Erro ${response.status}`
+      try {
+        const errorData = await response.json()
+        errorMessage = errorData.error || errorMessage
+      } catch {
+        errorMessage = `${errorMessage} - ${response.statusText}`
+      }
+
       return {
         success: false,
-        error: data.error || `Erro ${response.status}: ${response.statusText}`,
+        error: errorMessage,
       }
     }
 
-    return data
+    const result = await response.json()
+    return {
+      success: result.success || true,
+    }
   } catch (error: any) {
-    console.error(`[CLIENT] Erro ao deletar instância:`, error)
+    console.error("Erro ao deletar instância:", error)
     return {
       success: false,
-      error: `Erro de conexão: ${error.message}`,
+      error: `Erro de conexão: ${error.message || "Erro desconhecido"}`,
     }
   }
 }
