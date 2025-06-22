@@ -413,73 +413,33 @@ export async function getInstanceQRCode(instanceName: string): Promise<{
   }
 }
 
-// Função para deletar instância
+// Remover a função deleteEvolutionInstance que está causando o erro
+// Substituir por uma função que chama o endpoint de API
+
+// Função para deletar instância (usando endpoint de API)
 export async function deleteEvolutionInstance(instanceName: string): Promise<{
   success: boolean
   error?: string
 }> {
   try {
-    const integrationsTable = await supabase.from("integrations")
-    const { data: integrationData, error: integrationError } = await integrationsTable
-      .select("config")
-      .eq("type", "evolution_api")
-      .eq("is_active", true)
-      .single()
-
-    if (integrationError) {
-      console.error("Erro ao buscar config da Evolution API:", integrationError)
-      return { success: false, error: "Erro ao buscar configuração da Evolution API." }
-    }
-
-    if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
-      return {
-        success: false,
-        error: "Evolution API não configurada.",
-      }
-    }
-
-    // Validar URL da API
-    let apiUrl: string
-    try {
-      const url = new URL(integrationData.config.apiUrl)
-      apiUrl = url.toString().replace(/\/$/, "")
-    } catch (urlError) {
-      return {
-        success: false,
-        error: "URL da Evolution API inválida na configuração.",
-      }
-    }
-
-    const response = await fetch(`${apiUrl}/instance/delete/${instanceName}`, {
+    const response = await fetch(`/api/whatsapp/delete/${instanceName}`, {
       method: "DELETE",
-      headers: {
-        apikey: integrationData.config.apiKey,
-      },
     })
 
+    const result = await response.json()
+
     if (!response.ok) {
-      let errorMessage = `Erro ${response.status}`
-
-      if (isJsonResponse(response)) {
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.message || errorData.error || errorMessage
-        } catch {
-          errorMessage = `${errorMessage} - ${response.statusText}`
-        }
-      } else {
-        errorMessage = `${errorMessage} - ${response.statusText}`
-      }
-
       return {
         success: false,
-        error: `Erro ao deletar instância: ${errorMessage}`,
+        error: result.error || `Erro ${response.status}`,
       }
     }
 
-    return { success: true }
+    return {
+      success: true,
+    }
   } catch (error: any) {
-    console.error("Erro interno ao deletar instância:", error)
+    console.error("Erro ao deletar instância:", error)
     return {
       success: false,
       error: `Erro interno: ${error.message || "Erro desconhecido"}`,
