@@ -1,12 +1,18 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useCallback } from "react"
-import { useRouter } from "next/navigation"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +20,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
 import {
   Smartphone,
   Plus,
@@ -27,63 +33,79 @@ import {
   Filter,
   Info,
   Loader2,
-} from "lucide-react"
-import { getCurrentUser } from "@/lib/auth"
-import WhatsAppConnectionModal from "@/components/whatsapp-connection-modal"
-import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
-import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
-import WhatsAppInfoModal from "@/components/whatsapp-info-modal"
-import { useToast } from "@/components/ui/use-toast"
+} from "lucide-react";
+import { getCurrentUser } from "@/lib/auth";
+import WhatsAppConnectionModal from "@/components/whatsapp-connection-modal";
+import WhatsAppQRModal from "@/components/whatsapp-qr-modal";
+import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal";
+import WhatsAppInfoModal from "@/components/whatsapp-info-modal";
+import { useToast } from "@/components/ui/use-toast";
+
+interface WhatsAppConnection {
+  id: string;
+  connection_name: string;
+  instance_name: string;
+  phone_number?: string;
+  status: "connected" | "connecting" | "disconnected" | "error";
+  created_at: string;
+  updated_at?: string;
+}
 
 export default function WhatsAppPage() {
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
-  const router = useRouter()
-  const { toast } = useToast()
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const router = useRouter();
+  const { toast } = useToast();
 
   // Estados para WhatsApp
-  const [whatsappConnections, setWhatsappConnections] = useState([])
-  const [connectionLimits, setConnectionLimits] = useState({ current: 0, maximum: 2, canCreate: true })
-  const [showConnectionModal, setShowConnectionModal] = useState(false)
-  const [loadingConnections, setLoadingConnections] = useState(false)
+  const [whatsappConnections, setWhatsappConnections] = useState<
+    WhatsAppConnection[]
+  >([]);
+  const [connectionLimits, setConnectionLimits] = useState({
+    current: 0,
+    maximum: 2,
+    canCreate: true,
+  });
+  const [showConnectionModal, setShowConnectionModal] = useState(false);
+  const [loadingConnections, setLoadingConnections] = useState(false);
 
   // Estados para filtros
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [showFilters, setShowFilters] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
 
   // Estados para confirmação de exclusão
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-  const [connectionToDelete, setConnectionToDelete] = useState<any>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [connectionToDelete, setConnectionToDelete] = useState<any>(null);
 
   // Estados para QR Code, configurações e informações
-  const [qrModalOpen, setQrModalOpen] = useState(false)
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
-  const [infoModalOpen, setInfoModalOpen] = useState(false)
-  const [selectedConnection, setSelectedConnection] = useState<any>(null)
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [selectedConnection, setSelectedConnection] = useState<any>(null);
 
   useEffect(() => {
-    const currentUser = getCurrentUser()
+    const currentUser = getCurrentUser();
     if (!currentUser) {
-      router.push("/")
-      return
+      router.push("/");
+      return;
     }
     if (currentUser.role === "admin") {
-      router.push("/admin/whatsapp")
-      return
+      router.push("/admin/whatsapp");
+      return;
     }
-    setUser(currentUser)
-    setLoading(false)
-  }, [router])
+    setUser(currentUser);
+    setLoading(false);
+  }, [router]);
 
   // Função para buscar conexões WhatsApp via API
   const fetchWhatsAppConnections = async () => {
-    if (!user) return
+    if (!user) return;
 
-    setLoadingConnections(true)
+    setLoadingConnections(true);
     try {
-      console.log("🔍 Buscando conexões WhatsApp via API...")
+      console.log("🔍 Buscando conexões WhatsApp via API...");
 
       const response = await fetch("/api/whatsapp-connections/user", {
         method: "GET",
@@ -91,63 +113,66 @@ export default function WhatsAppPage() {
           "Content-Type": "application/json",
         },
         credentials: "include", // Incluir cookies
-      })
+      });
 
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error("❌ Erro ao buscar conexões:", errorData)
+        const errorData = await response.json();
+        console.error("❌ Erro ao buscar conexões:", errorData);
         toast({
           title: "Erro",
           description: errorData.error || "Erro ao buscar conexões",
           variant: "destructive",
-        })
-        setWhatsappConnections([])
-        return
+        });
+        setWhatsappConnections([]);
+        return;
       }
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (data.success) {
-        console.log(`✅ Conexões carregadas: ${data.data.connections.length}`)
-        setWhatsappConnections(data.data.connections || [])
-        setConnectionLimits(data.data.limits)
+        console.log(`✅ Conexões carregadas: ${data.data.connections.length}`);
+        setWhatsappConnections(data.data.connections || []);
+        setConnectionLimits(data.data.limits);
       } else {
-        console.error("❌ Erro na resposta:", data.error)
+        console.error("❌ Erro na resposta:", data.error);
         toast({
           title: "Erro",
           description: data.error || "Erro ao buscar conexões",
           variant: "destructive",
-        })
-        setWhatsappConnections([])
+        });
+        setWhatsappConnections([]);
       }
     } catch (error: any) {
-      console.error("💥 Erro ao buscar conexões:", error)
+      console.error("💥 Erro ao buscar conexões:", error);
       toast({
         title: "Erro",
         description: "Erro de conexão ao buscar dados",
         variant: "destructive",
-      })
-      setWhatsappConnections([])
+      });
+      setWhatsappConnections([]);
     } finally {
-      setLoadingConnections(false)
+      setLoadingConnections(false);
     }
-  }
+  };
 
   // Função para filtrar conexões
   const filteredConnections = whatsappConnections.filter((connection) => {
     const matchesSearch =
-      connection.connection_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (connection.phone_number && connection.phone_number.includes(searchTerm))
+      connection.connection_name
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      (connection.phone_number && connection.phone_number.includes(searchTerm));
 
-    const matchesStatus = statusFilter === "all" || connection.status === statusFilter
+    const matchesStatus =
+      statusFilter === "all" || connection.status === statusFilter;
 
-    return matchesSearch && matchesStatus
-  })
+    return matchesSearch && matchesStatus;
+  });
 
   // Função para sincronizar uma conexão específica
   const syncConnection = useCallback(async (connectionId: string) => {
     try {
-      console.log(`🔄 Sincronizando conexão: ${connectionId}`)
+      console.log(`🔄 Sincronizando conexão: ${connectionId}`);
 
       const response = await fetch(`/api/whatsapp/sync/${connectionId}`, {
         method: "POST",
@@ -155,110 +180,132 @@ export default function WhatsAppPage() {
           "Content-Type": "application/json",
         },
         credentials: "include",
-      })
+      });
 
       if (response.ok) {
-        const data = await response.json()
-        console.log("✅ Conexão sincronizada:", data)
-        await fetchWhatsAppConnections()
+        const data = await response.json();
+        console.log("✅ Conexão sincronizada:", data);
+        await fetchWhatsAppConnections();
       } else {
-        const errorData = await response.json()
-        console.error("❌ Erro ao sincronizar conexão:", errorData)
+        const errorData = await response.json();
+        console.error("❌ Erro ao sincronizar conexão:", errorData);
       }
     } catch (error) {
-      console.error("💥 Erro ao sincronizar conexão:", error)
+      console.error("💥 Erro ao sincronizar conexão:", error);
     }
-  }, [])
+  }, []);
 
   // Carregar conexões quando usuário estiver disponível
   useEffect(() => {
     if (user) {
-      fetchWhatsAppConnections()
+      fetchWhatsAppConnections();
     }
-  }, [user])
+  }, [user]);
 
   const handleDeleteConnection = async (connection: any) => {
-    setConnectionToDelete(connection)
-    setDeleteConfirmOpen(true)
-  }
+    setConnectionToDelete(connection);
+    setDeleteConfirmOpen(true);
+  };
 
   const confirmDeleteConnection = async () => {
-    if (!connectionToDelete) return
+    if (!connectionToDelete) return;
 
     try {
-      // Usar API para deletar (será implementada depois)
-      console.log("🗑️ Deletando conexão:", connectionToDelete.connection_name)
+      console.log("🗑️ Deletando conexão:", connectionToDelete.connection_name);
 
-      // Por enquanto, apenas recarregar a lista
-      await fetchWhatsAppConnections()
-      setDeleteConfirmOpen(false)
-      setConnectionToDelete(null)
+      const response = await fetch(
+        `/api/whatsapp/delete-instance/${connectionToDelete.instance_name}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        }
+      );
 
-      toast({
-        title: "Sucesso",
-        description: "Conexão excluída com sucesso",
-      })
+      if (response.ok) {
+        const data = await response.json();
+        console.log("✅ Conexão deletada:", data);
+
+        // Recarregar lista de conexões
+        await fetchWhatsAppConnections();
+        setDeleteConfirmOpen(false);
+        setConnectionToDelete(null);
+
+        toast({
+          title: "Sucesso",
+          description: data.message || "Conexão excluída com sucesso",
+        });
+      } else {
+        const errorData = await response.json();
+        console.error("❌ Erro ao deletar:", errorData);
+        throw new Error(errorData.error || "Erro ao deletar conexão");
+      }
     } catch (error) {
-      console.error("Erro ao deletar conexão:", error)
+      console.error("💥 Erro ao deletar conexão:", error);
       toast({
         title: "Erro",
-        description: "Erro ao excluir conexão",
+        description: (error as Error).message || "Erro ao excluir conexão",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleDisconnectConnection = async (connection: any) => {
     try {
-      console.log(`🔌 Desconectando instância: ${connection.instance_name}`)
+      console.log(`🔌 Desconectando instância: ${connection.instance_name}`);
 
-      const response = await fetch(`/api/whatsapp/disconnect/${connection.instance_name}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-      })
+      const response = await fetch(
+        `/api/whatsapp/disconnect/${connection.instance_name}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        }
+      );
 
       if (response.ok) {
-        const data = await response.json()
-        console.log("✅ Instância desconectada:", data)
-        await fetchWhatsAppConnections()
+        const data = await response.json();
+        console.log("✅ Instância desconectada:", data);
+        await fetchWhatsAppConnections();
         toast({
           title: "Sucesso",
           description: "Instância desconectada com sucesso",
-        })
+        });
       } else {
-        const errorData = await response.json()
-        console.error("❌ Erro ao desconectar:", errorData)
+        const errorData = await response.json();
+        console.error("❌ Erro ao desconectar:", errorData);
         toast({
           title: "Erro",
           description: errorData.error || "Erro ao desconectar",
           variant: "destructive",
-        })
+        });
       }
     } catch (error) {
-      console.error("💥 Erro ao desconectar:", error)
+      console.error("💥 Erro ao desconectar:", error);
       toast({
         title: "Erro",
         description: "Erro de conexão",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleConnectionSuccess = () => {
-    fetchWhatsAppConnections()
-    setShowConnectionModal(false)
-  }
+    fetchWhatsAppConnections();
+    setShowConnectionModal(false);
+  };
 
   // Sincronização manual baseada na do admin
   const handleManualSync = async () => {
-    if (syncing || !whatsappConnections.length) return
+    if (syncing || !whatsappConnections.length) return;
 
-    setSyncing(true)
+    setSyncing(true);
     try {
-      console.log("🔄 Iniciando sincronização manual...")
+      console.log("🔄 Iniciando sincronização manual...");
 
       const response = await fetch("/api/whatsapp/sync-user", {
         method: "POST",
@@ -266,68 +313,69 @@ export default function WhatsAppPage() {
           "Content-Type": "application/json",
         },
         credentials: "include",
-      })
+      });
 
       if (!response.ok) {
         // Tentar ler como texto se não for JSON válido
-        const errorText = await response.text()
-        console.error("❌ Erro na sincronização (texto):", errorText)
+        const errorText = await response.text();
+        console.error("❌ Erro na sincronização (texto):", errorText);
         toast({
           title: "Erro",
           description: "Erro interno do servidor",
           variant: "destructive",
-        })
-        return
+        });
+        return;
       }
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (data.success) {
-        console.log("✅ Sincronização concluída:", data)
-        await fetchWhatsAppConnections()
+        console.log("✅ Sincronização concluída:", data);
+        await fetchWhatsAppConnections();
 
         toast({
           title: "Sucesso",
-          description: data.message || `${data.syncedCount || 0} conexões sincronizadas`,
-        })
+          description:
+            data.message || `${data.syncedCount || 0} conexões sincronizadas`,
+        });
       } else {
-        console.error("❌ Erro na sincronização:", data.error)
+        console.error("❌ Erro na sincronização:", data.error);
         toast({
           title: "Erro",
           description: data.error || "Erro na sincronização",
           variant: "destructive",
-        })
+        });
       }
     } catch (error: any) {
-      console.error("💥 Erro na sincronização manual:", error)
+      console.error("💥 Erro na sincronização manual:", error);
       toast({
         title: "Erro",
         description: "Erro de conexão durante sincronização",
         variant: "destructive",
-      })
+      });
     } finally {
-      setSyncing(false)
+      setSyncing(false);
     }
-  }
+  };
 
   const clearFilters = () => {
-    setSearchTerm("")
-    setStatusFilter("all")
-  }
+    setSearchTerm("");
+    setStatusFilter("all");
+  };
 
   // Quando o modal QR é aberto, sincronizar a conexão selecionada
   useEffect(() => {
     if (qrModalOpen && selectedConnection) {
-      syncConnection(selectedConnection.id)
+      syncConnection(selectedConnection.id);
     }
-  }, [qrModalOpen, selectedConnection, syncConnection])
+  }, [qrModalOpen, selectedConnection, syncConnection]);
 
   // Quando o modal de configurações é aberto, sincronizar a conexão selecionada
   useEffect(() => {
     if (settingsModalOpen && selectedConnection) {
-      syncConnection(selectedConnection.id)
+      syncConnection(selectedConnection.id);
     }
-  }, [settingsModalOpen, selectedConnection, syncConnection])
+  }, [settingsModalOpen, selectedConnection, syncConnection]);
 
   if (loading) {
     return (
@@ -337,17 +385,22 @@ export default function WhatsAppPage() {
           <p className="text-gray-600">Carregando...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
     <div className="p-6">
       <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Conexões WhatsApp</h1>
-          <p className="text-gray-600">Gerencie suas conexões do WhatsApp Business</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            Conexões WhatsApp
+          </h1>
+          <p className="text-gray-600">
+            Gerencie suas conexões do WhatsApp Business
+          </p>
           <p className="text-sm text-gray-500 mt-1">
-            {connectionLimits.current} de {connectionLimits.maximum} conexões utilizadas
+            {connectionLimits.current} de {connectionLimits.maximum} conexões
+            utilizadas
           </p>
         </div>
         <div className="flex gap-2">
@@ -379,7 +432,8 @@ export default function WhatsAppPage() {
             <div className="flex items-center gap-2 text-orange-800">
               <Info className="w-4 h-4" />
               <span className="font-medium">
-                Limite atingido: Você atingiu o limite máximo de {connectionLimits.maximum} conexões.
+                Limite atingido: Você atingiu o limite máximo de{" "}
+                {connectionLimits.maximum} conexões.
               </span>
             </div>
           </CardContent>
@@ -390,7 +444,9 @@ export default function WhatsAppPage() {
       <Card className="mb-6">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Filtros</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Filtros
+            </h3>
             <Button
               variant="outline"
               size="sm"
@@ -428,7 +484,11 @@ export default function WhatsAppPage() {
               </Select>
 
               <div className="flex gap-2">
-                <Button variant="outline" onClick={clearFilters} className="flex-1">
+                <Button
+                  variant="outline"
+                  onClick={clearFilters}
+                  className="flex-1"
+                >
                   Limpar Filtros
                 </Button>
               </div>
@@ -436,10 +496,15 @@ export default function WhatsAppPage() {
           )}
 
           <div className="text-sm text-gray-500 dark:text-gray-400 mt-4">
-            Mostrando {filteredConnections.length} de {whatsappConnections.length} conexões
+            Mostrando {filteredConnections.length} de{" "}
+            {whatsappConnections.length} conexões
             {searchTerm && <span> • Busca: "{searchTerm}"</span>}
             {statusFilter !== "all" && <span> • Status: {statusFilter}</span>}
-            {syncing && <span className="ml-2 text-blue-600">• Sincronizando status...</span>}
+            {syncing && (
+              <span className="ml-2 text-blue-600">
+                • Sincronizando status...
+              </span>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -457,7 +522,9 @@ export default function WhatsAppPage() {
             <Smartphone className="w-16 h-16 text-gray-300 mb-4" />
             {whatsappConnections.length === 0 ? (
               <>
-                <h4 className="text-lg font-medium mb-2">Nenhuma conexão WhatsApp</h4>
+                <h4 className="text-lg font-medium mb-2">
+                  Nenhuma conexão WhatsApp
+                </h4>
                 <p className="text-gray-600 text-center mb-6">
                   Conecte seu WhatsApp para começar a usar os agentes de IA
                 </p>
@@ -472,8 +539,12 @@ export default function WhatsAppPage() {
               </>
             ) : (
               <>
-                <h4 className="text-lg font-medium mb-2">Nenhuma conexão encontrada</h4>
-                <p className="text-gray-600 text-center mb-6">Nenhuma conexão corresponde aos filtros aplicados</p>
+                <h4 className="text-lg font-medium mb-2">
+                  Nenhuma conexão encontrada
+                </h4>
+                <p className="text-gray-600 text-center mb-6">
+                  Nenhuma conexão corresponde aos filtros aplicados
+                </p>
                 <Button variant="outline" onClick={clearFilters}>
                   Limpar Filtros
                 </Button>
@@ -492,19 +563,25 @@ export default function WhatsAppPage() {
                       <Smartphone className="w-5 h-5 text-green-600" />
                     </div>
                     <div>
-                      <div className="font-medium">{connection.connection_name}</div>
+                      <div className="font-medium">
+                        {connection.connection_name}
+                      </div>
                       <div className="text-sm text-gray-600">
                         {connection.status === "connected"
                           ? connection.phone_number || "Conectado"
                           : connection.status === "connecting"
-                            ? "Conectando..."
-                            : "Desconectado"}
+                          ? "Conectando..."
+                          : "Desconectado"}
                       </div>
                       <div className="text-xs text-gray-500">
-                        Criado em {new Date(connection.created_at).toLocaleDateString()}
+                        Criado em{" "}
+                        {new Date(connection.created_at).toLocaleDateString()}
                         {connection.updated_at && (
                           <span className="ml-2">
-                            • Atualizado: {new Date(connection.updated_at).toLocaleTimeString()}
+                            • Atualizado:{" "}
+                            {new Date(
+                              connection.updated_at
+                            ).toLocaleTimeString()}
                           </span>
                         )}
                       </div>
@@ -512,24 +589,28 @@ export default function WhatsAppPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge
-                      variant={connection.status === "connected" ? "default" : "secondary"}
+                      variant={
+                        connection.status === "connected"
+                          ? "default"
+                          : "secondary"
+                      }
                       className={
                         connection.status === "connected"
                           ? "bg-green-100 text-green-700"
                           : connection.status === "connecting"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : connection.status === "error"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-gray-100 text-gray-700"
+                          ? "bg-yellow-100 text-yellow-700"
+                          : connection.status === "error"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-gray-100 text-gray-700"
                       }
                     >
                       {connection.status === "connected"
                         ? "Conectado"
                         : connection.status === "connecting"
-                          ? "Conectando"
-                          : connection.status === "error"
-                            ? "Erro"
-                            : "Desconectado"}
+                        ? "Conectando"
+                        : connection.status === "error"
+                        ? "Erro"
+                        : "Desconectado"}
                     </Badge>
                     <div className="flex gap-1">
                       {connection.status === "connected" ? (
@@ -537,8 +618,8 @@ export default function WhatsAppPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            setSelectedConnection(connection)
-                            setInfoModalOpen(true)
+                            setSelectedConnection(connection);
+                            setInfoModalOpen(true);
                           }}
                           title="Ver Informações"
                           className="border-blue-200 text-blue-600 hover:bg-blue-50"
@@ -550,8 +631,8 @@ export default function WhatsAppPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            setSelectedConnection(connection)
-                            setQrModalOpen(true)
+                            setSelectedConnection(connection);
+                            setQrModalOpen(true);
                           }}
                           title="Conectar/Ver QR Code"
                           className="border-green-200 text-green-600 hover:bg-green-50"
@@ -563,15 +644,16 @@ export default function WhatsAppPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setSelectedConnection(connection)
-                          setSettingsModalOpen(true)
+                          setSelectedConnection(connection);
+                          setSettingsModalOpen(true);
                         }}
                         title="Configurações"
                         className="border-gray-200 text-gray-600 hover:bg-gray-50"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
-                      {(connection.status === "connected" || connection.status === "connecting") && (
+                      {(connection.status === "connected" ||
+                        connection.status === "connecting") && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -614,12 +696,16 @@ export default function WhatsAppPage() {
           <DialogHeader>
             <DialogTitle>Confirmar Exclusão</DialogTitle>
             <DialogDescription>
-              Tem certeza que deseja excluir a conexão "{connectionToDelete?.connection_name}"? Esta ação não pode ser
+              Tem certeza que deseja excluir a conexão "
+              {connectionToDelete?.connection_name}"? Esta ação não pode ser
               desfeita.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirmOpen(false)}
+            >
               Cancelar
             </Button>
             <Button variant="destructive" onClick={confirmDeleteConnection}>
@@ -637,7 +723,7 @@ export default function WhatsAppPage() {
         onStatusChange={(status) => {
           if (selectedConnection) {
             // Recarregar conexões após mudança de status
-            fetchWhatsAppConnections()
+            fetchWhatsAppConnections();
           }
         }}
       />
@@ -647,7 +733,7 @@ export default function WhatsAppPage() {
         onOpenChange={setSettingsModalOpen}
         connection={selectedConnection}
         onSettingsSaved={() => {
-          console.log("Configurações salvas!")
+          console.log("Configurações salvas!");
         }}
       />
 
@@ -658,10 +744,10 @@ export default function WhatsAppPage() {
         onStatusChange={(status) => {
           if (selectedConnection) {
             // Recarregar conexões após mudança de status
-            fetchWhatsAppConnections()
+            fetchWhatsAppConnections();
           }
         }}
       />
     </div>
-  )
+  );
 }

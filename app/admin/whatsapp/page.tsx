@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Edit,
   Trash2,
@@ -18,14 +18,14 @@ import {
   RefreshCw,
   Info,
   AlertCircle,
-} from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import WhatsAppQRModal from "@/components/whatsapp-qr-modal"
-import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal"
-import WhatsAppInfoModal from "@/components/whatsapp-info-modal"
-import { getCurrentUser } from "@/lib/auth"
-import AdminWhatsAppConnectionModal from "@/components/admin-whatsapp-connection-modal"
-import TransferConnectionModal from "@/components/transfer-connection-modal"
+} from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import WhatsAppQRModal from "@/components/whatsapp-qr-modal";
+import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal";
+import WhatsAppInfoModal from "@/components/whatsapp-info-modal";
+import { getCurrentUser } from "@/lib/auth";
+import AdminWhatsAppConnectionModal from "@/components/admin-whatsapp-connection-modal";
+import TransferConnectionModal from "@/components/transfer-connection-modal";
 import {
   Dialog,
   DialogContent,
@@ -33,103 +33,109 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { deleteEvolutionInstance } from "@/lib/whatsapp-api"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { fetchWhatsAppConnections } from "@/lib/whatsapp-connections"
+} from "@/components/ui/dialog";
+import { deleteEvolutionInstance } from "@/lib/whatsapp-api-client";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { fetchWhatsAppConnections } from "@/lib/whatsapp-connections";
 
 export default function AdminWhatsAppPage() {
-  const [connections, setConnections] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [qrModalOpen, setQrModalOpen] = useState(false)
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
-  const [infoModalOpen, setInfoModalOpen] = useState(false)
-  const [selectedConnection, setSelectedConnection] = useState<any>(null)
-  const [saveMessage, setSaveMessage] = useState("")
-  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [connections, setConnections] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [selectedConnection, setSelectedConnection] = useState<any>(null);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   // Estados para filtros
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [showFilters, setShowFilters] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
 
   // Estados para o modal de criação
-  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   // Estados para o modal de transferência
-  const [transferModalOpen, setTransferModalOpen] = useState(false)
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
 
   // Estados para confirmação de exclusão
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-  const [connectionToDelete, setConnectionToDelete] = useState<any>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [connectionToDelete, setConnectionToDelete] = useState<any>(null);
 
-  const [syncing, setSyncing] = useState(false)
+  const [syncing, setSyncing] = useState(false);
 
   // Auto-sync silencioso a cada 15 segundos + eventos
   const autoSync = useCallback(async (showMessage = false) => {
     try {
-      await fetch("/api/whatsapp/auto-sync", { method: "POST" })
+      await fetch("/api/whatsapp/auto-sync", { method: "POST" });
       // Recarregar conexões silenciosamente
-      const data = await fetchWhatsAppConnections(undefined, true)
-      setConnections(data)
+      const data = await fetchWhatsAppConnections(undefined, true);
+      setConnections(data);
 
       if (showMessage) {
-        setSaveMessage("Conexões sincronizadas!")
-        setTimeout(() => setSaveMessage(""), 2000)
+        setSaveMessage("Conexões sincronizadas!");
+        setTimeout(() => setSaveMessage(""), 2000);
       }
     } catch (error) {
       // Silently handle auto-sync errors
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    const user = getCurrentUser()
+    const user = getCurrentUser();
     if (user) {
-      setCurrentUser(user)
+      setCurrentUser(user);
     }
 
     // Sincronizar ao carregar a página
     loadConnections().then(() => {
-      autoSync()
-    })
+      autoSync();
+    });
 
     // Configurar auto-sync a cada 15 segundos
-    const interval = setInterval(() => autoSync(), 15000)
+    const interval = setInterval(() => autoSync(), 15000);
 
     // Sincronizar quando a página ganhar foco (usuário voltar para a aba)
-    const handleFocus = () => autoSync()
-    window.addEventListener("focus", handleFocus)
+    const handleFocus = () => autoSync();
+    window.addEventListener("focus", handleFocus);
 
     // Sincronizar quando a página ficar visível
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        autoSync()
+        autoSync();
       }
-    }
-    document.addEventListener("visibilitychange", handleVisibilityChange)
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      clearInterval(interval)
-      window.removeEventListener("focus", handleFocus)
-      document.removeEventListener("visibilitychange", handleVisibilityChange)
-    }
-  }, [autoSync])
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [autoSync]);
 
   const loadConnections = async () => {
     try {
-      setLoading(true)
-      setError("")
+      setLoading(true);
+      setError("");
 
-      const data = await fetchWhatsAppConnections(undefined, true)
-      setConnections(data)
+      const data = await fetchWhatsAppConnections(undefined, true);
+      setConnections(data);
     } catch (error: any) {
-      console.error("Erro ao buscar conexões:", error)
-      setError("Erro ao carregar conexões WhatsApp")
+      console.error("Erro ao buscar conexões:", error);
+      setError("Erro ao carregar conexões WhatsApp");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   // Filtrar conexões baseado nos critérios de busca
   const filteredConnections = useMemo(() => {
@@ -137,94 +143,108 @@ export default function AdminWhatsAppPage() {
       // Filtro por termo de busca
       const searchMatch =
         searchTerm === "" ||
-        connection.user_profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        connection.user_profiles?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        connection.connection_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        connection.instance_name?.toLowerCase().includes(searchTerm.toLowerCase())
+        connection.user_profiles?.full_name
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        connection.user_profiles?.email
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        connection.connection_name
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        connection.instance_name
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase());
 
       // Filtro por status
-      const statusMatch = statusFilter === "all" || connection.status === statusFilter
+      const statusMatch =
+        statusFilter === "all" || connection.status === statusFilter;
 
-      return searchMatch && statusMatch
-    })
-  }, [connections, searchTerm, statusFilter])
+      return searchMatch && statusMatch;
+    });
+  }, [connections, searchTerm, statusFilter]);
 
   const handleManualSync = async () => {
-    if (syncing) return
+    if (syncing) return;
 
-    setSyncing(true)
+    setSyncing(true);
     try {
       const response = await fetch("/api/whatsapp/sync-all", {
         method: "POST",
-      })
+      });
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (result.success) {
-        await loadConnections()
-        setSaveMessage(`✅ Sincronização concluída! ${result.synced} conexões atualizadas`)
+        await loadConnections();
+        setSaveMessage(
+          `✅ Sincronização concluída! ${result.synced} conexões atualizadas`
+        );
       } else {
-        setSaveMessage(`❌ Erro na sincronização: ${result.error}`)
+        setSaveMessage(`❌ Erro na sincronização: ${result.error}`);
       }
 
-      setTimeout(() => setSaveMessage(""), 5000)
+      setTimeout(() => setSaveMessage(""), 5000);
     } catch (error) {
-      setSaveMessage("Erro na sincronização")
-      setTimeout(() => setSaveMessage(""), 3000)
+      setSaveMessage("Erro na sincronização");
+      setTimeout(() => setSaveMessage(""), 3000);
     } finally {
-      setSyncing(false)
+      setSyncing(false);
     }
-  }
+  };
 
   const handleSyncConnection = async (connection: any) => {
     try {
-      const response = await fetch(`/api/whatsapp/sync/${connection.instance_name}`, {
-        method: "POST",
-      })
+      const response = await fetch(
+        `/api/whatsapp/sync/${connection.instance_name}`,
+        {
+          method: "POST",
+        }
+      );
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (result.success) {
-        await loadConnections()
-        setSaveMessage(`✅ Status sincronizado: ${result.status}`)
-        setTimeout(() => setSaveMessage(""), 3000)
+        await loadConnections();
+        setSaveMessage(`✅ Status sincronizado: ${result.status}`);
+        setTimeout(() => setSaveMessage(""), 3000);
       }
     } catch (error) {
-      setSaveMessage("❌ Erro ao sincronizar conexão")
-      setTimeout(() => setSaveMessage(""), 3000)
+      setSaveMessage("❌ Erro ao sincronizar conexão");
+      setTimeout(() => setSaveMessage(""), 3000);
     }
-  }
+  };
 
   const handleDeleteConnection = (connection: any) => {
-    setConnectionToDelete(connection)
-    setDeleteConfirmOpen(true)
-  }
+    setConnectionToDelete(connection);
+    setDeleteConfirmOpen(true);
+  };
 
   const confirmDeleteConnection = async () => {
-    if (!connectionToDelete) return
+    if (!connectionToDelete) return;
 
     try {
       // Deletar da Evolution API
-      await deleteEvolutionInstance(connectionToDelete.instance_name)
+      await deleteEvolutionInstance(connectionToDelete.instance_name);
 
       // Recarregar conexões
-      await loadConnections()
-      setDeleteConfirmOpen(false)
-      setConnectionToDelete(null)
-      setSaveMessage("Conexão excluída com sucesso!")
-      setTimeout(() => setSaveMessage(""), 3000)
+      await loadConnections();
+      setDeleteConfirmOpen(false);
+      setConnectionToDelete(null);
+      setSaveMessage("Conexão excluída com sucesso!");
+      setTimeout(() => setSaveMessage(""), 3000);
     } catch (error) {
-      setSaveMessage("Erro ao excluir conexão")
-      setTimeout(() => setSaveMessage(""), 3000)
+      setSaveMessage("Erro ao excluir conexão");
+      setTimeout(() => setSaveMessage(""), 3000);
     }
-  }
+  };
 
   const clearFilters = () => {
-    setSearchTerm("")
-    setStatusFilter("all")
-  }
+    setSearchTerm("");
+    setStatusFilter("all");
+  };
 
-  const hasActiveFilters = searchTerm !== "" || statusFilter !== "all"
+  const hasActiveFilters = searchTerm !== "" || statusFilter !== "all";
 
   if (loading) {
     return (
@@ -239,7 +259,7 @@ export default function AdminWhatsAppPage() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -249,21 +269,30 @@ export default function AdminWhatsAppPage() {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             {error}
-            <Button variant="outline" size="sm" onClick={loadConnections} className="ml-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadConnections}
+              className="ml-4"
+            >
               Tentar Novamente
             </Button>
           </AlertDescription>
         </Alert>
       </div>
-    )
+    );
   }
 
   return (
     <div className="p-6">
       <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Conexões WhatsApp</h1>
-          <p className="text-gray-600">Todas as conexões WhatsApp dos usuários</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            Conexões WhatsApp
+          </h1>
+          <p className="text-gray-600">
+            Todas as conexões WhatsApp dos usuários
+          </p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -274,9 +303,14 @@ export default function AdminWhatsAppPage() {
             title="Sincronizar status das conexões"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-            <span className="text-gray-700">{syncing ? "Sincronizando..." : "Sincronizar"}</span>
+            <span className="text-gray-700">
+              {syncing ? "Sincronizando..." : "Sincronizar"}
+            </span>
           </Button>
-          <Button onClick={() => setCreateModalOpen(true)} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+          <Button
+            onClick={() => setCreateModalOpen(true)}
+            className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+          >
             <Plus className="w-4 h-4" />
             Nova Conexão
           </Button>
@@ -337,7 +371,9 @@ export default function AdminWhatsAppPage() {
           {showFilters && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Status</label>
+                <label className="text-sm font-medium text-gray-700">
+                  Status
+                </label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger>
                     <SelectValue placeholder="Todos os status" />
@@ -353,7 +389,11 @@ export default function AdminWhatsAppPage() {
 
               <div className="flex items-end">
                 {hasActiveFilters && (
-                  <Button variant="outline" onClick={clearFilters} className="gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={clearFilters}
+                    className="gap-2"
+                  >
                     <X className="w-4 h-4" />
                     Limpar Filtros
                   </Button>
@@ -364,9 +404,14 @@ export default function AdminWhatsAppPage() {
 
           <div className="flex justify-between items-start mb-6">
             <div className="text-sm text-gray-500">
-              Mostrando {filteredConnections.length} de {connections.length} conexões
+              Mostrando {filteredConnections.length} de {connections.length}{" "}
+              conexões
               {hasActiveFilters && " (filtrado)"}
-              {syncing && <span className="ml-2 text-blue-600">• Sincronizando status...</span>}
+              {syncing && (
+                <span className="ml-2 text-blue-600">
+                  • Sincronizando status...
+                </span>
+              )}
             </div>
           </div>
         </CardContent>
@@ -385,7 +430,11 @@ export default function AdminWhatsAppPage() {
                   : "Nenhuma conexão encontrada com os filtros aplicados"}
                 {hasActiveFilters && (
                   <div className="mt-2">
-                    <Button variant="link" onClick={clearFilters} className="text-sm">
+                    <Button
+                      variant="link"
+                      onClick={clearFilters}
+                      className="text-sm"
+                    >
                       Limpar filtros para ver todas as conexões
                     </Button>
                   </div>
@@ -393,18 +442,27 @@ export default function AdminWhatsAppPage() {
               </div>
             ) : (
               filteredConnections.map((connection: any) => (
-                <div key={connection.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div
+                  key={connection.id}
+                  className="flex items-center justify-between p-4 border rounded-lg"
+                >
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
                       <Smartphone className="w-5 h-5 text-green-600" />
                     </div>
                     <div>
-                      <div className="font-medium">{connection.connection_name}</div>
+                      <div className="font-medium">
+                        {connection.connection_name}
+                      </div>
                       <div className="text-sm text-gray-600">
                         Usuário:{" "}
-                        {connection.user_profiles?.full_name || connection.user_profiles?.email || "Desconhecido"}
+                        {connection.user_profiles?.full_name ||
+                          connection.user_profiles?.email ||
+                          "Desconhecido"}
                       </div>
-                      <div className="text-xs text-gray-500">Instância: {connection.instance_name}</div>
+                      <div className="text-xs text-gray-500">
+                        Instância: {connection.instance_name}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -413,33 +471,34 @@ export default function AdminWhatsAppPage() {
                         connection.status === "connected"
                           ? "default"
                           : connection.status === "connecting"
-                            ? "secondary"
-                            : "secondary"
+                          ? "secondary"
+                          : "secondary"
                       }
                       className={
                         connection.status === "connected"
                           ? "bg-green-100 text-green-700"
                           : connection.status === "connecting"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : "bg-gray-100 text-gray-700"
+                          ? "bg-yellow-100 text-yellow-700"
+                          : "bg-gray-100 text-gray-700"
                       }
                     >
                       {connection.status === "connected"
                         ? "Conectado"
                         : connection.status === "connecting"
-                          ? "Conectando"
-                          : connection.status === "error"
-                            ? "Erro"
-                            : "Desconectado"}
+                        ? "Conectando"
+                        : connection.status === "error"
+                        ? "Erro"
+                        : "Desconectado"}
                     </Badge>
                     <div className="flex gap-1">
-                      {connection.status === "connected" || connection.status === "connecting" ? (
+                      {connection.status === "connected" ||
+                      connection.status === "connecting" ? (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            setSelectedConnection(connection)
-                            setInfoModalOpen(true)
+                            setSelectedConnection(connection);
+                            setInfoModalOpen(true);
                           }}
                           title="Ver Informações"
                           className="border-blue-200 text-blue-600 hover:bg-blue-50"
@@ -451,8 +510,8 @@ export default function AdminWhatsAppPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            setSelectedConnection(connection)
-                            setQrModalOpen(true)
+                            setSelectedConnection(connection);
+                            setQrModalOpen(true);
                           }}
                           title="Ver QR Code"
                           className="border-green-200 text-green-600 hover:bg-green-50"
@@ -464,8 +523,8 @@ export default function AdminWhatsAppPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setSelectedConnection(connection)
-                          setSettingsModalOpen(true)
+                          setSelectedConnection(connection);
+                          setSettingsModalOpen(true);
                         }}
                         title="Configurações"
                         className="border-gray-200 text-gray-600 hover:bg-gray-50"
@@ -476,8 +535,8 @@ export default function AdminWhatsAppPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setSelectedConnection(connection)
-                          setTransferModalOpen(true)
+                          setSelectedConnection(connection);
+                          setTransferModalOpen(true);
                         }}
                         title="Transferir Propriedade"
                         className="border-purple-200 text-purple-600 hover:bg-purple-50"
@@ -515,8 +574,8 @@ export default function AdminWhatsAppPage() {
       <WhatsAppQRModal
         open={qrModalOpen}
         onOpenChange={(open) => {
-          setQrModalOpen(open)
-          if (open) autoSync()
+          setQrModalOpen(open);
+          if (open) autoSync();
         }}
         connection={selectedConnection}
         onStatusChange={() => loadConnections()}
@@ -525,21 +584,21 @@ export default function AdminWhatsAppPage() {
       <WhatsAppSettingsModal
         open={settingsModalOpen}
         onOpenChange={(open) => {
-          setSettingsModalOpen(open)
-          if (open) autoSync()
+          setSettingsModalOpen(open);
+          if (open) autoSync();
         }}
         connection={selectedConnection}
         onSettingsSaved={() => {
-          setSaveMessage("Configurações salvas com sucesso!")
-          setTimeout(() => setSaveMessage(""), 3000)
+          setSaveMessage("Configurações salvas com sucesso!");
+          setTimeout(() => setSaveMessage(""), 3000);
         }}
       />
 
       <WhatsAppInfoModal
         open={infoModalOpen}
         onOpenChange={(open) => {
-          setInfoModalOpen(open)
-          if (open) autoSync()
+          setInfoModalOpen(open);
+          if (open) autoSync();
         }}
         connection={selectedConnection}
         onStatusChange={() => loadConnections()}
@@ -548,28 +607,28 @@ export default function AdminWhatsAppPage() {
       <AdminWhatsAppConnectionModal
         open={createModalOpen}
         onOpenChange={(open) => {
-          setCreateModalOpen(open)
-          if (!open) autoSync()
+          setCreateModalOpen(open);
+          if (!open) autoSync();
         }}
         adminId={currentUser?.id}
         onSuccess={() => {
-          loadConnections()
-          setSaveMessage("Conexão criada com sucesso!")
-          setTimeout(() => setSaveMessage(""), 3000)
+          loadConnections();
+          setSaveMessage("Conexão criada com sucesso!");
+          setTimeout(() => setSaveMessage(""), 3000);
         }}
       />
 
       <TransferConnectionModal
         open={transferModalOpen}
         onOpenChange={(open) => {
-          setTransferModalOpen(open)
-          if (!open) autoSync()
+          setTransferModalOpen(open);
+          if (!open) autoSync();
         }}
         connection={selectedConnection}
         onSuccess={() => {
-          loadConnections()
-          setSaveMessage("Conexão transferida com sucesso!")
-          setTimeout(() => setSaveMessage(""), 3000)
+          loadConnections();
+          setSaveMessage("Conexão transferida com sucesso!");
+          setTimeout(() => setSaveMessage(""), 3000);
         }}
       />
 
@@ -579,12 +638,16 @@ export default function AdminWhatsAppPage() {
           <DialogHeader>
             <DialogTitle>Confirmar Exclusão</DialogTitle>
             <DialogDescription>
-              Tem certeza que deseja excluir a conexão "{connectionToDelete?.connection_name}"? Esta ação não pode ser
+              Tem certeza que deseja excluir a conexão "
+              {connectionToDelete?.connection_name}"? Esta ação não pode ser
               desfeita.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirmOpen(false)}
+            >
               Cancelar
             </Button>
             <Button variant="destructive" onClick={confirmDeleteConnection}>
@@ -594,5 +657,5 @@ export default function AdminWhatsAppPage() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }
