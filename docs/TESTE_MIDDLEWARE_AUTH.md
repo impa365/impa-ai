@@ -11,12 +11,12 @@
 ## Como Executar os Testes
 
 ### 1. Instalar Dependências
-```bash
+\`\`\`bash
 pnpm install
-```
+\`\`\`
 
 ### 2. Executar Todos os Testes
-```bash
+\`\`\`bash
 # Executar uma vez
 pnpm test
 
@@ -25,12 +25,12 @@ pnpm test:watch
 
 # Executar com cobertura
 pnpm test:coverage
-```
+\`\`\`
 
 ### 3. Executar Apenas os Testes de Middleware
-```bash
+\`\`\`bash
 pnpm test auth-middleware
-```
+\`\`\`
 
 ---
 
@@ -67,36 +67,36 @@ pnpm test auth-middleware
 ## Validação Manual
 
 ### 1. Testando Rotas Públicas
-```bash
+\`\`\`bash
 # Deve funcionar sem login
 curl http://localhost:3000/api/config
 curl http://localhost:3000/api/auth/login -X POST
-```
+\`\`\`
 
 ### 2. Testando Rotas Protegidas
-```bash
+\`\`\`bash
 # Deve retornar 401
 curl http://localhost:3000/api/user/agents
 
 # Com cookie válido deve funcionar
 curl http://localhost:3000/api/user/agents \
   -H "Cookie: impaai_user=COOKIE_VÁLIDO"
-```
+\`\`\`
 
 ### 3. Testando Redirecionamentos
-```bash
+\`\`\`bash
 # Acesse no browser (deve redirecionar para login)
 http://localhost:3000/dashboard
 
 # Acesse como admin (deve redirecionar para /admin)
 http://localhost:3000/dashboard (com login de admin)
-```
+\`\`\`
 
 ---
 
 ## Estrutura dos Testes
 
-```
+\`\`\`
 __tests__/
 └── auth-middleware.test.ts
     ├── Rotas Públicas
@@ -104,7 +104,7 @@ __tests__/
     ├── Rotas Protegidas - Páginas
     ├── Cenários de Erro
     └── Casos Edge
-```
+\`\`\`
 
 ---
 
@@ -151,7 +151,7 @@ Todos os acessos são logados com:
 
 ## Comandos Úteis
 
-```bash
+\`\`\`bash
 # Desenvolvimento com logs visíveis
 pnpm dev
 
@@ -163,9 +163,9 @@ pnpm test:coverage -- --verbose
 
 # Executar testes em modo CI
 CI=true pnpm test
-```
+\`\`\`
 
 ---
 
 **✅ Status:** Middleware de autenticação implementado e testado  
-**🎯 Próximo:** Correção de senhas em texto plano (Vulnerabilidade #2) 
+**🎯 Próximo:** Correção de senhas em texto plano (Vulnerabilidade #2)

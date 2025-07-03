@@ -41,7 +41,7 @@ Localizados em [components/](mdc:components/):
 ## Padrões de Componentes
 
 ### Estrutura Básica
-```typescript
+\`\`\`typescript
 interface ComponentProps {
   // Props tipadas
 }
@@ -50,7 +50,7 @@ export function Component({ prop }: ComponentProps) {
   // Lógica do componente
   return <div>JSX</div>
 }
-```
+\`\`\`
 
 ### Hooks Customizados
 - [hooks/use-modal.ts](mdc:hooks/use-modal.ts): Gerenciamento de modais

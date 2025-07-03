@@ -90,17 +90,17 @@ class PublicApiClient {
     })
   }
 
-  // Atualizar agente
+  // Atualizar agente - CORRIGIDO para usar endpoint correto
   async updateAgent(agentId: string, agentData: any): Promise<ApiResponse<{ agent: any }>> {
-    return this.makeRequest("/api/admin/agents", {
+    return this.makeRequest(`/api/admin/agents/${agentId}`, {
       method: "PUT",
-      body: JSON.stringify({ id: agentId, ...agentData }),
+      body: JSON.stringify(agentData),
     })
   }
 
-  // Deletar agente
+  // Deletar agente - CORRIGIDO para usar endpoint correto
   async deleteAgent(agentId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return this.makeRequest(`/api/admin/agents?id=${agentId}`, {
+    return this.makeRequest(`/api/admin/agents/${agentId}`, {
       method: "DELETE",
     })
   }

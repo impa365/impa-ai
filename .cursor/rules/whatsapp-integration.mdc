@@ -16,13 +16,13 @@ A integração com WhatsApp é feita através da **Evolution API**, permitindo c
 - [lib/whatsapp-api-client.ts](mdc:lib/whatsapp-api-client.ts): Client HTTP
 
 ### Endpoints WhatsApp
-```
+\`\`\`
 GET /api/whatsapp/status/[instanceName]     # Status da instância
 GET /api/whatsapp/qr/[instanceName]         # QR Code
 GET /api/whatsapp/info/[instanceName]       # Informações
 POST /api/whatsapp/create-instance          # Criar instância
 DELETE /api/whatsapp/disconnect/[instanceName] # Desconectar
-```
+\`\`\`
 
 ### Configurações
 - [lib/whatsapp-settings-api.ts](mdc:lib/whatsapp-settings-api.ts): Configurações server
@@ -31,25 +31,25 @@ DELETE /api/whatsapp/disconnect/[instanceName] # Desconectar
 ## Fluxo de Conexão
 
 ### 1. Criar Instância
-```typescript
+\`\`\`typescript
 POST /api/whatsapp/create-instance
 {
   instanceName: string,
   userId: string
 }
-```
+\`\`\`
 
 ### 2. Obter QR Code
-```typescript
+\`\`\`typescript
 GET /api/whatsapp/qr/[instanceName]
 // Retorna base64 do QR Code
-```
+\`\`\`
 
 ### 3. Verificar Status
-```typescript
+\`\`\`typescript
 GET /api/whatsapp/status/[instanceName]
 // Retorna: connected | disconnected | connecting
-```
+\`\`\`
 
 ## Componentes UI
 
@@ -74,7 +74,7 @@ GET /api/whatsapp/status/[instanceName]
 - Atualização de status em tempo real
 
 ## Configurações Evolution API
-```typescript
+\`\`\`typescript
 // Configurações base
 {
   baseURL: string,
@@ -88,7 +88,7 @@ GET /api/whatsapp/status/[instanceName]
   webhookByEvents: boolean,
   webhookBase64: boolean
 }
-```
+\`\`\`
 
 ## Tipos TypeScript
 - [types/whatsapp.ts](mdc:types/whatsapp.ts): Interfaces WhatsApp

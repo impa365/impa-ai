@@ -39,5 +39,3 @@ O Impa AI é uma plataforma de construção de agentes de inteligência artifici
 - [app/page.tsx](mdc:app/page.tsx): Página inicial
 - [middleware.ts](mdc:middleware.ts): Middleware de autenticação
 - [lib/config.ts](mdc:lib/config.ts): Configurações da aplicação
-
-

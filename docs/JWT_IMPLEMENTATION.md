@@ -20,7 +20,7 @@ O sistema implementa uma estratégia híbrida que combina:
 
 ### 🔄 **Fluxo de Autenticação**
 
-```mermaid
+\`\`\`mermaid
 sequenceDiagram
     participant C as Cliente
     participant A as API Login
@@ -37,7 +37,7 @@ sequenceDiagram
     M->>M: Validar assinatura + expiração
     M->>P: Usuário autenticado
     P->>C: Resposta autorizada
-```
+\`\`\`
 
 ---
 
@@ -81,7 +81,7 @@ sequenceDiagram
 
 ### 🔑 **Variáveis de Ambiente Necessárias**
 
-```env
+\`\`\`env
 # Chaves JWT (OBRIGATÓRIO para produção)
 JWT_ACCESS_SECRET=sua-chave-super-secreta-access
 JWT_REFRESH_SECRET=sua-chave-super-secreta-refresh
@@ -93,12 +93,12 @@ JWT_REFRESH_EXPIRES_IN=7d
 # Supabase
 SUPABASE_URL=sua-url-supabase
 SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
-```
+\`\`\`
 
 ### 📡 **APIs Disponíveis**
 
 #### **1. Login**
-```bash
+\`\`\`bash
 POST /api/auth/login
 Content-Type: application/json
 
@@ -116,10 +116,10 @@ Content-Type: application/json
   },
   "message": "Login realizado com sucesso"
 }
-```
+\`\`\`
 
 #### **2. Refresh Token**
-```bash
+\`\`\`bash
 POST /api/auth/refresh
 # (usa cookie automaticamente)
 
@@ -132,10 +132,10 @@ POST /api/auth/refresh
   },
   "message": "Tokens atualizados com sucesso"
 }
-```
+\`\`\`
 
 #### **3. Logout**
-```bash
+\`\`\`bash
 POST /api/auth/logout
 
 # Resposta
@@ -143,21 +143,21 @@ POST /api/auth/logout
   "success": true,
   "message": "Logout realizado com sucesso"
 }
-```
+\`\`\`
 
 ### 🔒 **Usando JWT em APIs**
 
 #### **Opção 1: Header Authorization (Recomendado)**
-```bash
+\`\`\`bash
 curl -H "Authorization: Bearer eyJ..." \
      http://localhost:3000/api/user/agents
-```
+\`\`\`
 
 #### **Opção 2: Cookies (Automático)**
-```bash
+\`\`\`bash
 # Cookies são enviados automaticamente pelo browser
 fetch('/api/user/agents')
-```
+\`\`\`
 
 ---
 
@@ -188,11 +188,11 @@ fetch('/api/user/agents')
 - ✅ Status do usuário no banco
 
 #### **5. Logs de Auditoria**
-```
+\`\`\`
 ✅ [JWT-LOGIN] 2024-12-21T10:30:00Z - user@example.com - Role: user
 ✅ [JWT-VERIFY] 2024-12-21T10:31:00Z - user@example.com - Header Authorization
 ❌ [JWT-VERIFY] 2024-12-21T10:32:00Z - unknown - Token expirado
-```
+\`\`\`
 
 ---
 
@@ -209,7 +209,7 @@ fetch('/api/user/agents')
 
 ### 🚀 **Executar Testes**
 
-```bash
+\`\`\`bash
 # Todos os testes
 pnpm test
 
@@ -218,7 +218,7 @@ pnpm test jwt-auth
 
 # Com cobertura
 pnpm test:coverage
-```
+\`\`\`
 
 ---
 
@@ -273,7 +273,7 @@ O sistema mantém **total compatibilidade** com o código existente:
 
 ## Comandos Úteis
 
-```bash
+\`\`\`bash
 # Desenvolvimento
 pnpm dev
 
@@ -286,10 +286,10 @@ tail -f logs/auth.log  # Se configurado
 
 # Debug JWT (Node.js)
 node -e "console.log(require('jsonwebtoken').decode('SEU_TOKEN'))"
-```
+\`\`\`
 
 ---
 
 **✅ Status:** Sistema JWT implementado com sucesso  
 **🎯 Próximo:** Validação de entrada (Vulnerabilidade #6)  
-**📊 Segurança:** Vulnerabilidades Críticas #1 e #2 RESOLVIDAS 
+**📊 Segurança:** Vulnerabilidades Críticas #1 e #2 RESOLVIDAS

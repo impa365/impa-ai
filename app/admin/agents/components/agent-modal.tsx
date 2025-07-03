@@ -12,6 +12,8 @@ import { Loader2, AlertTriangle, CheckCircle, Info, ExternalLink } from "lucide-
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { publicApi } from "@/lib/api-client"
+import { useToast } from "@/components/ui/use-toast"
 
 export interface WhatsAppConnection {
   id: string
@@ -57,6 +59,8 @@ export function AgentModal({
   isAdmin = false,
 }: AgentModalProps) {
   const [isSaving, setIsSaving] = useState(false)
+  const { toast } = useToast()
+
   const [formData, setFormData] = useState({
     name: agent?.name || "",
     type: agent?.type || "geral",
@@ -84,24 +88,55 @@ export function AgentModal({
 
     // Validações
     if (!formData.whatsapp_connection_id) {
-      alert("Por favor, selecione uma conexão WhatsApp antes de criar o agente.")
+      toast({
+        title: "Erro",
+        description: "Por favor, selecione uma conexão WhatsApp antes de criar o agente.",
+        variant: "destructive",
+      })
       return
     }
 
     if (isAdmin && !formData.user_id) {
-      alert("Como administrador, você deve especificar para qual usuário está criando o agente.")
+      toast({
+        title: "Erro",
+        description: "Como administrador, você deve especificar para qual usuário está criando o agente.",
+        variant: "destructive",
+      })
       return
     }
 
     setIsSaving(true)
     try {
-      console.log("💾 Salvando agente:", formData)
-      // Aqui você implementaria a chamada real para salvar o agente
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      let response
+
+      if (agent?.id) {
+        // Atualizar agente existente
+        console.log("🔄 Atualizando agente:", agent.id, formData)
+        response = await publicApi.updateAgent(agent.id, formData)
+      } else {
+        // Criar novo agente
+        console.log("➕ Criando novo agente:", formData)
+        response = await publicApi.createAgent(formData)
+      }
+
+      if (response.error) {
+        throw new Error(response.error)
+      }
+
+      toast({
+        title: "Sucesso",
+        description: agent?.id ? "Agente atualizado com sucesso!" : "Agente criado com sucesso!",
+      })
+
       onSuccess()
       onOpenChange(false)
-    } catch (error) {
-      console.error("Erro ao salvar agente:", error)
+    } catch (error: any) {
+      console.error("❌ Erro ao salvar agente:", error)
+      toast({
+        title: "Erro",
+        description: error.message || "Falha ao salvar agente",
+        variant: "destructive",
+      })
     } finally {
       setIsSaving(false)
     }

@@ -13,7 +13,7 @@ alwaysApply: false
 ## Estrutura Principal
 
 ### Tabelas Principais
-```sql
+\`\`\`sql
 -- Usuários
 users (id, email, name, role, created_at)
 
@@ -28,7 +28,7 @@ api_keys (id, key, user_id, permissions, created_at)
 
 -- Logs
 agent_logs (id, agent_id, message, response, created_at)
-```
+\`\`\`
 
 ## Client Supabase
 Configurado em [lib/supabase.ts](mdc:lib/supabase.ts) e [lib/supabase-config.ts](mdc:lib/supabase-config.ts):
@@ -39,18 +39,18 @@ Configurado em [lib/supabase.ts](mdc:lib/supabase.ts) e [lib/supabase-config.ts]
 - **Admin**: Para operações administrativas
 
 ### Configuração
-```typescript
+\`\`\`typescript
 // Server-side
 import { createClient } from '@supabase/supabase-js'
 
 // Client-side
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-```
+\`\`\`
 
 ## Patterns de Uso
 
 ### Queries
-```typescript
+\`\`\`typescript
 // Buscar dados
 const { data, error } = await supabase
   .from('agents')
@@ -61,7 +61,7 @@ const { data, error } = await supabase
 const { data, error } = await supabase
   .from('agents')
   .insert([{ name, prompt, user_id }])
-```
+\`\`\`
 
 ### RLS (Row Level Security)
 - Políticas de acesso baseadas em usuário

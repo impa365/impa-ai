@@ -6,7 +6,7 @@ alwaysApply: false
 # Referência Rápida - Impa AI
 
 ## 🚀 Comandos Essenciais
-```bash
+\`\`\`bash
 # Desenvolvimento
 pnpm dev                    # Iniciar desenvolvimento
 pnpm build                  # Build para produção
@@ -15,7 +15,7 @@ pnpm lint                   # Verificar código
 # Docker
 docker build -t impa-ai .   # Build da imagem
 docker-compose up -d        # Executar com compose
-```
+\`\`\`
 
 ## 📁 Navegação Rápida
 
@@ -36,7 +36,7 @@ docker-compose up -d        # Executar com compose
 - [components/data-table.tsx](mdc:components/data-table.tsx) - Tabela reutilizável
 
 ## 🗂️ Estrutura de Pastas
-```
+\`\`\`
 impa-ai/
 ├── app/                    # Next.js App Router
 │   ├── admin/             # Área administrativa
@@ -48,10 +48,10 @@ impa-ai/
 ├── types/               # Tipos TypeScript
 ├── database/            # Scripts SQL
 └── hooks/              # Custom hooks
-```
+\`\`\`
 
 ## 🔌 APIs Importantes
-```
+\`\`\`
 # Autenticação
 POST /api/auth/login
 POST /api/auth/register
@@ -65,7 +65,7 @@ PUT /api/user/agents/[id]
 GET /api/whatsapp/status/[instance]
 GET /api/whatsapp/qr/[instance]
 POST /api/whatsapp/create-instance
-```
+\`\`\`
 
 ## 🛠️ Utilitários
 - [lib/utils.ts](mdc:lib/utils.ts) - Funções utilitárias

@@ -252,4 +252,4 @@ describe("Sistema JWT", () => {
       expect(decoded.email).toBe(userWithLongEmail.email)
     })
   })
-}) 
+})

@@ -167,4 +167,4 @@ export function logJWTOperation(operation: string, email: string, success: boole
   const status = success ? '✅' : '❌'
   
   console.log(`${status} [JWT-${operation}] ${timestamp} - ${email} ${details ? `- ${details}` : ''}`)
-} 
+}

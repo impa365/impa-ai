@@ -8,7 +8,7 @@ alwaysApply: false
 ## Ambiente de Desenvolvimento
 
 ### Configuração Inicial
-```bash
+\`\`\`bash
 # Instalar dependências
 pnpm install
 
@@ -18,10 +18,10 @@ cp .env.example .env
 
 # Executar em desenvolvimento
 pnpm dev
-```
+\`\`\`
 
 ### Variáveis de Ambiente
-```env
+\`\`\`env
 # Supabase
 SUPABASE_URL=your_supabase_url
 SUPABASE_ANON_KEY=your_anon_key
@@ -37,7 +37,7 @@ EVOLUTION_API_KEY=your_evolution_key
 
 # OpenAI
 OPENAI_API_KEY=your_openai_key
-```
+\`\`\`
 
 ## Scripts Disponíveis
 - `pnpm dev`: Desenvolvimento
@@ -54,7 +54,7 @@ OPENAI_API_KEY=your_openai_key
 - Standalone output
 
 ### Docker Compose
-```yaml
+\`\`\`yaml
 version: '3.8'
 services:
   app:
@@ -63,7 +63,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-```
+\`\`\`
 
 ### Portainer Stack
 [portainer-stack-simple.yml](mdc:portainer-stack-simple.yml) para deploy via Portainer.
@@ -78,13 +78,13 @@ services:
 ## Deployment
 
 ### Via Docker
-```bash
+\`\`\`bash
 # Build da imagem
 docker build -t impa-ai .
 
 # Executar container
 docker run -p 3000:3000 impa-ai
-```
+\`\`\`
 
 ### Via Vercel
 - Deploy automático via Git
@@ -105,10 +105,10 @@ Scripts SQL em [database/](mdc:database/):
 3. Configurar RLS policies
 
 ### Backup
-```bash
+\`\`\`bash
 # Backup via Supabase CLI
 supabase db dump -f backup.sql
-```
+\`\`\`
 
 ## Monitoramento
 

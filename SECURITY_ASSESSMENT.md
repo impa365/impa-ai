@@ -26,10 +26,10 @@ A análise de segurança do projeto Impa AI revelou **vulnerabilidades críticas
 - **Arquivo**: `middleware.ts`
 - **Linhas**: 22, 31
 - **Problema**:
-  ```javascript
+  \`\`\`javascript
   // TODO: Implementar verificação de autenticação JWT aqui
   // TODO: Implementar verificação de sessão aqui
-  ```
+  \`\`\`
 - **Impacto**: Todas as rotas API e páginas estão desprotegidas
 - **Risco**: Acesso irrestrito a dados sensíveis
 - **CVSS Score**: 10.0 (Crítico)
@@ -39,9 +39,9 @@ A análise de segurança do projeto Impa AI revelou **vulnerabilidades críticas
 - **Arquivo**: `app/api/auth/login/route.ts`
 - **Linha**: 42
 - **Problema**:
-  ```javascript
+  \`\`\`javascript
   if (user.password !== password) // Comparação direta!
-  ```
+  \`\`\`
 - **Scripts SQL**: `database/database-ofc/3 supabase-setup-3-etapa-correcao-password.sql`
 - **Comentário no código**: "sem hash por enquanto"
 - **Impacto**: Senhas visíveis para qualquer pessoa com acesso ao banco
@@ -80,9 +80,9 @@ A análise de segurança do projeto Impa AI revelou **vulnerabilidades críticas
 - **Arquivo**: `database/database-ofc/2 supabase-setup-2-etapa-correcoes.sql`
 - **Linha**: 38
 - **Problema**:
-  ```sql
+  \`\`\`sql
   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA impaai TO anon;
-  ```
+  \`\`\`
 - **Impacto**: Usuários anônimos podem modificar qualquer dado
 - **CVSS Score**: 8.1 (Alto)
 
@@ -95,10 +95,10 @@ A análise de segurança do projeto Impa AI revelou **vulnerabilidades críticas
   - Sem limite de tamanho de payload
   - `JSON.parse()` em dados não confiáveis
 - **Exemplos**:
-  ```javascript
+  \`\`\`javascript
   const body = await request.json(); // Sem validação!
   const config = JSON.parse(evolutionIntegration.config); // Perigoso!
-  ```
+  \`\`\`
 - **Risco**: Crash da aplicação, injeção de código
 - **CVSS Score**: 7.8 (Alto)
 
@@ -110,10 +110,10 @@ A análise de segurança do projeto Impa AI revelou **vulnerabilidades críticas
   - IDs de usuários
   - Detalhes de configuração
 - **Exemplos**:
-  ```javascript
+  \`\`\`javascript
   console.log("🔍 Buscando conexões WhatsApp para usuário:", user.email);
   console.log("👤 Sincronizando conexões do usuário: ${user.email}");
-  ```
+  \`\`\`
 - **Risco**: Espionagem, engenharia social
 - **CVSS Score**: 7.2 (Alto)
 

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Edit, Trash2, Power, PowerOff, Bot, Search, Filter, Plus, Users } from "lucide-react"
-import { AgentModal } from "@/components/agent-modal"
+import { AgentModal } from "./components/agent-modal"
 import { useToast } from "@/components/ui/use-toast"
 import { publicApi } from "@/lib/api-client"
 
@@ -381,9 +381,11 @@ export default function AdminAgentsPage() {
         open={showAgentModal}
         onOpenChange={setShowAgentModal}
         agent={selectedAgent}
-        onSave={handleAgentSaved}
-        maxAgentsReached={false}
-        isEditing={!!selectedAgent}
+        onSuccess={handleAgentSaved}
+        whatsappConnections={whatsappConnections}
+        isLoadingConnections={false}
+        fetchLogs={[]}
+        isAdmin={true}
       />
     </div>
   )

@@ -137,4 +137,4 @@ export async function POST() {
     console.error("💥 Erro crítico no refresh:", error.message)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
-} 
+}

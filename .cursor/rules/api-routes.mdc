@@ -40,7 +40,7 @@ A API segue a estrutura do Next.js App Router em [app/api/](mdc:app/api/).
 - `POST /api/integrations/evolution/settings/[instanceName]` - Configurar instância
 
 ## Padrões de Resposta
-```typescript
+\`\`\`typescript
 // Sucesso
 {
   success: true,
@@ -54,7 +54,7 @@ A API segue a estrutura do Next.js App Router em [app/api/](mdc:app/api/).
   error: string,
   details?: any
 }
-```
+\`\`\`
 
 ## Middleware
 - [middleware.ts](mdc:middleware.ts): Proteção de rotas

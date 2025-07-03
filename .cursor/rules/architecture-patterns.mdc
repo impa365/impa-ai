@@ -6,14 +6,14 @@ alwaysApply: false
 # Padrões Arquiteturais e Convenções
 
 ## Estrutura de Pastas
-```
+\`\`\`
 app/
 ├── admin/           # Área administrativa
 ├── dashboard/       # Dashboard do usuário
 ├── api/            # API endpoints
 ├── globals.css     # Estilos globais
 └── layout.tsx      # Layout raiz
-```
+\`\`\`
 
 ## Convenções de Nomenclatura
 - **Componentes**: PascalCase (ex: `AgentModal`)
@@ -59,4 +59,3 @@ app/
 - React Hook Form para formulários
 - TanStack Table para tabelas de dados
 - Context API para temas
-
