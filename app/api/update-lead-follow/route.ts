@@ -47,11 +47,11 @@ export async function POST(request: NextRequest) {
 
     // Buscar lead existente
     const { data: existingLead, error: findError } = await supabase
-      .from("lead_follow24hs")
+      .from("lead_folow24hs")
       .select("*")
       .eq("user_id", targetUserId)
       .eq("instance_name", instanceName)
-      .eq("remote_jid", remoteJid)
+      .eq("remoteJid", remoteJid)
       .single();
 
     if (findError || !existingLead) {
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      updateData.current_day = dayNumber;
+      updateData.dia = dayNumber;
     }
 
     if (currentDay !== undefined) {
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      updateData.current_day = dayNumber;
+      updateData.dia = dayNumber;
     }
 
     // Marcar dia como enviado
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     // Atualizar lead
     const { data: updatedLead, error: updateError } = await supabase
-      .from("lead_follow24hs")
+      .from("lead_folow24hs")
       .update(updateData)
       .eq("id", existingLead.id)
       .select()
