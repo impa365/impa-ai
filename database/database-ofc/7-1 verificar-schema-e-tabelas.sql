@@ -1,3 +1,5 @@
+SET search_path TO impaai;
+
 -- Verificar o schema atual
 SELECT current_schema();
 
