@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Verificar se o lead pertence à conexão informada
     const { data: lead, error: findError } = await supabase
-      .from("lead_folow24hs")
+      .from("lead_follow24hs")
       .select("*")
       .eq("remoteJid", remoteJid)
       .eq("whatsappConection", connection.id)
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     if (name) updateData.name = name;
 
     const { data: updatedLead, error: updateError } = await supabase
-      .from("lead_folow24hs")
+      .from("lead_follow24hs")
       .update(updateData)
       .eq("id", lead.id)
       .select()
