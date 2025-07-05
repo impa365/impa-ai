@@ -54,8 +54,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Buscar lead pelo remoteJid e whatsappConection
+    // ATENÇÃO: O nome correto da tabela é 'lead_folow24hs' (apenas 1 'l' após o 'fo')
     const { data: lead, error: findError } = await supabase
-      .from("lead_follow24hs")
+      .from("lead_folow24hs")
       .select("id")
       .eq("remoteJid", remoteJid)
       .eq("whatsappConection", connection.id)
@@ -67,8 +68,9 @@ export async function POST(request: NextRequest) {
     // 6. Atualizar lead
     const updateData: any = { dia: dayNumber, updated_at: new Date().toISOString() };
     if (name) updateData.name = String(name).trim();
+    // ATENÇÃO: O nome correto da tabela é 'lead_folow24hs' (apenas 1 'l' após o 'fo')
     const { data: updatedLead, error: updateError } = await supabase
-      .from("lead_follow24hs")
+      .from("lead_folow24hs")
       .update(updateData)
       .eq("id", lead.id)
       .select()
