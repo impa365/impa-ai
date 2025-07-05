@@ -32,12 +32,23 @@ export async function POST(request: NextRequest) {
       db: { schema: "impaai" },
     });
 
+    // Buscar UUID da conexão do WhatsApp pelo instance_name
+    const { data: connection, error: connectionError } = await supabase
+      .from("whatsapp_connections")
+      .select("id")
+      .eq("instance_name", instance_name)
+      .single();
+
+    if (connectionError || !connection) {
+      return NextResponse.json({ error: "Conexão WhatsApp não encontrada" }, { status: 404 });
+    }
+
     // Buscar lead
     const { data: lead, error: findError } = await supabase
       .from("lead_folow24hs")
       .select("*")
       .eq("remoteJid", remoteJid)
-      .eq("instance_name", instance_name)
+      .eq("whatsappConection", connection.id)
       .single();
 
     if (findError || !lead) {
