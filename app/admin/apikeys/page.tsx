@@ -289,13 +289,14 @@ export default function AdminApiKeysPage() {
       "dia": "21/06/2025"
     }'`,
 
-      updateLead: `curl -X POST "${baseUrl}/api/update-lead-follow" \\
-    -H "Authorization: Bearer ${apiKey}" \\
-    -H "Content-Type: application/json" \\
+      updateLead: `curl -X POST "${baseUrl}/api/update-lead-follow" \
+    -H "Authorization: Bearer ${apiKey}" \
+    -H "Content-Type: application/json" \
     -d '{
-      "id": "LEAD_ID",
-      "name": "Novo Nome",
-      "markDayAsSent": 1
+      "remoteJid": "REMOTE_JID_DO_LEAD",
+      "instance_name": "NOME_DA_INSTANCIA",
+      "dia": 2,
+      "name": "Nome do Lead (opcional)"
     }'`,
 
       listLeads: `curl -X GET "${baseUrl}/api/list-leads-follow?instance_name=INSTANCE_NAME&user_id=USER_ID" \\
