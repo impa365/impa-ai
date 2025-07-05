@@ -16,7 +16,8 @@ export async function middleware(req: NextRequest) {
     "/api/system/version", // Versão do sistema
     "/api/integrations/evolution/evolutionBot/create",
     "/api/get/agent",
-    "/api/get-all/agent"
+    "/api/get-all/agent",
+    "/api/update-lead-follow",
   ];
 
   // Lista de páginas públicas
@@ -35,7 +36,6 @@ export async function middleware(req: NextRequest) {
     "/api/get",
     "/api/list-leads-follow",
     "/api/add-lead-follow",
-    "/api/update-lead-follow",
     "/api/deactivate-lead-follow",
     "/api/followup-config",
   ];
