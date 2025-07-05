@@ -9,6 +9,10 @@ export async function POST(request: NextRequest) {
     if (!authResult.isValid) {
       return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
+    const userId = authResult.user?.id;
+    if (!userId) {
+      return NextResponse.json({ error: "Usuário da API Key não encontrado" }, { status: 401 });
+    }
 
     const body = await request.json();
     const { remoteJid, instance_name, dia, name } = body;
@@ -16,11 +20,9 @@ export async function POST(request: NextRequest) {
     if (!remoteJid || !instance_name) {
       return NextResponse.json({ error: "remoteJid e instance_name são obrigatórios" }, { status: 400 });
     }
-
     if (dia === undefined) {
       return NextResponse.json({ error: "dia é obrigatório" }, { status: 400 });
     }
-
     const dayNumber = Number.parseInt(dia.toString());
     if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
       return NextResponse.json({ error: "dia deve ser um número entre 1 e 30" }, { status: 400 });
@@ -32,27 +34,28 @@ export async function POST(request: NextRequest) {
       db: { schema: "impaai" },
     });
 
-    // Buscar UUID da conexão do WhatsApp pelo instance_name
+    // 1. Verificar se o instance_name pertence ao usuário da API key
     const { data: connection, error: connectionError } = await supabase
       .from("whatsapp_connections")
-      .select("id")
+      .select("id, user_id")
       .eq("instance_name", instance_name)
       .single();
-
     if (connectionError || !connection) {
       return NextResponse.json({ error: "Conexão WhatsApp não encontrada" }, { status: 404 });
     }
+    if (connection.user_id !== userId) {
+      return NextResponse.json({ error: "Esta conexão não pertence ao usuário da API Key" }, { status: 403 });
+    }
 
-    // Buscar lead
+    // 2. Verificar se o lead pertence à conexão informada
     const { data: lead, error: findError } = await supabase
       .from("lead_folow24hs")
       .select("*")
       .eq("remoteJid", remoteJid)
       .eq("whatsappConection", connection.id)
       .single();
-
     if (findError || !lead) {
-      return NextResponse.json({ error: "Lead não encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "Lead não encontrado para esta conexão" }, { status: 404 });
     }
 
     // Atualizar lead
