@@ -1,3 +1,5 @@
+SET search_path TO impaai;
+
 -- Adicionar colunas necessárias para sincronização com Evolution API
 ALTER TABLE ai_agents 
 ADD COLUMN IF NOT EXISTS trigger_type VARCHAR(20) DEFAULT 'keyword',

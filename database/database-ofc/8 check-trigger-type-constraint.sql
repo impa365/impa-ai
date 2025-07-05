@@ -1,3 +1,5 @@
+SET search_path TO impaai;
+
 -- Verificar o constraint atual da tabela ai_agents
 SELECT 
     conname as constraint_name,

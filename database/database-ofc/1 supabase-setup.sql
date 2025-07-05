@@ -7,7 +7,7 @@
 -- ============================================
 
 CREATE SCHEMA IF NOT EXISTS impaai;
-SET search_path TO impaai, public;
+SET search_path TO impaai;
 
 -- Função para atualizar updated_at
 CREATE OR REPLACE FUNCTION impaai.update_updated_at_column()
