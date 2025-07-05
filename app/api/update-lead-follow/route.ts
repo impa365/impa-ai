@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Buscar lead pelo remoteJid e whatsappConection
-    // ATENÇÃO: O nome correto da tabela é 'lead_folow24hs' (apenas 1 'l' após o 'fo')
+    // ATENÇÃO: O nome dos campos é case sensitive! Use exatamente 'remoteJid' e 'whatsappConection'.
     const { data: lead, error: findError } = await supabase
       .from("lead_folow24hs")
       .select("id")
@@ -62,13 +62,18 @@ export async function POST(request: NextRequest) {
       .eq("whatsappConection", connection.id)
       .single();
     if (findError || !lead) {
-      return NextResponse.json({ error: "Lead não encontrado para esta conexão" }, { status: 404 });
+      const isDev = process.env.NODE_ENV !== "production";
+      return NextResponse.json({
+        error: "Lead não encontrado para esta conexão",
+        details: isDev ? findError : undefined,
+        supabase: isDev ? { remoteJid, whatsappConection: connection.id } : undefined
+      }, { status: 404 });
     }
 
     // 6. Atualizar lead
     const updateData: any = { dia: dayNumber, updated_at: new Date().toISOString() };
     if (name) updateData.name = String(name).trim();
-    // ATENÇÃO: O nome correto da tabela é 'lead_folow24hs' (apenas 1 'l' após o 'fo')
+    // ATENÇÃO: O nome dos campos é case sensitive! Use exatamente 'id' para o update.
     const { data: updatedLead, error: updateError } = await supabase
       .from("lead_folow24hs")
       .update(updateData)
@@ -76,7 +81,12 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
     if (updateError) {
-      return NextResponse.json({ error: "Erro ao atualizar lead" }, { status: 500 });
+      const isDev = process.env.NODE_ENV !== "production";
+      return NextResponse.json({
+        error: "Erro ao atualizar lead",
+        details: isDev ? updateError : undefined,
+        supabase: isDev ? { updateData, leadId: lead.id } : undefined
+      }, { status: 500 });
     }
 
     // 7. Resposta de sucesso
@@ -86,9 +96,13 @@ export async function POST(request: NextRequest) {
       data: updatedLead,
     });
   } catch (error) {
-    // Não vazar detalhes sensíveis
+    // Não vazar detalhes sensíveis em produção
+    const isDev = process.env.NODE_ENV !== "production";
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        details: isDev ? String(error) : undefined
+      },
       { status: 500 }
     );
   }

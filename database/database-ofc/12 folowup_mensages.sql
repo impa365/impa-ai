@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS impaai.lead_folow24hs (
     "whatsappConection" UUID NOT NULL,
     "remoteJid" TEXT NULL,
     dia NUMERIC NULL,
+    "updated_at" timestamptz,
 
     CONSTRAINT lead_folow24hs_pkey PRIMARY KEY (id),
     CONSTRAINT lead_folow24hs_whatsappConection_fkey
