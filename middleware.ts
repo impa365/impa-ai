@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getCurrentServerUser } from "./lib/auth-server";
+import { validateApiKey } from "./lib/api-auth";
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -53,11 +54,21 @@ export async function middleware(req: NextRequest) {
     const needsAdmin = adminRoutes.some((route) => pathname.startsWith(route));
 
     if (needsAuth || needsAdmin) {
-      const user = await getCurrentServerUser(req);
+      let user = await getCurrentServerUser(req);
+      let authMethod = "jwt";
+
+      // Se não autenticou via JWT, tentar API key
+      if (!user) {
+        const apiKeyResult = await validateApiKey(req);
+        if (apiKeyResult.isValid) {
+          user = apiKeyResult.user;
+          authMethod = "api_key";
+        }
+      }
 
       if (!user) {
         console.log(
-          `🚫 Acesso negado à API ${pathname} - Usuário não autenticado`
+          `🚫 Acesso negado à API ${pathname} - Usuário não autenticado (JWT e API key inválidos)`
         );
         return NextResponse.json(
           { error: "Não autorizado - Usuário não autenticado" },
@@ -77,7 +88,7 @@ export async function middleware(req: NextRequest) {
       }
 
       console.log(
-        `✅ Acesso autorizado à API ${pathname} - Usuário: ${user.email} (${user.role})`
+        `✅ Acesso autorizado à API ${pathname} - Usuário: ${user.email} (${user.role}) via ${authMethod}`
       );
     }
 
