@@ -2,7 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { validateApiKey } from "@/lib/api-auth";
 
-export async function POST(request: NextRequest) {
+// Endpoint DELETE para remover um lead do follow up
+export async function DELETE(request: NextRequest) {
   try {
     // 1. Validar API key
     const authResult = await validateApiKey(request);
@@ -54,20 +55,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Lead não encontrado para esta conexão" }, { status: 404 });
     }
 
-    // 6. Desativar lead (apenas atualiza updated_at, pois não existe campo is_active)
-    const { data: updatedLead, error: updateError } = await supabase
+    // 6. Deletar lead
+    const { error: deleteError } = await supabase
       .from("lead_folow24hs")
-      .update({
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", lead.id)
-      .select()
-      .single();
-    if (updateError || !updatedLead) {
+      .delete()
+      .eq("id", lead.id);
+    if (deleteError) {
       const isDev = process.env.NODE_ENV !== "production";
       return NextResponse.json({
-        error: "Erro ao desativar lead",
-        details: isDev ? updateError : undefined,
+        error: "Erro ao deletar lead",
+        details: isDev ? deleteError : undefined,
         supabase: isDev ? { leadId: lead.id } : undefined
       }, { status: 500 });
     }
@@ -75,7 +72,8 @@ export async function POST(request: NextRequest) {
     // 7. Retornar sucesso
     return NextResponse.json({
       success: true,
-      lead: updatedLead
+      message: "Lead deletado com sucesso",
+      leadId: lead.id
     });
   } catch (error) {
     // Não vazar detalhes sensíveis em produção
