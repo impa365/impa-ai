@@ -54,11 +54,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Lead não encontrado para esta conexão" }, { status: 404 });
     }
 
-    // 6. Desativar lead
+    // 6. Desativar lead (apenas atualiza updated_at, pois não existe campo is_active)
     const { data: updatedLead, error: updateError } = await supabase
       .from("lead_folow24hs")
       .update({
-        is_active: false,
         updated_at: new Date().toISOString(),
       })
       .eq("id", lead.id)
