@@ -18,6 +18,7 @@ export async function middleware(req: NextRequest) {
     "/api/get/agent",
     "/api/get-all/agent",
     "/api/update-lead-follow",
+    "/api/get-connection-info",
   ];
 
   // Lista de páginas públicas
