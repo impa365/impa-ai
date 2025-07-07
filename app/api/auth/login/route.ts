@@ -2,6 +2,43 @@ import { type NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { generateTokenPair, logJWTOperation } from "@/lib/jwt";
+import { SignJWT } from 'jose';
+import type { JWTPayload } from '@/lib/jwt';
+
+// Função utilitária para gerar JWTs usando jose (Edge Runtime safe)
+async function generateTokenPairJose(user: Omit<JWTPayload, 'iat' | 'exp'>) {
+  const accessSecret = new TextEncoder().encode(process.env.JWT_ACCESS_SECRET || 'your-super-secret-access-key-change-in-production');
+  const refreshSecret = new TextEncoder().encode(process.env.JWT_REFRESH_SECRET || 'your-super-secret-refresh-key-change-in-production');
+  const now = Math.floor(Date.now() / 1000);
+
+  // Access Token
+  const accessToken = await new SignJWT({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    full_name: user.full_name,
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setIssuer('impa-ai')
+    .setAudience('impa-ai-users')
+    .setExpirationTime('15m')
+    .sign(accessSecret);
+
+  // Refresh Token
+  const refreshToken = await new SignJWT({
+    id: user.id,
+    email: user.email,
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setIssuer('impa-ai')
+    .setAudience('impa-ai-users')
+    .setExpirationTime('7d')
+    .sign(refreshSecret);
+
+  return { accessToken, refreshToken };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -112,12 +149,25 @@ export async function POST(request: NextRequest) {
 
     try {
       // Gerar tokens JWT
-      const tokens = generateTokenPair({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        full_name: user.full_name,
-      });
+      let tokens;
+      try {
+        tokens = generateTokenPair({
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          full_name: user.full_name,
+        });
+      } catch (jwtError) {
+        // Fallback para jose se der erro de prototype (Edge/Vercel)
+        console.error("❌ Erro ao gerar tokens JWT com jsonwebtoken, tentando fallback jose:", jwtError);
+        tokens = await generateTokenPairJose({
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          full_name: user.full_name,
+        });
+        logJWTOperation("LOGIN", user.email, true, "Fallback jose (Edge Runtime)");
+      }
 
       // Log de auditoria JWT
       logJWTOperation("LOGIN", user.email, true, `Role: ${user.role}`);
