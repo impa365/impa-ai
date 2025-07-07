@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { validateApiKey } from "@/lib/api-auth";
 
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   try {
     // 1. Autenticação da API Key
     const authResult = await validateApiKey(request);
