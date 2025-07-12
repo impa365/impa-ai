@@ -10,11 +10,22 @@ import { Edit, Trash2, Power, PowerOff, Bot, Search, Filter, Plus, Users } from 
 import { AgentModal } from "@/components/agent-modal"
 import { useToast } from "@/components/ui/use-toast"
 import { publicApi } from "@/lib/api-client"
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog"
 
 export default function AdminAgentsPage() {
-  const [agents, setAgents] = useState([])
-  const [users, setUsers] = useState([])
-  const [whatsappConnections, setWhatsappConnections] = useState([])
+  const [agents, setAgents] = useState<any[]>([])
+  const [users, setUsers] = useState<any[]>([])
+  const [whatsappConnections, setWhatsappConnections] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showAgentModal, setShowAgentModal] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState(null)
@@ -26,6 +37,9 @@ export default function AdminAgentsPage() {
     voice_enabled: "all",
     calendar_enabled: "all",
   })
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [agentToDelete, setAgentToDelete] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const { toast } = useToast()
 
@@ -94,30 +108,29 @@ export default function AdminAgentsPage() {
     setShowAgentModal(true)
   }
 
-  const handleEditAgent = (agent) => {
+  const handleEditAgent = (agent: any) => {
     console.log("🔧 [AdminAgents] Editando agente:", agent)
     setSelectedAgent(agent)
     setShowAgentModal(true)
   }
 
-  const handleDeleteAgent = async (agentId) => {
-    if (!confirm("Tem certeza que deseja excluir este agente?")) return
+  const handleDeleteAgent = async (agentId: any) => {
+    setAgentToDelete(agentId)
+    setDeleteDialogOpen(true)
+  }
 
+  const confirmDeleteAgent = async () => {
+    if (!agentToDelete) return
+    setIsDeleting(true)
     try {
-      console.log("🗑️ Deletando agente via API:", agentId)
-
-      const response = await publicApi.deleteAgent(agentId)
-
+      const response = await publicApi.deleteAgent(agentToDelete)
       if (response.error) {
         throw new Error(response.error)
       }
-
       toast({
         title: "Sucesso",
         description: "Agente excluído com sucesso",
       })
-
-      // Recarregar dados
       fetchData()
     } catch (error) {
       console.error("❌ Erro ao excluir agente:", error)
@@ -126,10 +139,14 @@ export default function AdminAgentsPage() {
         description: "Falha ao excluir agente",
         variant: "destructive",
       })
+    } finally {
+      setIsDeleting(false)
+      setDeleteDialogOpen(false)
+      setAgentToDelete(null)
     }
   }
 
-  const handleToggleStatus = async (agent) => {
+  const handleToggleStatus = async (agent: any) => {
     try {
       const newStatus = agent.status === "active" ? "inactive" : "active"
       console.log("🔄 Alterando status do agente via API:", agent.id, "para", newStatus)
@@ -375,6 +392,28 @@ export default function AdminAgentsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal de confirmação de deleção */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir agente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este agente? Esta ação não poderá ser desfeita e irá remover o agente da Evolution Bot também.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteAgent}
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Modal de Agente */}
       <AgentModal

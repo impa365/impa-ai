@@ -26,7 +26,7 @@ export async function GET() {
     };
 
     console.log("🔍 Buscando agentes...");
-    // Buscar agentes com joins
+    // Buscar agentes com joins - incluindo model_config para provedor LLM
     const agentsResponse = await fetch(
       `${supabaseUrl}/rest/v1/ai_agents?select=*,user_profiles!ai_agents_user_id_fkey(id,email,full_name),whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(connection_name,status)&order=created_at.desc`,
       { headers }
@@ -85,12 +85,42 @@ export async function GET() {
     const connections = await connectionsResponse.json();
     console.log("✅ Conexões encontradas:", connections.length);
 
+    console.log("🔍 Buscando configurações de provedores LLM...");
+    // Buscar configurações de sistema para provedores LLM
+    const settingsResponse = await fetch(
+      `${supabaseUrl}/rest/v1/system_settings?select=setting_key,setting_value&setting_key=in.(available_llm_providers,default_model)`,
+      { headers }
+    );
+
+    let llmConfig = {
+      available_providers: ["openai", "anthropic", "google"],
+      default_model: "gpt-4o-mini"
+    };
+
+    if (settingsResponse.ok) {
+      const settings = await settingsResponse.json();
+      settings.forEach((setting: any) => {
+        if (setting.setting_key === 'available_llm_providers') {
+          try {
+            llmConfig.available_providers = JSON.parse(setting.setting_value);
+          } catch (e) {
+            console.warn("Erro ao parsear available_llm_providers, usando padrão");
+          }
+        }
+        if (setting.setting_key === 'default_model') {
+          llmConfig.default_model = setting.setting_value;
+        }
+      });
+    }
+    console.log("✅ Configurações LLM carregadas:", llmConfig.available_providers.length, "provedores");
+
     console.log("✅ Dados processados com sucesso");
     return NextResponse.json({
       success: true,
       agents: agents || [],
       users: users || [],
       connections: connections || [],
+      llm_config: llmConfig,
     });
   } catch (error: any) {
     console.error("❌ Erro na API admin/agents:", error.message);

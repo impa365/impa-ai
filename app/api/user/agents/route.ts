@@ -89,12 +89,42 @@ export async function GET() {
       }
     }
 
+    console.log("🔍 Buscando configurações de provedores LLM...")
+    // Buscar configurações de sistema para provedores LLM
+    const settingsResponse = await fetch(
+      `${supabaseUrl}/rest/v1/system_settings?select=setting_key,setting_value&setting_key=in.(available_llm_providers,default_model)`,
+      { headers }
+    )
+
+    let llmConfig = {
+      available_providers: ["openai", "anthropic", "google"],
+      default_model: "gpt-4o-mini"
+    }
+
+    if (settingsResponse.ok) {
+      const settings = await settingsResponse.json()
+      settings.forEach((setting: any) => {
+        if (setting.setting_key === 'available_llm_providers') {
+          try {
+            llmConfig.available_providers = JSON.parse(setting.setting_value)
+          } catch (e) {
+            console.warn("Erro ao parsear available_llm_providers, usando padrão")
+          }
+        }
+        if (setting.setting_key === 'default_model') {
+          llmConfig.default_model = setting.setting_value
+        }
+      })
+    }
+    console.log("✅ Configurações LLM carregadas:", llmConfig.available_providers.length, "provedores")
+
     console.log("✅ Dados processados com sucesso - APENAS DO USUÁRIO")
     return NextResponse.json({
       success: true,
       agents: agents || [],
       connections: connections || [],
       limits: userLimits,
+      llm_config: llmConfig,
       // NÃO enviamos dados de outros usuários
     })
   } catch (error: any) {

@@ -70,6 +70,7 @@ export interface Agent {
   whatsapp_connection_id?: string | null
   evolution_bot_id?: string | null
   model?: string | null
+  model_config?: string | null // Provedor LLM (openai, anthropic, etc.)
   // Campos para sincronização com Evolution API
   trigger_type?: string | null
   trigger_operator?: string | null
@@ -126,6 +127,7 @@ const initialFormData: Agent = {
   whatsapp_connection_id: null,
   evolution_bot_id: null,
   model: null,
+  model_config: null,
   // Valores padrão para campos Evolution API
   trigger_type: "keyword",
   trigger_operator: "equals",
@@ -165,6 +167,9 @@ export function AgentModal({
   const [showOrimonApiKey, setShowOrimonApiKey] = useState(false) // Adicionar esta linha
   const [evolutionSyncStatus, setEvolutionSyncStatus] = useState<string>("")
   const [systemDefaultModel, setSystemDefaultModel] = useState<string | null>(null)
+  const [llmConfig, setLlmConfig] = useState<any>(null)
+  const [loadingLlmConfig, setLoadingLlmConfig] = useState(false)
+  const [modelSelection, setModelSelection] = useState<"default" | "custom">("default")
   const [showCurlModal, setShowCurlModal] = useState(false)
   const [curlInput, setCurlInput] = useState("")
   const [curlDescription, setCurlDescription] = useState("")
@@ -213,7 +218,48 @@ export function AgentModal({
       }
     }
 
+  // Função SEGURA para carregar configurações LLM
+  const loadLlmConfig = async () => {
+    if (!open) return
+
+    try {
+      console.log("🔄 [AgentModal] Carregando configurações LLM via API segura...")
+      setLoadingLlmConfig(true)
+
+      const response = await fetch("/api/system/llm-config", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      if (data.success && data.config) {
+        console.log("✅ [AgentModal] Configurações LLM carregadas:", data.config)
+        setLlmConfig(data.config)
+      } else {
+        throw new Error(data.error || "Erro desconhecido ao carregar configurações LLM")
+      }
+    } catch (error: any) {
+      console.error("❌ [AgentModal] Erro ao carregar configurações LLM:", error)
+      toast({
+        title: "Erro ao carregar configurações LLM",
+        description: error.message || error.toString(),
+        variant: "destructive"
+      })
+      setLlmConfig(null)
+    } finally {
+      setLoadingLlmConfig(false)
+    }
+  }
+
     loadSystemDefaultModel()
+    loadLlmConfig()
   }, [open])
 
   useEffect(() => {
@@ -554,6 +600,7 @@ _______________________________________
         whatsapp_connection_id: formData.whatsapp_connection_id,
         evolution_bot_id: formData.evolution_bot_id,
         model: formData.model || systemDefaultModel,
+      model_config: formData.model_config || "openai",
         // Campos para sincronização Evolution API
         trigger_type: validTriggerType,
         trigger_operator: validTriggerOperator,
@@ -954,50 +1001,171 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                   </p>
                 </div>
 
+                {/* Seção SEGURA de Configuração de LLM */}
                 <div>
-                  <Label htmlFor="model_type" className="text-gray-900 dark:text-gray-100">
-                    Modelo de IA
+                  <Label htmlFor="model_config" className="text-gray-900 dark:text-gray-100">
+                    Provedor de IA 🔒
                   </Label>
                   <Select
-                    name="model_type"
-                    value={formData.model ? "custom" : "default"}
+                    name="model_config"
+                    value={formData.model_config || ""}
                     onValueChange={(value) => {
-                      if (value === "default") {
-                        setFormData((prev) => ({ ...prev, model: null }))
-                      } else {
-                        setFormData((prev) => ({ ...prev, model: formData.model || "" }))
-                      }
+                      console.log("🔄 [AgentModal] Provedor selecionado:", value)
+                      // Ao trocar provedor, automaticamente usar o modelo padrão desse provedor
+                      const defaultModelForProvider = llmConfig?.default_models?.[value] || "gpt-4o-mini"
+                      console.log("📋 [AgentModal] Modelo padrão para", value, ":", defaultModelForProvider)
+                      setFormData((prev) => ({ 
+                        ...prev, 
+                        model_config: value,
+                        model: defaultModelForProvider
+                      }))
                     }}
+                    disabled={loadingLlmConfig || !llmConfig}
                   >
                     <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                      <SelectValue placeholder="Selecione o tipo de modelo" />
+                      <SelectValue placeholder={loadingLlmConfig ? "Carregando provedores..." : "Selecione o provedor de IA"} />
                     </SelectTrigger>
                     <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                      <SelectItem value="default">Modelo Padrão ({systemDefaultModel || "carregando..."})</SelectItem>
-                      <SelectItem value="custom">Outro Modelo</SelectItem>
+                      {(() => {
+                        // Garantir que available_providers seja sempre um array
+                        const providers = llmConfig?.available_providers;
+                        
+                        if (loadingLlmConfig) {
+                          return (
+                            <SelectItem value="loading" disabled>
+                              Carregando provedores...
+                            </SelectItem>
+                          );
+                        }
+                        
+                        if (!providers) {
+                          return (
+                            <SelectItem value="openai">
+                              OpenAI (GPT) - Padrão
+                            </SelectItem>
+                          );
+                        }
+                        
+                        // Se providers for um array, usar normalmente
+                        if (Array.isArray(providers)) {
+                          return providers.map((provider: string) => {
+                            const getProviderName = (provider: string) => {
+                              switch (provider) {
+                                case "openai": return "OpenAI (GPT)";
+                                case "anthropic": return "Anthropic (Claude)";
+                                case "google": return "Google (Gemini)";
+                                case "ollama": return "Ollama (Local)";
+                                case "groq": return "Groq (Fast)";
+                                default: return provider;
+                              }
+                            };
+                            
+                            return (
+                              <SelectItem key={provider} value={provider}>
+                                {getProviderName(provider)}
+                              </SelectItem>
+                            );
+                          });
+                        }
+                        
+                        // Se providers for um objeto (caso de erro), extrair as chaves
+                        if (typeof providers === 'object' && providers !== null) {
+                          return Object.keys(providers).map((provider: string) => {
+                            const getProviderName = (provider: string) => {
+                              switch (provider) {
+                                case "openai": return "OpenAI (GPT)";
+                                case "anthropic": return "Anthropic (Claude)";
+                                case "google": return "Google (Gemini)";
+                                case "ollama": return "Ollama (Local)";
+                                case "groq": return "Groq (Fast)";
+                                default: return provider;
+                              }
+                            };
+                            
+                            return (
+                              <SelectItem key={provider} value={provider}>
+                                {getProviderName(provider)}
+                              </SelectItem>
+                            );
+                          });
+                        }
+                        
+                        // Fallback final
+                        return (
+                          <SelectItem value="openai">
+                            OpenAI (GPT) - Padrão
+                          </SelectItem>
+                        );
+                      })()}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                    Escolha se quer usar o modelo padrão do sistema ou especificar outro modelo
+                    Escolha qual provedor de IA será usado (configurações carregadas do servidor)
                   </p>
                 </div>
 
-                {formData.model !== null && (
+                {formData.model_config && (
+                  <div>
+                    <Label htmlFor="model_selection" className="text-gray-900 dark:text-gray-100">
+                      Modelo Específico 🎯
+                    </Label>
+                    <Select
+                      name="model_selection"
+                      value={modelSelection}
+                      onValueChange={(value: "default" | "custom") => {
+                        setModelSelection(value)
+                        if (value === "default") {
+                          const selectedProvider = formData.model_config || "openai"
+                          const defaultModel = llmConfig?.default_models?.[selectedProvider] || "gpt-4o-mini"
+                          setFormData((prev) => ({ ...prev, model: defaultModel }))
+                        } else {
+                          setFormData((prev) => ({ ...prev, model: "" }))
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                        <SelectValue placeholder="Usar modelo padrão ou personalizado" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                        <SelectItem value="default">
+                          Modelo Padrão ({(() => {
+                            const selectedProvider = formData.model_config || "openai"
+                            const defaultModel = llmConfig?.default_models?.[selectedProvider]
+                            return defaultModel || systemDefaultModel || "carregando..."
+                          })()})
+                        </SelectItem>
+                        <SelectItem value="custom">Modelo Personalizado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                      Use o modelo padrão recomendado ou especifique um modelo específico
+                    </p>
+                  </div>
+                )}
+
+                {formData.model_config && modelSelection === "custom" && (
                   <div>
                     <Label htmlFor="model" className="text-gray-900 dark:text-gray-100">
-                      Nome do Modelo Personalizado *
+                      Nome do Modelo Personalizado * 🔧
                     </Label>
                     <Input
                       id="model"
                       name="model"
                       value={formData.model || ""}
                       onChange={handleInputChange}
-                      placeholder="Ex: gpt-4o, claude-3-sonnet, gemini-pro, etc."
+                      placeholder={
+                        formData.model_config === "openai" ? "Ex: gpt-4o, gpt-4o-mini, gpt-3.5-turbo" :
+                        formData.model_config === "anthropic" ? "Ex: claude-3-haiku-20240307, claude-3-sonnet-20240229" :
+                        formData.model_config === "google" ? "Ex: gemini-1.5-flash, gemini-1.5-pro" :
+                        formData.model_config === "ollama" ? "Ex: llama3.2:3b, llama3.2:1b" :
+                        formData.model_config === "groq" ? "Ex: llama3-8b-8192, mixtral-8x7b-32768" :
+                        "Digite o nome exato do modelo"
+                      }
                       className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                      required
                     />
                     <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                      Digite o nome exato do modelo que deseja usar (ex: gpt-4o, gpt-4o-mini, claude-3-sonnet,
-                      gemini-pro)
+                      Digite o nome exato do modelo para o provedor {formData.model_config}
                     </p>
                   </div>
                 )}
@@ -1744,11 +1912,19 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setShowIgnoreJidsWarning(false)}>
-                    Cancelar (Recomendado)
-                  </Button>
-                  <Button variant="destructive" onClick={confirmRemoveGroupsJid}>
+                  <Button
+                    variant="outline"
+                    className="border border-red-600 text-red-600 hover:bg-red-50"
+                    onClick={confirmRemoveGroupsJid}
+                  >
                     Remover Mesmo Assim
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="bg-green-600 text-white hover:bg-green-700 font-semibold shadow"
+                    onClick={() => setShowIgnoreJidsWarning(false)}
+                  >
+                    Cancelar (Recomendado)
                   </Button>
                 </DialogFooter>
               </DialogContent>

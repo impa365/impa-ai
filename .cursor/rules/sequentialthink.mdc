@@ -1,6 +1,4 @@
-# sequentialthink
-Sempre use a tool sequentialthink antes de responder a uma solicitação, sempre utilize essa tool.
-description:
-globs:
+---
 alwaysApply: true
 ---
+Sempre use a tool sequentialthink antes de responder a uma solicitação, sempre utilize essa tool (sequentialthink).

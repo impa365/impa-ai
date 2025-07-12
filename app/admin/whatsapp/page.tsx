@@ -596,12 +596,8 @@ export default function AdminWhatsAppPage() {
 
       <WhatsAppInfoModal
         open={infoModalOpen}
-        onOpenChange={(open) => {
-          setInfoModalOpen(open);
-          if (open) autoSync();
-        }}
+        onOpenChange={setInfoModalOpen}
         connection={selectedConnection}
-        onStatusChange={() => loadConnections()}
       />
 
       <AdminWhatsAppConnectionModal
