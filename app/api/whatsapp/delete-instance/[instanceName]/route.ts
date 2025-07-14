@@ -7,8 +7,10 @@ export async function DELETE(
 ) {
   try {
     const { instanceName } = params;
+    console.log("🗑️ Iniciando deleção de instância:", instanceName);
 
     if (!instanceName) {
+      console.error("❌ Nome da instância não fornecido");
       return NextResponse.json(
         { success: false, error: "Nome da instância é obrigatório" },
         { status: 400 }
@@ -18,11 +20,18 @@ export async function DELETE(
     // Verificar autenticação
     const user = await getCurrentServerUser(request);
     if (!user) {
+      console.error("❌ Usuário não autenticado");
       return NextResponse.json(
         { success: false, error: "Usuário não autenticado" },
         { status: 401 }
       );
     }
+
+    console.log("👤 Usuário autenticado:", {
+      id: user.id,
+      email: user.email,
+      role: user.role
+    });
 
     // Configuração do Supabase
     const supabaseUrl = process.env.SUPABASE_URL;
@@ -35,6 +44,8 @@ export async function DELETE(
         { status: 500 }
       );
     }
+
+    console.log("🔍 Buscando conexão com instance_name:", instanceName);
 
     // Verificar se a conexão pertence ao usuário (ou se é admin)
     const connectionCheckResponse = await fetch(
@@ -50,7 +61,13 @@ export async function DELETE(
       }
     );
 
+    console.log("📡 Resposta da busca de conexão:", {
+      status: connectionCheckResponse.status,
+      ok: connectionCheckResponse.ok
+    });
+
     if (!connectionCheckResponse.ok) {
+      console.error("❌ Erro ao buscar conexão:", connectionCheckResponse.statusText);
       return NextResponse.json(
         { success: false, error: "Erro ao verificar conexão" },
         { status: 500 }
@@ -58,8 +75,30 @@ export async function DELETE(
     }
 
     const connections = await connectionCheckResponse.json();
+    console.log("📋 Conexões encontradas:", connections);
 
     if (!connections || connections.length === 0) {
+      console.error("❌ Nenhuma conexão encontrada com instance_name:", instanceName);
+      
+      // Buscar todas as conexões do usuário para debug
+      const allConnectionsResponse = await fetch(
+        `${supabaseUrl}/rest/v1/whatsapp_connections?user_id=eq.${user.id}&select=id,instance_name,connection_name`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Accept-Profile": "impaai",
+            "Content-Profile": "impaai",
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+        }
+      );
+      
+      if (allConnectionsResponse.ok) {
+        const allConnections = await allConnectionsResponse.json();
+        console.log("🔍 Todas as conexões do usuário:", allConnections);
+      }
+      
       return NextResponse.json(
         { success: false, error: "Conexão não encontrada" },
         { status: 404 }
@@ -67,9 +106,17 @@ export async function DELETE(
     }
 
     const connection = connections[0];
+    console.log("🔐 Verificando permissões:", {
+      connection_user_id: connection.user_id,
+      current_user_id: user.id,
+      user_role: user.role,
+      is_owner: connection.user_id === user.id,
+      is_admin: user.role === "admin"
+    });
 
     // Verificar permissão: deve ser o dono da conexão ou admin
     if (connection.user_id !== user.id && user.role !== "admin") {
+      console.error("❌ Sem permissão para deletar conexão");
       return NextResponse.json(
         { success: false, error: "Sem permissão para deletar esta conexão" },
         { status: 403 }

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Edit, Trash2, Power, PowerOff, Bot, Search, Filter, Plus, Users } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { AgentModal } from "@/components/agent-modal"
 import { useToast } from "@/components/ui/use-toast"
 import { publicApi } from "@/lib/api-client"
@@ -42,6 +43,7 @@ export default function AdminAgentsPage() {
   const [isDeleting, setIsDeleting] = useState(false)
 
   const { toast } = useToast()
+  const router = useRouter()
 
   useEffect(() => {
     fetchData()
@@ -370,6 +372,17 @@ export default function AdminAgentsPage() {
                     <Button variant="ghost" size="sm" onClick={() => handleEditAgent(agent)}>
                       <Edit className="w-4 h-4" />
                     </Button>
+                    {agent.evolution_bot_id && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-blue-600 hover:text-blue-700"
+                        onClick={() => router.push(`/admin/agents/${agent.id}/sessions`)}
+                        title="Ver sessões do Evolution Bot"
+                      >
+                        <Users className="w-4 h-4" />
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" onClick={() => handleToggleStatus(agent)}>
                       {agent.status === "active" ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
                     </Button>

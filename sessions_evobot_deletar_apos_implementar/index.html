@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Painel de Navegação</title>
+  <link rel="icon" href="img/favicon.png" type="image/png"/>
+  <!-- Font Awesome para ícones -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"/>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    /* Variáveis CSS para temas */
+    :root {
+      --background-color: #121212;
+      --text-color: #e0e0e0;
+      --header-background: linear-gradient(135deg, #1f1f1f, #343434);
+      --container-background: #1e1e1e;
+      --button-background: #4CAF50;
+      --button-text-color: white;
+      --menu-background: #2b2b2b;
+      --menu-text-color: #e0e0e0;
+      --menu-hover-background: #3a3a3a;
+      --card-background: #2b2b2b;
+      --card-border: #3a3a3a;
+      --transition-time: 0.3s;
+      --accent-color: #4CAF50;
+      --tutorial-step-bg: #2b2b2b;
+      --box-shadow-color: rgba(0, 0, 0, 0.4);
+    }
+
+    /* Tema Claro */
+    .light-theme {
+      --background-color: #f4f4f9;
+      --text-color: #333;
+      --header-background: linear-gradient(135deg, #e0e0e0, #f4f4f9);
+      --container-background: #ffffff;
+      --button-background: #4CAF50;
+      --button-text-color: white;
+      --menu-background: #f0f0f0;
+      --menu-text-color: #333;
+      --menu-hover-background: #e0e0e0;
+      --card-background: #f5f5f5;
+      --card-border: #dddddd;
+      --tutorial-step-bg: #f0f0f0;
+      --box-shadow-color: rgba(0, 0, 0, 0.1);
+    }
+
+    /* Estilos Globais */
+    body {
+      font-family: 'Roboto', sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      transition: background-color var(--transition-time), color var(--transition-time);
+    }
+
+    /* Cabeçalho */
+    header {
+      display: flex;
+      align-items: center;
+      background: var(--header-background);
+      color: var(--text-color);
+      padding: 10px 20px;
+      box-shadow: 0 4px 8px var(--box-shadow-color);
+      position: relative;
+    }
+
+    header h1 {
+      flex: 1;
+      text-align: center;
+      margin: 0;
+      font-size: 1.8em;
+      font-weight: 700;
+    }
+
+    .logo {
+      width: 50px;
+      height: auto;
+    }
+
+    /* Barra de Navegação */
+    nav {
+      display: flex;
+      gap: 15px;
+    }
+
+    nav a {
+      background-color: var(--button-background);
+      color: var(--button-text-color);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 0.95em;
+      text-decoration: none;
+      transition: background-color var(--transition-time), box-shadow var(--transition-time);
+    }
+
+    nav a:hover {
+      background-color: #45a049;
+      box-shadow: 0 4px 10px var(--box-shadow-color);
+    }
+
+    /* Botão de Alternar Tema */
+    .theme-toggle {
+      background: none;
+      border: none;
+      color: var(--text-color);
+      font-size: 1.8em;
+      cursor: pointer;
+      transition: transform 0.2s;
+      margin-left: 10px;
+    }
+
+    .theme-toggle:hover {
+      transform: scale(1.1);
+    }
+
+    /* Conteúdo Principal */
+    .container {
+      max-width: 1100px;
+      margin: 30px auto;
+      padding: 30px;
+      background: var(--container-background);
+      border-radius: 12px;
+      box-shadow: 0 6px 20px var(--box-shadow-color);
+      transition: background var(--transition-time);
+    }
+
+    .container h2 {
+      margin-top: 0;
+      color: var(--text-color);
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--accent-color);
+      padding-bottom: 10px;
+    }
+
+    .welcome {
+      font-size: 1.2em;
+      margin-top: 20px;
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    /* Estilos para o Tutorial */
+    .tutorial-section {
+      margin-top: 40px;
+    }
+
+    .tutorial-title {
+      text-align: center;
+      font-size: 1.5em;
+      margin-bottom: 25px;
+      color: var(--accent-color);
+    }
+
+    .tutorial-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 25px;
+      margin-top: 20px;
+    }
+
+    .tutorial-step {
+      background-color: var(--tutorial-step-bg);
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 4px 8px var(--box-shadow-color);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .tutorial-step:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 6px 12px var(--box-shadow-color);
+    }
+
+    .step-number {
+      background-color: var(--accent-color);
+      color: white;
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      margin-bottom: 15px;
+      margin-right: auto;
+      margin-left: auto;
+    }
+
+    .step-title {
+      font-weight: 600;
+      font-size: 1.2em;
+      margin-bottom: 12px;
+      text-align: center;
+      color: var(--accent-color);
+    }
+
+    .step-description {
+      text-align: left;
+      line-height: 1.6;
+    }
+
+    .note {
+      background-color: rgba(76, 175, 80, 0.1);
+      border-left: 4px solid var(--accent-color);
+      padding: 15px;
+      border-radius: 0 5px 5px 0;
+      margin-top: 30px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="img/logo.png" alt="Logo" class="logo">
+    <h1>Painel de Navegação</h1>
+    <nav>
+      <a href="Typebot.html">Typebot</a>
+      <a href="Openai.html">OpenAI</a>
+      <a href="Dify.html">Dify</a>
+      <a href="EvolutionBot.html">EvolutionBot</a>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" aria-label="Alternar tema"><i class="fas fa-moon"></i></button>
+  </header>
+
+  <div class="container">
+    <h2>Bem-vindo ao Painel de Navegação</h2>
+    <p class="welcome">Selecione a ferramenta desejada na barra de navegação acima para gerenciar suas conversas.</p>
+
+    <!-- Seção de Tutorial -->
+    <div class="tutorial-section">
+      <h3 class="tutorial-title">Como Conectar uma Instância</h3>
+      <div class="tutorial-steps">
+        <div class="tutorial-step">
+          <div class="step-number">1</div>
+          <div class="step-title">Selecione uma Ferramenta</div>
+          <div class="step-description">
+            Clique em uma das ferramentas na barra de navegação (Typebot, OpenAI, Dify ou EvolutionBot) para acessar o painel correspondente.
+          </div>
+        </div>
+
+        <div class="tutorial-step">
+          <div class="step-number">2</div>
+          <div class="step-title">Gerenciar Instâncias</div>
+          <div class="step-description">
+            No painel da ferramenta, clique no botão <strong>"Gerenciar Instâncias"</strong> localizado no canto superior direito da tela.
+          </div>
+        </div>
+
+        <div class="tutorial-step">
+          <div class="step-number">3</div>
+          <div class="step-title">Adicionar Nova Instância</div>
+          <div class="step-description">
+            Preencha o formulário com as seguintes informações:
+            <ul>
+              <li><strong>Nome do Cliente:</strong> Identificação da instância</li>
+              <li><strong>Base URL:</strong> Endereço da API (ex: https://sua-api.com)</li>
+              <li><strong>Nome da Instância:</strong> ID da instância no sistema</li>
+              <li><strong>API Key:</strong> Chave de autenticação fornecida</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="tutorial-step">
+          <div class="step-number">4</div>
+          <div class="step-title">Salvar e Selecionar</div>
+          <div class="step-description">
+            Clique em <strong>"Adicionar Instância"</strong> para salvar. Depois, selecione a instância adicionada no menu suspenso ao lado do botão "Gerenciar Instâncias".
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <strong>Nota:</strong> Todas as instâncias criadas são salvas localmente no seu navegador. Se você limpar os dados do navegador ou acessar de outro dispositivo, precisará configurar as instâncias novamente.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Referências aos elementos DOM
+    const themeToggle = document.getElementById('themeToggle');
+
+    // Função para alternar tema
+    themeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('light-theme');
+      // Atualiza o ícone do botão de tema
+      themeToggle.innerHTML = document.body.classList.contains('light-theme')
+        ? '<i class="fas fa-sun"></i>'
+        : '<i class="fas fa-moon"></i>';
+      // Salva a preferência de tema no localStorage
+      if (document.body.classList.contains('light-theme')) {
+        localStorage.setItem('theme', 'light');
+      } else {
+        localStorage.setItem('theme', 'dark');
+      }
+    });
+
+    // Aplica o tema salvo ao carregar a página
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme === 'light') {
+        document.body.classList.add('light-theme');
+        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+      } else {
+        themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+      }
+    });
+  </script>
+</body>
+</html>

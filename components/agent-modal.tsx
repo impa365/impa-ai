@@ -244,9 +244,9 @@ export function AgentModal({
         setLlmConfig(data.config)
       } else {
         throw new Error(data.error || "Erro desconhecido ao carregar configurações LLM")
-      }
+       }
     } catch (error: any) {
-      console.error("❌ [AgentModal] Erro ao carregar configurações LLM:", error)
+       console.error("❌ [AgentModal] Erro ao carregar configurações LLM:", error)
       toast({
         title: "Erro ao carregar configurações LLM",
         description: error.message || error.toString(),
@@ -552,6 +552,10 @@ _______________________________________
     try {
       console.log("🔄 [AgentModal] Iniciando salvamento via API...")
 
+      // Detectar automaticamente se é contexto de admin ou usuário
+      const isAdminContext = typeof window !== 'undefined' && window.location.pathname.includes('/admin/')
+      console.log(`🔍 [AgentModal] Contexto detectado: ${isAdminContext ? 'ADMIN' : 'USUÁRIO'}`)
+
       // Garantir que trigger_type tenha um valor válido
       const validTriggerType =
         formData.trigger_type && ["keyword", "all"].includes(formData.trigger_type)
@@ -617,21 +621,37 @@ _______________________________________
         ignore_jids: finalIgnoreJids,
       }
 
+      // Escolher a API correta baseada no contexto
+      const baseApiPath = isAdminContext ? "/api/admin/agents" : "/api/user/agents"
+      
       let response
       if (isEditing && agent?.id) {
         // Atualizar agente existente
-        console.log("🔄 [AgentModal] Atualizando agente via API:", agent.id)
-        response = await fetch("/api/admin/agents", {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ id: agent.id, ...agentPayload }),
-        })
+        console.log(`🔄 [AgentModal] Atualizando agente via API (${isAdminContext ? 'admin' : 'usuário'}):`, agent.id)
+        
+        if (isAdminContext) {
+          // Para admin: usar PUT com ID no payload
+          response = await fetch(baseApiPath, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ id: agent.id, ...agentPayload }),
+          })
+        } else {
+          // Para usuário: usar PUT com ID na URL
+          response = await fetch(`${baseApiPath}/${agent.id}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(agentPayload),
+          })
+        }
       } else {
         // Criar novo agente
-        console.log("🔄 [AgentModal] Criando novo agente via API")
-        response = await fetch("/api/admin/agents", {
+        console.log(`🔄 [AgentModal] Criando novo agente via API (${isAdminContext ? 'admin' : 'usuário'})`)
+        response = await fetch(baseApiPath, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1061,9 +1081,9 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                             };
                             
                             return (
-                              <SelectItem key={provider} value={provider}>
+                        <SelectItem key={provider} value={provider}>
                                 {getProviderName(provider)}
-                              </SelectItem>
+                        </SelectItem>
                             );
                           });
                         }
@@ -1085,7 +1105,7 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                             return (
                               <SelectItem key={provider} value={provider}>
                                 {getProviderName(provider)}
-                              </SelectItem>
+                        </SelectItem>
                             );
                           });
                         }
@@ -1114,19 +1134,19 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                       value={modelSelection}
                       onValueChange={(value: "default" | "custom") => {
                         setModelSelection(value)
-                        if (value === "default") {
+                      if (value === "default") {
                           const selectedProvider = formData.model_config || "openai"
                           const defaultModel = llmConfig?.default_models?.[selectedProvider] || "gpt-4o-mini"
                           setFormData((prev) => ({ ...prev, model: defaultModel }))
-                        } else {
+                      } else {
                           setFormData((prev) => ({ ...prev, model: "" }))
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
                         <SelectValue placeholder="Usar modelo padrão ou personalizado" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
                         <SelectItem value="default">
                           Modelo Padrão ({(() => {
                             const selectedProvider = formData.model_config || "openai"
@@ -1135,12 +1155,12 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                           })()})
                         </SelectItem>
                         <SelectItem value="custom">Modelo Personalizado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
                       Use o modelo padrão recomendado ou especifique um modelo específico
-                    </p>
-                  </div>
+                  </p>
+                </div>
                 )}
 
                 {formData.model_config && modelSelection === "custom" && (

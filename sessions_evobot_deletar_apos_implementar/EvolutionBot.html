@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Painel de Alteração de Status - Evolution Bot</title>
+  <link rel="icon" href="img/favicon.png" type="image/png"/>
+  <!-- Font Awesome para ícones -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"/>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --background-color: #121212;
+      --text-color: #e0e0e0;
+      --header-background: linear-gradient(135deg, #1f1f1f, #343434);
+      --container-background: #1e1e1e;
+      --input-background: #2d2d2d;
+      --input-text-color: #e0e0e0;
+      --button-background: #4CAF50;
+      --button-text-color: white;
+      --card-background: #2b2b2b;
+      --card-hover-background: #3a3a3a;
+      --log-text-color: #ccc;
+      --log-success-color: #4CAF50;
+      --log-error-color: #ff4c4c;
+      --session-count-color: #b0b0b0;
+      --placeholder-color: #999;
+      --box-shadow-color: rgba(0, 0, 0, 0.4);
+      --input-focus-shadow: #4CAF50;
+      --menu-background: #2b2b2b;
+      --menu-text-color: #e0e0e0;
+      --menu-hover-background: #3a3a3a;
+      --transition-time: 0.3s;
+    }
+
+    .light-theme {
+      --background-color: #f4f4f9;
+      --text-color: #333;
+      --header-background: linear-gradient(135deg, #e0e0e0, #f4f4f9);
+      --container-background: #fff;
+      --input-background: #f0f0f0;
+      --input-text-color: #333;
+      --button-background: #4CAF50;
+      --button-text-color: white;
+      --card-background: #f0f0f0;
+      --card-hover-background: #e0e0e0;
+      --log-text-color: #333;
+      --log-success-color: #4CAF50;
+      --log-error-color: #ff4c4c;
+      --session-count-color: #666;
+      --placeholder-color: #666;
+      --box-shadow-color: rgba(0, 0, 0, 0.1);
+      --input-focus-shadow: #4CAF50;
+      --menu-background: #f0f0f0;
+      --menu-text-color: #333;
+      --menu-hover-background: #e0e0e0;
+    }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      transition: background-color var(--transition-time), color var(--transition-time);
+    }
+
+    /* Cabeçalho */
+    header {
+      width: 100%;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      background: var(--header-background);
+      color: var(--text-color);
+      padding: 10px 20px;
+      box-shadow: 0 4px 8px var(--box-shadow-color);
+      position: relative;
+    }
+
+    .header-top h1 {
+      flex: 1;
+      text-align: center;
+      margin: 0;
+      font-size: 1.8em;
+      font-weight: 700;
+    }
+
+    .logo {
+      width: 50px;
+      height: auto;
+    }
+
+    .theme-toggle {
+      background: none;
+      border: none;
+      color: var(--text-color);
+      font-size: 1.8em;
+      cursor: pointer;
+      transition: transform 0.2s;
+      margin-left: 10px;
+    }
+
+    .theme-toggle:hover {
+      transform: scale(1.1);
+    }
+
+    .header-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--menu-background);
+      padding: 10px 20px;
+      box-shadow: 0 2px 4px var(--box-shadow-color);
+      transition: background var(--transition-time);
+    }
+
+    nav {
+      display: flex;
+      gap: 15px;
+    }
+
+    nav a {
+      background-color: var(--button-background);
+      color: var(--button-text-color);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 0.95em;
+      text-decoration: none;
+      transition: background-color var(--transition-time), box-shadow var(--transition-time);
+    }
+
+    nav a:hover {
+      background-color: #45a049;
+      box-shadow: 0 4px 10px var(--box-shadow-color);
+    }
+
+    /* Indicação da Página Ativa */
+    nav a.active {
+      background-color: #3e8e41;
+      box-shadow: 0 4px 10px var(--box-shadow-color);
+    }
+
+    #manageInstances {
+      background-color: var(--button-background);
+      color: var(--button-text-color);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 0.95em;
+      transition: background-color var(--transition-time), box-shadow var(--transition-time);
+      margin-right: 15px;
+    }
+
+    #manageInstances:hover {
+      background-color: #45a049;
+      box-shadow: 0 4px 10px var(--box-shadow-color);
+    }
+
+    .instance-selector {
+      background-color: var(--input-background);
+      color: var(--input-text-color);
+      border: none;
+      border-radius: 6px;
+      padding: 6px;
+      font-size: 0.95em;
+      box-shadow: 0 2px 5px var(--box-shadow-color);
+      outline: none;
+    }
+
+    .instance-selector:focus {
+      box-shadow: 0 0 8px var(--input-focus-shadow);
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 30px auto;
+      padding: 30px;
+      background: var(--container-background);
+      border-radius: 12px;
+      box-shadow: 0 6px 20px var(--box-shadow-color);
+      transition: background var(--transition-time);
+      position: relative;
+    }
+
+    h2 {
+      margin-top: 40px;
+      margin-bottom: 20px;
+      color: var(--text-color);
+      font-weight: 600;
+      border-bottom: 2px solid var(--button-background);
+      padding-bottom: 10px;
+    }
+
+    form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    label {
+      font-weight: 500;
+      margin-bottom: 5px;
+    }
+
+    input, select, textarea {
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 1em;
+      background-color: var(--input-background);
+      color: var(--input-text-color);
+      box-shadow: 0 2px 5px var(--box-shadow-color);
+      transition: box-shadow var(--transition-time), background-color var(--transition-time);
+    }
+
+    input::placeholder, select::placeholder, textarea::placeholder {
+      color: var(--placeholder-color);
+    }
+
+    input:focus, select:focus, textarea:focus {
+      box-shadow: 0 0 8px var(--input-focus-shadow);
+      outline: none;
+    }
+
+    button {
+      padding: 12px;
+      background-color: var(--button-background);
+      color: var(--button-text-color);
+      border: none;
+      border-radius: 6px;
+      font-size: 1.1em;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color var(--transition-time), box-shadow var(--transition-time);
+    }
+
+    button:hover {
+      background-color: #45a049;
+      box-shadow: 0 4px 10px var(--box-shadow-color);
+    }
+
+    button:disabled {
+      background-color: #666;
+      cursor: not-allowed;
+    }
+
+    .sessionPanel, .botPanel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-top: 30px;
+    }
+
+    .sessionCard, .botCard {
+      border: none;
+      padding: 20px;
+      border-radius: 12px;
+      background-color: var(--card-background);
+      box-shadow: 0 4px 15px var(--box-shadow-color);
+      transition: background-color var(--transition-time), transform var(--transition-time);
+      position: relative;
+    }
+
+    .sessionCard:hover, .botCard:hover {
+      background-color: var(--card-hover-background);
+      transform: translateY(-5px);
+    }
+
+    .sessionCard h3, .botCard h3 {
+      margin: 0;
+      font-size: 1.4em;
+      color: var(--text-color);
+      font-weight: 500;
+    }
+
+    .sessionCard p, .botCard p {
+      margin: 8px 0;
+      font-size: 1em;
+      color: var(--text-color);
+    }
+
+    .botCard.selected {
+      border: 2px solid var(--button-background);
+    }
+
+    .filterPanel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+
+    .showMorePanel {
+      margin-top: 25px;
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .logPanel {
+      margin-top: 30px;
+      padding: 20px;
+      border: none;
+      border-radius: 12px;
+      background-color: var(--card-background);
+      display: none;
+      overflow-y: auto;
+      max-height: 300px;
+      box-shadow: 0 4px 15px var(--box-shadow-color);
+    }
+
+    .logEntry {
+      font-size: 1em;
+      margin-bottom: 15px;
+      color: var(--log-text-color);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .logSuccess {
+      color: var(--log-success-color);
+    }
+
+    .logError {
+      color: var(--log-error-color);
+    }
+
+    .session-count {
+      margin-top: 20px;
+      font-size: 1.2em;
+      text-align: center;
+      color: var(--session-count-color);
+    }
+
+    .sessionCheckbox {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      transform: scale(1.2);
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.7);
+      transition: opacity var(--transition-time);
+    }
+
+    .modal-content {
+      background-color: var(--container-background);
+      margin: 5% auto;
+      padding: 20px;
+      border: 1px solid var(--text-color);
+      width: 80%;
+      max-width: 500px;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px var(--box-shadow-color);
+      position: relative;
+    }
+
+    .close-button {
+      color: var(--text-color);
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: color var(--transition-time);
+    }
+
+    .close-button:hover {
+      color: #ccc;
+    }
+
+    .modal label {
+      display: block;
+      margin-top: 15px;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+
+    .modal textarea {
+      width: 100%;
+      resize: vertical;
+    }
+
+    .options-menu {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+    }
+
+    .options-button {
+      background: none;
+      border: none;
+      color: var(--text-color);
+      font-size: 1.5em;
+      cursor: pointer;
+      padding: 5px;
+      transition: transform var(--transition-time);
+    }
+
+    .options-button:hover {
+      transform: scale(1.1);
+    }
+
+    .options-dropdown {
+      display: none;
+      position: absolute;
+      bottom: 35px;
+      right: 0;
+      background-color: var(--menu-background);
+      min-width: 150px;
+      box-shadow: 0 4px 8px var(--box-shadow-color);
+      z-index: 1;
+      border-radius: 6px;
+    }
+
+    .options-dropdown a {
+      color: var(--menu-text-color);
+      padding: 12px 16px;
+      text-decoration: none;
+      display: block;
+      cursor: pointer;
+      transition: background-color var(--transition-time);
+    }
+
+    .options-dropdown a:hover {
+      background-color: var(--menu-hover-background);
+    }
+
+    .toggleBotsButton {
+      margin-bottom: 20px;
+      cursor: pointer;
+      background-color: var(--button-background);
+      color: var(--button-text-color);
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 1em;
+      transition: background-color var(--transition-time), box-shadow var(--transition-time);
+    }
+
+    .toggleBotsButton:hover {
+      background-color: #45a049;
+      box-shadow: 0 4px 10px var(--box-shadow-color);
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .custom-time-filter {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .custom-time-filter input[type="number"] {
+      width: 80px;
+    }
+
+    .instances-list {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-bottom: 20px;
+      border: 1px solid var(--text-color);
+      padding: 10px;
+      border-radius: 6px;
+      background-color: var(--card-background);
+    }
+
+    .instance-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 10px;
+    }
+
+    .instance-item span {
+      flex: 1;
+      margin-right: 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.9em;
+    }
+
+    .instance-item .edit-instance {
+      background: none;
+      border: none;
+      color: var(--text-color);
+      cursor: pointer;
+      font-size: 1em;
+      margin-right: 5px;
+      transition: color var(--transition-time);
+    }
+
+    .instance-item .edit-instance:hover {
+      color: #ccc;
+    }
+
+    .instance-item button {
+      background: none;
+      border: none;
+      color: var(--text-color);
+      cursor: pointer;
+      font-size: 1.2em;
+      transition: color var(--transition-time);
+    }
+
+    .instance-item button:hover {
+      color: #ccc;
+    }
+
+    .edit-instance-form {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%,-50%);
+      background-color: var(--card-background);
+      border-radius: 12px;
+      box-shadow: 0 4px 15px var(--box-shadow-color);
+      padding: 20px;
+      z-index: 2000;
+      border: 2px solid var(--button-background);
+      font-size: 1em;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .edit-instance-form h3 {
+      margin-top: 0;
+      color: var(--text-color);
+      font-weight: 600;
+      border-bottom: 2px solid var(--button-background);
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+
+    .edit-instance-form label {
+      font-weight: 500;
+      margin-bottom: 5px;
+    }
+
+    .edit-instance-form input {
+      margin-bottom: 15px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .logs-container {
+      margin-top: 40px;
+    }
+
+    .toggleLogs {
+      margin-top: 20px;
+      cursor: pointer;
+      background-color: var(--button-background);
+      color: var(--button-text-color);
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 1em;
+      transition: background-color var(--transition-time), box-shadow var(--transition-time);
+    }
+
+    .toggleLogs:hover {
+      background-color: #45a049;
+      box-shadow: 0 4px 10px var(--box-shadow-color);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <!-- Primeira Linha do Cabeçalho -->
+    <div class="header-top">
+      <img src="img/logo.png" alt="Logo" class="logo">
+      <h1>Painel de Alteração de Status - Evolution Bot</h1>
+      <button class="theme-toggle" id="themeToggle" aria-label="Alternar tema"><i class="fas fa-moon"></i></button>
+    </div>
+    <!-- Segunda Linha do Cabeçalho -->
+    <div class="header-bottom">
+      <nav>
+        <a href="Typebot.html">Typebot</a>
+        <a href="Openai.html">OpenAI</a>
+        <a href="Dify.html">Dify</a>
+        <a href="EvolutionBot.html">Evolution Bot</a>
+      </nav>
+      <div style="display: flex; align-items: center;">
+        <button id="manageInstances">Gerenciar Instâncias</button>
+        <select class="instance-selector"></select>
+      </div>
+    </div>
+  </header>
+
+  <div class="container" id="evolutionBot">
+    <button class="toggleBotsButton">Ocultar Bots Disponíveis</button>
+
+    <div class="bots-container">
+      <h2>Bots Disponíveis:</h2>
+      <div class="botPanel"></div>
+    </div>
+
+    <h2>Enviar Mensagem:</h2>
+    <form class="messageForm">
+      <label>Status:</label>
+      <select class="statusToSend">
+        <option value="opened">Opened</option>
+        <option value="paused">Paused</option>
+        <option value="closed">Closed</option>
+      </select>
+
+      <label>Tempo:</label>
+      <select class="timeToSend">
+        <option value="">Todos os Tempos</option>
+        <option value="5">Últimos 5 Minutos</option>
+        <option value="10">Últimos 10 Minutos</option>
+        <option value="15">Últimos 15 Minutos</option>
+        <option value="20">Últimos 20 Minutos</option>
+        <option value="30">Últimos 30 Minutos</option>
+        <option value="60">Últimos 60 Minutos</option>
+        <option value=">60">Mais de 60 Minutos</option>
+        <option value=">120">Mais de 2 Horas</option>
+        <option value=">300">Mais de 5 Horas</option>
+        <option value=">1440">Mais de 24 Horas</option>
+        <option value="custom">Personalizado</option>
+      </select>
+
+      <div class="custom-time-filter message-custom-time" style="display:none;">
+        <select class="customTimeCondition">
+          <option value="more">A mais de</option>
+          <option value="less">A menos de</option>
+        </select>
+        <input type="number" class="customTimeValue" placeholder="Valor">
+        <select class="customTimeUnit">
+          <option value="minutes">Minutos</option>
+          <option value="hours">Horas</option>
+          <option value="days">Dias</option>
+        </select>
+      </div>
+
+      <label>Mensagem:</label>
+      <textarea class="messageText" rows="4" placeholder="Digite a mensagem"></textarea>
+
+      <button type="submit">Enviar Mensagens</button>
+    </form>
+
+    <h2>Filtro:</h2>
+    <div class="filterPanel">
+      <input type="text" class="filterName" placeholder="Filtrar por Nome">
+      <input type="text" class="filterNumber" placeholder="Filtrar por Número">
+      <select class="filterStatus">
+        <option value="">Filtrar por Status</option>
+        <option value="opened">Opened</option>
+        <option value="paused">Paused</option>
+        <option value="closed">Closed</option>
+      </select>
+      <select class="filterTime">
+        <option value="">Filtrar por Tempo</option>
+        <option value="5">Últimos 5 Minutos</option>
+        <option value="10">Últimos 10 Minutos</option>
+        <option value="15">Últimos 15 Minutos</option>
+        <option value="20">Últimos 20 Minutos</option>
+        <option value="30">Últimos 30 Minutos</option>
+        <option value="60">Últimos 60 Minutos</option>
+        <option value=">60">Mais de 60 Minutos</option>
+        <option value=">120">Mais de 2 Horas</option>
+        <option value=">300">Mais de 5 Horas</option>
+        <option value=">1440">Mais de 24 Horas</option>
+        <option value="custom">Personalizado</option>
+      </select>
+      <div class="custom-time-filter filter-custom-time" style="display:none;">
+        <select class="customFilterCondition">
+          <option value="more">A mais de</option>
+          <option value="less">A menos de</option>
+        </select>
+        <input type="number" class="customFilterValue" placeholder="Valor">
+        <select class="customFilterUnit">
+          <option value="minutes">Minutos</option>
+          <option value="hours">Horas</option>
+          <option value="days">Dias</option>
+        </select>
+      </div>
+      <button class="applyFilters">Aplicar Filtros</button>
+    </div>
+
+    <h2>Alterar Etapas:</h2>
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+      <input type="checkbox" class="selectAll"> Selecionar Todas
+      <button class="massUpdate">Alterar Status das Selecionadas</button>
+      <select class="statusChange">
+        <option value="opened">Opened</option>
+        <option value="paused">Paused</option>
+        <option value="delete">Delete</option>
+        <option value="closed">Closed</option>
+      </select>
+    </div>
+
+    <h2>Sessões Retornadas:</h2>
+    <div class="session-count">Total de Sessões: 0</div>
+    <div class="sessionPanel"></div>
+    <div class="showMorePanel">
+      <button class="showMore">Mostrar Mais</button>
+      <button class="showAll">Mostrar Tudo</button>
+      <button class="showLess" disabled>Mostrar Menos</button>
+    </div>
+
+    <div class="logs-container">
+      <button class="toggleLogs">Exibir Logs</button>
+      <div class="logPanel"></div>
+      <pre class="result error"></pre>
+    </div>
+  </div>
+
+  <!-- MODAL DE INSTÂNCIAS -->
+  <div id="instancesModal" class="modal">
+    <div class="modal-content">
+      <span class="close-button" id="closeInstancesModal">&times;</span>
+      <h2>Gerenciar Instâncias</h2>
+      <div class="instances-list"></div>
+      <form id="instanceForm">
+        <label for="instanceName">Nome do Cliente:</label>
+        <input type="text" id="instanceName" required placeholder="Nome da Instância">
+
+        <label for="instanceUrl">Base URL:</label>
+        <input type="url" id="instanceUrl" required placeholder="https://SuaUrlApi.com">
+
+        <label for="instanceId">Nome da Instancia:</label>
+        <input type="text" id="instanceId" required placeholder="Digite o ID da Instance">
+
+        <label for="instanceApiKey">API Key:</label>
+        <input type="password" id="instanceApiKey" required placeholder="Digite sua API Key">
+
+        <button type="submit">Adicionar Instância</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL ALTERAR STATUS INDIVIDUAL -->
+  <div id="statusModal" class="modal">
+    <div class="modal-content">
+      <span class="close-button" id="closeStatusModal">&times;</span>
+      <h2>Alterar Status</h2>
+      <form id="statusForm">
+        <label for="individualStatusChange">Selecione o Novo Status:</label>
+        <select id="individualStatusChange">
+          <option value="opened">Opened</option>
+          <option value="paused">Paused</option>
+          <option value="delete">Delete</option>
+          <option value="closed">Closed</option>
+        </select>
+        <input type="hidden" id="statusRemoteJid">
+        <button type="submit">Alterar Status</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL ENVIAR MENSAGEM INDIVIDUAL -->
+  <div id="messageModal" class="modal">
+    <div class="modal-content">
+      <span class="close-button" id="closeMessageModal">&times;</span>
+      <h2>Enviar Mensagem</h2>
+      <form id="individualMessageForm">
+        <label for="individualMessageText">Mensagem:</label>
+        <textarea id="individualMessageText" rows="4" placeholder="Digite a mensagem"></textarea>
+        <input type="hidden" id="messageRemoteJid">
+        <button type="submit">Enviar Mensagem</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL EDITAR SESSÃO -->
+  <div id="editSessionModal" class="modal">
+    <div class="modal-content">
+      <span class="close-button" id="closeEditSessionModal">&times;</span>
+      <h2>Editar Sessão</h2>
+      <form id="editSessionForm">
+        <input type="hidden" id="editSessionRemoteJid">
+        <label for="editSessionName">Nome da Sessão:</label>
+        <input type="text" id="editSessionName" required placeholder="Novo nome da sessão">
+        <button type="submit">Salvar Alterações</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- FORMULARIO EDITAR INSTÂNCIA -->
+  <form id="editInstancePanel" class="edit-instance-form">
+    <h3>Editar Instância</h3>
+    <input type="hidden" id="editInstancePanelIndex">
+    <label for="editInstancePanelName">Nome do Cliente:</label>
+    <input type="text" id="editInstancePanelName" required>
+
+    <label for="editInstancePanelUrl">Base URL:</label>
+    <input type="url" id="editInstancePanelUrl" required>
+
+    <label for="editInstancePanelId">Nome da Instancia:</label>
+    <input type="text" id="editInstancePanelId" required>
+
+    <label for="editInstancePanelApiKey">API Key:</label>
+    <input type="password" id="editInstancePanelApiKey" required>
+
+    <button type="submit">Salvar Alterações</button>
+  </form>
+
+  <script>
+    // Abaixo estão as variáveis e lógicas do frontend.
+    // Código referente à automação e à conexão com DB removido.
+
+    let sessions = [];
+    let filteredSessions = [];
+    let logs = [];
+    let sessionsPerPage = 9;
+    let sessionsDisplayed = 0;
+    let bots = [];
+    let selectedBotId = null;
+    let defaultBotId = null;
+    let instances = [];
+    let activeInstanceIndex = null;
+
+    const themeToggle = document.getElementById('themeToggle');
+    const manageInstancesButton = document.getElementById('manageInstances');
+    const instanceSelector = document.querySelector('.instance-selector');
+    const instancesModal = document.getElementById('instancesModal');
+    const closeInstancesModalButton = document.getElementById('closeInstancesModal');
+    const instanceForm = document.getElementById('instanceForm');
+    const instancesListDiv = document.querySelector('.instances-list');
+
+    const editInstancePanel = document.getElementById('editInstancePanel');
+    const editInstancePanelIndex = document.getElementById('editInstancePanelIndex');
+    const editInstancePanelName = document.getElementById('editInstancePanelName');
+    const editInstancePanelUrl = document.getElementById('editInstancePanelUrl');
+    const editInstancePanelId = document.getElementById('editInstancePanelId');
+    const editInstancePanelApiKey = document.getElementById('editInstancePanelApiKey');
+
+    const statusModal = document.getElementById('statusModal');
+    const closeStatusModalButton = document.getElementById('closeStatusModal');
+    const messageModal = document.getElementById('messageModal');
+    const closeMessageModalButton = document.getElementById('closeMessageModal');
+    const editSessionModal = document.getElementById('editSessionModal');
+    const closeEditSessionModalButton = document.getElementById('closeEditSessionModal');
+
+    const showMoreButton = document.querySelector('.showMore');
+    const showAllButton = document.querySelector('.showAll');
+    const showLessButton = document.querySelector('.showLess');
+
+    const applyFiltersButton = document.querySelector('.applyFilters');
+
+    const toggleLogsButton = document.querySelector('.toggleLogs');
+    const logPanel = document.querySelector('.logPanel');
+
+    const filterTime = document.querySelector('.filterTime');
+    const filterCustomTimeDiv = document.querySelector('.filter-custom-time');
+    filterTime.addEventListener('change', () => {
+      filterCustomTimeDiv.style.display = (filterTime.value === 'custom') ? 'flex' : 'none';
+    });
+
+    const timeToSend = document.querySelector('.timeToSend');
+    const messageCustomTimeDiv = document.querySelector('.message-custom-time');
+    timeToSend.addEventListener('change', () => {
+      messageCustomTimeDiv.style.display = (timeToSend.value === 'custom') ? 'flex' : 'none';
+    });
+
+    themeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('light-theme');
+      if (document.body.classList.contains('light-theme')) {
+        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+      } else {
+        themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+      }
+      logAction('themeToggle', { theme: document.body.classList.contains('light-theme') ? 'light' : 'dark' });
+      // Salva a preferência de tema no localStorage
+      if (document.body.classList.contains('light-theme')) {
+        localStorage.setItem('theme', 'light');
+      } else {
+        localStorage.setItem('theme', 'dark');
+      }
+    });
+
+    function logAction(action, data, isError = false) {
+      const entry = {
+        action,
+        data,
+        error: isError ? data : undefined,
+        timestamp: new Date().toISOString()
+      };
+      logs.push(entry);
+      renderLogs();
+    }
+
+    function loadInstances() {
+      logAction('loadInstances', 'Carregando instâncias do localStorage');
+      const stored = localStorage.getItem('instances');
+      if (stored) {
+        instances = JSON.parse(stored);
+      } else {
+        instances = [];
+      }
+      const active = localStorage.getItem('activeInstanceIndex');
+      if (active !== null) {
+        activeInstanceIndex = parseInt(active);
+      } else {
+        if (instances.length > 0) {
+          activeInstanceIndex = 0;
+          localStorage.setItem('activeInstanceIndex', activeInstanceIndex);
+          logAction('autoSelectInstance', {activeInstanceIndex});
+        } else {
+          activeInstanceIndex = null;
+        }
+      }
+      renderInstanceSelector();
+      renderInstancesList();
+    }
+
+    function saveInstances() {
+      logAction('saveInstances', 'Salvando instâncias no localStorage');
+      localStorage.setItem('instances', JSON.stringify(instances));
+      if (activeInstanceIndex === null && instances.length > 0) {
+        activeInstanceIndex = 0;
+        localStorage.setItem('activeInstanceIndex', activeInstanceIndex);
+      }
+      renderInstanceSelector();
+      renderInstancesList();
+    }
+
+    function renderInstanceSelector() {
+      instanceSelector.innerHTML = '';
+      if (instances.length === 0) {
+        const option = document.createElement('option');
+        option.textContent = 'Nenhuma Instância';
+        option.disabled = true;
+        option.selected = true;
+        instanceSelector.appendChild(option);
+      } else {
+        instances.forEach((inst, idx) => {
+          const option = document.createElement('option');
+          option.value = idx;
+          option.textContent = inst.name;
+          if (activeInstanceIndex === idx) {
+            option.selected = true;
+          }
+          instanceSelector.appendChild(option);
+        });
+      }
+      logAction('renderInstanceSelector', {instances, activeInstanceIndex});
+    }
+
+    instanceSelector.addEventListener('change', () => {
+      activeInstanceIndex = parseInt(instanceSelector.value);
+      localStorage.setItem('activeInstanceIndex', activeInstanceIndex);
+      logAction('instanceSelected', {activeInstanceIndex});
+      fetchBots();
+      fetchSessions();
+    });
+
+    function renderInstancesList() {
+      instancesListDiv.innerHTML = '';
+      if (instances.length === 0) {
+        instancesListDiv.textContent = 'Nenhuma instância cadastrada.';
+      } else {
+        instances.forEach((inst, idx) => {
+          const div = document.createElement('div');
+          div.className = 'instance-item';
+          div.innerHTML = `
+            <span>${inst.name} - ${inst.url} (${inst.instanceId})</span>
+            <button class="edit-instance" data-index="${idx}"><i class="fas fa-edit"></i></button>
+            <button data-index="${idx}">&times;</button>
+          `;
+          instancesListDiv.appendChild(div);
+        });
+
+        instancesListDiv.querySelectorAll('.edit-instance').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const idx = parseInt(btn.getAttribute('data-index'));
+            openEditInstancePanel(idx);
+          });
+        });
+
+        instancesListDiv.querySelectorAll('.instance-item button:not(.edit-instance)').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const idx = parseInt(btn.getAttribute('data-index'));
+            logAction('removeInstance', {index: idx, instance: instances[idx]});
+            instances.splice(idx, 1);
+            if (activeInstanceIndex === idx) {
+              activeInstanceIndex = null;
+              localStorage.removeItem('activeInstanceIndex');
+            } else if (activeInstanceIndex > idx) {
+              activeInstanceIndex--;
+              localStorage.setItem('activeInstanceIndex', activeInstanceIndex);
+            }
+            saveInstances();
+          });
+        });
+      }
+      logAction('renderInstancesList', {instances, activeInstanceIndex});
+    }
+
+    function openEditInstancePanel(idx) {
+      const inst = instances[idx];
+      editInstancePanelIndex.value = idx;
+      editInstancePanelName.value = inst.name;
+      editInstancePanelUrl.value = inst.url;
+      editInstancePanelId.value = inst.instanceId;
+      editInstancePanelApiKey.value = inst.apikey;
+      editInstancePanel.style.display = 'block';
+      logAction('openEditInstancePanel', {index: idx, instance: inst});
+    }
+
+    editInstancePanel.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const idx = parseInt(editInstancePanelIndex.value);
+      const name = editInstancePanelName.value;
+      const url = editInstancePanelUrl.value;
+      const instanceId = editInstancePanelId.value;
+      const apikey = editInstancePanelApiKey.value;
+
+      instances[idx] = { name, url, instanceId, apikey };
+      logAction('editInstance', {index: idx, instance: instances[idx]});
+      saveInstances();
+      editInstancePanel.style.display = 'none';
+    });
+
+    function openInstancesModal() {
+      instancesModal.style.display = 'block';
+      logAction('openInstancesModal');
+    }
+
+    function closeInstancesModal() {
+      instancesModal.style.display = 'none';
+      logAction('closeInstancesModal');
+    }
+
+    manageInstancesButton.addEventListener('click', openInstancesModal);
+    closeInstancesModalButton.addEventListener('click', closeInstancesModal);
+    window.addEventListener('click', (event) => {
+      if (event.target === instancesModal) {
+        closeInstancesModal();
+      }
+    });
+
+    instanceForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const name = document.getElementById('instanceName').value;
+      const url = document.getElementById('instanceUrl').value;
+      const instanceId = document.getElementById('instanceId').value;
+      const apikey = document.getElementById('instanceApiKey').value;
+
+      instances.push({ name, url, instanceId, apikey });
+      logAction('addInstance', { instance: { name, url, instanceId, apikey }});
+      saveInstances();
+      instanceForm.reset();
+    });
+
+    function getActiveInstanceConfig() {
+      if (activeInstanceIndex !== null && instances[activeInstanceIndex]) {
+        const config = instances[activeInstanceIndex];
+        logAction('getActiveInstanceConfig', config);
+        return config;
+      }
+      logAction('getActiveInstanceConfig', 'Nenhuma instância ativa selecionada', true);
+      return null;
+    }
+
+    closeStatusModalButton.addEventListener('click', closeStatusModal);
+    window.addEventListener('click', (event) => {
+      if (event.target === statusModal) {
+        closeStatusModal();
+      }
+    });
+
+    closeMessageModalButton.addEventListener('click', closeMessageModal);
+    window.addEventListener('click', (event) => {
+      if (event.target === messageModal) {
+        closeMessageModal();
+      }
+    });
+
+    closeEditSessionModalButton.addEventListener('click', closeEditSessionModal);
+    window.addEventListener('click', (event) => {
+      if (event.target === editSessionModal) {
+        closeEditSessionModal();
+      }
+    });
+
+    document.getElementById('editSessionForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const remoteJid = document.getElementById('editSessionRemoteJid').value;
+      const newName = document.getElementById('editSessionName').value;
+      await editSession(remoteJid, newName);
+    });
+
+    async function editSession(remoteJid, newName) {
+      const config = getActiveInstanceConfig();
+      if (!config) {
+        logAction('editSession', 'Nenhuma instância selecionada', true);
+        return;
+      }
+      const baseUrl = config.url;
+      const instance = config.instanceId;
+      const apikey = config.apikey;
+      const editUrl = `${baseUrl}/evolutionBot/editSession/${instance}`;
+
+      logAction('editSession', {remoteJid, newName, url: editUrl});
+      try {
+        const response = await fetch(editUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': apikey
+          },
+          body: JSON.stringify({ remoteJid, pushName: newName })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          logAction('editSessionError', result, true);
+          throw new Error(result.message || `Erro ao editar sessão ${remoteJid}`);
+        }
+
+        logAction('editSessionSuccess', result);
+
+        await fetchSessions();
+        sessionsDisplayed = 0;
+        renderSessions();
+
+        closeEditSessionModal();
+      } catch (error) {
+        console.error(error);
+        logAction('editSessionException', error.message, true);
+      }
+    }
+
+    document.getElementById('statusForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const remoteJid = document.getElementById('statusRemoteJid').value;
+      const status = document.getElementById('individualStatusChange').value;
+      logAction('statusFormSubmit', {remoteJid, status});
+      await changeStatus(remoteJid, status).catch(err => logAction('changeStatusException', err.message, true));
+    });
+
+    document.getElementById('individualMessageForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const remoteJid = document.getElementById('messageRemoteJid').value;
+      const messageText = document.getElementById('individualMessageText').value;
+
+      logAction('individualMessageFormSubmit', {remoteJid, messageText});
+      const config = getActiveInstanceConfig();
+      if (!config) {
+        logAction('individualMessageFormError', 'Nenhuma instância selecionada', true);
+        return;
+      }
+      const baseUrl = config.url;
+      const instance = config.instanceId;
+      const apikey = config.apikey;
+      const sendUrl = `${baseUrl}/message/sendText/${instance}`;
+
+      if (!messageText) {
+        logAction('individualMessageFormError', 'Mensagem vazia', true);
+        return;
+      }
+
+      try {
+        logAction('sendMessageRequest', {url: sendUrl, remoteJid, messageText});
+        const response = await fetch(sendUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': apikey
+          },
+          body: JSON.stringify({
+            number: remoteJid,
+            text: messageText
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          logAction('sendMessageError', result, true);
+          throw new Error(result.message || `Erro ao enviar mensagem para ${remoteJid}`);
+        }
+
+        logAction('sendMessageSuccess', result);
+
+        await fetchSessions();
+        sessionsDisplayed = 0;
+        renderSessions();
+
+        const massUpdateButton = document.querySelector(`#evolutionBot .massUpdate`);
+        massUpdateButton.style.display = 'block'; 
+        closeMessageModal();
+      } catch (error) {
+        console.error(error);
+        logAction('sendMessageException', error.message, true);
+      }
+    });
+
+    async function fetchSessions() {
+      logAction('fetchSessions', 'Iniciando fetchSessions');
+      const config = getActiveInstanceConfig();
+      if (!config) {
+        return;
+      }
+
+      const baseUrl = config.url;
+      const instance = config.instanceId;
+      const apikey = config.apikey;
+
+      if (!baseUrl || !instance || !apikey) {
+        logAction('fetchSessionsError', 'Configuração da instância inválida', true);
+        return;
+      }
+
+      const endpoint = `${baseUrl}/evolutionBot/fetchSessions/${selectedBotId || defaultBotId}/${instance}`;
+      logAction('fetchSessionsRequest', endpoint);
+      const sessionPanel = document.querySelector(`#evolutionBot .sessionPanel`);
+      const result = document.querySelector(`#evolutionBot .result`);
+      const massUpdateButton = document.querySelector(`#evolutionBot .massUpdate`);
+
+      sessionPanel.innerHTML = '';
+      if (result) result.textContent = '';
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'apikey': apikey
+          }
+        });
+
+        if (!response.ok) {
+          logAction('fetchSessionsError', {status: response.status, text: response.statusText}, true);
+          throw new Error(`Erro na requisição: ${response.status} - ${response.statusText}`);
+        }
+
+        let data = await response.json();
+        logAction('fetchSessionsSuccess', data);
+
+        sessions = data;
+        filteredSessions = [...sessions];
+      } catch (error) {
+        console.error(error);
+        if (result) result.textContent = `Erro: ${error.message}`;
+        sessions = [];
+        filteredSessions = [];
+        logAction('fetchSessionsException', error.message, true);
+      }
+
+      sessionsDisplayed = 0;
+      renderSessions();
+      massUpdateButton.style.display = 'block';
+    }
+
+    async function fetchBots() {
+      logAction('fetchBots', 'Iniciando fetchBots');
+      const config = getActiveInstanceConfig();
+      if (!config) return;
+
+      const baseUrl = config.url;
+      const instance = config.instanceId;
+      const apikey = config.apikey;
+
+      if (!baseUrl || !instance || !apikey) {
+        logAction('fetchBotsError', 'Configuração da instância inválida', true);
+        return;
+      }
+
+      const endpoint = `${baseUrl}/evolutionBot/find/${instance}`;
+      logAction('fetchBotsRequest', endpoint);
+      const botPanel = document.querySelector(`#evolutionBot .botPanel`);
+      const result = document.querySelector(`#evolutionBot .result`);
+
+      botPanel.innerHTML = '';
+      if (result) result.textContent = '';
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'apikey': apikey
+          }
+        });
+
+        if (!response.ok) {
+          logAction('fetchBotsError', {status: response.status, text: response.statusText}, true);
+          throw new Error(`Erro na requisição: ${response.status} - ${response.statusText}`);
+        }
+
+        let data = await response.json();
+        logAction('fetchBotsSuccess', data);
+
+        bots = data;
+
+        if (!defaultBotId && data.length > 0) {
+          defaultBotId = data[0].id;
+        }
+
+      } catch (error) {
+        console.error(error);
+        if (result) result.textContent = `Erro: ${error.message}`;
+        bots = [];
+        logAction('fetchBotsException', error.message, true);
+      }
+
+      renderBots();
+    }
+
+    function renderBots() {
+      logAction('renderBots', {bots});
+      const parent = document.getElementById('evolutionBot');
+      const botPanel = parent.querySelector('.botPanel');
+      botPanel.innerHTML = '';
+
+      bots.forEach(bot => {
+        const card = document.createElement('div');
+        card.className = 'botCard';
+        if (selectedBotId === bot.id) {
+          card.classList.add('selected');
+        }
+
+        card.innerHTML = `
+          <h3>${bot.description || 'Sem Descrição'}</h3>
+          <p><strong>ID:</strong> ${bot.id}</p>
+        `;
+
+        card.addEventListener('click', () => {
+          if (selectedBotId === bot.id) {
+            selectedBotId = null;
+          } else {
+            selectedBotId = bot.id;
+          }
+          logAction('botSelected', {selectedBotId});
+          renderBots();
+          fetchSessions();
+        });
+
+        botPanel.appendChild(card);
+      });
+
+      if (!selectedBotId && defaultBotId) {
+        selectedBotId = defaultBotId;
+      }
+    }
+
+    function renderSessions(append = false) {
+      logAction('renderSessions', {append, filteredSessionsLength: filteredSessions.length});
+      const parent = document.getElementById('evolutionBot');
+      const sessionPanel = parent.querySelector('.sessionPanel');
+      if (!append) {
+        sessionPanel.innerHTML = '';
+      }
+
+      const totalSessions = filteredSessions.length;
+      const endIndex = Math.min(sessionsDisplayed + sessionsPerPage, totalSessions);
+
+      for (let i = sessionsDisplayed; i < endIndex; i++) {
+        const session = filteredSessions[i];
+        const card = document.createElement('div');
+        card.className = 'sessionCard';
+
+        card.innerHTML = `
+          <input type="checkbox" class="sessionCheckbox" value="${session.remoteJid}">
+          <h3>${session.pushName || 'Sem Nome'}</h3>
+          <p><strong>Número:</strong> ${session.remoteJid}</p>
+          <p><strong>Status:</strong> <span>${session.status}</span></p>
+          <p><strong>Atualizado em:</strong> ${new Date(session.updatedAt).toLocaleString()}</p>
+          <div class="options-menu">
+            <button class="options-button"><i class="fas fa-ellipsis-v"></i></button>
+            <div class="options-dropdown">
+              <a href="#" class="change-status" data-remote-jid="${session.remoteJid}">Alterar Status</a>
+              <a href="#" class="send-message" data-remote-jid="${session.remoteJid}">Enviar Mensagem</a>
+              <a href="#" class="edit-session" data-remote-jid="${session.remoteJid}" data-push-name="${session.pushName}">Editar Sessão</a>
+            </div>
+          </div>
+        `;
+
+        sessionPanel.appendChild(card);
+      }
+
+      sessionsDisplayed = endIndex;
+
+      const sessionCount = parent.querySelector('.session-count');
+      sessionCount.textContent = `Total de Sessões: ${totalSessions}`;
+      updateShowButtons();
+      addSessionCardEventListeners();
+    }
+
+    function addSessionCardEventListeners() {
+      const parent = document.getElementById('evolutionBot');
+      const optionsButtons = parent.querySelectorAll('.options-button');
+      optionsButtons.forEach(button => {
+        button.addEventListener('click', (event) => {
+          event.stopPropagation();
+          closeAllDropdowns();
+          const dropdown = button.nextElementSibling;
+          dropdown.style.display = 'block';
+        });
+      });
+
+      const changeStatusLinks = parent.querySelectorAll('.change-status');
+      changeStatusLinks.forEach(link => {
+        link.addEventListener('click', (event) => {
+          event.preventDefault();
+          const remoteJid = event.target.getAttribute('data-remote-jid');
+          openStatusModal(remoteJid);
+        });
+      });
+
+      const sendMessageLinks = parent.querySelectorAll('.send-message');
+      sendMessageLinks.forEach(link => {
+        link.addEventListener('click', (event) => {
+          event.preventDefault();
+          const remoteJid = event.target.getAttribute('data-remote-jid');
+          openMessageModal(remoteJid);
+        });
+      });
+
+      const editSessionLinks = parent.querySelectorAll('.edit-session');
+      editSessionLinks.forEach(link => {
+        link.addEventListener('click', (event) => {
+          event.preventDefault();
+          const remoteJid = event.target.getAttribute('data-remote-jid');
+          const pushName = event.target.getAttribute('data-push-name') || '';
+          openEditSessionModal(remoteJid, pushName);
+        });
+      });
+
+      document.addEventListener('click', closeAllDropdowns);
+    }
+
+    function closeAllDropdowns() {
+      const dropdowns = document.querySelectorAll('.options-dropdown');
+      dropdowns.forEach(dropdown => {
+        dropdown.style.display = 'none';
+      });
+    }
+
+    function updateShowButtons() {
+      const totalSessions = filteredSessions.length;
+      if (sessionsDisplayed >= totalSessions) {
+        showMoreButton.disabled = true;
+        showAllButton.disabled = true;
+      } else {
+        showMoreButton.disabled = false;
+        showAllButton.disabled = false;
+      }
+
+      if (sessionsDisplayed > sessionsPerPage) {
+        showLessButton.disabled = false;
+      } else {
+        showLessButton.disabled = true;
+      }
+    }
+
+    function renderLogs() {
+      logPanel.innerHTML = logs.map(log => {
+        let className = '';
+        if (log.error) {
+          className = 'logError';
+        } else {
+          className = 'logSuccess';
+        }
+        return `<div class="logEntry ${className}">
+          ${JSON.stringify(log, null, 2)}
+        </div>`;
+      }).join('');
+    }
+
+    toggleLogsButton.addEventListener('click', () => {
+      logPanel.style.display = (logPanel.style.display === 'none' || logPanel.style.display === '') ? 'block' : 'none';
+    });
+
+    function applyFilters() {
+      const parent = document.getElementById('evolutionBot');
+      const nameFilter = parent.querySelector('.filterName').value.toLowerCase();
+      const numberFilter = parent.querySelector('.filterNumber').value;
+      const statusFilter = parent.querySelector('.filterStatus').value;
+      const timeFilterSelect = parent.querySelector('.filterTime').value;
+
+      let customFilterValueEl = parent.querySelector('.customFilterValue');
+      let customFilterUnitEl = parent.querySelector('.customFilterUnit');
+      let customFilterConditionEl = parent.querySelector('.customFilterCondition');
+
+      let customValue = null;
+      let customUnit = null;
+      let customCondition = null;
+      if (timeFilterSelect === 'custom') {
+        customValue = parseInt(customFilterValueEl.value);
+        customUnit = customFilterUnitEl.value;
+        customCondition = customFilterConditionEl.value;
+      }
+
+      const parsedTime = parseTimeFilter(timeFilterSelect, customValue, customUnit, customCondition);
+
+      filteredSessions = sessions.filter(session => {
+        const matchesName = session.pushName?.toLowerCase().includes(nameFilter);
+        const matchesNumber = session.remoteJid.includes(numberFilter);
+        const matchesStatus = !statusFilter || session.status === statusFilter;
+
+        let matchesTime = true;
+        if (parsedTime !== null) {
+          const diffMinutes = (Date.now() - new Date(session.updatedAt).getTime()) / 60000;
+          matchesTime = checkTimeCondition(diffMinutes, parsedTime);
+        }
+
+        return matchesName && matchesNumber && matchesStatus && matchesTime;
+      });
+      sessionsDisplayed = 0;
+    }
+
+    function parseTimeFilter(value, customValue, customUnit, customCondition) {
+      if (value === 'custom') {
+        if (!customValue || isNaN(customValue) || customValue <= 0) return null;
+        const minutes = convertCustomTime(customValue, customUnit);
+        return { minutes, condition: customCondition };
+      }
+
+      if (!value) return null;
+
+      if (value.startsWith('>')) {
+        const val = parseInt(value.slice(1));
+        return { moreThan: val };
+      } else {
+        return parseInt(value);
+      }
+    }
+
+    function convertCustomTime(value, unit) {
+      if (unit === 'minutes') return value;
+      if (unit === 'hours') return value * 60;
+      if (unit === 'days') return value * 1440;
+      return null;
+    }
+
+    function checkTimeCondition(diffMinutes, timeFilter) {
+      if (typeof timeFilter === 'object' && timeFilter.moreThan !== undefined) {
+        return diffMinutes > timeFilter.moreThan;
+      } else if (typeof timeFilter === 'object' && timeFilter.minutes !== undefined && timeFilter.condition) {
+        if (timeFilter.condition === 'more') {
+          return diffMinutes > timeFilter.minutes;
+        } else {
+          return diffMinutes <= timeFilter.minutes;
+        }
+      } else if (typeof timeFilter === 'number') {
+        return diffMinutes <= timeFilter;
+      }
+      return true;
+    }
+
+    applyFiltersButton.addEventListener('click', () => {
+      applyFilters();
+      sessionsDisplayed = 0;
+      renderSessions();
+    });
+
+    showMoreButton.addEventListener('click', () => {
+      sessionsDisplayed += sessionsPerPage;
+      renderSessions(true);
+    });
+
+    showAllButton.addEventListener('click', () => {
+      sessionsPerPage = filteredSessions.length;
+      sessionsDisplayed = 0;
+      renderSessions();
+    });
+
+    showLessButton.addEventListener('click', () => {
+      sessionsPerPage = 9;
+      sessionsDisplayed = 0;
+      renderSessions();
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      logAction('DOMContentLoaded', 'Iniciando carga');
+      loadInstances();
+      editInstancePanel.style.display = 'none';
+
+      if (activeInstanceIndex !== null && instances[activeInstanceIndex]) {
+        fetchBots();
+        fetchSessions();
+      }
+
+      document.querySelector('.selectAll').addEventListener('change', (event) => {
+        const parent = event.target.closest('.container');
+        const checkboxes = parent.querySelectorAll('.sessionCheckbox');
+        checkboxes.forEach(cb => cb.checked = event.target.checked);
+      });
+
+      document.querySelector('.massUpdate').addEventListener('click', async (event) => {
+        const parent = event.target.closest('.container');
+        const selectedSessions = Array.from(parent.querySelectorAll('.sessionCheckbox:checked'))
+          .map(checkbox => checkbox.value);
+
+        if (selectedSessions.length === 0) {
+          alert('Selecione ao menos uma sessão.');
+          return;
+        }
+
+        const status = parent.querySelector('.statusChange').value;
+
+        try {
+          await Promise.all(selectedSessions.map(remoteJid => changeStatus(remoteJid, status)));
+          alert('Status atualizado para as sessões selecionadas.');
+
+          await fetchSessions();
+          sessionsDisplayed = 0;
+          renderSessions();
+          const massUpdateButton = parent.querySelector('.massUpdate');
+          massUpdateButton.style.display = 'block';
+        } catch (error) {
+          console.error(error);
+        }
+      });
+
+      // Indicar a página ativa na barra de navegação
+      const currentPage = window.location.pathname.split('/').pop();
+      const navLinks = document.querySelectorAll('nav a');
+      navLinks.forEach(link => {
+        if (link.getAttribute('href') === currentPage) {
+          link.classList.add('active');
+        }
+      });
+
+      // Aplicar tema salvo no carregamento
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme === 'light') {
+        document.body.classList.add('light-theme');
+        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+      } else {
+        themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+      }
+    });
+
+    async function sendMessage(remoteJid, text) {
+      const config = getActiveInstanceConfig();
+      if (!config) {
+        logAction('sendMessage', 'Nenhuma instância selecionada', true);
+        return;
+      }
+      const baseUrl = config.url;
+      const instance = config.instanceId;
+      const apikey = config.apikey;
+      const sendUrl = `${baseUrl}/message/sendText/${instance}`;
+
+      logAction('sendMessage', {remoteJid, text, url: sendUrl});
+      const response = await fetch(sendUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apikey
+        },
+        body: JSON.stringify({
+          number: remoteJid,
+          text: text
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        logAction('sendMessageError', result, true);
+        throw new Error(result.message || `Erro ao enviar mensagem para ${remoteJid}`);
+      }
+
+      logAction('sendMessageSuccess', result);
+      return result;
+    }
+
+    async function changeStatus(remoteJid, status) {
+      const config = getActiveInstanceConfig();
+      if (!config) {
+        logAction('changeStatus', 'Nenhuma instância selecionada', true);
+        return;
+      }
+      const baseUrl = config.url;
+      const instance = config.instanceId;
+      const apikey = config.apikey;
+
+      const changeUrl = `${baseUrl}/evolutionBot/changeStatus/${instance}`;
+
+      logAction('changeStatus', {remoteJid, status, url: changeUrl});
+      const response = await fetch(changeUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apikey
+        },
+        body: JSON.stringify({ remoteJid, status, botId: selectedBotId || defaultBotId })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        logAction('changeStatusError', result, true);
+        throw new Error(result.message || `Erro ao alterar status para ${remoteJid}`);
+      }
+
+      logAction('changeStatusSuccess', result);
+      await fetchSessions();
+      sessionsDisplayed = 0;
+      renderSessions();
+
+      const massUpdateButton = document.querySelector(`#evolutionBot .massUpdate`);
+      massUpdateButton.style.display = 'block';
+      closeStatusModal();
+    }
+
+    function openStatusModal(remoteJid) {
+      document.getElementById('statusRemoteJid').value = remoteJid;
+      statusModal.style.display = 'block';
+      logAction('openStatusModal', {remoteJid});
+    }
+
+    function closeStatusModal() {
+      statusModal.style.display = 'none';
+      logAction('closeStatusModal');
+    }
+
+    function openMessageModal(remoteJid) {
+      document.getElementById('messageRemoteJid').value = remoteJid;
+      messageModal.style.display = 'block';
+      logAction('openMessageModal', {remoteJid});
+    }
+
+    function closeMessageModal() {
+      messageModal.style.display = 'none';
+      logAction('closeMessageModal');
+    }
+
+    function openEditSessionModal(remoteJid, currentName) {
+      document.getElementById('editSessionRemoteJid').value = remoteJid;
+      document.getElementById('editSessionName').value = currentName;
+      editSessionModal.style.display = 'block';
+      logAction('openEditSessionModal', {remoteJid, currentName});
+    }
+
+    function closeEditSessionModal() {
+      editSessionModal.style.display = 'none';
+      logAction('closeEditSessionModal');
+    }
+  </script>
+</body>
+</html>

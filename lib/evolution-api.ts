@@ -47,7 +47,8 @@ export async function checkEvolutionConfig(): Promise<boolean> {
 // Função para buscar configurações da instância na Evolution API
 export async function fetchEvolutionBotSettings(instanceName: string): Promise<any> {
   try {
-    const response = await fetch(`/api/integrations/evolution/instance/fetchSettings/${instanceName}`)
+    // 🔧 ENDPOINT CORRIGIDO: Agora usa /settings em vez de /instance/fetchSettings
+    const response = await fetch(`/api/integrations/evolution/settings/${instanceName}`)
 
     if (!response.ok) {
       console.error(`Erro ao buscar configurações da Evolution API: ${response.status}`)
@@ -68,7 +69,8 @@ export async function setEvolutionInstanceSettings(
   settingsData: EvolutionInstanceSettings,
 ): Promise<boolean> {
   try {
-    const response = await fetch(`/api/integrations/evolution/instance/setSettings/${instanceName}`, {
+    // 🔧 ENDPOINT CORRIGIDO: Agora usa /settings em vez de /instance/setSettings
+    const response = await fetch(`/api/integrations/evolution/settings/${instanceName}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -46,8 +46,8 @@ export async function GET() {
       console.log("🔍 [DEBUG] Valor bruto:", setting.setting_value)
       console.log("🔍 [DEBUG] Tipo do valor:", typeof setting.setting_value)
       
-      switch (setting.setting_key) {
-        case 'available_llm_providers':
+        switch (setting.setting_key) {
+          case 'available_llm_providers':
           console.log("🔍 [DEBUG] Processando available_llm_providers...")
           
           // Se já for um array, usar diretamente
@@ -64,9 +64,9 @@ export async function GET() {
           } else {
             throw new Error("available_llm_providers em formato inválido")
           }
-          break
+            break
           
-        case 'default_model':
+          case 'default_model':
           console.log("🔍 [DEBUG] Processando default_model...")
           
           // Se já for um objeto, usar diretamente
@@ -83,7 +83,7 @@ export async function GET() {
           } else {
             throw new Error("default_model em formato inválido")
           }
-          break
+            break
       }
     })
 

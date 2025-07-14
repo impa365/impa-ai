@@ -233,9 +233,41 @@ export default function AdminSettingsPage() {
         return
       }
 
-      // TODO: Implementar atualização via API
+      // Fazer chamada para API de atualização de perfil
+      const response = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          full_name: profileForm.full_name,
+          email: profileForm.email,
+          currentPassword: profileForm.currentPassword,
+          newPassword: profileForm.newPassword,
+          confirmPassword: profileForm.confirmPassword,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erro ao atualizar perfil")
+      }
+
       setProfileMessage("Perfil atualizado com sucesso!")
 
+      // Atualizar dados do usuário no estado se necessário
+      if (data.user) {
+        setUser({ ...user, ...data.user })
+        setProfileForm({
+          ...profileForm,
+          full_name: data.user.full_name,
+          email: data.user.email,
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        })
+      } else {
       // Limpar campos de senha após sucesso
       setProfileForm({
         ...profileForm,
@@ -243,12 +275,20 @@ export default function AdminSettingsPage() {
         newPassword: "",
         confirmPassword: "",
       })
-    } catch (error) {
-      console.error("Erro ao atualizar perfil")
-      setProfileMessage("Erro ao atualizar perfil")
+      }
+
+      // Mostrar toast de sucesso
+      toast({
+        title: "Perfil atualizado!",
+        description: "Suas informações foram atualizadas com sucesso.",
+      })
+
+    } catch (error: any) {
+      console.error("Erro ao atualizar perfil:", error.message)
+      setProfileMessage(error.message || "Erro ao atualizar perfil")
     } finally {
       setSavingProfile(false)
-      setTimeout(() => setProfileMessage(""), 3000)
+      setTimeout(() => setProfileMessage(""), 5000)
     }
   }
 

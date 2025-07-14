@@ -211,7 +211,11 @@ export default function WhatsAppPage() {
     if (!connectionToDelete) return;
 
     try {
-      console.log("🗑️ Deletando conexão:", connectionToDelete.connection_name);
+      console.log("🗑️ Deletando conexão:", {
+        connection_name: connectionToDelete.connection_name,
+        instance_name: connectionToDelete.instance_name,
+        id: connectionToDelete.id
+      });
 
       const response = await fetch(
         `/api/whatsapp/delete-instance/${connectionToDelete.instance_name}`,
@@ -223,6 +227,12 @@ export default function WhatsAppPage() {
           credentials: "include",
         }
       );
+
+      console.log("📡 Resposta da API:", {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -238,12 +248,30 @@ export default function WhatsAppPage() {
           description: data.message || "Conexão excluída com sucesso",
         });
       } else {
-        const errorData = await response.json();
-        console.error("❌ Erro ao deletar:", errorData);
-        throw new Error(errorData.error || "Erro ao deletar conexão");
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          console.error("❌ Erro ao fazer parse da resposta:", parseError);
+          errorData = { error: `Erro ${response.status}: ${response.statusText}` };
+        }
+        
+        console.error("❌ Erro ao deletar:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorData: errorData
+        });
+        
+        const errorMessage = errorData?.error || `Erro ${response.status}: ${response.statusText}`;
+        throw new Error(errorMessage);
       }
     } catch (error) {
-      console.error("💥 Erro ao deletar conexão:", error);
+      console.error("💥 Erro ao deletar conexão:", {
+        error: error,
+        message: (error as Error).message,
+        stack: (error as Error).stack
+      });
+      
       toast({
         title: "Erro",
         description: (error as Error).message || "Erro ao excluir conexão",

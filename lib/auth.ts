@@ -95,21 +95,35 @@ export async function changePassword(
   newPassword: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log("🔐 Iniciando troca de senha via API para usuário:", userId)
+    console.log("🔐 Iniciando troca de senha para usuário:", userId)
 
-    // TODO: Implementar API endpoint para mudança de senha
-    // const result = await authApi.changePassword(userId, oldPassword, newPassword)
+    // Fazer chamada para o endpoint de mudança de senha administrativo
+    const response = await fetch("/api/admin/users", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: userId,
+        password: newPassword, // A API fará o hash
+      }),
+    })
 
-    // Por enquanto, retornar erro informando que precisa ser implementado
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || "Erro ao alterar senha")
+    }
+
+    console.log("✅ Senha alterada com sucesso")
     return {
-      success: false,
-      error: "Funcionalidade de mudança de senha será implementada em breve",
+      success: true,
     }
   } catch (error: any) {
-    console.error("💥 Erro inesperado ao trocar senha:", error.message)
+    console.error("💥 Erro ao trocar senha:", error.message)
     return {
       success: false,
-      error: "Erro interno do servidor: " + error.message,
+      error: error.message || "Erro interno do servidor",
     }
   }
 }

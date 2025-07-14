@@ -2,12 +2,17 @@ import { type NextRequest, NextResponse } from "next/server";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { instanceName: string } }
+  { params }: { params: Promise<{ instanceName: string }> }
 ) {
   try {
-    const { instanceName } = params;
+    // 🔧 CORREÇÃO: Await params antes de usar suas propriedades
+    const resolvedParams = await params;
+    const { instanceName } = resolvedParams;
+
+    console.log(`🔄 [SYNC] Iniciando sincronização para instância: ${instanceName}`);
 
     if (!instanceName) {
+      console.error("❌ [SYNC] Nome da instância é obrigatório");
       return NextResponse.json(
         { success: false, error: "Nome da instância é obrigatório" },
         { status: 400 }

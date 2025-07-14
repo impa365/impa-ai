@@ -16,9 +16,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Key, Eye, EyeOff, RefreshCw } from "lucide-react"
 import { changePassword } from "@/lib/auth"
 
-// Remover a importação do supabase se não estiver sendo usado para outras coisas
-import { supabase } from "@/lib/supabase"
-
 interface ChangePasswordModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -69,20 +66,8 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
     setSuccess("")
 
     try {
-      // Usar a função changePassword, mas como admin não precisa da senha atual
-      // Vamos buscar a senha atual primeiro e depois usar a função
-      const { data: currentUser, error: fetchError } = await supabase
-        .from("user_profiles")
-        .select("password")
-        .eq("id", user.id)
-        .single()
-
-      if (fetchError || !currentUser) {
-        throw new Error("Usuário não encontrado")
-      }
-
-      // Como admin, usar a senha atual para validação
-      const result = await changePassword(user.id, currentUser.password, formData.newPassword)
+      // Como admin, usar changePassword direto (não precisa da senha atual)
+      const result = await changePassword(user.id, "", formData.newPassword)
 
       if (!result.success) {
         throw new Error(result.error || "Erro ao alterar senha")
@@ -189,16 +174,15 @@ export default function ChangePasswordModal({ open, onOpenChange, user, onSucces
             />
           </div>
 
-          <div className="text-sm bg-yellow-50 dark:bg-yellow-950 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
-            <strong className="text-yellow-800 dark:text-yellow-200">⚠️ Atenção:</strong>
-            <span className="text-yellow-700 dark:text-yellow-300">
+          <div className="text-sm bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+            <strong className="text-blue-800 dark:text-blue-200">🔐 Segurança:</strong>
+            <span className="text-blue-700 dark:text-blue-300">
               {" "}
-              As senhas estão sendo salvas em texto plano para fins de demonstração. Em um ambiente de produção, utilize
-              hash de senhas (ex: bcrypt).
+              As senhas são criptografadas automaticamente usando bcrypt antes de serem salvas no banco de dados.
             </span>
             <br />
-            <strong className="text-yellow-800 dark:text-yellow-200">Importante:</strong>
-            <span className="text-yellow-700 dark:text-yellow-300">
+            <strong className="text-blue-800 dark:text-blue-200">Importante:</strong>
+            <span className="text-blue-700 dark:text-blue-300">
               {" "}
               Comunique a nova senha ao usuário por um canal seguro.
             </span>

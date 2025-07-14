@@ -106,14 +106,15 @@ ______________________________
 
 agora o endpoint pra puxar as informações da instancia é: 
 
-get: url da evo/instance/fetchInstances header apikey: apikey da instancia 
+get: url da evo/instance/fetchInstances 
+header apikey: apikey da instancia 
 
 modelo de resposta: 
 
 "clientName": "evolution", "disconnectionReasonCode": 401, "disconnectionObject": "{"error":{"data":null,"isBoom":true,"isServer":false,"output":{"statusCode":401,"payload":{"statusCode":401,"error":"Unauthorized","message":"Log out instance: impaai_dgdg_4557"},"headers":{}}},"date":"2025-06-19T18:56:37.761Z"}", "disconnectionAt": "2025-06-19T18:56:37.764Z", "createdAt": "2025-06-17T19:58:33.976Z", "updatedAt": "2025-06-19T18:56:37.776Z", "Chatwoot": null, "Proxy": null, "Rabbitmq": null, "Nats": null, "Sqs": null, "Websocket": null, "Setting": { "id": "cmc0y4h6o30sjll4s93cakbvp", "rejectCall": false, "msgCall": "", "groupsIgnore": false, "alwaysOnline": false, "readMessages": false, "readStatus": false, "syncFullHistory": false, "wavoipToken": "", "createdAt": "2025-06-17T19:58:33.983Z", "updatedAt": "2025-06-19T18:57:41.938Z", "instanceId": "5c0e2e9d-19a8-481b-8e7f-8b264b2d48c7" }, "_count": { "Message": 29068, "Contact": 3193, "Chat": 2298 } }
 
 
-É o seginte. Pra puxar as informaççies da evolution usamos o endpoint:
+É o seginte. Pra puxar as configuraç~~oes da evolution usamos o endpoint:
 
 get: https://url_api_evo/settings/find/nome_da_instancia
 header apikey: apikey_da_instancia
@@ -186,6 +187,7 @@ false
 }
 }
 }
+
 
 E lembrando que sempre deve sicronizar as conexões do whatsapp com o banco de dados, e o painel com a evo e vice e versa.
 

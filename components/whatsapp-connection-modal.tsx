@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Plus, AlertCircle } from "lucide-react"
-import { createEvolutionInstance } from "@/lib/whatsapp-api"
+
 import InstanceCreationModal from "./instance-creation-modal"
 
 interface WhatsAppConnectionModalProps {
@@ -62,7 +62,18 @@ export default function WhatsAppConnectionModal({
     setLoading(true)
 
     try {
-      const result = await createEvolutionInstance(connectionName.trim(), userId)
+      const response = await fetch("/api/whatsapp/create-instance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          connectionName: connectionName.trim(),
+          userId: userId,
+        }),
+      })
+
+      const result = await response.json()
 
       if (result.success) {
         onSuccess()

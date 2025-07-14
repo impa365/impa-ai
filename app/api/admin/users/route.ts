@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import bcrypt from "bcryptjs"
 
 export async function GET() {
   try {
@@ -66,6 +67,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
     }
 
+    // Hash da senha antes de salvar
+    let hashedPassword = userData.password
+    if (userData.password) {
+      const saltRounds = 12
+      hashedPassword = await bcrypt.hash(userData.password, saltRounds)
+      console.log("🔐 Senha hasheada para novo usuário")
+    }
+
     // Criar usuário via REST API
     const response = await fetch(`${supabaseUrl}/rest/v1/user_profiles`, {
       method: "POST",
@@ -80,7 +89,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         full_name: userData.full_name,
         email: userData.email,
-        password: userData.password, // Em produção, usar hash
+        password: hashedPassword, // Agora com hash
         role: userData.role || "user",
         status: userData.status || "active",
         agents_limit: userData.agents_limit || 5,
@@ -118,6 +127,14 @@ export async function PUT(request: Request) {
 
     if (!supabaseUrl || !supabaseKey) {
       return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
+    }
+
+    // Se há senha nos dados, fazer hash
+    if (updateData.password) {
+      const saltRounds = 12
+      const hashedPassword = await bcrypt.hash(updateData.password, saltRounds)
+      updateData.password = hashedPassword
+      console.log("🔐 Senha hasheada para atualização")
     }
 
     // Atualizar usuário via REST API

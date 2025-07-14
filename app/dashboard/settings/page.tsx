@@ -9,9 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
-import { supabase } from "@/lib/supabase"
 import { useToast } from "@/components/ui/use-toast"
-import { changePassword } from "@/lib/auth"
 
 export default function UserSettings() {
   const [user, setUser] = useState<any>(null)
@@ -92,47 +90,48 @@ export default function UserSettings() {
         return
       }
 
-      // Atualizar perfil
-      const { error } = await supabase
-        .from("user_profiles")
-        .update({
-          full_name: profileForm.full_name.trim(),
-          email: profileForm.email.trim(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id)
+      // Fazer chamada para API de atualização de perfil
+      const response = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          full_name: profileForm.full_name,
+          email: profileForm.email,
+          currentPassword: profileForm.currentPassword,
+          newPassword: profileForm.newPassword,
+          confirmPassword: profileForm.confirmPassword,
+        }),
+      })
 
-      if (error) {
-        console.error("Erro ao atualizar perfil:", error)
-        throw error
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erro ao atualizar perfil")
       }
 
-      // Se há nova senha, trocar a senha
-      if (profileForm.newPassword) {
-        const passwordResult = await changePassword(user.id, profileForm.currentPassword, profileForm.newPassword)
-
-        if (!passwordResult.success) {
-          setProfileMessage(passwordResult.error || "Erro ao alterar senha")
-          setSavingProfile(false)
-          return
-        }
-      }
-
-      // Atualizar usuário local
-      const updatedUser = {
-        ...user,
-        full_name: profileForm.full_name.trim(),
-        email: profileForm.email.trim(),
-      }
+      // Atualizar dados do usuário no estado local
+      if (data.user) {
+        const updatedUser = { ...user, ...data.user }
       setUser(updatedUser)
       localStorage.setItem("user", JSON.stringify(updatedUser))
+      }
 
       setProfileMessage("Perfil atualizado com sucesso!" + (profileForm.newPassword ? " Senha alterada." : ""))
+      
+      // Limpar campos de senha após sucesso
       setProfileForm({
         ...profileForm,
         currentPassword: "",
         newPassword: "",
         confirmPassword: "",
+      })
+
+      // Mostrar toast de sucesso
+      toast({
+        title: "Perfil atualizado!",
+        description: "Suas informações foram atualizadas com sucesso.",
       })
     } catch (error: any) {
       console.error("Erro ao atualizar perfil:", error)
