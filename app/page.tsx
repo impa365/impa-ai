@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import LoginForm from "@/components/login-form"
 import DynamicTitle from "@/components/dynamic-title"
 import { getCurrentUser } from "@/lib/auth"
 
@@ -15,17 +14,20 @@ export default function HomePage() {
       try {
         const user = getCurrentUser()
         if (user) {
+          // Se usuário logado, redirecionar para dashboard apropriado
           if (user.role === "admin") {
             router.push("/admin")
           } else {
             router.push("/dashboard")
           }
         } else {
-          setLoading(false)
+          // Se não logado, mostrar landing page
+          router.push("/landing")
         }
       } catch (error) {
         console.error("Error checking user:", error)
-        setLoading(false)
+        // Em caso de erro, mostrar landing page
+        router.push("/landing")
       }
     }
 
@@ -36,17 +38,25 @@ export default function HomePage() {
     return (
       <>
         <DynamicTitle />
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto mb-8"></div>
+            <p className="text-white text-xl">Carregando IMPA AI...</p>
+          </div>
         </div>
       </>
     )
   }
 
+  // Esta página não deveria ser renderizada, pois sempre redireciona
   return (
     <>
       <DynamicTitle />
-      <LoginForm />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <div className="text-center">
+          <div className="animate-pulse text-white text-xl">Redirecionando...</div>
+        </div>
+      </div>
     </>
   )
 }
