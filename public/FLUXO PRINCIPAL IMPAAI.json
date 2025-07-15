@@ -1,0 +1,1172 @@
+{
+  "name": "FLUXO PRINCIPAL IMPAAI",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "impa-ai-crm",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -860,
+        -400
+      ],
+      "id": "82640c07-46cb-4b29-a262-854d164b3878",
+      "name": "Webhook",
+      "webhookId": "fe6e4241-4dde-4d48-b237-fb1dfd9cc2da"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "349cb3ef-80fe-4f05-a831-71e900f17479",
+              "leftValue": "={{ $json.body.inputs.fromMe }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -640,
+        -400
+      ],
+      "id": "e7ea90e6-af08-4fbb-bbc4-51ac1c5f0b92",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "url": "=https://agentes.blackatende.com/api/get/agent/{{ $('Webhook').item.json.query.agentId.replace('AGENT_', '') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer impaai_TZUiViiyr6mvloEwvvdEfG1STS1Dsm5h"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -420,
+        -400
+      ],
+      "id": "8faef695-956c-4142-ae7e-14f444d0b20d",
+      "name": "DADOS AGENTE"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook').item.json.body.inputs.sessionId }}",
+        "tableName": "n8n_chat_history_impaai1",
+        "contextWindowLength": 55
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        480,
+        -180
+      ],
+      "id": "2d88cecf-469e-4ea2-ab96-600102ff7187",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "iT6RuyteAeCorajK",
+          "name": "supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"message\": \"{{ \n  $json.output\n    .replace(/\\n/g, '\\\\n')\n    .replace(/\"/g, \"'\")\n    .replace(/\\*\\*/g, '*')\n}}\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        700,
+        -400
+      ],
+      "id": "25c40e88-8a9d-4404-b4fc-4bc992034828",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "={{ $('DADOS AGENTE').item.json.agent.model }}",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": "={{ $('DADOS AGENTE').item.json.agent.temperature +0.2 }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        20,
+        20
+      ],
+      "id": "70fec698-f9de-4788-b03f-49ed6dceb137",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "sEZUGpfkprqglQFs",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "={{ $('Separa Info').item.json['ler-imagem'] }}",
+        "method": "POST",
+        "url": "={{ $env[\"WEBHOOK_URL\"] }}webhook/analisa_imagem_impaai",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', `image_urls`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        -420,
+        360
+      ],
+      "id": "22f02903-c2d7-492f-8ceb-27bb9a8b7dc8",
+      "name": "Ler imagens"
+    },
+    {
+      "parameters": {
+        "toolDescription": "USE ESSA FERRRAMENTA APARA FAZER REQUISIÇÕES PERSONALIZADAs",
+        "url": "={{ $fromAI('ENDPOINT', `INFORME A URL DA REQUISIÇÃO`, 'string') }}",
+        "sendQuery": true,
+        "specifyQuery": "json",
+        "jsonQuery": "={{ $fromAI('QUERY', `query da requisição se necessário`, 'string') }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ $fromAI('HEADER', `hader_da_requisicao_se_necesseario`, 'string') }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $fromAI('BODY', `BODY DA REQUISICAO SE NESCESSARIO`, 'string') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        120,
+        360
+      ],
+      "id": "3ac9a101-4cfa-4d70-b19e-2444a021190b",
+      "name": "HTTP GENERICO"
+    },
+    {
+      "parameters": {
+        "toolDescription": "={{ $('Separa Info').item.json['gera-audio'] }}",
+        "method": "POST",
+        "url": "={{ $env[\"WEBHOOK_URL\"] }}webhook/gera_audio_impa_ai",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "mensagem",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', `Mensagem que deseja enviar para o cliente`, 'string') }}"
+            },
+            {
+              "name": "whatsapp",
+              "value": "={{ $('Webhook').item.json.body.inputs.remoteJid.replace(/\\D/g, '') }}{{ new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14) }}"
+            },
+            {
+              "name": "apikey_fish",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.voice_api_key }}"
+            },
+            {
+              "name": "voice_id",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.voice_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        360
+      ],
+      "id": "69423e18-6833-4aa5-8046-3aa032731eae",
+      "name": "gera_audio"
+    },
+    {
+      "parameters": {
+        "toolDescription": "={{ $('Separa Info').item.json.agendamentoCal.cancela }}",
+        "url": "={{ $env[\"WEBHOOK_URL\"] }}webhook/cancela_agendamento_cal_impaai",
+        "sendBody": true,
+        "parametersBody": {
+          "values": [
+            {
+              "name": "apikey_cal",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.calendar_api_key }}"
+            },
+            {
+              "name": "id_reuniao",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.calendar_meeting_id }}"
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        780,
+        360
+      ],
+      "id": "590daccd-a4d1-4ac6-9730-d36be94e2350",
+      "name": "Cancela_Agendamento"
+    },
+    {
+      "parameters": {
+        "toolDescription": "={{ $('Separa Info').item.json.agendamentoCal.consulta }}",
+        "url": "={{ $env[\"WEBHOOK_URL\"] }}webhook/consulta_agenda_cal_impaai",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "phone",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook').item.json.body.inputs.remoteJid.split('@')[0] }}"
+            },
+            {
+              "name": "date",
+              "valueProvider": "fieldValue",
+              "value": "= {data_do_agendamento}"
+            },
+            {
+              "name": "id_reuniao",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.calendar_meeting_id }}"
+            },
+            {
+              "name": "apikey_cal",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.calendar_api_key }}"
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        580,
+        380
+      ],
+      "id": "b1f1b5b1-acc9-4168-9444-257a340ef68c",
+      "name": "Disponibilidade"
+    },
+    {
+      "parameters": {
+        "content": "## Agenda Cal.com",
+        "height": 300,
+        "width": 580
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        340,
+        220
+      ],
+      "typeVersion": 1,
+      "id": "d402cb35-fcee-4e06-ad3a-9c3168294b09",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "toolDescription": "={{ $('Separa Info').item.json.agendamentoCal.criar }}",
+        "method": "POST",
+        "url": "={{ $env[\"WEBHOOK_URL\"] }}webhook/cria_agendamento_cal_impaai",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "nome_paciente",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', `Nome do paciente`, 'string') }}"
+            },
+            {
+              "name": "email_paciente",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `Email do paciente`, 'string') }}"
+            },
+            {
+              "name": "telefone",
+              "value": "={{ $('Webhook').item.json.body.inputs.remoteJid.split('@')[0] }}"
+            },
+            {
+              "name": "date",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters3_Value', `data do agendamento`, 'string') }}"
+            },
+            {
+              "name": "apikey_cal",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.calendar_api_key }}"
+            },
+            {
+              "name": "id_reuniao",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.calendar_meeting_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        380,
+        380
+      ],
+      "id": "94b71cf7-5e5d-4bd8-8e33-90b3aa49a0a5",
+      "name": "Cria agendamento"
+    },
+    {
+      "parameters": {
+        "content": "## HTTP GENERICO",
+        "height": 300
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        40,
+        220
+      ],
+      "typeVersion": 1,
+      "id": "55396581-758b-4b4d-8cc0-1253168986e3",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## GERA AUDIO FISH AUDIO",
+        "height": 300
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -240,
+        220
+      ],
+      "typeVersion": 1,
+      "id": "69007523-f151-4e09-9883-f095c31f7c47",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## ANALISA IMAGEM",
+        "height": 300
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -500,
+        220
+      ],
+      "typeVersion": 1,
+      "id": "b8d9e53e-3ebd-4465-beaf-a409ae805ae6",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "toolDescription": "={{ $('Separa Info').item.json['transcreve-audio'] }}",
+        "method": "POST",
+        "url": "={{ $env[\"WEBHOOK_URL\"] }}webhook/transcrever_audio_impaai",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url_audio",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', `url do audio`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        -720,
+        360
+      ],
+      "id": "58c5c599-3ead-4d43-a2fa-6699568829e8",
+      "name": "transcreve_audio"
+    },
+    {
+      "parameters": {
+        "content": "## Transcreve audio",
+        "height": 300
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -800,
+        220
+      ],
+      "typeVersion": 1,
+      "id": "6d09fd33-f3aa-44a7-9a1c-76f99a2bd02e",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Antes de enviar a mensagem use essa ferramenta para puxar as coneversas com o cliente e entender o contexto",
+        "method": "POST",
+        "url": "={{ $env[\"WEBHOOK_URL\"] }}webhook/puxa-menssagens-antigas",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=remoteJid",
+              "value": "={{ $('Webhook').item.json.body.inputs.remoteJid }}"
+            },
+            {
+              "name": "urlApi",
+              "value": "=INFORMAR A URL DA EVOLUTION"
+            },
+            {
+              "name": "instanceName",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.whatsapp_connection.instance_name }}"
+            },
+            {
+              "name": "apikey",
+              "value": "=APIKEY DA GLOBAL"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1060,
+        380
+      ],
+      "id": "30b8d92f-2154-4926-a1ce-fcdb545556f9",
+      "name": "PUXA CONVERSA"
+    },
+    {
+      "parameters": {
+        "toolDescription": "={{ $('Separa Info').item.json.orimon }}",
+        "method": "POST",
+        "url": "https://channel-connector.orimon.ai/orimon/v1/conversation/api/message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=apiKey {{ $('DADOS AGENTE').item.json.agent.orimon_api_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"message\",\n  \"info\": {\n    \"psid\": \"{{ $('Webhook').item.json.body.inputs.sessionId }}\",\n    \"sender\": \"user\",\n    \"tenantId\": \"{{ $('DADOS AGENTE').item.json.agent.orimon_bot_id }}\",\n    \"platformName\": \"web\"\n  },\n  \"message\": {\n    \"id\": \"{{ $('Webhook').item.json.body.inputs.remoteJid.replace(/\\D/g, '') }}{{ new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14) }}\",\n    \"type\": \"text\",\n    \"payload\": {\n      \"text\": \"{{ $fromAI('parameters1_Name', `Mensagem recebeida do cliente ou duvida que precisa de resposta`, 'string') }}\"\n    }\n  }\n}",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        380
+      ],
+      "id": "40c81c14-dda7-42e3-93a5-7cbb38ed0ac9",
+      "name": "ORIMON"
+    },
+    {
+      "parameters": {
+        "content": "## Colocar url da evo e apikey global",
+        "height": 320
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        980,
+        220
+      ],
+      "typeVersion": 1,
+      "id": "f670ba0a-92e5-4b7d-969f-92cfd42529f7",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Ferramenta para rag\n\nDinsponivel na comunidade Impa",
+        "height": 320
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1260,
+        220
+      ],
+      "typeVersion": 1,
+      "id": "9972b3bd-0f89-46d4-b672-253a45eeda20",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b1c4e311-a885-42d1-9edc-9aed3d943d0e",
+              "name": "transcreve-audio",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.transcribe_audio === true ? 'Use essa ferramenta para transcrever os audios recebidos' : 'Não use para nada' }}",
+              "type": "string"
+            },
+            {
+              "id": "45371bb3-798d-494b-85e3-052ed87a8565",
+              "name": "ler-imagem",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.understand_images ? 'use para ler imagens' : 'não use pra nada' }}",
+              "type": "string"
+            },
+            {
+              "id": "40fa91d8-179b-4fbc-90e6-3a016b39535d",
+              "name": "gera-audio",
+              "value": "={{    $('DADOS AGENTE').item.json.agent.voice_response_enabled === true &&    $('DADOS AGENTE').item.json.agent.voice_provider === 'fish_audio'    ?    'Use essa ferramenta todas as vezes para gerar o áudio para enviar para o cliente, nunca esqueça de usar essa ferramenta.'    :    'Não use para nada'  }}",
+              "type": "string"
+            },
+            {
+              "id": "6030a47e-4c72-439d-93f1-ca22a2d2259c",
+              "name": "orimon",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.orimon_integration ? 'Use essa ferramenta para consultar a base de dados e responder perguntas que não saiba a resposta' : 'Não use para nada essa requisição' }}",
+              "type": "string"
+            },
+            {
+              "id": "c007dcb1-6b1b-4981-a941-76ba193a0bf8",
+              "name": "agendamentoCal.criar",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.calendar_integration === true ? 'Use essa ferramenta para criar um agendamewnto no cal.com\\nInforme a data no formato: yyyy-MM-ddTHH:mm:ss' : 'Não use para nada' }}",
+              "type": "string"
+            },
+            {
+              "id": "2d901c79-824f-4779-b3a5-2ffe214b9a04",
+              "name": "agendamentoCal.consulta",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.calendar_integration === true ? 'Use essa ferramenta para Verificar a disponibilidade de consulta agendamento ou retorneo do dia \\nInforme a data no formato: yyyy-MM-ddTHH:mm:ss' : 'Não use pra nada' }}",
+              "type": "string"
+            },
+            {
+              "id": "9f3d41ce-204c-4599-93c9-aebfb2224125",
+              "name": "agendamentoCal.cancela",
+              "value": "={{ $('DADOS AGENTE').item.json.agent.calendar_integration === true ? 'Usa para cancelar um agendamento no cal.com' : 'Não use para nada' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -200,
+        -400
+      ],
+      "id": "98a930a7-d9c8-41ff-862c-47f2fd179031",
+      "name": "Separa Info"
+    },
+    {
+      "parameters": {
+        "toolDescription": "=Quando um agendamento for realizado use essa ferramenta para avisar o(s) colaborador(es) que o agendamento foi feito. Use primeiro o agendamento e somente se o agendamento for bem sucedido use essa ferramenta\n\nUse uma vez para cada colaborador\n\nmodelo do json:\n\n\n{\n    \"number\": \"Numero do colaborador que será enviado a notificação de agendmaento\",\n    \"text\": \"Mensagem para o colaborador da notificação de agendamento.\"\n}\n\nnão mande nada tipo:\n\n\n{\n  \"JSON\": {\n    \"number\": \"2175939307\",\n    \"text\": \"Novo agendamento acabou de ser criado!\\n\\nNome do cliente: Jorrandeson Lorran\\n\\nEmail: JORRANDESONLORRAN@GMAIL.COM\\n\\nWhatsapp: (numero do paciente)\\n\\nAgendado para: terça-feira, 8 de julho de 2025 às 11:00\"\n  }\n}\n\ndeve ser:\n\n{\n    \"number\": \"Numero do colaborador que será enviado a notificação de agendmaento\",\n    \"text\": \"Mensagem para o colaborador da notificação de agendamento. Ex: Novo agendamento acabou de ser criado!\\n\\nNome do cliente: Jorrandeson Lorran\\n\\nEmail: JORRANDESONLORRAN@GMAIL.COM\\n\\nWhatsapp: (numero do paciente)\\n\\nAgendado para: terça-feira, 8 de julho de 2025 às 11:00\"\n}\n\n\nNumero do contato que agendou é:  {{ $('Webhook').item.json.body.inputs.remoteJid }}",
+        "method": "POST",
+        "url": "={{ $('Webhook').item.json.body.inputs.serverUrl }}/message/sendText/{{ $('Webhook').item.json.body.inputs.instanceName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Webhook').item.json.body.inputs.apiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', `Numero do colaborador que será enviado a notificação de agendamento no formato: DDI 55 + DDD + NUMERO \n\nEx. 5511988887777\n\n<instruçao> aqui é o remoteJid o telefone o whatsapp, e não o CPF Nunnca coloque o cpf aqui`, 'string') }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', `Mensagem para o colaborador da notificação de agendamento.`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        380
+      ],
+      "id": "0b6dc7a3-3eae-46d6-bf21-897a884edf1a",
+      "name": "Notificacao_agendamento",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Webhook').first().json.body.query }} ",
+        "options": {
+          "systemMessage": "=Você é {{ $('DADOS AGENTE').item.json.agent.name }}\n\nComo você deve se aprensentar\n{{ $('DADOS AGENTE').item.json.agent.identity_description }}\n\n\nSua função principal é {{ $('DADOS AGENTE').item.json.agent.main_function }}\n\nUse sempre um tom de Voz {{ $('DADOS AGENTE').item.json.agent.voice_tone }}\n\nInstruções de Comportamento\n{{ $('DADOS AGENTE').item.json.agent.training_prompt }}\n\ncaso não tenha header ou body ou query não deixe vazio sempre coloque as chaves e parte dos campo tipo {} pra não da erro na requisição\n\nAtenção, todo arquivo, pdf, video, imagem, audio etc deve sempre ser enviado em markdown\n\n[Descrição](https://url-do-arquivo-a-ser-enviado)\n\n\nData atual e hora: {{ new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ', ' + new Date().toLocaleTimeString('pt-BR', { hour: 'numeric', minute: 'numeric', second: 'numeric' }) }}\n\n\nSaudação correta agora: {{ \n  (() => {\n    const hour = new Date().getHours();\n\n    if (hour >= 5 && hour < 12) {\n      return 'Bom dia';\n    } else if (hour >= 12 && hour < 18) {\n      return 'Boa tarde';\n    } else {\n      return 'Boa noite';\n    }\n  })()\n}}\n\n\nDias seguintes: {{ \n  Array.from({ length: 7 }, (_, i) => {\n    const d = new Date();\n    d.setDate(d.getDate() + i + 1);\n    return d.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });\n  }).join(', ')\n}}\n\n\n{{ $('DADOS AGENTE').item.json.agent.understand_images ? 'Caso receba uma imagem use a ferramenta pra analiza-la e responder ao cliente com base nela' : '' }}\n\n{{ $('DADOS AGENTE').item.json.agent.transcribe_audio === true ? 'caso receba um audio use a ferramenta para transcreve-lo e conseguir responder o cliente.' : ' ' }}\n\n{{ $('DADOS AGENTE').item.json.agent.calendar_integration === true ? 'Caso o cliente queira agendar uma consulta Use a ferramenta para consultar os horarios disponiveis, após isso peça a ele o nome completo, email e cpf uma mensagem de cada vez.Essas informações são nescessarias para realizar um agendamewnto\\nInforme a data no formato: yyyy-MM-ddTHH:mm:ss' : ' ' }}\n\nRemoteJid do contato: {{ $('Webhook').item.json.body.inputs.remoteJid }}\n\nAtenção, todo arquivo, pdf, video, imagem, audio etc deve sempre ser enviado em markdown\n\n[Descrição](https://url-do-arquivo-a-ser-enviado)\n\n\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        280,
+        -400
+      ],
+      "id": "64ab190d-3cd7-4eb5-9640-1529f373dd01",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "numberInputs": 5,
+        "rules": {
+          "rule": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a7c80fb9-780b-41bf-86cc-92e4cbd22b06",
+                    "leftValue": "={{ $('DADOS AGENTE').item.json.agent.model_config }}",
+                    "rightValue": "openai",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "modelIndex": 2,
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "0279f4ba-e3ae-49f7-9b3b-285e53b8dbda",
+                    "leftValue": "={{ $('DADOS AGENTE').item.json.agent.model_config }}",
+                    "rightValue": "anthropic",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "modelIndex": 3,
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ecbf2596-c6f1-4887-bffa-a42e3224fff5",
+                    "leftValue": "={{ $('DADOS AGENTE').item.json.agent.model_config }}",
+                    "rightValue": "google",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "modelIndex": 4,
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "bb0a7197-a4c9-4d7c-a457-6b331ac73ee7",
+                    "leftValue": "={{ $('DADOS AGENTE').item.json.agent.model_config }}",
+                    "rightValue": "ollama",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "modelIndex": 5,
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "958c4bd1-2bae-4701-8436-f8efa237f9b9",
+                    "leftValue": "={{ $('DADOS AGENTE').item.json.agent.model_config }}",
+                    "rightValue": "groq",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.modelSelector",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -180
+      ],
+      "id": "c9f58d09-ec3a-4f0c-8a0d-5fecc48cbf85",
+      "name": "Model Selector"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-20250514",
+          "cachedResultName": "Claude 4 Sonnet"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        140,
+        20
+      ],
+      "id": "e73e70b2-349d-4cdf-b34f-7ccaaa2ea35d",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "yqrk4tf2hBU1VooX",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        260,
+        20
+      ],
+      "id": "7f96f653-ca27-464d-b31b-e1ef10df8672",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "HxLHK2aHDQsc7Z99",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        380,
+        20
+      ],
+      "id": "aa0a2122-d073-437a-8d51-db2c5b5499f3",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "7OyChzq8zaqoOClC",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        500,
+        20
+      ],
+      "id": "47507746-f9da-47d2-a36c-459882cbdbbd",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "Gjs7XZtz1nK5Sgzs",
+          "name": "Groq account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "nflow.blackatende.com",
+            "user-agent": "axios/1.10.0",
+            "content-length": "373",
+            "accept": "application/json, text/plain, */*",
+            "accept-encoding": "gzip, compress, deflate, br",
+            "content-type": "application/json",
+            "x-forwarded-for": "172.18.0.1",
+            "x-forwarded-host": "nflow.blackatende.com",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "477365fd4184",
+            "x-real-ip": "172.18.0.1"
+          },
+          "params": {},
+          "query": {
+            "agentId": "299f28e2-03aa-4bff-af76-cb4808119296"
+          },
+          "body": {
+            "inputs": {
+              "sessionId": "cmcz2rjzdjtvyo65w9ghr6sw5",
+              "remoteJid": "5521975939307@s.whatsapp.net",
+              "pushName": "Alberto Lopes",
+              "fromMe": false,
+              "instanceName": "impaai_drthiago_9755",
+              "serverUrl": "https://eapi.blackatende.com",
+              "apiKey": "27FF069B-B6D9-47BE-8463-4658F0CA1C20"
+            },
+            "query": "alberto Lopes, albertjhonsonessa@gmail.com, 171.254.987-10",
+            "user": "5521975939307@s.whatsapp.net"
+          },
+          "webhookUrl": "https://nflow.blackatende.com/webhook/impa-ai-crm",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "DADOS AGENTE",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "DADOS AGENTE": {
+      "main": [
+        [
+          {
+            "node": "Separa Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "transcreve_audio": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Model Selector",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler imagens": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "gera_audio": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP GENERICO": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cria agendamento": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Disponibilidade": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancela_Agendamento": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PUXA CONVERSA": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ORIMON": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separa Info": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notificacao_agendamento": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model Selector": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Model Selector",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Model Selector",
+            "type": "ai_languageModel",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Model Selector",
+            "type": "ai_languageModel",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Model Selector",
+            "type": "ai_languageModel",
+            "index": 4
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "29165870-24e0-4bfb-ac40-46997572105f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "011a7dde30b170d8f087daee6ac60c5cdd857e162f23e26776cf1449980154a9"
+  },
+  "id": "PY2ITmy21fOoUH8a",
+  "tags": [
+    {
+      "createdAt": "2025-06-24T17:04:13.780Z",
+      "updatedAt": "2025-06-24T17:04:13.780Z",
+      "id": "TwVE0yum4YaYlkRb",
+      "name": "IMPAAI"
+    }
+  ]
+}

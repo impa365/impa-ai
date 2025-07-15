@@ -55,12 +55,20 @@ export async function GET() {
             llmConfig.available_providers = setting.setting_value
             console.log("✅ [DEBUG] Providers já parseados:", setting.setting_value)
           } 
-          // Se for string, fazer parse
+          // Se for string, verificar se é JSON ou lista separada por vírgulas
           else if (typeof setting.setting_value === 'string') {
-            const providers = JSON.parse(setting.setting_value)
-            if (!Array.isArray(providers)) throw new Error("available_llm_providers não é array")
-            llmConfig.available_providers = providers
-            console.log("✅ [DEBUG] Providers parseados de string:", providers)
+            try {
+              // Tentar fazer parse como JSON primeiro
+              const providers = JSON.parse(setting.setting_value)
+              if (!Array.isArray(providers)) throw new Error("available_llm_providers não é array")
+              llmConfig.available_providers = providers
+              console.log("✅ [DEBUG] Providers parseados como JSON:", providers)
+            } catch (jsonError) {
+              // Se falhar o parse JSON, tratar como string separada por vírgulas
+              const providers = setting.setting_value.split(',').map((p: string) => p.trim()).filter((p: string) => p.length > 0)
+              llmConfig.available_providers = providers
+              console.log("✅ [DEBUG] Providers parseados como CSV:", providers)
+            }
           } else {
             throw new Error("available_llm_providers em formato inválido")
           }

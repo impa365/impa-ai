@@ -884,6 +884,213 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Fluxo n8n Workflow */}
+      <section className="py-24 px-6">
+        <div className="container mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-6xl font-bold text-white mb-6">
+              Workflow <span className="text-purple-400">Inteligente</span>
+            </h2>
+            <p className="text-xl text-gray-300 max-w-4xl mx-auto">
+              Fluxo automatizado de última geração que conecta WhatsApp, múltiplos modelos de IA 
+              e ferramentas avançadas em um sistema único e poderoso
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="space-y-8">
+              <div className="space-y-6">
+                <h3 className="text-3xl font-bold text-white">
+                  Sistema de Orquestração Avançado
+                </h3>
+                <p className="text-gray-300 text-lg">
+                  Nosso fluxo exclusivo no n8n integra perfeitamente o WhatsApp Business 
+                  com múltiplos provedores de IA, criando a experiência mais natural e 
+                  inteligente para seus clientes.
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                {[
+                  {
+                    icon: <Workflow className="w-6 h-6" />,
+                    title: "Orquestração Inteligente",
+                    description: "Fluxo automatizado que conecta webhook → filtros → agentes → ferramentas → resposta"
+                  },
+                  {
+                    icon: <Brain className="w-6 h-6" />,
+                    title: "Multi-Model AI",
+                    description: "Suporte nativo a OpenAI, Anthropic, Google Gemini, Ollama e Groq em um único fluxo"
+                  },
+                  {
+                    icon: <Puzzle className="w-6 h-6" />,
+                    title: "Ferramentas Integradas",
+                    description: "Transcrição, análise de imagem, síntese de voz, agendamento e consulta de conhecimento"
+                  },
+                  {
+                    icon: <Database className="w-6 h-6" />,
+                    title: "Memória Contextual",
+                    description: "PostgreSQL integrado para manter contexto completo das conversas"
+                  }
+                ].map((feature, index) => (
+                  <div key={index} className="flex gap-4 p-6 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10">
+                    <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-600 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                      {feature.icon}
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-bold text-white mb-2">{feature.title}</h4>
+                      <p className="text-gray-400 text-sm">{feature.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-500/20 rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Lock className="w-6 h-6 text-purple-400" />
+                  <h4 className="text-lg font-semibold text-white">Exclusivo para Clientes</h4>
+                </div>
+                <p className="text-gray-300 text-sm">
+                  Este workflow avançado é disponibilizado exclusivamente para clientes que adquirem o sistema completo, 
+                  garantindo máximo valor e diferencial competitivo.
+                </p>
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-3xl blur-3xl"></div>
+              <Card className="relative bg-black/30 backdrop-blur-xl border border-purple-500/20 overflow-hidden">
+                <CardHeader>
+                  <CardTitle className="text-2xl text-white flex items-center gap-3">
+                    <Layers className="w-8 h-8 text-purple-400" />
+                    Arquitetura do Workflow
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="relative">
+                    <img 
+                      src="/images/fluxo-n8n1.png" 
+                      alt="Fluxo n8n - Sistema de Integração Inteligente"
+                      className="w-full h-auto rounded-b-xl"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+                  </div>
+                  <div className="p-6 bg-black/20">
+                    <h4 className="text-lg font-semibold text-white mb-3">Componentes Principais</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { name: "Webhook Evolution", status: "Ativo" },
+                        { name: "Model Selector", status: "Ativo" },
+                        { name: "AI Agent Core", status: "Ativo" },
+                        { name: "Memory System", status: "Ativo" },
+                        { name: "Voice Tools", status: "Ativo" },
+                        { name: "Calendar API", status: "Ativo" },
+                        { name: "Image Analysis", status: "Ativo" },
+                        { name: "Knowledge Base", status: "Ativo" }
+                      ].map((component, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
+                          <span className="text-xs text-gray-300">{component.name}</span>
+                          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          <div className="mt-16 grid md:grid-cols-3 gap-8">
+            <Card className="bg-white/5 backdrop-blur-xl border border-white/10 p-6">
+              <CardHeader>
+                <CardTitle className="text-xl text-white flex items-center gap-3">
+                  <Filter className="w-7 h-7 text-blue-400" />
+                  Processamento Inteligente
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-gray-400 text-sm">
+                  Filtros automáticos que distinguem mensagens de clientes de mensagens do bot, 
+                  garantindo que apenas interações relevantes sejam processadas.
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-gray-300 text-sm">Detecção de origem automática</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-gray-300 text-sm">Filtro anti-loop</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-gray-300 text-sm">Contexto preservado</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/5 backdrop-blur-xl border border-white/10 p-6">
+              <CardHeader>
+                <CardTitle className="text-xl text-white flex items-center gap-3">
+                  <Cpu className="w-7 h-7 text-purple-400" />
+                  Seleção Dinâmica de Modelos
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-gray-400 text-sm">
+                  Sistema avançado que seleciona automaticamente o melhor modelo de IA 
+                  baseado nas configurações específicas de cada agente.
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-gray-300 text-sm">5 provedores suportados</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-gray-300 text-sm">Temperatura configurável</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-gray-300 text-sm">Fallback automático</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/5 backdrop-blur-xl border border-white/10 p-6">
+              <CardHeader>
+                <CardTitle className="text-xl text-white flex items-center gap-3">
+                  <Network className="w-7 h-7 text-green-400" />
+                  Integração Nativa
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-gray-400 text-sm">
+                  Conecta nativamente com Evolution API, Supabase, Cal.com, Fish Audio, 
+                  Orimon e outras ferramentas essenciais.
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-gray-300 text-sm">WebHooks bidirecionais</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-gray-300 text-sm">APIs configuráveis</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-gray-300 text-sm">Resposta formatada</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
       {/* Dashboard & Analytics */}
       <section className="py-24 px-6">
         <div className="container mx-auto">
