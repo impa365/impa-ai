@@ -936,13 +936,13 @@ export default function LandingPage() {
                   <div key={index} className="flex gap-4 p-6 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10">
                     <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-600 rounded-xl flex items-center justify-center text-white flex-shrink-0">
                       {feature.icon}
-                    </div>
-                    <div>
+                  </div>
+                  <div>
                       <h4 className="text-lg font-bold text-white mb-2">{feature.title}</h4>
                       <p className="text-gray-400 text-sm">{feature.description}</p>
-                    </div>
                   </div>
-                ))}
+                </div>
+              ))}
               </div>
 
               <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-500/20 rounded-xl p-6">
@@ -998,8 +998,8 @@ export default function LandingPage() {
                 </CardContent>
               </Card>
             </div>
-          </div>
-
+                  </div>
+                  
           <div className="mt-16 grid md:grid-cols-3 gap-8">
             <Card className="bg-white/5 backdrop-blur-xl border border-white/10 p-6">
               <CardHeader>
@@ -1105,7 +1105,7 @@ export default function LandingPage() {
 
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-8">
-              <div className="space-y-6">
+                  <div className="space-y-6">
                 <h3 className="text-3xl font-bold text-white">
                   Controle & Monitoramento
                 </h3>
@@ -1144,8 +1144,8 @@ export default function LandingPage() {
                   </div>
                     <h4 className="text-lg font-bold text-white mb-2">{feature.title}</h4>
                     <p className="text-gray-400 text-sm">{feature.description}</p>
-                </div>
-              ))}
+                      </div>
+                    ))}
               </div>
             </div>
 
