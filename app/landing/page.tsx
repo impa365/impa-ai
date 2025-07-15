@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSystemName } from "@/hooks/use-system-config";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -78,6 +79,7 @@ export default function LandingPage() {
   const router = useRouter();
   const [activeFeature, setActiveFeature] = useState(0);
   const [isVisible, setIsVisible] = useState({});
+  const { systemName, isLoading } = useSystemName();
 
   const features = [
     "Sistema de Agentes IA",
@@ -113,7 +115,9 @@ export default function LandingPage() {
               <Bot className="w-7 h-7 text-white" />
             </div>
             <div>
-            <span className="text-2xl font-bold text-white">IMPA AI</span>
+            <span className="text-2xl font-bold text-white">
+              {systemName || "Sistema de IA"}
+            </span>
               <div className="text-xs text-blue-300">Plataforma de Agentes Inteligentes</div>
           </div>
           </div>
@@ -139,7 +143,7 @@ export default function LandingPage() {
           </div>
           
             <h1 className="text-7xl md:text-9xl font-black text-white mb-8 leading-none">
-              IMPA AI
+              {systemName || "Sistema de IA"}
               <div className="text-5xl md:text-7xl bg-gradient-to-r from-blue-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent mt-2">
                 Sistema Completo de
                 <br />Agentes Inteligentes
@@ -1332,7 +1336,7 @@ console.log('Agente criado:', agent);`}
           </h2>
             <p className="text-2xl text-gray-300 mb-12 leading-relaxed">
               Junte-se às empresas que já revolucionaram seus resultados com 
-              <strong className="text-blue-400"> IMPA AI</strong> - 
+              <strong className="text-blue-400"> {systemName || "Sistema de IA"}</strong> - 
               a plataforma enterprise de agentes inteligentes
             </p>
             
@@ -1389,7 +1393,9 @@ console.log('Agente criado:', agent);`}
                   <Bot className="w-7 h-7 text-white" />
               </div>
                 <div>
-              <span className="text-2xl font-bold text-white">IMPA AI</span>
+              <span className="text-2xl font-bold text-white">
+                {systemName || "Sistema de IA"}
+              </span>
                   <div className="text-xs text-blue-300">Enterprise Platform</div>
                 </div>
               </div>
@@ -1432,7 +1438,7 @@ console.log('Agente criado:', agent);`}
           
           <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-white/10">
             <p className="text-gray-400 mb-4 md:mb-0">
-              © 2024 IMPA AI. Todos os direitos reservados.
+              © 2024 {systemName || "Sistema de IA"}. Todos os direitos reservados.
             </p>
             <div className="flex items-center gap-6">
               <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">

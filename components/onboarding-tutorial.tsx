@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useSystemName } from "@/hooks/use-system-config"
 import {
   ChevronLeft,
   ChevronRight,
@@ -40,7 +41,7 @@ interface TutorialStep {
 const tutorialSteps: TutorialStep[] = [
   {
     id: 1,
-    title: "Bem-vindo à Impa AI! 🎉",
+      title: "Bem-vindo à Impa AI! 🎉",
     description:
       "Vamos te ajudar a configurar sua primeira IA para WhatsApp em apenas 4 passos simples. Este tutorial levará cerca de 5 minutos.",
     icon: <Zap className="w-8 h-8 text-blue-500" />,
@@ -118,6 +119,14 @@ export default function OnboardingTutorial() {
   const [isVisible, setIsVisible] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
   const router = useRouter()
+  const { systemName, isLoading: isLoadingSystemName } = useSystemName()
+
+  const getStepTitle = (step: TutorialStep) => {
+    if (step.id === 1) {
+      return `Bem-vindo à ${systemName || "plataforma"}! 🎉`
+    }
+    return step.title
+  }
 
   useEffect(() => {
     // Verificar se o tutorial já foi completado
@@ -207,7 +216,7 @@ export default function OnboardingTutorial() {
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white rounded-lg shadow-sm">{step.icon}</div>
             <div>
-              <CardTitle className="text-xl text-gray-900">{step.title}</CardTitle>
+              <CardTitle className="text-xl text-gray-900">{getStepTitle(step)}</CardTitle>
               <CardDescription className="text-gray-600">
                 Passo {currentStep + 1} de {tutorialSteps.length}
               </CardDescription>

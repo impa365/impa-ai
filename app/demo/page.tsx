@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { useSystemName } from "@/hooks/use-system-config";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -25,6 +26,7 @@ export default function DemoPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const { systemName, isLoading: isLoadingSystemName } = useSystemName();
 
   const demoSteps = [
     {
@@ -114,7 +116,9 @@ export default function DemoPage() {
           <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
             <Bot className="w-5 h-5 text-white" />
           </div>
-          <span className="text-xl font-bold text-white">IMPA AI - Demonstração</span>
+                      <span className="text-xl font-bold text-white">
+                              {systemName || "Sistema de IA"} - Demonstração
+            </span>
         </div>
 
         <Button 
@@ -128,7 +132,7 @@ export default function DemoPage() {
       <div className="container mx-auto px-6 py-12">
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold text-white mb-6">
-            Veja o IMPA AI em <span className="text-blue-400">Ação</span>
+                            Veja o {systemName || "Sistema de IA"} em <span className="text-blue-400">Ação</span>
           </h1>
           <p className="text-xl text-gray-300 max-w-3xl mx-auto">
             Uma demonstração interativa de como criar e configurar seu primeiro agente de IA em minutos

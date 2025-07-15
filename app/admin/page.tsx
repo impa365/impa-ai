@@ -359,7 +359,7 @@ export default function AdminDashboard() {
             <Key className="w-4 h-4" />
             Gerenciar API Keys
           </Button>
-          <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => updateURL("settings")}>
+          <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => router.push("/admin/settings")}>
             <Settings className="w-4 h-4" />
             Configurações
           </Button>
