@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Copy } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 
 interface AgentDuplicateDialogProps {
   open: boolean
@@ -31,14 +30,13 @@ export function AgentDuplicateDialog({ open, onOpenChange, agent, onSuccess }: A
     setError("")
 
     try {
-      // Buscar dados completos do agente
-      const { data: agentData, error: fetchError } = await supabase
-        .from("ai_agents")
-        .select("*")
-        .eq("id", agent.id)
-        .single()
-
-      if (fetchError) throw fetchError
+      // Buscar dados completos do agente via API
+      const getResponse = await fetch(`/api/admin/agents/${agent.id}`)
+      if (!getResponse.ok) {
+        throw new Error("Erro ao buscar dados do agente")
+      }
+      
+      const agentData = await getResponse.json()
 
       // Criar novo agente com os mesmos dados, mas com nome diferente
       const newAgent = {
@@ -51,9 +49,19 @@ export function AgentDuplicateDialog({ open, onOpenChange, agent, onSuccess }: A
         is_default: false, // Não duplicar como padrão
       }
 
-      const { error: insertError } = await supabase.from("ai_agents").insert([newAgent])
+      // Criar novo agente via API
+      const createResponse = await fetch('/api/admin/agents', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newAgent),
+      })
 
-      if (insertError) throw insertError
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json()
+        throw new Error(errorData.error || "Erro ao duplicar agente")
+      }
 
       onSuccess()
       onOpenChange(false)

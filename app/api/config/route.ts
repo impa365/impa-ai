@@ -61,9 +61,22 @@ export async function GET() {
       customCss: activeTheme.custom_css,
     }
 
-    // Configurações fixas que não precisam vir do banco
+    // Buscar configuração de cadastro público do banco de dados
+    const settingsResponse = await fetch(
+      `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.allow_public_registration`, 
+      { headers }
+    )
+
+    let allowPublicRegistration = false // Padrão seguro
+    if (settingsResponse.ok) {
+      const settingsData = await settingsResponse.json()
+      if (settingsData && settingsData.length > 0) {
+        allowPublicRegistration = settingsData[0].setting_value === 'true'
+      }
+    }
+
     const settings = {
-      allowPublicRegistration: false, // Por segurança, manter sempre false
+      allowPublicRegistration: allowPublicRegistration,
     }
 
     const apiResponse = {

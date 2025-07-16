@@ -566,44 +566,63 @@ CREATE INDEX IF NOT EXISTS idx_integrations_active ON impaai.integrations(is_act
 -- SEÇÃO 9: TRIGGERS PARA UPDATED_AT
 -- ============================================
 
-CREATE TRIGGER IF NOT EXISTS update_user_profiles_updated_at 
+-- Trigger para user_profiles
+DROP TRIGGER IF EXISTS update_user_profiles_updated_at ON impaai.user_profiles;
+CREATE TRIGGER update_user_profiles_updated_at 
     BEFORE UPDATE ON impaai.user_profiles 
     FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
 
-CREATE TRIGGER IF NOT EXISTS update_user_api_keys_updated_at 
+-- Trigger para user_api_keys
+DROP TRIGGER IF EXISTS update_user_api_keys_updated_at ON impaai.user_api_keys;
+CREATE TRIGGER update_user_api_keys_updated_at 
     BEFORE UPDATE ON impaai.user_api_keys 
     FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
 
-CREATE TRIGGER IF NOT EXISTS update_whatsapp_connections_updated_at 
+-- Trigger para whatsapp_connections
+DROP TRIGGER IF EXISTS update_whatsapp_connections_updated_at ON impaai.whatsapp_connections;
+CREATE TRIGGER update_whatsapp_connections_updated_at 
     BEFORE UPDATE ON impaai.whatsapp_connections 
     FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
 
-CREATE TRIGGER IF NOT EXISTS update_ai_agents_updated_at 
+-- Trigger para ai_agents
+DROP TRIGGER IF EXISTS update_ai_agents_updated_at ON impaai.ai_agents;
+CREATE TRIGGER update_ai_agents_updated_at 
     BEFORE UPDATE ON impaai.ai_agents 
     FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
 
-CREATE TRIGGER IF NOT EXISTS update_system_settings_updated_at 
+-- Trigger para system_settings
+DROP TRIGGER IF EXISTS update_system_settings_updated_at ON impaai.system_settings;
+CREATE TRIGGER update_system_settings_updated_at 
     BEFORE UPDATE ON impaai.system_settings 
     FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
 
-CREATE TRIGGER IF NOT EXISTS update_conversations_updated_at 
+-- Trigger para conversations
+DROP TRIGGER IF EXISTS update_conversations_updated_at ON impaai.conversations;
+CREATE TRIGGER update_conversations_updated_at 
     BEFORE UPDATE ON impaai.conversations 
     FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
 
-CREATE TRIGGER IF NOT EXISTS update_followup_24hs_updated_at 
+-- Trigger para followup_24hs
+DROP TRIGGER IF EXISTS update_followup_24hs_updated_at ON impaai.followup_24hs;
+CREATE TRIGGER update_followup_24hs_updated_at 
     BEFORE UPDATE ON impaai.followup_24hs 
     FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
 
-CREATE TRIGGER IF NOT EXISTS update_followup_messages_updated_at 
+-- Trigger para followup_messages
+DROP TRIGGER IF EXISTS update_followup_messages_updated_at ON impaai.followup_messages;
+CREATE TRIGGER update_followup_messages_updated_at 
     BEFORE UPDATE ON impaai.followup_messages 
     FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
 
-CREATE TRIGGER IF NOT EXISTS update_lead_follow24hs_updated_at 
+-- Trigger para lead_follow24hs
+DROP TRIGGER IF EXISTS update_lead_follow24hs_updated_at ON impaai.lead_follow24hs;
+CREATE TRIGGER update_lead_follow24hs_updated_at 
     BEFORE UPDATE ON impaai.lead_follow24hs 
     FOR EACH ROW EXECUTE FUNCTION impaai.update_updated_at_column();
 
 -- Trigger para hash único (arquivo 12)
-CREATE TRIGGER IF NOT EXISTS trg_generate_impa365_hash_impaai
+DROP TRIGGER IF EXISTS trg_generate_impa365_hash_impaai ON impaai."folowUp24hs_mensagem";
+CREATE TRIGGER trg_generate_impa365_hash_impaai
     BEFORE INSERT OR UPDATE ON impaai."folowUp24hs_mensagem"
     FOR EACH ROW
     EXECUTE FUNCTION impaai.generate_impa365_unique_hash();
@@ -1125,7 +1144,7 @@ INSERT INTO impaai.user_profiles (
 ) VALUES (
     'Administrador do Sistema',
     'admin@impa.ai',
-    'admin123',
+    '$2b$12$/P8k7iiIQFzSo5IEX46FMuS6Ld9nniA6UE8.caHdHqcnrvVimRiK.',
     'admin', 'active', 999, 999, 999999, true
 ) ON CONFLICT (email) DO UPDATE SET
     password = EXCLUDED.password,
@@ -1259,7 +1278,7 @@ BEGIN
     RAISE NOTICE '';
     RAISE NOTICE 'CREDENCIAIS PADRÃO:';
     RAISE NOTICE 'Email: admin@impa.ai';
-    RAISE NOTICE 'Senha: admin123';
+    RAISE NOTICE 'Senha: hash bcrypt configurado';
     RAISE NOTICE '';
     RAISE NOTICE 'RECURSOS 100%% INCLUÍDOS:';
     RAISE NOTICE '✅ Schema e tabelas principais COMPLETAS';

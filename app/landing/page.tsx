@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Bot,
   Smartphone,
@@ -72,13 +73,16 @@ import {
   Phone,
   MapPin,
   Link2,
-  Megaphone
+  Megaphone,
+  Expand,
+  X
 } from "lucide-react";
 
 export default function LandingPage() {
   const router = useRouter();
   const [activeFeature, setActiveFeature] = useState(0);
   const [isVisible, setIsVisible] = useState({});
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const { systemName, isLoading } = useSystemName();
 
   const features = [
@@ -884,209 +888,176 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Fluxo n8n Workflow */}
+      {/* Workflow N8N Enterprise */}
       <section className="py-24 px-6">
         <div className="container mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-6xl font-bold text-white mb-6">
-              Workflow <span className="text-purple-400">Inteligente</span>
+              Workflow <span className="text-cyan-400">Enterprise</span>
             </h2>
             <p className="text-xl text-gray-300 max-w-4xl mx-auto">
-              Fluxo automatizado de última geração que conecta WhatsApp, múltiplos modelos de IA 
-              e ferramentas avançadas em um sistema único e poderoso
+              Sistema de automação completo com n8n para workflows avançados de IA conversacional
             </p>
+            <Badge className="mt-4 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-300 border-cyan-500/30 px-6 py-2 text-lg">
+              🚀 Disponível para Clientes Premium
+            </Badge>
           </div>
 
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-8">
-              <div className="space-y-6">
-                <h3 className="text-3xl font-bold text-white">
-                  Sistema de Orquestração Avançado
-                </h3>
-                <p className="text-gray-300 text-lg">
-                  Nosso fluxo exclusivo no n8n integra perfeitamente o WhatsApp Business 
-                  com múltiplos provedores de IA, criando a experiência mais natural e 
-                  inteligente para seus clientes.
-                </p>
-              </div>
-
-              <div className="space-y-6">
-                {[
-                  {
-                    icon: <Workflow className="w-6 h-6" />,
-                    title: "Orquestração Inteligente",
-                    description: "Fluxo automatizado que conecta webhook → filtros → agentes → ferramentas → resposta"
-                  },
-                  {
-                    icon: <Brain className="w-6 h-6" />,
-                    title: "Multi-Model AI",
-                    description: "Suporte nativo a OpenAI, Anthropic, Google Gemini, Ollama e Groq em um único fluxo"
-                  },
-                  {
-                    icon: <Puzzle className="w-6 h-6" />,
-                    title: "Ferramentas Integradas",
-                    description: "Transcrição, análise de imagem, síntese de voz, agendamento e consulta de conhecimento"
-                  },
-                  {
-                    icon: <Database className="w-6 h-6" />,
-                    title: "Memória Contextual",
-                    description: "PostgreSQL integrado para manter contexto completo das conversas"
-                  }
-                ].map((feature, index) => (
-                  <div key={index} className="flex gap-4 p-6 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10">
-                    <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-600 rounded-xl flex items-center justify-center text-white flex-shrink-0">
-                      {feature.icon}
-                  </div>
-                  <div>
-                      <h4 className="text-lg font-bold text-white mb-2">{feature.title}</h4>
-                      <p className="text-gray-400 text-sm">{feature.description}</p>
-                  </div>
-                </div>
-              ))}
-              </div>
-
-              <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-500/20 rounded-xl p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <Lock className="w-6 h-6 text-purple-400" />
-                  <h4 className="text-lg font-semibold text-white">Exclusivo para Clientes</h4>
-                </div>
-                <p className="text-gray-300 text-sm">
-                  Este workflow avançado é disponibilizado exclusivamente para clientes que adquirem o sistema completo, 
-                  garantindo máximo valor e diferencial competitivo.
-                </p>
-              </div>
-            </div>
-
+            {/* Imagem do Fluxo */}
             <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-3xl blur-3xl"></div>
-              <Card className="relative bg-black/30 backdrop-blur-xl border border-purple-500/20 overflow-hidden">
-                <CardHeader>
-                  <CardTitle className="text-2xl text-white flex items-center gap-3">
-                    <Layers className="w-8 h-8 text-purple-400" />
-                    Arquitetura do Workflow
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="relative">
-                    <img 
-                      src="/images/fluxo-n8n1.png" 
-                      alt="Fluxo n8n - Sistema de Integração Inteligente"
-                      className="w-full h-auto rounded-b-xl"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-                  </div>
-                  <div className="p-6 bg-black/20">
-                    <h4 className="text-lg font-semibold text-white mb-3">Componentes Principais</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { name: "Webhook Evolution", status: "Ativo" },
-                        { name: "Model Selector", status: "Ativo" },
-                        { name: "AI Agent Core", status: "Ativo" },
-                        { name: "Memory System", status: "Ativo" },
-                        { name: "Voice Tools", status: "Ativo" },
-                        { name: "Calendar API", status: "Ativo" },
-                        { name: "Image Analysis", status: "Ativo" },
-                        { name: "Knowledge Base", status: "Ativo" }
-                      ].map((component, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
-                          <span className="text-xs text-gray-300">{component.name}</span>
-                          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                        </div>
-                      ))}
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded-3xl blur-3xl"></div>
+              <div className="relative bg-black/30 backdrop-blur-xl rounded-3xl border border-cyan-500/20 p-8 overflow-hidden">
+                <div className="absolute top-4 right-4">
+                  <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
+                    <Activity className="w-4 h-4 mr-1" />
+                    Ativo 24/7
+                  </Badge>
+                </div>
+                <div className="absolute top-4 left-4">
+                  <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 cursor-pointer">
+                    <Expand className="w-4 h-4 mr-1" />
+                    Clique para ampliar
+                  </Badge>
+                </div>
+                <img 
+                  src="/images/fluxo-n8n1.png" 
+                  alt="Fluxo N8N Enterprise - Workflow de IA Conversacional"
+                  className="w-full h-auto rounded-2xl shadow-2xl border border-white/10 cursor-pointer hover:opacity-90 transition-opacity duration-300"
+                  onClick={() => setIsImageModalOpen(true)}
+                />
+                <div className="absolute bottom-4 left-4 right-4">
+                  <div className="bg-black/50 backdrop-blur-sm rounded-xl p-4 border border-white/10">
+                    <div className="flex items-center gap-2 text-white text-sm">
+                      <Workflow className="w-4 h-4 text-cyan-400" />
+                      <span className="font-semibold">Workflow Completo:</span>
+                      <span className="text-cyan-300">WhatsApp → IA → Resposta Automática</span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
-                  </div>
-                  
-          <div className="mt-16 grid md:grid-cols-3 gap-8">
-            <Card className="bg-white/5 backdrop-blur-xl border border-white/10 p-6">
-              <CardHeader>
-                <CardTitle className="text-xl text-white flex items-center gap-3">
-                  <Filter className="w-7 h-7 text-blue-400" />
-                  Processamento Inteligente
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-gray-400 text-sm">
-                  Filtros automáticos que distinguem mensagens de clientes de mensagens do bot, 
-                  garantindo que apenas interações relevantes sejam processadas.
-                </p>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-gray-300 text-sm">Detecção de origem automática</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-gray-300 text-sm">Filtro anti-loop</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-gray-300 text-sm">Contexto preservado</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
-            <Card className="bg-white/5 backdrop-blur-xl border border-white/10 p-6">
-              <CardHeader>
-                <CardTitle className="text-xl text-white flex items-center gap-3">
-                  <Cpu className="w-7 h-7 text-purple-400" />
-                  Seleção Dinâmica de Modelos
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-gray-400 text-sm">
-                  Sistema avançado que seleciona automaticamente o melhor modelo de IA 
-                  baseado nas configurações específicas de cada agente.
+            {/* Conteúdo */}
+            <div className="space-y-8">
+              <div>
+                <h3 className="text-4xl font-bold text-white mb-6">
+                  Automação <span className="text-cyan-400">Inteligente</span>
+                </h3>
+                <p className="text-xl text-gray-300 leading-relaxed mb-8">
+                  Workflow enterprise completo que processa automaticamente mensagens do WhatsApp 
+                  através de múltiplas ferramentas de IA, oferecendo respostas contextuais e 
+                  ações automatizadas em tempo real.
                 </p>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-gray-300 text-sm">5 provedores suportados</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-gray-300 text-sm">Temperatura configurável</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-gray-300 text-sm">Fallback automático</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            <Card className="bg-white/5 backdrop-blur-xl border border-white/10 p-6">
-              <CardHeader>
-                <CardTitle className="text-xl text-white flex items-center gap-3">
-                  <Network className="w-7 h-7 text-green-400" />
-                  Integração Nativa
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-gray-400 text-sm">
-                  Conecta nativamente com Evolution API, Supabase, Cal.com, Fish Audio, 
-                  Orimon e outras ferramentas essenciais.
-                </p>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-gray-300 text-sm">WebHooks bidirecionais</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-gray-300 text-sm">APIs configuráveis</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-gray-300 text-sm">Resposta formatada</span>
-                  </div>
+              {/* Recursos do Workflow */}
+              <div className="grid grid-cols-1 gap-6">
+                <Card className="bg-white/5 backdrop-blur-sm border border-cyan-500/20 p-6">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-xl text-white flex items-center gap-3">
+                      <Brain className="w-6 h-6 text-cyan-400" />
+                      IA Multi-Modal Avançada
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Mic className="w-4 h-4 text-blue-400" />
+                          <span className="text-sm text-gray-300">Transcrição de Áudio</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Volume2 className="w-4 h-4 text-purple-400" />
+                          <span className="text-sm text-gray-300">Síntese de Voz</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Image className="w-4 h-4 text-green-400" />
+                          <span className="text-sm text-gray-300">Análise de Imagens</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Database className="w-4 h-4 text-cyan-400" />
+                          <span className="text-sm text-gray-300">Base de Conhecimento</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-white/5 backdrop-blur-sm border border-purple-500/20 p-6">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-xl text-white flex items-center gap-3">
+                      <Calendar className="w-6 h-6 text-purple-400" />
+                      Automação de Negócios
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-400" />
+                          <span className="text-sm text-gray-300">Agendamento Cal.com</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-400" />
+                          <span className="text-sm text-gray-300">Notificações Auto</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-400" />
+                          <span className="text-sm text-gray-300">APIs Personalizadas</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-400" />
+                          <span className="text-sm text-gray-300">Memória Contextual</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-white/5 backdrop-blur-sm border border-blue-500/20 p-6">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-xl text-white flex items-center gap-3">
+                      <Cpu className="w-6 h-6 text-blue-400" />
+                      Multi-Modelo IA
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-3">
+                      <Badge className="bg-green-500/20 text-green-300 border-green-500/30">OpenAI</Badge>
+                      <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">Anthropic</Badge>
+                      <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30">Google</Badge>
+                      <Badge className="bg-orange-500/20 text-orange-300 border-orange-500/30">Ollama</Badge>
+                      <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30">Groq</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 backdrop-blur-sm border border-cyan-500/20 rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Sparkles className="w-6 h-6 text-cyan-400" />
+                  <h4 className="text-lg font-bold text-white">Exclusivo para Clientes</h4>
                 </div>
-              </CardContent>
-            </Card>
+                <p className="text-gray-300 text-sm leading-relaxed">
+                  Este workflow enterprise está disponível <strong className="text-cyan-400">
+                  apenas para clientes que adquirem o sistema completo</strong>. 
+                  Inclui suporte técnico dedicado, customização de fluxos e 
+                  integração com suas ferramentas existentes.
+                </p>
+                <Button 
+                  onClick={handleLogin}
+                  className="mt-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white px-6 py-2 rounded-lg font-semibold shadow-lg transition-all duration-300"
+                >
+                  <Rocket className="w-4 h-4 mr-2" />
+                  Solicitar Acesso
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1105,7 +1076,7 @@ export default function LandingPage() {
 
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-8">
-                  <div className="space-y-6">
+              <div className="space-y-6">
                 <h3 className="text-3xl font-bold text-white">
                   Controle & Monitoramento
                 </h3>
@@ -1144,8 +1115,8 @@ export default function LandingPage() {
                   </div>
                     <h4 className="text-lg font-bold text-white mb-2">{feature.title}</h4>
                     <p className="text-gray-400 text-sm">{feature.description}</p>
-                      </div>
-                    ))}
+                </div>
+              ))}
               </div>
             </div>
 
@@ -1658,6 +1629,96 @@ console.log('Agente criado:', agent);`}
           </div>
         </div>
       </footer>
+
+      {/* Modal para ampliar imagem do fluxo N8N */}
+      <Dialog open={isImageModalOpen} onOpenChange={setIsImageModalOpen}>
+        <DialogContent className="max-w-7xl w-[95vw] h-[95vh] bg-black/95 backdrop-blur-xl border border-cyan-500/20 p-0 overflow-hidden">
+          <DialogHeader className="absolute top-4 left-6 right-6 z-10">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-2xl text-white flex items-center gap-3">
+                <Workflow className="w-8 h-8 text-cyan-400" />
+                Workflow Enterprise N8N - Sistema Completo
+              </DialogTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsImageModalOpen(false)}
+                className="text-white hover:bg-white/10 h-8 w-8 p-0"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
+                <Activity className="w-4 h-4 mr-1" />
+                Ativo 24/7
+              </Badge>
+              <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
+                8 Ferramentas Integradas
+              </Badge>
+              <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
+                Multi-Modal IA
+              </Badge>
+              <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30">
+                5 Provedores IA
+              </Badge>
+            </div>
+          </DialogHeader>
+          
+          <div className="relative w-full h-full p-6 pt-24 overflow-auto">
+            <img 
+              src="/images/fluxo-n8n1.png" 
+              alt="Fluxo N8N Enterprise - Workflow de IA Conversacional - Visualização Ampliada"
+              className="w-full h-auto rounded-xl shadow-2xl border border-white/10"
+            />
+            
+            <div className="mt-6 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 backdrop-blur-sm border border-cyan-500/20 rounded-xl p-6">
+              <h4 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <Sparkles className="w-6 h-6 text-cyan-400" />
+                Recursos do Workflow Enterprise
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                <div className="space-y-2">
+                  <h5 className="font-semibold text-cyan-300">IA Multi-Modal</h5>
+                  <div className="space-y-1 text-gray-300">
+                    <div>• Transcrição de áudio</div>
+                    <div>• Análise de imagens</div>
+                    <div>• Síntese de voz</div>
+                    <div>• Processamento de texto</div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h5 className="font-semibold text-purple-300">Automação</h5>
+                  <div className="space-y-1 text-gray-300">
+                    <div>• Agendamento Cal.com</div>
+                    <div>• Notificações automáticas</div>
+                    <div>• Webhooks personalizados</div>
+                    <div>• APIs de terceiros</div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h5 className="font-semibold text-blue-300">Modelos IA</h5>
+                  <div className="space-y-1 text-gray-300">
+                    <div>• OpenAI (GPT-4)</div>
+                    <div>• Anthropic (Claude)</div>
+                    <div>• Google (Gemini)</div>
+                    <div>• Ollama & Groq</div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h5 className="font-semibold text-green-300">Enterprise</h5>
+                  <div className="space-y-1 text-gray-300">
+                    <div>• Memória contextual</div>
+                    <div>• Escalabilidade</div>
+                    <div>• Configuração flexível</div>
+                    <div>• Suporte 24/7</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

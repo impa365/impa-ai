@@ -1,41 +1,50 @@
-import { supabase } from "./supabase"
+// REMOVIDO: import { supabase } from "./supabase" 
+// MOTIVO: Vulnerabilidade de segurança - uso direto do Supabase no cliente
 
-// Função alternativa que usa SQL direto para contornar problemas de cache
+// Função segura que usa API ao invés de acesso direto ao Supabase
 export async function syncInstanceStatusDirect(connectionId: string) {
   try {
-    console.log(`[SYNC-DIRECT] Iniciando sincronização direta para: ${connectionId}`)
+    console.log(`[SYNC-DIRECT] Iniciando sincronização segura via API para: ${connectionId}`)
 
-    // Usar SQL direto para atualizar
-    const { data, error } = await supabase.rpc("update_connection_sync", {
-      connection_id: connectionId,
-    })
+    // SEGURANÇA: Usar API ao invés de acesso direto ao banco
+    const response = await fetch('/api/whatsapp/sync-connection', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        connectionId: connectionId,
+      }),
+    });
 
-    if (error) {
-      console.error("Erro na função RPC:", error)
-
-      // Fallback: usar query SQL direta
-      const currentTime = new Date().toISOString()
-      const { data: updateData, error: updateError } = await supabase
-        .from("whatsapp_connections")
-        .update({
-          updated_at: currentTime,
-        })
-        .eq("id", connectionId)
-        .select()
-
-      if (updateError) {
-        console.error("Erro no fallback SQL:", updateError)
-        return { success: false, error: updateError.message }
-      }
-
-      console.log("[SYNC-DIRECT] Fallback executado com sucesso")
-      return { success: true, updated: true, method: "fallback" }
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("[SYNC-DIRECT] Erro na API:", errorData);
+      return { 
+        success: false, 
+        error: errorData.error || `Erro HTTP ${response.status}` 
+      };
     }
 
-    console.log("[SYNC-DIRECT] RPC executado com sucesso:", data)
-    return { success: true, updated: true, method: "rpc" }
+    const result = await response.json();
+    console.log("[SYNC-DIRECT] Sincronização via API executada com sucesso:", result);
+    
+    return { 
+      success: true, 
+      updated: true, 
+      method: "api",
+      data: result 
+    };
+
   } catch (error) {
-    console.error("Erro na sincronização direta:", error)
-    return { success: false, error: "Erro interno" }
+    console.error("Erro na sincronização via API:", error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Erro interno" 
+    };
   }
 }
+
+// Função alternativa para compatibilidade (deprecated)
+// Use syncInstanceStatusDirect() diretamente
+export const syncConnectionStatus = syncInstanceStatusDirect;

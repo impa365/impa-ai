@@ -27,38 +27,17 @@ export function getSupabaseServer() {
   });
 }
 
-// Função para criar/obter a instância única do Supabase (cliente)
-export function getSupabaseClient() {
-  // Esta função só deve ser usada no lado do cliente
-  if (typeof window === "undefined") {
-    throw new Error("getSupabaseClient should only be used on the client side");
-  }
-
-  // Se já existe uma instância, retornar ela (singleton)
-  if (supabaseInstance) {
-    return supabaseInstance;
-  }
-
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing public Supabase environment variables");
-  }
-
-  // Criar nova instância apenas se não existir (singleton)
-  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
-    db: { schema: "impaai" },
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      storage: typeof window !== "undefined" ? window.localStorage : undefined,
-      storageKey: "impaai-auth-token", // Chave única para evitar conflitos
-    },
-  });
-
-  return supabaseInstance;
-}
+// REMOVIDO: getSupabaseClient() - VULNERABILIDADE DE SEGURANÇA
+// REMOVIDO: getSupabaseClientSafe() - NÃO UTILIZADA E POTENCIAL RISCO
+//
+// SOLUÇÃO SEGURA: Use APENAS APIs do servidor ao invés de cliente Supabase direto
+// Exemplos:
+// - await fetch('/api/user/profile')
+// - await publicApi.getAgents()
+// - await fetch('/api/dashboard/stats')
+//
+// ⚠️ IMPORTANTE: Não criar clientes Supabase no frontend.
+// Todas as operações devem passar pelas APIs do servidor.
 
 // Função para resetar a instância (útil para testes ou logout)
 export function resetSupabaseInstance() {

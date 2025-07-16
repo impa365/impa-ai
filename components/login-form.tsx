@@ -180,9 +180,9 @@ function LoginForm() {
               </div>
             </div>
             <Button 
-              variant="outline" 
+              variant="ghost" 
               onClick={() => setShowRegister(true)} 
-              className="w-full mt-4 h-12 border border-white/30 text-white hover:bg-white/10 hover:border-white/50 rounded-xl transition-all duration-200" 
+              className="w-full mt-4 h-12 border border-white/30 text-white hover:bg-white/10 hover:border-white/50 hover:text-white rounded-xl transition-all duration-200 bg-transparent" 
               disabled={loading}
             >
               Criar Conta Gratuita
