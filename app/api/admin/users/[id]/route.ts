@@ -47,9 +47,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
       status: user.status,
       last_login_at: user.last_login_at,
       created_at: user.created_at,
-      agents_limit: user.agents_limit || 5,
-      connections_limit: user.connections_limit || 2,
-      whatsapp_connections_limit: user.connections_limit || 2,
+      agents_limit: user.agents_limit || 1, // Usar padrão seguro
+      connections_limit: user.connections_limit || 1,
+      whatsapp_connections_limit: user.connections_limit || 1,
       login_count: user.login_count || 0,
     }
 

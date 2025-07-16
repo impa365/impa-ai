@@ -55,23 +55,58 @@ export async function POST(request: NextRequest) {
     // Hash da senha
     const passwordHash = await bcrypt.hash(password, 12);
 
+    // Buscar limites padrão da tabela system_settings
+    const headers = {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      "Content-Type": "application/json",
+      "Accept-Profile": "impaai",
+      "Content-Profile": "impaai",
+    };
+
+    // Buscar limite padrão de agentes
+    const agentsLimitResponse = await fetch(
+      `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.default_agents_limit`,
+      { headers }
+    );
+    let defaultAgentsLimit = 1; // Padrão seguro
+    if (agentsLimitResponse.ok) {
+      const agentsData = await agentsLimitResponse.json();
+      if (agentsData && agentsData.length > 0) {
+        defaultAgentsLimit = parseInt(agentsData[0].setting_value) || 1;
+      }
+    }
+
+    // Buscar limite padrão de conexões WhatsApp
+    const connectionsLimitResponse = await fetch(
+      `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.default_whatsapp_connections_limit`,
+      { headers }
+    );
+    let defaultConnectionsLimit = 1; // Padrão seguro
+    if (connectionsLimitResponse.ok) {
+      const connectionsData = await connectionsLimitResponse.json();
+      if (connectionsData && connectionsData.length > 0) {
+        defaultConnectionsLimit = parseInt(connectionsData[0].setting_value) || 1;
+      }
+    }
+
+    console.log(`📊 Limites do sistema: agents=${defaultAgentsLimit}, connections=${defaultConnectionsLimit}`);
+
     // Criar usuário via REST API
     const createResponse = await fetch(`${supabaseUrl}/rest/v1/user_profiles`, {
       method: "POST",
       headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
+        ...headers,
         Prefer: "return=representation",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
       },
       body: JSON.stringify({
         email,
         full_name,
-        password: passwordHash, // Corrigido: usar 'password' ao invés de 'password_hash'
+        password: passwordHash,
         role: "user",
         status: "active",
+        agents_limit: defaultAgentsLimit,
+        connections_limit: defaultConnectionsLimit,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }),

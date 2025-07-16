@@ -42,9 +42,9 @@ export async function GET() {
       status: user.status,
       last_login_at: user.last_login_at,
       created_at: user.created_at,
-      agents_limit: user.agents_limit || 5,
-      connections_limit: user.connections_limit || 2,
-      whatsapp_connections_limit: user.connections_limit || 2,
+      agents_limit: user.agents_limit || 1, // Usar padrão seguro ao invés de hardcoded
+      connections_limit: user.connections_limit || 1,
+      whatsapp_connections_limit: user.connections_limit || 1,
       login_count: user.login_count || 0,
     }))
 
@@ -75,25 +75,64 @@ export async function POST(request: Request) {
       console.log("🔐 Senha hasheada para novo usuário")
     }
 
+    // Buscar limites padrão da tabela system_settings (se não fornecidos)
+    const headers = {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      "Content-Type": "application/json",
+      "Accept-Profile": "impaai",
+      "Content-Profile": "impaai",
+    };
+
+    let finalAgentsLimit = userData.agents_limit;
+    let finalConnectionsLimit = userData.connections_limit;
+
+    // Se limites não foram fornecidos, buscar da tabela system_settings
+    if (!finalAgentsLimit) {
+      const agentsLimitResponse = await fetch(
+        `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.default_agents_limit`,
+        { headers }
+      );
+      if (agentsLimitResponse.ok) {
+        const agentsData = await agentsLimitResponse.json();
+        if (agentsData && agentsData.length > 0) {
+          finalAgentsLimit = parseInt(agentsData[0].setting_value) || 1;
+        }
+      }
+      finalAgentsLimit = finalAgentsLimit || 1; // Padrão seguro
+    }
+
+    if (!finalConnectionsLimit) {
+      const connectionsLimitResponse = await fetch(
+        `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.default_whatsapp_connections_limit`,
+        { headers }
+      );
+      if (connectionsLimitResponse.ok) {
+        const connectionsData = await connectionsLimitResponse.json();
+        if (connectionsData && connectionsData.length > 0) {
+          finalConnectionsLimit = parseInt(connectionsData[0].setting_value) || 1;
+        }
+      }
+      finalConnectionsLimit = finalConnectionsLimit || 1; // Padrão seguro
+    }
+
+    console.log(`📊 Limites aplicados: agents=${finalAgentsLimit}, connections=${finalConnectionsLimit}`);
+
     // Criar usuário via REST API
     const response = await fetch(`${supabaseUrl}/rest/v1/user_profiles`, {
       method: "POST",
       headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
+        ...headers,
         Prefer: "return=representation",
       },
       body: JSON.stringify({
         full_name: userData.full_name,
         email: userData.email,
-        password: hashedPassword, // Agora com hash
+        password: hashedPassword,
         role: userData.role || "user",
         status: userData.status || "active",
-        agents_limit: userData.agents_limit || 5,
-        connections_limit: userData.connections_limit || 2,
+        agents_limit: finalAgentsLimit,
+        connections_limit: finalConnectionsLimit,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }),
