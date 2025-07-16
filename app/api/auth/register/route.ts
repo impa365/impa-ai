@@ -55,54 +55,50 @@ export async function POST(request: NextRequest) {
     // Hash da senha
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Buscar limites padrão da tabela system_settings
-    const headers = {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-    };
-
-    // Buscar limite padrão de agentes
-    const agentsLimitResponse = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.default_agents_limit`,
-      { headers }
-    );
-    let defaultAgentsLimit = 1; // Padrão seguro
-    if (agentsLimitResponse.ok) {
-      const agentsData = await agentsLimitResponse.json();
-      if (agentsData && agentsData.length > 0) {
-        defaultAgentsLimit = parseInt(agentsData[0].setting_value) || 1;
+    // Buscar limites padrão do banco de dados
+    let defaultAgentsLimit = 1;
+    let defaultConnectionsLimit = 1;
+    try {
+      const settingsResponse = await fetch(
+        `${supabaseUrl}/rest/v1/system_settings?select=setting_key,setting_value&setting_key=in.(default_agents_limit,max_connections_per_user)`,
+        {
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (settingsResponse.ok) {
+        const settings = await settingsResponse.json();
+        for (const setting of settings) {
+          if (setting.setting_key === "default_agents_limit") {
+            defaultAgentsLimit = parseInt(setting.setting_value) || 1;
+          }
+          if (setting.setting_key === "max_connections_per_user") {
+            defaultConnectionsLimit = parseInt(setting.setting_value) || 1;
+          }
+        }
       }
+    } catch (e) {
+      console.warn("Não foi possível buscar limites padrão do banco, usando fallback 1.");
     }
-
-    // Buscar limite padrão de conexões WhatsApp
-    const connectionsLimitResponse = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.default_whatsapp_connections_limit`,
-      { headers }
-    );
-    let defaultConnectionsLimit = 1; // Padrão seguro
-    if (connectionsLimitResponse.ok) {
-      const connectionsData = await connectionsLimitResponse.json();
-      if (connectionsData && connectionsData.length > 0) {
-        defaultConnectionsLimit = parseInt(connectionsData[0].setting_value) || 1;
-      }
-    }
-
-    console.log(`📊 Limites do sistema: agents=${defaultAgentsLimit}, connections=${defaultConnectionsLimit}`);
 
     // Criar usuário via REST API
     const createResponse = await fetch(`${supabaseUrl}/rest/v1/user_profiles`, {
       method: "POST",
       headers: {
-        ...headers,
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
         Prefer: "return=representation",
+        "Accept-Profile": "impaai",
+        "Content-Profile": "impaai",
       },
       body: JSON.stringify({
         email,
         full_name,
-        password: passwordHash,
+        password: passwordHash, // Corrigido: usar 'password' ao invés de 'password_hash'
         role: "user",
         status: "active",
         agents_limit: defaultAgentsLimit,

@@ -6,7 +6,7 @@ export async function GET() {
   try {
     // Retornar configurações padrão para usuários
     const defaultSettings = {
-      agents_limit: 1, // Limite padrão para usuários normais
+      agents_limit: 5, // Limite padrão para usuários normais
       transcribe_audio_enabled: true,
       understand_images_enabled: true,
       voice_response_enabled: true,

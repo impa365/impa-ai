@@ -83,8 +83,8 @@ export async function GET() {
       if (userData && userData.length > 0) {
         const user = userData[0]
         userLimits = {
-                max_agents: user.role === "admin" ? 999 : user.agents_limit || 1,
-      max_whatsapp_connections: user.role === "admin" ? 999 : user.connections_limit || 1,
+          max_agents: user.role === "admin" ? 999 : user.agents_limit || 5,
+          max_whatsapp_connections: user.role === "admin" ? 999 : user.connections_limit || 3,
         }
       }
     }

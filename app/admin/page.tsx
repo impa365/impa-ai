@@ -275,7 +275,7 @@ export default function AdminDashboard() {
           full_name: adminProfileForm.full_name.trim(),
           email: adminProfileForm.email.trim(),
         }),
-      })
+        })
       
       if (!response.ok) {
         const errorData = await response.json()
@@ -652,13 +652,13 @@ export default function AdminDashboard() {
                       'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                      setting_key: "default_whatsapp_connections_limit",
-                      setting_value: systemLimits.defaultLimit,
+                    setting_key: "default_whatsapp_connections_limit",
+                    setting_value: systemLimits.defaultLimit,
                     }),
                   })
                   
                   if (response.ok) {
-                    setSaveMessage("Configurações salvas!")
+                  setSaveMessage("Configurações salvas!")
                   } else {
                     setSaveMessage("Erro ao salvar configurações")
                   }

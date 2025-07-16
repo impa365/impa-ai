@@ -29,7 +29,7 @@ export function getSupabaseServer() {
 
 // REMOVIDO: getSupabaseClient() - VULNERABILIDADE DE SEGURANÇA
 // REMOVIDO: getSupabaseClientSafe() - NÃO UTILIZADA E POTENCIAL RISCO
-//
+// 
 // SOLUÇÃO SEGURA: Use APENAS APIs do servidor ao invés de cliente Supabase direto
 // Exemplos:
 // - await fetch('/api/user/profile')
