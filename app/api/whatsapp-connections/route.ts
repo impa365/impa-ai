@@ -42,10 +42,19 @@ export async function GET(request: Request) {
 
     if (!response.ok) {
       const errorText = await response.text()
+      // LOG DETALHADO NO SERVIDOR
+      console.error("[WhatsApp-Connections][ERRO] Falha ao buscar conexões:", {
+        url,
+        status: response.status,
+        userId,
+        isAdmin,
+        errorText,
+      })
       return NextResponse.json(
         {
           success: false,
           error: `Erro ao buscar conexões: ${response.status}`,
+          details: errorText,
         },
         { status: response.status },
       )
@@ -74,6 +83,12 @@ export async function GET(request: Request) {
       connections: safeConnections,
     })
   } catch (error: any) {
+    // LOG DETALHADO DE EXCEÇÃO
+    console.error("[WhatsApp-Connections][EXCEPTION] Erro inesperado ao buscar conexões:", {
+      message: error.message,
+      stack: error.stack,
+      url: request.url,
+    })
     return NextResponse.json(
       {
         success: false,
