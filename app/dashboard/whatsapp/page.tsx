@@ -337,7 +337,7 @@ export default function WhatsAppPage() {
       const response = await fetch(
         `/api/whatsapp/disconnect/${connection.instance_name}`,
         {
-          method: "POST",
+          method: "DELETE",
           headers: {
             "Content-Type": "application/json",
           },

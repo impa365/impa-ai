@@ -51,7 +51,7 @@ export async function disconnectInstance(
     console.log(`🔌 Desconectando instância: ${instanceName}`)
 
     const response = await fetch(`/api/whatsapp/disconnect/${instanceName}`, {
-      method: "POST",
+      method: "DELETE",
       headers: {
         "Content-Type": "application/json",
       },

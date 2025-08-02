@@ -228,3 +228,23 @@ nesse caso webhookByEvents deveria ser true e quado receber um endpoint messages
 Um modelo de webhook enviado pelo endpoint messages-upsert é:
 
 [ { "headers": { "host": "nflow.atendimentoimpae.com", "user-agent": "axios/1.10.0", "content-length": "656", "accept": "application/json, text/plain, /", "accept-encoding": "gzip, compress, deflate, br", "content-type": "application/json", "x-forwarded-for": "172.18.0.1", "x-forwarded-host": "nflow.atendimentoimpae.com", "x-forwarded-port": "443", "x-forwarded-proto": "https", "x-forwarded-server": "477365fd4184", "x-real-ip": "172.18.0.1" }, "params": {}, "query": {}, "body": { "event": "messages.upsert", "instance": "impaai_testeal_1866", "data": { "key": { "remoteJid": "557331912851@s.whatsapp.net", "fromMe": true, "id": "59A128DE2A0DB589FC81EA391730791B" }, "pushName": "Testes Impa", "status": "SERVER_ACK", "message": { "conversation": "Agradecemos seu contato, Até Mais!" }, "messageType": "conversation", "messageTimestamp": 1751730537, "instanceId": "17cf85e9-fba4-4f99-bee3-6766c98b914c", "source": "android" }, "destination": "https://nflow.atendimentoimpae.com/webhook/impaai/evolution", "date_time": "2025-07-05T12:48:57.651Z", "sender": "557398631289@s.whatsapp.net", "server_url": "https://eapi.atendimentoimpae.com", "apikey": "A57F6969-79CD-4285-A783-798460BDFFC6" }, "webhookUrl": "https://nflow.atendimentoimpae.com/webhook/impaai/evolution/messages-upsert", "executionMode": "production" } ]
+
+Caso uma instnacia esteja conectando ou conectada podemos usar o endpoint a seguir para desconectala:
+
+delete: {{baseUrl}}/instance/logout/{{instance}}
+header  apikey: apikey da instancia
+
+modelo de resposta de sucesso:
+
+
+{
+"status": 
+"SUCCESS",
+"error": 
+false,
+"response": 
+{
+"message": 
+"Instance logged out"
+}
+}

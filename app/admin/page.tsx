@@ -304,22 +304,10 @@ export default function AdminDashboard() {
     try {
       const result = await disconnectInstance(connection.instance_name)
       if (result.success) {
-        // Atualizar status via API
-        await fetch('/api/whatsapp-connections', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            id: connection.id,
-            status: "disconnected",
-            updated_at: new Date().toISOString(),
-          }),
-        })
         await fetchWhatsAppConnections()
         setSaveMessage("Conexão desconectada com sucesso!")
       } else {
-        throw new Error(result.message || "Falha ao desconectar instância")
+        throw new Error(result.error || "Falha ao desconectar instância")
       }
     } catch (error) {
       console.error("Erro ao desconectar:", error)
@@ -874,7 +862,7 @@ export default function AdminDashboard() {
                     >
                       <Edit className="w-4 h-4" />
                     </Button>
-                    {connection.status === "connected" && (
+                    {(connection.status === "connected" || connection.status === "connecting") && (
                       <Button
                         variant="ghost"
                         size="sm"
