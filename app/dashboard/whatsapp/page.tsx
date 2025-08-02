@@ -100,10 +100,13 @@ export default function WhatsAppPage() {
   }, [router]);
 
   // Função para buscar conexões WhatsApp via API
-  const fetchWhatsAppConnections = async () => {
+  const fetchWhatsAppConnections = async (showLoading = true) => {
     if (!user) return;
 
-    setLoadingConnections(true);
+    if (showLoading) {
+      setLoadingConnections(true);
+    }
+    
     try {
       console.log("🔍 Buscando conexões WhatsApp via API...");
 
@@ -123,7 +126,7 @@ export default function WhatsAppPage() {
           description: errorData.error || "Erro ao buscar conexões",
           variant: "destructive",
         });
-        setWhatsappConnections([]);
+        // Não limpar conexões em caso de erro para evitar piscar
         return;
       }
 
@@ -140,7 +143,7 @@ export default function WhatsAppPage() {
           description: data.error || "Erro ao buscar conexões",
           variant: "destructive",
         });
-        setWhatsappConnections([]);
+        // Não limpar conexões em caso de erro para evitar piscar
       }
     } catch (error: any) {
       console.error("💥 Erro ao buscar conexões:", error);
@@ -149,9 +152,11 @@ export default function WhatsAppPage() {
         description: "Erro de conexão ao buscar dados",
         variant: "destructive",
       });
-      setWhatsappConnections([]);
+      // Não limpar conexões em caso de erro para evitar piscar
     } finally {
-      setLoadingConnections(false);
+      if (showLoading) {
+        setLoadingConnections(false);
+      }
     }
   };
 
@@ -185,7 +190,7 @@ export default function WhatsAppPage() {
       if (response.ok) {
         const data = await response.json();
         console.log("✅ Conexão sincronizada:", data);
-        await fetchWhatsAppConnections();
+        await fetchWhatsAppConnections(false);
       } else {
         const errorData = await response.json();
         console.error("❌ Erro ao sincronizar conexão:", errorData);
@@ -212,8 +217,8 @@ export default function WhatsAppPage() {
         credentials: "include",
       });
       
-      // Recarregar conexões silenciosamente
-      await fetchWhatsAppConnections();
+      // Recarregar conexões silenciosamente (sem loading)
+      await fetchWhatsAppConnections(false);
     } catch (error) {
       // Silently handle auto-sync errors
     }
@@ -289,7 +294,7 @@ export default function WhatsAppPage() {
         console.log("✅ Conexão deletada:", data);
 
         // Recarregar lista de conexões
-        await fetchWhatsAppConnections();
+        await fetchWhatsAppConnections(false);
         setDeleteConfirmOpen(false);
         setConnectionToDelete(null);
 
@@ -334,6 +339,15 @@ export default function WhatsAppPage() {
     try {
       console.log(`🔌 Desconectando instância: ${connection.instance_name}`);
 
+      // Atualização otimista - atualizar imediatamente no estado local
+      setWhatsappConnections(prev => 
+        prev.map(conn => 
+          conn.id === connection.id 
+            ? { ...conn, status: "disconnected" as const }
+            : conn
+        )
+      );
+
       const response = await fetch(
         `/api/whatsapp/disconnect/${connection.instance_name}`,
         {
@@ -348,7 +362,8 @@ export default function WhatsAppPage() {
       if (response.ok) {
         const data = await response.json();
         console.log("✅ Instância desconectada:", data);
-        await fetchWhatsAppConnections();
+        // Recarregar para garantir sincronização completa
+        await fetchWhatsAppConnections(false);
         toast({
           title: "Sucesso",
           description: "Instância desconectada com sucesso",
@@ -356,6 +371,14 @@ export default function WhatsAppPage() {
       } else {
         const errorData = await response.json();
         console.error("❌ Erro ao desconectar:", errorData);
+        // Reverter mudança otimista em caso de erro
+        setWhatsappConnections(prev => 
+          prev.map(conn => 
+            conn.id === connection.id 
+              ? { ...conn, status: connection.status }
+              : conn
+          )
+        );
         toast({
           title: "Erro",
           description: errorData.error || "Erro ao desconectar",
@@ -364,6 +387,14 @@ export default function WhatsAppPage() {
       }
     } catch (error) {
       console.error("💥 Erro ao desconectar:", error);
+      // Reverter mudança otimista em caso de erro
+      setWhatsappConnections(prev => 
+        prev.map(conn => 
+          conn.id === connection.id 
+            ? { ...conn, status: connection.status }
+            : conn
+        )
+      );
       toast({
         title: "Erro",
         description: "Erro de conexão",
@@ -373,7 +404,7 @@ export default function WhatsAppPage() {
   };
 
   const handleConnectionSuccess = () => {
-    fetchWhatsAppConnections();
+    fetchWhatsAppConnections(false);
     setShowConnectionModal(false);
   };
 
@@ -418,7 +449,7 @@ export default function WhatsAppPage() {
 
       if (data.success) {
         console.log("✅ Sincronização concluída:", data);
-        await fetchWhatsAppConnections();
+        await fetchWhatsAppConnections(false);
 
         toast({
           title: "Sucesso",

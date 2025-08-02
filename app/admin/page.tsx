@@ -302,15 +302,40 @@ export default function AdminDashboard() {
 
   const handleDisconnectWhatsAppConnection = async (connection: any) => {
     try {
+      // Atualização otimista - atualizar imediatamente no estado local
+      setWhatsappConnections(prev => 
+        prev.map(conn => 
+          conn.id === connection.id 
+            ? { ...conn, status: "disconnected" }
+            : conn
+        )
+      );
+
       const result = await disconnectInstance(connection.instance_name)
       if (result.success) {
         await fetchWhatsAppConnections()
         setSaveMessage("Conexão desconectada com sucesso!")
       } else {
+        // Reverter mudança otimista em caso de erro
+        setWhatsappConnections(prev => 
+          prev.map(conn => 
+            conn.id === connection.id 
+              ? { ...conn, status: connection.status }
+              : conn
+          )
+        );
         throw new Error(result.error || "Falha ao desconectar instância")
       }
     } catch (error) {
       console.error("Erro ao desconectar:", error)
+      // Reverter mudança otimista em caso de erro
+      setWhatsappConnections(prev => 
+        prev.map(conn => 
+          conn.id === connection.id 
+            ? { ...conn, status: connection.status }
+            : conn
+        )
+      );
       setSaveMessage("Erro ao desconectar conexão")
     } finally {
       setTimeout(() => setSaveMessage(""), 3000)
