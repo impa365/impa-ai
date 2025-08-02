@@ -201,6 +201,9 @@ export default function WhatsAppPage() {
       // Sincronizar apenas se a página estiver visível
       if (document.hidden) return;
       
+      // Sincronizar apenas se há conexões para sincronizar
+      if (whatsappConnections.length === 0) return;
+      
       await fetch("/api/whatsapp/sync-user", {
         method: "POST",
         headers: {
@@ -214,7 +217,7 @@ export default function WhatsAppPage() {
     } catch (error) {
       // Silently handle auto-sync errors
     }
-  }, []);
+  }, [whatsappConnections.length]);
 
   // Carregar conexões quando usuário estiver disponível
   useEffect(() => {
@@ -226,9 +229,6 @@ export default function WhatsAppPage() {
   // Configurar auto-sync quando usuário estiver disponível
   useEffect(() => {
     if (!user) return;
-
-    // Sincronizar ao carregar a página
-    autoSync();
 
     // Configurar auto-sync a cada 30 segundos
     const interval = setInterval(() => autoSync(), 30000);
@@ -379,7 +379,16 @@ export default function WhatsAppPage() {
 
   // Sincronização manual baseada na do admin
   const handleManualSync = async () => {
-    if (syncing || !whatsappConnections.length) return;
+    if (syncing) return;
+    
+    // Não sincronizar se não há conexões
+    if (whatsappConnections.length === 0) {
+      toast({
+        title: "Informação",
+        description: "Nenhuma conexão para sincronizar",
+      });
+      return;
+    }
 
     setSyncing(true);
     try {
@@ -485,7 +494,7 @@ export default function WhatsAppPage() {
           <Button
             variant="outline"
             onClick={handleManualSync}
-            disabled={syncing || whatsappConnections.length === 0}
+            disabled={syncing}
             className="gap-2 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
             title="Sincronizar status das conexões"
           >
