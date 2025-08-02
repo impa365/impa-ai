@@ -55,6 +55,7 @@ export default function WhatsAppPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [autoSyncActive, setAutoSyncActive] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -195,12 +196,61 @@ export default function WhatsAppPage() {
     }
   }, []);
 
-  // Carregar conexões quando usuário estiver disponível
+  // Auto-sync silencioso a cada 15 segundos + eventos
+  const autoSync = useCallback(async (showMessage = false) => {
+    try {
+      setAutoSyncActive(true);
+      await fetch("/api/whatsapp/sync-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+      // Recarregar conexões silenciosamente
+      await fetchWhatsAppConnections();
+
+      if (showMessage) {
+        toast({
+          title: "Sincronização",
+          description: "Conexões sincronizadas automaticamente!",
+        });
+      }
+    } catch (error) {
+      // Silently handle auto-sync errors
+      console.log("Auto-sync error (silent):", error);
+    } finally {
+      setAutoSyncActive(false);
+    }
+  }, [fetchWhatsAppConnections, toast]);
+
+  // Carregar conexões quando usuário estiver disponível e configurar auto-sync
   useEffect(() => {
     if (user) {
       fetchWhatsAppConnections();
+      
+      // Configurar auto-sync a cada 15 segundos
+      const interval = setInterval(() => autoSync(), 15000);
+
+      // Sincronizar quando a página ganhar foco (usuário voltar para a aba)
+      const handleFocus = () => autoSync();
+      window.addEventListener("focus", handleFocus);
+
+      // Sincronizar quando a página ficar visível
+      const handleVisibilityChange = () => {
+        if (!document.hidden) {
+          autoSync();
+        }
+      };
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener("focus", handleFocus);
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      };
     }
-  }, [user]);
+  }, [user, autoSync]);
 
   const handleDeleteConnection = async (connection: any) => {
     setConnectionToDelete(connection);
@@ -429,6 +479,12 @@ export default function WhatsAppPage() {
           <p className="text-sm text-gray-500 mt-1">
             {connectionLimits.current} de {connectionLimits.maximum} conexões
             utilizadas
+            {autoSyncActive && (
+              <span className="ml-2 inline-flex items-center text-blue-600">
+                <RefreshCw className="h-3 w-3 animate-spin mr-1" />
+                Sincronizando...
+              </span>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -769,12 +825,6 @@ export default function WhatsAppPage() {
         open={infoModalOpen}
         onOpenChange={setInfoModalOpen}
         connection={selectedConnection}
-        onStatusChange={(status) => {
-          if (selectedConnection) {
-            // Recarregar conexões após mudança de status
-            fetchWhatsAppConnections();
-          }
-        }}
       />
     </div>
   );
