@@ -55,7 +55,6 @@ export default function WhatsAppPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [autoSyncActive, setAutoSyncActive] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -196,10 +195,12 @@ export default function WhatsAppPage() {
     }
   }, []);
 
-  // Auto-sync silencioso a cada 15 segundos + eventos
-  const autoSync = useCallback(async (showMessage = false) => {
+  // Auto-sync silencioso a cada 30 segundos + eventos
+  const autoSync = useCallback(async () => {
     try {
-      setAutoSyncActive(true);
+      // Sincronizar apenas se a página estiver visível
+      if (document.hidden) return;
+      
       await fetch("/api/whatsapp/sync-user", {
         method: "POST",
         headers: {
@@ -207,49 +208,48 @@ export default function WhatsAppPage() {
         },
         credentials: "include",
       });
+      
       // Recarregar conexões silenciosamente
       await fetchWhatsAppConnections();
-
-      if (showMessage) {
-        toast({
-          title: "Sincronização",
-          description: "Conexões sincronizadas automaticamente!",
-        });
-      }
     } catch (error) {
       // Silently handle auto-sync errors
-      console.log("Auto-sync error (silent):", error);
-    } finally {
-      setAutoSyncActive(false);
     }
-  }, [fetchWhatsAppConnections, toast]);
+  }, []);
 
-  // Carregar conexões quando usuário estiver disponível e configurar auto-sync
+  // Carregar conexões quando usuário estiver disponível
   useEffect(() => {
     if (user) {
       fetchWhatsAppConnections();
-      
-      // Configurar auto-sync a cada 15 segundos
-      const interval = setInterval(() => autoSync(), 15000);
-
-      // Sincronizar quando a página ganhar foco (usuário voltar para a aba)
-      const handleFocus = () => autoSync();
-      window.addEventListener("focus", handleFocus);
-
-      // Sincronizar quando a página ficar visível
-      const handleVisibilityChange = () => {
-        if (!document.hidden) {
-          autoSync();
-        }
-      };
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-
-      return () => {
-        clearInterval(interval);
-        window.removeEventListener("focus", handleFocus);
-        document.removeEventListener("visibilitychange", handleVisibilityChange);
-      };
     }
+  }, [user]);
+
+  // Configurar auto-sync quando usuário estiver disponível
+  useEffect(() => {
+    if (!user) return;
+
+    // Sincronizar ao carregar a página
+    autoSync();
+
+    // Configurar auto-sync a cada 30 segundos
+    const interval = setInterval(() => autoSync(), 30000);
+
+    // Sincronizar quando a página ganhar foco (usuário voltar para a aba)
+    const handleFocus = () => autoSync();
+    window.addEventListener("focus", handleFocus);
+
+    // Sincronizar quando a página ficar visível
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        autoSync();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [user, autoSync]);
 
   const handleDeleteConnection = async (connection: any) => {
@@ -479,12 +479,6 @@ export default function WhatsAppPage() {
           <p className="text-sm text-gray-500 mt-1">
             {connectionLimits.current} de {connectionLimits.maximum} conexões
             utilizadas
-            {autoSyncActive && (
-              <span className="ml-2 inline-flex items-center text-blue-600">
-                <RefreshCw className="h-3 w-3 animate-spin mr-1" />
-                Sincronizando...
-              </span>
-            )}
           </p>
         </div>
         <div className="flex gap-2">
