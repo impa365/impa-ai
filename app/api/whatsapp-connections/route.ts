@@ -28,7 +28,7 @@ export async function GET(request: Request) {
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    let url = `${supabaseUrl}/rest/v1/whatsapp_connections?select=*,user_profiles(id,email,full_name)&order=connection_name.asc`
+    let url = `${supabaseUrl}/rest/v1/whatsapp_connections?select=*,adciona_folow,remover_folow,user_profiles(id,email,full_name)&order=connection_name.asc`
 
     // Se não for admin e tiver userId, filtrar por usuário
     if (!isAdmin && userId) {
@@ -42,10 +42,19 @@ export async function GET(request: Request) {
 
     if (!response.ok) {
       const errorText = await response.text()
+      // LOG DETALHADO NO SERVIDOR
+      console.error("[WhatsApp-Connections][ERRO] Falha ao buscar conexões:", {
+        url,
+        status: response.status,
+        userId,
+        isAdmin,
+        errorText,
+      })
       return NextResponse.json(
         {
           success: false,
           error: `Erro ao buscar conexões: ${response.status}`,
+          details: errorText,
         },
         { status: response.status },
       )
@@ -65,6 +74,8 @@ export async function GET(request: Request) {
       updated_at: conn.updated_at,
       user_profiles: conn.user_profiles,
       settings: conn.settings,
+      adciona_folow: conn.adciona_folow,
+      remover_folow: conn.remover_folow,
     }))
 
     return NextResponse.json({
@@ -72,6 +83,12 @@ export async function GET(request: Request) {
       connections: safeConnections,
     })
   } catch (error: any) {
+    // LOG DETALHADO DE EXCEÇÃO
+    console.error("[WhatsApp-Connections][EXCEPTION] Erro inesperado ao buscar conexões:", {
+      message: error.message,
+      stack: error.stack,
+      url: request.url,
+    })
     return NextResponse.json(
       {
         success: false,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import React, { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -12,8 +12,9 @@ import AgentModal from "@/components/agent-modal"
 import AgentDuplicateDialog from "@/components/agent-duplicate-dialog"
 import AgentStats from "@/components/agent-stats"
 
-export default function AgentDetailPage({ params }: { params: { id: string } }) {
+export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
+  const resolvedParams = React.use(params)
   const [agent, setAgent] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -27,12 +28,12 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
     fetchAgent()
     fetchWhatsAppConnections()
     fetchUserSettings()
-  }, [params.id])
+  }, [resolvedParams.id])
 
   const fetchAgent = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/user/agents/${params.id}`)
+      const response = await fetch(`/api/user/agents/${resolvedParams.id}`)
 
       if (!response.ok) {
         const errorData = await response.json()

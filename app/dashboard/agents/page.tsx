@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Plus, Search, Edit, Trash2, Eye, AlertTriangle, Loader2 } from "lucide-react"
+import { Bot, Plus, Search, Edit, Trash2, Eye, AlertTriangle, Loader2, Users } from "lucide-react"
 import { AgentModal, type Agent } from "@/components/agent-modal"
 import { getCurrentUser } from "@/lib/auth"
 import { useToast } from "@/components/ui/use-toast"
@@ -317,7 +317,7 @@ export default function UserAgentsPage() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-500">Palavra-chave:</span>
                     <code className="text-xs bg-gray-100 px-2 py-1 rounded">
-                      {agent.model_config?.activation_keyword || agent.trigger_value || "Não definida"}
+                      {agent.trigger_value || "Não definida"}
                     </code>
                   </div>
 
@@ -344,6 +344,18 @@ export default function UserAgentsPage() {
                     <Eye className="h-4 w-4" />
                     Ver
                   </Button>
+
+                  {agent.evolution_bot_id && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(`/dashboard/agents/${agent.id}/sessions`)}
+                      className="gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                    >
+                      <Users className="h-4 w-4" />
+                      Sessões
+                    </Button>
+                  )}
 
                   <Button
                     variant="outline"
@@ -373,7 +385,6 @@ export default function UserAgentsPage() {
         onSave={handleAgentSaved}
         maxAgentsReached={maxAgentsReached}
         isEditing={!!selectedAgent}
-        apiEndpoint="/api/user/agents" // Usar API do usuário
       />
     </div>
   )

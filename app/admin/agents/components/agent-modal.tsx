@@ -65,7 +65,13 @@ export function AgentModal({
     whatsapp_connection_id: agent?.whatsapp_connection_id || "",
     user_id: selectedUserId || agent?.user_id || "",
     training_prompt: agent?.training_prompt || "Você é um assistente virtual. Seja sempre educado e prestativo.",
+    model_config: agent?.model_config || "",
+    model: agent?.model || "",
   })
+  
+  // Estados para configurações LLM
+  const [llmConfig, setLlmConfig] = useState<any>(null)
+  const [loadingLlmConfig, setLoadingLlmConfig] = useState(false)
 
   useEffect(() => {
     setFormData({
@@ -76,13 +82,55 @@ export function AgentModal({
       whatsapp_connection_id: agent?.whatsapp_connection_id || "",
       user_id: selectedUserId || agent?.user_id || "",
       training_prompt: agent?.training_prompt || "Você é um assistente virtual. Seja sempre educado e prestativo.",
+      model_config: agent?.model_config || "",
+      model: agent?.model || "",
     })
   }, [agent, open, selectedUserId])
+
+  // Função SEGURA para carregar configurações LLM
+  const loadLlmConfig = async () => {
+    try {
+      console.log("🔄 [AdminAgentModal] Carregando configurações LLM...")
+      setLoadingLlmConfig(true)
+
+      const response = await fetch("/api/system/llm-config", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      })
+
+      if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`)
+      
+      const data = await response.json()
+      
+      if (data.success && data.config) {
+        console.log("✅ [AdminAgentModal] Configurações LLM carregadas")
+        setLlmConfig(data.config)
+             } else {
+         // Fallback seguro
+         setLlmConfig({
+           available_providers: ["openai"],
+           default_model: {"openai": "gpt-4o-mini"}
+         })
+       }
+     } catch (error) {
+       console.error("❌ [AdminAgentModal] Erro:", error)
+       setLlmConfig({
+         available_providers: ["openai"],
+         default_model: {"openai": "gpt-4o-mini"}
+       })
+     } finally {
+      setLoadingLlmConfig(false)
+    }
+  }
+
+  useEffect(() => {
+    if (open) loadLlmConfig()
+  }, [open])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validações
+    // Validações SEGURAS
     if (!formData.whatsapp_connection_id) {
       alert("Por favor, selecione uma conexão WhatsApp antes de criar o agente.")
       return
@@ -90,6 +138,16 @@ export function AgentModal({
 
     if (isAdmin && !formData.user_id) {
       alert("Como administrador, você deve especificar para qual usuário está criando o agente.")
+      return
+    }
+
+    if (!formData.model_config) {
+      alert("Por favor, selecione um provedor de IA.")
+      return
+    }
+
+    if (!formData.model) {
+      alert("Por favor, selecione ou digite um modelo específico.")
       return
     }
 
@@ -139,9 +197,12 @@ export function AgentModal({
   const canSubmit =
     !isSaving &&
     !isLoadingConnections &&
+    !loadingLlmConfig &&
     formData.whatsapp_connection_id &&
     formData.name.trim() &&
     formData.training_prompt.trim() &&
+    formData.model_config &&
+    formData.model &&
     whatsappConnections.length > 0 &&
     (!isAdmin || formData.user_id)
 
@@ -292,6 +353,94 @@ export function AgentModal({
                 placeholder="Ex: Você é uma assistente de vendas especializada em produtos digitais. Seja sempre educada, faça perguntas para entender as necessidades do cliente..."
               />
             </div>
+
+            {/* Seção SEGURA de Configuração de LLM */}
+            <div>
+              <Label htmlFor="model_config">Provedor de IA 🔒</Label>
+              <Select
+                value={formData.model_config}
+                onValueChange={(value) => setFormData({ 
+                  ...formData, 
+                  model_config: value,
+                  model: "" // Limpar modelo ao trocar provedor
+                })}
+                disabled={loadingLlmConfig || !llmConfig || whatsappConnections.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingLlmConfig ? "Carregando provedores..." : "Selecione o provedor de IA"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {llmConfig?.available_providers?.map((provider: string) => (
+                    <SelectItem key={provider} value={provider}>
+                      {provider === "openai" && "OpenAI (GPT)"}
+                      {provider === "anthropic" && "Anthropic (Claude)"}
+                      {provider === "google" && "Google (Gemini)"}
+                      {provider === "ollama" && "Ollama (Local)"}
+                      {provider === "groq" && "Groq (Fast)"}
+                      {!["openai", "anthropic", "google", "ollama", "groq"].includes(provider) && provider}
+                    </SelectItem>
+                  )) || (
+                    <SelectItem value="openai" disabled>
+                      {loadingLlmConfig ? "Carregando..." : "Nenhum provedor disponível"}
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500 mt-1">
+                Escolha qual provedor de IA será usado (configurações do servidor)
+              </p>
+            </div>
+
+            {formData.model_config && (
+              <div>
+                <Label htmlFor="model">Modelo Específico 🎯</Label>
+                <Select
+                  value={formData.model ? "custom" : "default"}
+                                     onValueChange={(value) => {
+                     if (value === "default") {
+                       const defaultModel = formData.model_config && llmConfig?.default_model?.[formData.model_config] || "gpt-4o-mini"
+                       setFormData({ ...formData, model: defaultModel })
+                     } else {
+                       setFormData({ ...formData, model: "" })
+                     }
+                   }}
+                  disabled={whatsappConnections.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Usar modelo padrão ou personalizado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                                         <SelectItem value="default">
+                       Modelo Padrão ({formData.model_config && llmConfig?.default_model?.[formData.model_config] || "gpt-4o-mini"})
+                     </SelectItem>
+                    <SelectItem value="custom">Modelo Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {formData.model_config && formData.model === "" && (
+              <div>
+                <Label htmlFor="custom_model">Nome do Modelo Personalizado * 🔧</Label>
+                <Input
+                  id="custom_model"
+                  value={formData.model}
+                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                  placeholder={
+                    formData.model_config === "openai" ? "Ex: gpt-4o, gpt-4o-mini, gpt-3.5-turbo" :
+                    formData.model_config === "anthropic" ? "Ex: claude-3-haiku-20240307, claude-3-sonnet-20240229" :
+                    formData.model_config === "google" ? "Ex: gemini-1.5-flash, gemini-1.5-pro" :
+                    formData.model_config === "ollama" ? "Ex: llama3.2:3b, llama3.2:1b" :
+                    formData.model_config === "groq" ? "Ex: llama3-8b-8192, mixtral-8x7b-32768" :
+                    "Digite o nome exato do modelo"
+                  }
+                  disabled={whatsappConnections.length === 0}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Digite o nome exato do modelo para o provedor {formData.model_config}
+                </p>
+              </div>
+            )}
 
             <div>
               <Label htmlFor="status">Status do Agente</Label>

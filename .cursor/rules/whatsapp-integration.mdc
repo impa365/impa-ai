@@ -1,6 +1,5 @@
 ---
-description:
-globs:
+description: Use quando precisar consultar informações sobre a conexão e verificação das conexões com a integração das instancias da evolution api
 alwaysApply: false
 ---
 # Integração WhatsApp e Evolution API
@@ -100,3 +99,152 @@ GET /api/whatsapp/status/[instanceName]
 - Zustand para estado de conexões
 - Context para configurações
 - Polling para status em tempo real
+
+Para desconectar usamos o endpoint: delete Url da evo/instance/logout/nome da instancia header apikey: apikey da instancia modelo de resposta: { "status": "SUCCESS", "error": false, "response": { "message": "Instance logged out" } } 
+
+______________________________ 
+
+agora o endpoint pra puxar as informações da instancia é: 
+
+get: url da evo/instance/fetchInstances 
+header apikey: apikey da instancia 
+
+modelo de resposta: 
+
+"clientName": "evolution", "disconnectionReasonCode": 401, "disconnectionObject": "{"error":{"data":null,"isBoom":true,"isServer":false,"output":{"statusCode":401,"payload":{"statusCode":401,"error":"Unauthorized","message":"Log out instance: impaai_dgdg_4557"},"headers":{}}},"date":"2025-06-19T18:56:37.761Z"}", "disconnectionAt": "2025-06-19T18:56:37.764Z", "createdAt": "2025-06-17T19:58:33.976Z", "updatedAt": "2025-06-19T18:56:37.776Z", "Chatwoot": null, "Proxy": null, "Rabbitmq": null, "Nats": null, "Sqs": null, "Websocket": null, "Setting": { "id": "cmc0y4h6o30sjll4s93cakbvp", "rejectCall": false, "msgCall": "", "groupsIgnore": false, "alwaysOnline": false, "readMessages": false, "readStatus": false, "syncFullHistory": false, "wavoipToken": "", "createdAt": "2025-06-17T19:58:33.983Z", "updatedAt": "2025-06-19T18:57:41.938Z", "instanceId": "5c0e2e9d-19a8-481b-8e7f-8b264b2d48c7" }, "_count": { "Message": 29068, "Contact": 3193, "Chat": 2298 } }
+
+
+É o seginte. Pra puxar as configuraç~~oes da evolution usamos o endpoint:
+
+get: https://url_api_evo/settings/find/nome_da_instancia
+header apikey: apikey_da_instancia
+
+modelo de resposta:
+
+
+{
+"rejectCall": 
+false,
+"msgCall": 
+"",
+"groupsIgnore": 
+false,
+"alwaysOnline": 
+false,
+"readMessages": 
+false,
+"readStatus": 
+false,
+"syncFullHistory": 
+false,
+"wavoipToken": 
+""
+}
+
+Já o endpoint pra salvar as configurações é:
+
+post: 
+
+https://url_api_evo/settings/set/nome_da_instancia
+header apikey: apikey_da_instancia
+
+body:
+
+{
+  "rejectCall": true,
+  "msgCall": "Não aceitamos ligação",
+  "groupsIgnore": false,
+  "alwaysOnline": true,
+  "readMessages": false,
+  "syncFullHistory": false,
+  "readStatus": false
+}
+
+já o modelo de resposta é:
+
+
+{
+"settings": 
+{
+"instanceName": 
+"impaai_dgdg_4557",
+"settings": 
+{
+"rejectCall": 
+true,
+"msgCall": 
+"Não aceitamos ligação",
+"groupsIgnore": 
+false,
+"alwaysOnline": 
+true,
+"readMessages": 
+false,
+"syncFullHistory": 
+false,
+"readStatus": 
+false
+}
+}
+}
+
+
+E lembrando que sempre deve sicronizar as conexões do whatsapp com o banco de dados, e o painel com a evo e vice e versa.
+
+Vamos lá primeira coisa o endpoint pra criar uma instancia na evolution é:
+
+post {{baseUrl}}/instance/create
+
+"instanceName": "{{instance}}", "token": "{{apikey}}", "number": "{{number}}", "qrcode": true, "integration": "WHATSAPP-BAILEYS"
+
+modelo de resposta :
+
+{ "instance": { "instanceName": "sdhfdisfgujdsgh", "instanceId": "db709d14-0a08-4a59-987b-dabe800e60b1", "integration": "WHATSAPP-BAILEYS", "webhookWaBusiness": null, "accessTokenWaBusiness": "", "status": "connecting" }, "hash": "sdgdgdgdgdgdg", "webhook": {}, "websocket": {}, "rabbitmq": {}, "nats": {}, "sqs": {}, "settings": { "rejectCall": false, "msgCall": "", "groupsIgnore": false, "alwaysOnline": false, "readMessages": false, "readStatus": false, "syncFullHistory": false, "wavoipToken": "" }, "qrcode": { "pairingCode": "WWRW2FPG", "code": "2@POdY18Y9cm+t7CiIwCCHjUk8PqlafDKPoRUT+A3GwC/j6OJOLXfzX1RneMJ197Ku89NUc7heGxMtXzLaLF3jAFU/yk3NAjuFHwc=,oIqzrpPOxGmJyZ2roJs8N/HKeeeVGB3pnrzWHBkUHyI=,uSlIHyxcQUhDQLSAofunYF81ARp7TbDFqIRgVmOMaDA=,Lgg30mB/sh5cEOKeX6915qpOoerpiDdYQAgwvH/NlKg=", "base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAVwAAAFcCAYAAACEFgYsAAAi+0lEQVR4AezBwZEox65kwcOyKwTkghQhEqQIuaAFh0us0iytuot8f+D+19//YK211q97WGut9YmHtdZan3hYa631iYe11lqfeFhrrfWJh7XWWp94WGut9YmHtdZan3hYa631iYe11lqfeFhrrfWJP1yKLL7UFlNkcdIWU2QxtcVJZPGb2mTqh8OYAAAAASUVORK5CYII=", "count": 1 } }
+
+Agora é o seguinte junto com esse endpoint devemos usar logo após o endpoint:
+
+post {{baseUrl}}/webhook/set/{{instance}}
+
+{ "webhook": { "enabled": true, "url": "webhoook do sistema que vai receber a mensagem", "headers": { "autorization": "Bearer TOKEN", (token do sistema que vai receber as mensagens entre outras atualizações) "Content-Type": "application/json" }, "byEvents": true, "base64": true, "events": [ "APPLICATION_STARTUP", "QRCODE_UPDATED", "MESSAGES_SET", "MESSAGES_UPSERT", "MESSAGES_UPDATE", "MESSAGES_DELETE", "SEND_MESSAGE", "CONTACTS_SET", "CONTACTS_UPSERT", "CONTACTS_UPDATE", "PRESENCE_UPDATE", "CHATS_SET", "CHATS_UPSERT", "CHATS_UPDATE", "CHATS_DELETE", "GROUPS_UPSERT", "GROUP_UPDATE", "GROUP_PARTICIPANTS_UPDATE", "CONNECTION_UPDATE", "LABELS_EDIT", "LABELS_ASSOCIATION", "CALL", "TYPEBOT_START", "TYPEBOT_CHANGE_STATUS" ] } }
+
+Eventos Suportados Estes são os eventos de webhook disponíveis e suportados:
+
+Variável de ambiente URL Descrição APPLICATION_STARTUP /application-startup Notifica quando uma inicialização de aplicativo ocorre QRCODE_UPDATED /qrcode-updated Envia o base64 do qrcode para leitura CONNECTION_UPDATE /connection-update Informa o status da conexão com o WhatsApp MESSAGES_SET /messages-set Envia uma lista de todas as suas mensagens carregadas no WhatsApp. Este evento ocorre apenas uma vez MESSAGES_UPSERT /messages-upsert Notifica quando uma mensagem é recebida MESSAGES_UPDATE /messages-update Informa quando uma mensagem é atualizada MESSAGES_DELETE /messages-delete Informa quando uma mensagem é excluída SEND_MESSAGE /send-message Notifica quando uma mensagem é enviada CONTACTS_SET /contacts-set Realiza o carregamento inicial de todos os contatos. Este evento ocorre apenas uma vez CONTACTS_UPSERT /contacts-upsert Recarrega todos os contatos com informações adicionais. Este evento ocorre apenas uma vez CONTACTS_UPDATE /contacts-update Informa quando o contato é atualizado PRESENCE_UPDATE /presence-update Informa se o usuário está online, se ele está realizando alguma ação como escrever ou gravar e seu último visto: ‘indisponível’, ‘disponível’, ‘compondo’, ‘gravando’, ‘pausado’ CHATS_SET /chats-set Envia uma lista de todos os chats carregados CHATS_UPDATE /chats-update Informa quando o chat é atualizado CHATS_UPSERT /chats-upsert Envia qualquer nova informação de chat CHATS_DELETE /chats-delete Notifica quando um chat é excluído GROUPS_UPSERT /groups-upsert Notifica quando um grupo é criado GROUPS_UPDATE /groups-update Notifica quando um grupo tem suas informações atualizadas GROUP_PARTICIPANTS_UPDATE /group-participants-update Notifica quando uma ação ocorre envolvendo um participante: ‘adicionar’, ‘remover’, ‘promover’, ‘rebaixar’ NEW_TOKEN /new-jwt Notifica quando o token (jwt) é atualizado
+
+Webhook por eventos Ao habilitar as opções WEBHOOK_BY_EVENTS nos webhooks globais e locais, os seguintes caminhos serão adicionados ao final do webhook.
+
+Adicione ao final da URL o nome do evento com um traço (-) entre as palavras que compõem o evento.
+
+​Exemplo Supondo que sua URL de webhook fosse https://sub.domain.com/webhook/. A Evolution adicionará automaticamente ao final da URL o nome do evento quando webhook_by_events estiver definido como verdadeiro.
+
+Evento Nova URL de Webhook por Eventos APPLICATION_STARTUP https://sub.domain.com/webhook/application-startup QRCODE_UPDATED https://sub.domain.com/webhook/qrcode-updated CONNECTION_UPDATE https://sub.domain.com/webhook/connection-update MESSAGES_SET https://sub.domain.com/webhook/messages-set MESSAGES_UPSERT https://sub.domain.com/webhook/messages-upsert MESSAGES_UPDATE https://sub.domain.com/webhook/messages-update MESSAGES_DELETE https://sub.domain.com/webhook/messages-delete SEND_MESSAGE https://sub.domain.com/webhook/send-message CONTACTS_SET https://sub.domain.com/webhook/contacts-set CONTACTS_UPSERT https://sub.domain.com/webhook/contacts-upsert CONTACTS_UPDATE https://sub.domain.com/webhook/contacts-update PRESENCE_UPDATE https://sub.domain.com/webhook/presence-update CHATS_SET https://sub.domain.com/webhook/chats-set CHATS_UPDATE https://sub.domain.com/webhook/chats-update CHATS_UPSERT https://sub.domain.com/webhook/chats-upsert CHATS_DELETE https://sub.domain.com/webhook/chats-delete GROUPS_UPSERT https://sub.domain.com/webhook/groups-upsert GROUPS_UPDATE https://sub.domain.com/webhook/groups-update GROUP_PARTICIPANTS_UPDATE https://sub.domain.com/webhook/group-participants-update NEW_TOKEN https://sub.domain.com/webhook/new-jwt
+
+Dados retornados da solicitação: Chamando o endpoint retornará todas as informações sobre o webhook que está sendo usado pela instância.:
+
+{ "enabled": true, "url": "[url]", "webhookByEvents": false, "events": [ [eventos] ] }
+
+nesse caso webhookByEvents deveria ser true e quado receber um endpoint messages-upsert (update ou delete etc...) deverá criar a mensagem na conversa expecifica e se a conversa não existe cria-la.
+
+Um modelo de webhook enviado pelo endpoint messages-upsert é:
+
+[ { "headers": { "host": "nflow.atendimentoimpae.com", "user-agent": "axios/1.10.0", "content-length": "656", "accept": "application/json, text/plain, /", "accept-encoding": "gzip, compress, deflate, br", "content-type": "application/json", "x-forwarded-for": "172.18.0.1", "x-forwarded-host": "nflow.atendimentoimpae.com", "x-forwarded-port": "443", "x-forwarded-proto": "https", "x-forwarded-server": "477365fd4184", "x-real-ip": "172.18.0.1" }, "params": {}, "query": {}, "body": { "event": "messages.upsert", "instance": "impaai_testeal_1866", "data": { "key": { "remoteJid": "557331912851@s.whatsapp.net", "fromMe": true, "id": "59A128DE2A0DB589FC81EA391730791B" }, "pushName": "Testes Impa", "status": "SERVER_ACK", "message": { "conversation": "Agradecemos seu contato, Até Mais!" }, "messageType": "conversation", "messageTimestamp": 1751730537, "instanceId": "17cf85e9-fba4-4f99-bee3-6766c98b914c", "source": "android" }, "destination": "https://nflow.atendimentoimpae.com/webhook/impaai/evolution", "date_time": "2025-07-05T12:48:57.651Z", "sender": "557398631289@s.whatsapp.net", "server_url": "https://eapi.atendimentoimpae.com", "apikey": "A57F6969-79CD-4285-A783-798460BDFFC6" }, "webhookUrl": "https://nflow.atendimentoimpae.com/webhook/impaai/evolution/messages-upsert", "executionMode": "production" } ]
+
+Caso uma instnacia esteja conectando ou conectada podemos usar o endpoint a seguir para desconectala:
+
+delete: {{baseUrl}}/instance/logout/{{instance}}
+header  apikey: apikey da instancia
+
+modelo de resposta de sucesso:
+
+
+{
+"status": 
+"SUCCESS",
+"error": 
+false,
+"response": 
+{
+"message": 
+"Instance logged out"
+}
+}

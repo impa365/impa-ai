@@ -2,161 +2,107 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { validateApiKey } from "@/lib/api-auth";
 
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   try {
-    // Validar API key
+    // 1. Autenticação da API Key
     const authResult = await validateApiKey(request);
     if (!authResult.isValid) {
       return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
-
-    const user = authResult.user;
-
-    // Obter dados do header e body
-    const instanceName = request.headers.get("instance_name");
-    const userIdHeader = request.headers.get("user_id");
-
-    if (!instanceName) {
-      return NextResponse.json(
-        { error: "instance_name header is required" },
-        { status: 400 }
-      );
+    const userId = authResult.user?.id;
+    if (!userId) {
+      return NextResponse.json({ error: "Usuário da API Key não encontrado" }, { status: 401 });
     }
 
+    // 2. Validação dos parâmetros
+    if (request.headers.get("content-type") !== "application/json") {
+      return NextResponse.json({ error: "Content-Type deve ser application/json" }, { status: 400 });
+    }
     const body = await request.json();
-    const { remoteJid, name, dia, currentDay, markDayAsSent } = body;
-
-    if (!remoteJid) {
-      return NextResponse.json(
-        { error: "remoteJid is required" },
-        { status: 400 }
-      );
+    let { remoteJid, instance_name, dia, name } = body;
+    if (!remoteJid || !instance_name) {
+      return NextResponse.json({ error: "remoteJid e instance_name são obrigatórios" }, { status: 400 });
+    }
+    remoteJid = String(remoteJid).trim();
+    instance_name = String(instance_name).trim();
+    if (dia === undefined) {
+      return NextResponse.json({ error: "dia é obrigatório" }, { status: 400 });
+    }
+    const dayNumber = Number.parseInt(dia.toString(), 10);
+    if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
+      return NextResponse.json({ error: "dia deve ser um número entre 1 e 30" }, { status: 400 });
     }
 
-    // Determinar user_id (admin pode especificar, usuário comum usa o próprio)
-    let targetUserId = user.id;
-    if (user.role === "admin" && userIdHeader) {
-      targetUserId = userIdHeader;
-    }
-
+    // 3. Conexão com o Supabase
     const supabaseUrl = process.env.SUPABASE_URL!;
     const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       db: { schema: "impaai" },
     });
 
-    // Buscar lead existente
-    const { data: existingLead, error: findError } = await supabase
-      .from("lead_follow24hs")
-      .select("*")
-      .eq("user_id", targetUserId)
-      .eq("instance_name", instanceName)
-      .eq("remote_jid", remoteJid)
+    // 4. Buscar conexão WhatsApp pelo instance_name
+    const { data: connection, error: connectionError } = await supabase
+      .from("whatsapp_connections")
+      .select("id, user_id")
+      .eq("instance_name", instance_name)
       .single();
-
-    if (findError || !existingLead) {
-      return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+    if (connectionError || !connection) {
+      return NextResponse.json({ error: "Conexão WhatsApp não encontrada" }, { status: 404 });
+    }
+    if (connection.user_id !== userId) {
+      return NextResponse.json({ error: "Esta conexão não pertence ao usuário da API Key" }, { status: 403 });
     }
 
-    // Preparar dados para atualização
-    const updateData: any = {
-      updated_at: new Date().toISOString(),
-    };
-
-    if (name) updateData.name = name;
-
-    if (dia !== undefined) {
-      // Validar que dia é um número válido (1-30)
-      const dayNumber = Number.parseInt(dia.toString());
-      if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
-        return NextResponse.json(
-          { error: "dia must be a number between 1 and 30" },
-          { status: 400 }
-        );
-      }
-      updateData.current_day = dayNumber;
+    // 5. Buscar lead pelo remoteJid e whatsappConection
+    // ATENÇÃO: O nome dos campos é case sensitive! Use exatamente 'remoteJid' e 'whatsappConection'.
+    const { data: lead, error: findError } = await supabase
+      .from("lead_folow24hs")
+      .select("id")
+      .eq("remoteJid", remoteJid)
+      .eq("whatsappConection", connection.id)
+      .single();
+    if (findError || !lead) {
+      const isDev = process.env.NODE_ENV !== "production";
+      return NextResponse.json({
+        error: "Lead não encontrado para esta conexão",
+        details: isDev ? findError : undefined,
+        supabase: isDev ? { remoteJid, whatsappConection: connection.id } : undefined
+      }, { status: 404 });
     }
 
-    if (currentDay !== undefined) {
-      const dayNumber = Number.parseInt(currentDay.toString());
-      if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
-        return NextResponse.json(
-          { error: "currentDay must be a number between 1 and 30" },
-          { status: 400 }
-        );
-      }
-      updateData.current_day = dayNumber;
-    }
-
-    // Marcar dia como enviado
-    if (markDayAsSent !== undefined) {
-      const dayNumber = Number.parseInt(markDayAsSent.toString());
-      if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 30) {
-        return NextResponse.json(
-          { error: "markDayAsSent must be a number between 1 and 30" },
-          { status: 400 }
-        );
-      }
-
-      updateData.last_message_sent_day = dayNumber;
-      updateData.last_message_sent_at = new Date().toISOString();
-
-      // Buscar configuração de mensagem para este dia
-      const { data: followupConfig } = await supabase
-        .from("followup_24hs")
-        .select("id")
-        .eq("user_id", targetUserId)
-        .eq("instance_name", instanceName)
-        .single();
-
-      if (followupConfig) {
-        const { data: messageConfig } = await supabase
-          .from("followup_messages")
-          .select("*")
-          .eq("followup_config_id", followupConfig.id)
-          .eq("day_number", dayNumber)
-          .single();
-
-        if (messageConfig) {
-          // Registrar no histórico
-          await supabase.from("followup_message_history").upsert({
-            lead_id: existingLead.id,
-            day_number: dayNumber,
-            message_text: messageConfig.message_text,
-            media_url: messageConfig.media_url,
-            media_type: messageConfig.media_type,
-            sent_at: new Date().toISOString(),
-            status: "sent",
-          });
-        }
-      }
-    }
-
-    // Atualizar lead
+    // 6. Atualizar lead
+    const updateData: any = { dia: dayNumber, updated_at: new Date().toISOString() };
+    if (name) updateData.name = String(name).trim();
+    // ATENÇÃO: O nome dos campos é case sensitive! Use exatamente 'id' para o update.
     const { data: updatedLead, error: updateError } = await supabase
-      .from("lead_follow24hs")
+      .from("lead_folow24hs")
       .update(updateData)
-      .eq("id", existingLead.id)
+      .eq("id", lead.id)
       .select()
       .single();
-
     if (updateError) {
-      console.error("Error updating lead:", updateError);
-      return NextResponse.json(
-        { error: "Failed to update lead" },
-        { status: 500 }
-      );
+      const isDev = process.env.NODE_ENV !== "production";
+      return NextResponse.json({
+        error: "Erro ao atualizar lead",
+        details: isDev ? updateError : undefined,
+        supabase: isDev ? { updateData, leadId: lead.id } : undefined
+      }, { status: 500 });
     }
 
+    // 7. Resposta de sucesso
     return NextResponse.json({
       success: true,
-      message: "Lead updated successfully",
+      message: "Lead atualizado com sucesso",
       data: updatedLead,
     });
   } catch (error) {
-    console.error("Error in update-lead-follow:", error);
+    // Não vazar detalhes sensíveis em produção
+    const isDev = process.env.NODE_ENV !== "production";
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        details: isDev ? String(error) : undefined
+      },
       { status: 500 }
     );
   }

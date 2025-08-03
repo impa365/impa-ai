@@ -72,9 +72,12 @@ export default function AdminWhatsAppPage() {
 
   const [syncing, setSyncing] = useState(false);
 
-  // Auto-sync silencioso a cada 15 segundos + eventos
+  // Auto-sync silencioso a cada 30 segundos + eventos
   const autoSync = useCallback(async (showMessage = false) => {
     try {
+      // Sincronizar apenas se a página estiver visível
+      if (document.hidden) return;
+      
       await fetch("/api/whatsapp/auto-sync", { method: "POST" });
       // Recarregar conexões silenciosamente
       const data = await fetchWhatsAppConnections(undefined, true);
@@ -100,8 +103,8 @@ export default function AdminWhatsAppPage() {
       autoSync();
     });
 
-    // Configurar auto-sync a cada 15 segundos
-    const interval = setInterval(() => autoSync(), 15000);
+    // Configurar auto-sync a cada 30 segundos
+    const interval = setInterval(() => autoSync(), 30000);
 
     // Sincronizar quando a página ganhar foco (usuário voltar para a aba)
     const handleFocus = () => autoSync();
@@ -596,12 +599,8 @@ export default function AdminWhatsAppPage() {
 
       <WhatsAppInfoModal
         open={infoModalOpen}
-        onOpenChange={(open) => {
-          setInfoModalOpen(open);
-          if (open) autoSync();
-        }}
+        onOpenChange={setInfoModalOpen}
         connection={selectedConnection}
-        onStatusChange={() => loadConnections()}
       />
 
       <AdminWhatsAppConnectionModal

@@ -41,7 +41,6 @@ import {
   Key,
 } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
-import { db } from "@/lib/supabase"
 import { useTheme } from "@/components/theme-provider"
 import { themePresets, type ThemeConfig } from "@/lib/theme"
 import Image from "next/image"
@@ -217,10 +216,19 @@ export default function AdminDashboard() {
     if (!userToDelete) return
     setSaving(true)
     try {
-      await (await db.whatsappConnections()).delete().eq("user_id", userToDelete.id)
-      await (await db.userSettings()).delete().eq("user_id", userToDelete.id)
-      const { error } = await (await db.users()).delete().eq("id", userToDelete.id)
-      if (error) throw error
+      // Deletar usuário via API segura
+      const response = await fetch(`/api/admin/users?id=${userToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erro ao deletar usuário")
+      }
+      
       await fetchUsers()
       setDeleteUserModal(false)
       setUserToDelete(null)
@@ -256,13 +264,23 @@ export default function AdminDashboard() {
         return
       }
 
-      const { error } = await (await db.users())
-        .update({
+      // Atualizar perfil via API segura
+      const response = await fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: user.id,
           full_name: adminProfileForm.full_name.trim(),
           email: adminProfileForm.email.trim(),
+        }),
         })
-        .eq("id", user.id)
-      if (error) throw error
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erro ao atualizar perfil")
+      }
 
       const updatedUser = {
         ...user,
@@ -284,16 +302,40 @@ export default function AdminDashboard() {
 
   const handleDisconnectWhatsAppConnection = async (connection: any) => {
     try {
+      // Atualização otimista - atualizar imediatamente no estado local
+      setWhatsappConnections(prev => 
+        prev.map(conn => 
+          conn.id === connection.id 
+            ? { ...conn, status: "disconnected" }
+            : conn
+        )
+      );
+
       const result = await disconnectInstance(connection.instance_name)
       if (result.success) {
-        await (await db.whatsappConnections()).update({ status: "disconnected" }).eq("id", connection.id)
         await fetchWhatsAppConnections()
         setSaveMessage("Conexão desconectada com sucesso!")
       } else {
-        throw new Error(result.message || "Falha ao desconectar instância")
+        // Reverter mudança otimista em caso de erro
+        setWhatsappConnections(prev => 
+          prev.map(conn => 
+            conn.id === connection.id 
+              ? { ...conn, status: connection.status }
+              : conn
+          )
+        );
+        throw new Error(result.error || "Falha ao desconectar instância")
       }
     } catch (error) {
       console.error("Erro ao desconectar:", error)
+      // Reverter mudança otimista em caso de erro
+      setWhatsappConnections(prev => 
+        prev.map(conn => 
+          conn.id === connection.id 
+            ? { ...conn, status: connection.status }
+            : conn
+        )
+      );
       setSaveMessage("Erro ao desconectar conexão")
     } finally {
       setTimeout(() => setSaveMessage(""), 3000)
@@ -310,16 +352,27 @@ export default function AdminDashboard() {
         configData = { flowUrl: integrationForm.n8nFlowUrl, apiKey: integrationForm.n8nApiKey || null }
       }
       const existing = integrations.find((int) => int.type === type)
-      if (existing) {
-        const { error } = await (await db.integrations())
-          .update({ config: configData, is_active: true })
-          .eq("id", existing.id)
-        if (error) throw error
-      } else {
-        const { error } = await (await db.integrations()).insert([
-          { name: type === "evolution_api" ? "Evolution API" : "n8n", type, config: configData, is_active: true },
-        ])
-        if (error) throw error
+      // Salvar via API segura
+      const response = await fetch('/api/admin/integrations', {
+        method: existing ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(existing ? {
+          id: existing.id,
+          config: configData,
+          is_active: true,
+        } : {
+          name: type === "evolution_api" ? "Evolution API" : "n8n",
+          type,
+          config: configData,
+          is_active: true,
+        }),
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erro ao salvar integração")
       }
       await fetchIntegrations()
       setIntegrationModalOpen(false)
@@ -359,7 +412,7 @@ export default function AdminDashboard() {
             <Key className="w-4 h-4" />
             Gerenciar API Keys
           </Button>
-          <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => updateURL("settings")}>
+          <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => router.push("/admin/settings")}>
             <Settings className="w-4 h-4" />
             Configurações
           </Button>
@@ -605,12 +658,23 @@ export default function AdminDashboard() {
             <div className="flex items-end">
               <Button
                 onClick={async () => {
-                  await (await db.systemSettings()).upsert({
-                    // Corrected
+                  // Salvar configuração via API segura
+                  const response = await fetch('/api/system/settings', {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
                     setting_key: "default_whatsapp_connections_limit",
                     setting_value: systemLimits.defaultLimit,
+                    }),
                   })
+                  
+                  if (response.ok) {
                   setSaveMessage("Configurações salvas!")
+                  } else {
+                    setSaveMessage("Erro ao salvar configurações")
+                  }
                   setTimeout(() => setSaveMessage(""), 3000)
                 }}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -823,7 +887,7 @@ export default function AdminDashboard() {
                     >
                       <Edit className="w-4 h-4" />
                     </Button>
-                    {connection.status === "connected" && (
+                    {(connection.status === "connected" || connection.status === "connecting") && (
                       <Button
                         variant="ghost"
                         size="sm"

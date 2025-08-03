@@ -100,10 +100,13 @@ export default function WhatsAppPage() {
   }, [router]);
 
   // Função para buscar conexões WhatsApp via API
-  const fetchWhatsAppConnections = async () => {
+  const fetchWhatsAppConnections = async (showLoading = true) => {
     if (!user) return;
 
-    setLoadingConnections(true);
+    if (showLoading) {
+      setLoadingConnections(true);
+    }
+    
     try {
       console.log("🔍 Buscando conexões WhatsApp via API...");
 
@@ -123,7 +126,7 @@ export default function WhatsAppPage() {
           description: errorData.error || "Erro ao buscar conexões",
           variant: "destructive",
         });
-        setWhatsappConnections([]);
+        // Não limpar conexões em caso de erro para evitar piscar
         return;
       }
 
@@ -140,7 +143,7 @@ export default function WhatsAppPage() {
           description: data.error || "Erro ao buscar conexões",
           variant: "destructive",
         });
-        setWhatsappConnections([]);
+        // Não limpar conexões em caso de erro para evitar piscar
       }
     } catch (error: any) {
       console.error("💥 Erro ao buscar conexões:", error);
@@ -149,9 +152,11 @@ export default function WhatsAppPage() {
         description: "Erro de conexão ao buscar dados",
         variant: "destructive",
       });
-      setWhatsappConnections([]);
+      // Não limpar conexões em caso de erro para evitar piscar
     } finally {
-      setLoadingConnections(false);
+      if (showLoading) {
+        setLoadingConnections(false);
+      }
     }
   };
 
@@ -185,7 +190,7 @@ export default function WhatsAppPage() {
       if (response.ok) {
         const data = await response.json();
         console.log("✅ Conexão sincronizada:", data);
-        await fetchWhatsAppConnections();
+        await fetchWhatsAppConnections(false);
       } else {
         const errorData = await response.json();
         console.error("❌ Erro ao sincronizar conexão:", errorData);
@@ -195,12 +200,62 @@ export default function WhatsAppPage() {
     }
   }, []);
 
+  // Auto-sync silencioso a cada 30 segundos + eventos
+  const autoSync = useCallback(async () => {
+    try {
+      // Sincronizar apenas se a página estiver visível
+      if (document.hidden) return;
+      
+      // Sincronizar apenas se há conexões para sincronizar
+      if (whatsappConnections.length === 0) return;
+      
+      await fetch("/api/whatsapp/sync-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+      
+      // Recarregar conexões silenciosamente (sem loading)
+      await fetchWhatsAppConnections(false);
+    } catch (error) {
+      // Silently handle auto-sync errors
+    }
+  }, [whatsappConnections.length]);
+
   // Carregar conexões quando usuário estiver disponível
   useEffect(() => {
     if (user) {
       fetchWhatsAppConnections();
     }
   }, [user]);
+
+  // Configurar auto-sync quando usuário estiver disponível
+  useEffect(() => {
+    if (!user) return;
+
+    // Configurar auto-sync a cada 30 segundos
+    const interval = setInterval(() => autoSync(), 30000);
+
+    // Sincronizar quando a página ganhar foco (usuário voltar para a aba)
+    const handleFocus = () => autoSync();
+    window.addEventListener("focus", handleFocus);
+
+    // Sincronizar quando a página ficar visível
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        autoSync();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user, autoSync]);
 
   const handleDeleteConnection = async (connection: any) => {
     setConnectionToDelete(connection);
@@ -211,7 +266,11 @@ export default function WhatsAppPage() {
     if (!connectionToDelete) return;
 
     try {
-      console.log("🗑️ Deletando conexão:", connectionToDelete.connection_name);
+      console.log("🗑️ Deletando conexão:", {
+        connection_name: connectionToDelete.connection_name,
+        instance_name: connectionToDelete.instance_name,
+        id: connectionToDelete.id
+      });
 
       const response = await fetch(
         `/api/whatsapp/delete-instance/${connectionToDelete.instance_name}`,
@@ -224,12 +283,18 @@ export default function WhatsAppPage() {
         }
       );
 
+      console.log("📡 Resposta da API:", {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
       if (response.ok) {
         const data = await response.json();
         console.log("✅ Conexão deletada:", data);
 
         // Recarregar lista de conexões
-        await fetchWhatsAppConnections();
+        await fetchWhatsAppConnections(false);
         setDeleteConfirmOpen(false);
         setConnectionToDelete(null);
 
@@ -238,12 +303,30 @@ export default function WhatsAppPage() {
           description: data.message || "Conexão excluída com sucesso",
         });
       } else {
-        const errorData = await response.json();
-        console.error("❌ Erro ao deletar:", errorData);
-        throw new Error(errorData.error || "Erro ao deletar conexão");
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          console.error("❌ Erro ao fazer parse da resposta:", parseError);
+          errorData = { error: `Erro ${response.status}: ${response.statusText}` };
+        }
+        
+        console.error("❌ Erro ao deletar:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorData: errorData
+        });
+        
+        const errorMessage = errorData?.error || `Erro ${response.status}: ${response.statusText}`;
+        throw new Error(errorMessage);
       }
     } catch (error) {
-      console.error("💥 Erro ao deletar conexão:", error);
+      console.error("💥 Erro ao deletar conexão:", {
+        error: error,
+        message: (error as Error).message,
+        stack: (error as Error).stack
+      });
+      
       toast({
         title: "Erro",
         description: (error as Error).message || "Erro ao excluir conexão",
@@ -256,10 +339,19 @@ export default function WhatsAppPage() {
     try {
       console.log(`🔌 Desconectando instância: ${connection.instance_name}`);
 
+      // Atualização otimista - atualizar imediatamente no estado local
+      setWhatsappConnections(prev => 
+        prev.map(conn => 
+          conn.id === connection.id 
+            ? { ...conn, status: "disconnected" as const }
+            : conn
+        )
+      );
+
       const response = await fetch(
         `/api/whatsapp/disconnect/${connection.instance_name}`,
         {
-          method: "POST",
+          method: "DELETE",
           headers: {
             "Content-Type": "application/json",
           },
@@ -270,7 +362,8 @@ export default function WhatsAppPage() {
       if (response.ok) {
         const data = await response.json();
         console.log("✅ Instância desconectada:", data);
-        await fetchWhatsAppConnections();
+        // Recarregar para garantir sincronização completa
+        await fetchWhatsAppConnections(false);
         toast({
           title: "Sucesso",
           description: "Instância desconectada com sucesso",
@@ -278,6 +371,14 @@ export default function WhatsAppPage() {
       } else {
         const errorData = await response.json();
         console.error("❌ Erro ao desconectar:", errorData);
+        // Reverter mudança otimista em caso de erro
+        setWhatsappConnections(prev => 
+          prev.map(conn => 
+            conn.id === connection.id 
+              ? { ...conn, status: connection.status }
+              : conn
+          )
+        );
         toast({
           title: "Erro",
           description: errorData.error || "Erro ao desconectar",
@@ -286,6 +387,14 @@ export default function WhatsAppPage() {
       }
     } catch (error) {
       console.error("💥 Erro ao desconectar:", error);
+      // Reverter mudança otimista em caso de erro
+      setWhatsappConnections(prev => 
+        prev.map(conn => 
+          conn.id === connection.id 
+            ? { ...conn, status: connection.status }
+            : conn
+        )
+      );
       toast({
         title: "Erro",
         description: "Erro de conexão",
@@ -295,13 +404,22 @@ export default function WhatsAppPage() {
   };
 
   const handleConnectionSuccess = () => {
-    fetchWhatsAppConnections();
+    fetchWhatsAppConnections(false);
     setShowConnectionModal(false);
   };
 
   // Sincronização manual baseada na do admin
   const handleManualSync = async () => {
-    if (syncing || !whatsappConnections.length) return;
+    if (syncing) return;
+    
+    // Não sincronizar se não há conexões
+    if (whatsappConnections.length === 0) {
+      toast({
+        title: "Informação",
+        description: "Nenhuma conexão para sincronizar",
+      });
+      return;
+    }
 
     setSyncing(true);
     try {
@@ -331,7 +449,7 @@ export default function WhatsAppPage() {
 
       if (data.success) {
         console.log("✅ Sincronização concluída:", data);
-        await fetchWhatsAppConnections();
+        await fetchWhatsAppConnections(false);
 
         toast({
           title: "Sucesso",
@@ -407,7 +525,7 @@ export default function WhatsAppPage() {
           <Button
             variant="outline"
             onClick={handleManualSync}
-            disabled={syncing || whatsappConnections.length === 0}
+            disabled={syncing}
             className="gap-2 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
             title="Sincronizar status das conexões"
           >
@@ -741,12 +859,6 @@ export default function WhatsAppPage() {
         open={infoModalOpen}
         onOpenChange={setInfoModalOpen}
         connection={selectedConnection}
-        onStatusChange={(status) => {
-          if (selectedConnection) {
-            // Recarregar conexões após mudança de status
-            fetchWhatsAppConnections();
-          }
-        }}
       />
     </div>
   );

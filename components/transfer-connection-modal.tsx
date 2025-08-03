@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, AlertCircle, UserPlus } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface TransferConnectionModalProps {
@@ -46,16 +45,19 @@ export default function TransferConnectionModal({
   const fetchUsers = async () => {
     setLoadingUsers(true)
     try {
-      const { data } = await supabase
-        .from("user_profiles")
-        .select("id, email, full_name")
-        .order("full_name", { ascending: true })
-
-      if (data) {
-        setUsers(data)
+      // Buscar usuários via API segura
+      const response = await fetch('/api/admin/users')
+      if (!response.ok) {
+        throw new Error("Erro ao buscar usuários")
+      }
+      
+      const result = await response.json()
+      if (result.users) {
+        setUsers(result.users)
       }
     } catch (error) {
       console.error("Erro ao buscar usuários:", error)
+      setError("Erro ao carregar lista de usuários")
     } finally {
       setLoadingUsers(false)
     }
@@ -74,41 +76,57 @@ export default function TransferConnectionModal({
     setSuccess("")
 
     try {
-      const { data: userSettings } = await supabase
-        .from("user_settings")
-        .select("whatsapp_connections_limit")
-        .eq("user_id", selectedUserId)
-        .single()
+      // Verificar limites do usuário de destino via API
+      const userResponse = await fetch(`/api/admin/users/${selectedUserId}`)
+      if (!userResponse.ok) {
+        throw new Error("Erro ao verificar dados do usuário")
+      }
+      
+      const userData = await userResponse.json()
+      const userLimits = userData.user.whatsapp_connections_limit || 2
 
-      const { data: userConnections, count } = await supabase
-        .from("whatsapp_connections")
-        .select("id", { count: "exact" })
-        .eq("user_id", selectedUserId)
+      // Verificar conexões atuais do usuário de destino
+      const connectionsResponse = await fetch(`/api/whatsapp-connections?userId=${selectedUserId}&isAdmin=true`)
+      if (!connectionsResponse.ok) {
+        throw new Error("Erro ao verificar conexões do usuário")
+      }
+      
+      const connectionsData = await connectionsResponse.json()
+      const currentConnections = connectionsData.connections?.length || 0
 
-      const connectionCount = count || 0
-      const connectionLimit = userSettings?.whatsapp_connections_limit || 2
-
-      if (connectionCount >= connectionLimit) {
-        setError(`O usuário selecionado já atingiu o limite de ${connectionLimit} conexões`)
+      // Verificar se não excede o limite
+      if (currentConnections >= userLimits) {
+        setError(`O usuário já atingiu o limite de ${userLimits} conexões WhatsApp`)
         return
       }
 
-      const { error: updateError } = await supabase
-        .from("whatsapp_connections")
-        .update({ user_id: selectedUserId })
-        .eq("id", connection.id)
+      // Realizar transferência via API
+      const transferResponse = await fetch(`/api/whatsapp-connections`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: connection.id,
+          user_id: selectedUserId,
+          updated_at: new Date().toISOString(),
+        }),
+      })
 
-      if (updateError) throw updateError
+      if (!transferResponse.ok) {
+        const errorData = await transferResponse.json()
+        throw new Error(errorData.error || "Erro ao transferir conexão")
+      }
 
       setSuccess("Conexão transferida com sucesso!")
-
       setTimeout(() => {
-        onOpenChange(false)
         onSuccess()
-      }, 2000)
-    } catch (error) {
+        onOpenChange(false)
+      }, 1500)
+
+    } catch (error: any) {
       console.error("Erro ao transferir conexão:", error)
-      setError("Erro ao transferir conexão")
+      setError(error.message || "Erro ao transferir conexão")
     } finally {
       setLoading(false)
     }

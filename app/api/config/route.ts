@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server"
 
+// Cache simples para evitar consultas desnecessárias
+let configCache: { data: any; timestamp: number } | null = null
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutos
+
 export async function GET() {
   try {
+    // Verificar cache primeiro
+    const now = Date.now()
+    if (configCache && (now - configCache.timestamp) < CACHE_TTL) {
+      return NextResponse.json(configCache.data)
+    }
+
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Erro de configuração do servidor" }, { status: 500 })
+      return NextResponse.json({ error: "Configuração do servidor inválida" }, { status: 500 })
     }
 
     const headers = {
@@ -17,85 +27,76 @@ export async function GET() {
       "Content-Profile": "impaai",
     }
 
-    // Buscar tema ativo
-    const themeResponse = await fetch(`${supabaseUrl}/rest/v1/system_themes?is_active=eq.true`, { headers })
-    let themeData = null
-    if (themeResponse.ok) {
-      const themes = await themeResponse.json()
-      if (themes && themes.length > 0) {
-        const theme = themes[0]
-        themeData = {
-          systemName: theme.display_name || theme.name || "Sistema",
-          description: theme.description || "Sistema de gestão",
-          logoIcon: theme.logo_icon || "🤖",
-          primaryColor: theme.colors?.primary || "#3b82f6",
-          secondaryColor: theme.colors?.secondary || "#10b981",
-          accentColor: theme.colors?.accent || "#8b5cf6",
-          textColor: theme.colors?.text,
-          backgroundColor: theme.colors?.background,
-          fontFamily: theme.fonts?.primary,
-          borderRadius: theme.borders?.radius,
-          customCss: theme.custom_css,
-        }
-      }
+    // Buscar apenas system_themes como fonte única de verdade
+    // Priorizar: is_default=true AND is_active=true, depois apenas is_active=true
+    const themeResponse = await fetch(
+      `${supabaseUrl}/rest/v1/system_themes?is_active=eq.true&order=is_default.desc,created_at.desc`, 
+      { headers }
+    )
+
+    if (!themeResponse.ok) {
+      return NextResponse.json({ error: "Erro ao buscar configurações" }, { status: 500 })
     }
 
-    // Buscar configurações do sistema
-    const settingsResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings`, { headers })
-    let processedSettings: Record<string, any> = {}
+    const themes = await themeResponse.json()
+    
+    if (!themes || themes.length === 0) {
+      return NextResponse.json({ error: "Nenhum tema ativo encontrado" }, { status: 404 })
+    }
+
+    // Pegar o primeiro tema (que será o default se existir, senão o mais recente ativo)
+    const activeTheme = themes[0]
+
+    const themeData = {
+      systemName: activeTheme.display_name || activeTheme.name,
+      description: activeTheme.description || "Sistema de gestão",
+      logoIcon: activeTheme.logo_icon || "🤖",
+      primaryColor: activeTheme.colors?.primary || "#3b82f6",
+      secondaryColor: activeTheme.colors?.secondary || "#10b981",
+      accentColor: activeTheme.colors?.accent || "#8b5cf6",
+      textColor: activeTheme.colors?.text,
+      backgroundColor: activeTheme.colors?.background,
+      fontFamily: activeTheme.fonts?.primary,
+      borderRadius: activeTheme.borders?.radius,
+      customCss: activeTheme.custom_css,
+    }
+
+    // Buscar configuração de cadastro público do banco de dados
+    const settingsResponse = await fetch(
+      `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.allow_public_registration`, 
+      { headers }
+    )
+
+    let allowPublicRegistration = false // Padrão seguro
     if (settingsResponse.ok) {
       const settingsData = await settingsResponse.json()
-
       if (settingsData && settingsData.length > 0) {
-        processedSettings = settingsData.reduce((acc: any, setting: any) => {
-          let value = setting.setting_value
-          if (value === "true") value = true
-          else if (value === "false") value = false
-          else if (
-            typeof value === "string" &&
-            !isNaN(Number.parseFloat(value)) &&
-            isFinite(Number(value)) &&
-            value.trim() !== ""
-          ) {
-            value = Number(value)
-          }
-          acc[setting.setting_key] = value
-          return acc
-        }, {})
+        allowPublicRegistration = settingsData[0].setting_value === 'true'
       }
     }
 
-    if (!themeData) {
-      themeData = {
-        systemName: "Impa AI",
-        description: "Tema padrão azul da plataforma",
-        logoIcon: "🤖",
-        primaryColor: "#3b82f6",
-      }
-    }
-
-    // Remove a chave snake_case e adiciona a camelCase
-    const { allow_public_registration, ...otherProcessedSettings } = processedSettings
-
-    const finalResponseSettings = {
-      ...otherProcessedSettings,
-      allowPublicRegistration: allow_public_registration === true,
+    const settings = {
+      allowPublicRegistration: allowPublicRegistration,
     }
 
     const apiResponse = {
       theme: themeData,
-      settings: finalResponseSettings,
+      settings: settings,
+    }
+
+    // Atualizar cache
+    configCache = {
+      data: apiResponse,
+      timestamp: now
     }
 
     return NextResponse.json(apiResponse)
+    
   } catch (error: any) {
-    console.error("💥 [API /api/config] Erro:", error.message)
+    // Em caso de erro, retornar erro sem fallback hardcoded
     return NextResponse.json(
-      {
-        theme: { systemName: "Impa AI", logoIcon: "🤖", primaryColor: "#3b82f6" },
-        settings: { allowPublicRegistration: false },
-      },
-      { status: 500 },
+      { error: "Erro interno do servidor" },
+      { status: 500 }
     )
   }
 }

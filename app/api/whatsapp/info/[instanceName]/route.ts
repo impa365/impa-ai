@@ -2,26 +2,61 @@ import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { instanceName: string } }
+  { params }: { params: Promise<{ instanceName: string }> }
 ) {
   try {
-    const { instanceName } = params;
+    // 🔧 CORREÇÃO: Await params antes de usar suas propriedades
+    const resolvedParams = await params;
+    const { instanceName } = resolvedParams;
+
+    console.log(`ℹ️ [INFO] Buscando informações para instância: ${instanceName}`);
 
     if (!instanceName) {
+      console.error("❌ [INFO] Nome da instância é obrigatório");
       return NextResponse.json(
         { success: false, error: "Nome da instância é obrigatório" },
         { status: 400 }
       );
     }
 
-    // Buscar configuração da Evolution API
+    // Buscar configuração do Supabase
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       return NextResponse.json(
-        { success: false, error: "Configuração não encontrada" },
+        { success: false, error: "Configuração do servidor incompleta" },
+        { status: 500 }
+      );
+    }
+
+    // Buscar conexão da instância no Supabase
+    const connectionResponse = await fetch(
+      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Accept-Profile": "impaai",
+          "Content-Profile": "impaai",
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+      }
+    );
+
+    if (!connectionResponse.ok) {
+      return NextResponse.json(
+        { success: false, error: "Erro ao buscar conexão da instância" },
+        { status: 500 }
+      );
+    }
+
+    const connections = await connectionResponse.json();
+    const instanceConnection = connections[0];
+
+    if (!instanceConnection?.instance_token) {
+      return NextResponse.json(
+        { success: false, error: "Token da instância não encontrado" },
         { status: 500 }
       );
     }
@@ -42,112 +77,82 @@ export async function GET(
 
     if (!integrationResponse.ok) {
       return NextResponse.json(
-        { success: false, error: "Erro ao buscar configuração da API" },
+        { success: false, error: "Erro ao buscar configuração da Evolution API" },
         { status: 500 }
       );
     }
 
     const integrations = await integrationResponse.json();
+    const evolutionConfig = integrations[0];
 
-    if (!integrations || integrations.length === 0) {
+    if (!evolutionConfig?.config?.apiUrl) {
       return NextResponse.json(
         { success: false, error: "Evolution API não configurada" },
         { status: 500 }
       );
     }
 
-    const config = integrations[0].config;
+    // Buscar informações da instância na Evolution API
+    const evolutionResponse = await fetch(
+      `${evolutionConfig.config.apiUrl}/instance/fetchInstances`,
+      {
+        method: "GET",
+        headers: {
+          apikey: instanceConnection.instance_token,
+        },
+        signal: AbortSignal.timeout(10000), // 10 segundos timeout
+      }
+    );
 
-    if (!config?.apiUrl || !config?.apiKey) {
+    if (!evolutionResponse.ok) {
       return NextResponse.json(
-        { success: false, error: "Configuração da Evolution API incompleta" },
+        { success: false, error: "Erro ao buscar informações da instância na Evolution API" },
         { status: 500 }
       );
     }
 
-    // Buscar informações da instância
-    const infoResponse = await fetch(
-      `${config.apiUrl}/instance/fetchInstances?instanceName=${instanceName}`,
-      {
-        method: "GET",
-        headers: {
-          apikey: config.apiKey,
-        },
-        signal: AbortSignal.timeout(8000), // 8 segundos timeout
-      }
-    );
+    const evolutionData = await evolutionResponse.json();
 
-    if (!infoResponse.ok) {
+    // Encontrar a instância específica no array retornado
+    const instanceData = Array.isArray(evolutionData) 
+      ? evolutionData.find(inst => inst.name === instanceName)
+      : evolutionData;
+
+    if (!instanceData) {
       return NextResponse.json(
-        { success: false, error: "Erro ao buscar informações da instância" },
-        { status: 500 }
+        { success: false, error: "Instância não encontrada na Evolution API" },
+        { status: 404 }
       );
     }
 
-    const instanceData = await infoResponse.json();
-
-    // Buscar status da conexão
-    const statusResponse = await fetch(
-      `${config.apiUrl}/instance/connectionState/${instanceName}`,
-      {
-        method: "GET",
-        headers: {
-          apikey: config.apiKey,
-        },
-      }
-    );
-
-    let connectionStatus = "disconnected";
-    let phoneNumber = null;
-    let isOnline = false;
-
-    if (statusResponse.ok) {
-      const statusData = await statusResponse.json();
-
-      if (statusData?.instance?.state) {
-        switch (statusData.instance.state) {
-          case "open":
-            connectionStatus = "connected";
-            isOnline = true;
-            break;
-          case "connecting":
-            connectionStatus = "connecting";
-            break;
-          case "close":
-          default:
-            connectionStatus = "disconnected";
-            break;
-        }
-      }
-
-      phoneNumber =
-        statusData?.instance?.wuid || statusData?.instance?.number || null;
-    }
-
-    // Formatar informações para retorno
+    // Formatar resposta
     const info = {
-      status: connectionStatus,
-      phoneNumber: phoneNumber,
-      profileName: instanceData?.clientName || null,
-      isOnline: isOnline,
-      createdAt: instanceData?.createdAt || null,
-      updatedAt: instanceData?.updatedAt || null,
-      disconnectedAt: instanceData?.disconnectionAt || null,
-      disconnectionReason: instanceData?.disconnectionReasonCode || null,
-      settings: instanceData?.Setting || null,
-      stats: {
-        messages: instanceData?._count?.Message || 0,
-        contacts: instanceData?._count?.Contact || 0,
-        chats: instanceData?._count?.Chat || 0,
-      },
+      id: instanceData.id,
+      name: instanceData.name,
+      connectionStatus: instanceData.connectionStatus,
+      ownerJid: instanceData.ownerJid,
+      profileName: instanceData.profileName,
+      profilePicUrl: instanceData.profilePicUrl,
+      integration: instanceData.integration,
+      number: instanceData.number,
+      businessId: instanceData.businessId,
+      token: instanceData.token ? instanceData.token.substring(0, 20) + '...' : undefined,
+      clientName: instanceData.clientName,
+      disconnectionReasonCode: instanceData.disconnectionReasonCode,
+      disconnectionAt: instanceData.disconnectionAt,
+      createdAt: instanceData.createdAt,
+      updatedAt: instanceData.updatedAt,
+      settings: instanceData.Setting,
+      stats: instanceData._count,
     };
 
     return NextResponse.json({
       success: true,
       info: info,
     });
+
   } catch (error: any) {
-    console.error("Erro ao buscar informações:", error);
+    console.error("Erro ao buscar informações da instância:", error);
 
     if (error.name === "TimeoutError") {
       return NextResponse.json(

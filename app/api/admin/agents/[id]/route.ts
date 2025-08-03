@@ -228,7 +228,82 @@ export async function DELETE(
       );
     }
 
-    // Fazer requisição direta para a API REST do Supabase
+    // Buscar agente antes de deletar
+    const agentResponse = await fetch(
+      `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
+      {
+        headers: {
+          "Accept-Profile": "impaai",
+          "Content-Profile": "impaai",
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+      }
+    );
+    const agentData = await agentResponse.json();
+    const agent = agentData[0];
+
+    // Se tem evolution_bot_id, deletar na Evolution API
+    if (agent && agent.evolution_bot_id && agent.whatsapp_connection_id) {
+      try {
+        // Buscar dados da conexão WhatsApp
+        const connectionResponse = await fetch(
+          `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${agent.whatsapp_connection_id}`,
+          {
+            headers: {
+              "Accept-Profile": "impaai",
+              "Content-Profile": "impaai",
+              Authorization: `Bearer ${supabaseKey}`,
+            },
+          }
+        );
+        const connections = await connectionResponse.json();
+        const connection = connections[0];
+
+        if (!connection) {
+          console.error("❌ Conexão WhatsApp não encontrada para deletar Evolution Bot");
+        } else {
+          // Buscar configurações da Evolution API
+          const evolutionResponse = await fetch(
+            `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true`,
+            {
+              headers: {
+                "Accept-Profile": "impaai",
+                "Content-Profile": "impaai",
+                Authorization: `Bearer ${supabaseKey}`,
+              },
+            }
+          );
+          const evolutionIntegrations = await evolutionResponse.json();
+          const evolutionConfig = evolutionIntegrations[0];
+
+          if (!evolutionConfig) {
+            console.error("❌ Evolution API não configurada para deletar Evolution Bot");
+          } else {
+            const { apiUrl, apiKey } = evolutionConfig.config;
+            // Deletar bot na Evolution API
+            const evolutionDeleteResponse = await fetch(
+              `${apiUrl}/evolutionBot/delete/${agent.evolution_bot_id}/${connection.instance_name}`,
+              {
+                method: "DELETE",
+                headers: {
+                  apikey: apiKey,
+                },
+              }
+            );
+            if (evolutionDeleteResponse.ok) {
+              console.log("✅ Bot deletado com sucesso na Evolution API");
+            } else {
+              const errorText = await evolutionDeleteResponse.text();
+              console.error("❌ Erro ao deletar bot na Evolution API:", errorText);
+            }
+          }
+        }
+      } catch (evolutionError) {
+        console.error("❌ Erro ao tentar deletar bot na Evolution API:", evolutionError);
+      }
+    }
+
+    // Agora sim, deletar agente no banco
     const response = await fetch(
       `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
       {

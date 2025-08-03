@@ -76,8 +76,6 @@ export default function AdminApiKeysPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [selectedApiKey, setSelectedApiKey] = useState<ApiKey | null>(null)
-  const [examplesModalOpen, setExamplesModalOpen] = useState(false)
-  const [selectedApiKeyForExamples, setSelectedApiKeyForExamples] = useState<ApiKey | null>(null)
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -230,10 +228,30 @@ export default function AdminApiKeysPage() {
 
   const copyToClipboard = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(text)
-      toast.success("API Key copiada para a área de transferência!")
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text)
+        toast.success("Copiado para a área de transferência!")
+      } else {
+        // Fallback para navegadores sem suporte
+        const textarea = document.createElement("textarea")
+        textarea.value = text
+        textarea.style.position = "fixed" // Evita scroll
+        textarea.style.opacity = "0"
+        document.body.appendChild(textarea)
+        textarea.select()
+        const successful = document.execCommand("copy")
+        document.body.removeChild(textarea)
+        if (successful) {
+          toast.success("Copiado para a área de transferência!")
+        } else {
+          throw new Error("execCommand falhou")
+        }
+      }
     } catch (error) {
-      toast.error("Erro ao copiar API Key.")
+      if (process.env.NODE_ENV === "development") {
+        console.error("Erro ao copiar:", error)
+      }
+      toast.error("Não foi possível copiar. Selecione o texto manualmente.")
     }
   }
 
@@ -278,35 +296,36 @@ export default function AdminApiKeysPage() {
       "agent_id": "AGENT_ID"
     }'`,
 
-      addLead: `curl -X POST "${baseUrl}/api/add-lead-follow" \\
-    -H "Authorization: Bearer ${apiKey}" \\
-    -H "Content-Type: application/json" \\
-    -H "instance_name: INSTANCE_NAME" \\
-    -H "user_id: USER_ID" \\
+      addLead: `curl -X POST "${baseUrl}/api/add-lead-follow" \
+    -H "Authorization: Bearer ${apiKey}" \
+    -H "Content-Type: application/json" \
     -d '{
-      "remoteJid": "5511999999999",
-      "name": "Nome do Lead",
-      "dia": "21/06/2025"
+      "remoteJid": "557331912851@s.whatsapp.net",
+      "instance_name": "impaai_testeal_1866",
+      "instance_token": "A57F6969-79CD-4285-A783-798460BDFFC6"
     }'`,
 
-      updateLead: `curl -X POST "${baseUrl}/api/update-lead-follow" \\
-    -H "Authorization: Bearer ${apiKey}" \\
-    -H "Content-Type: application/json" \\
+      updateLead: `curl -X POST "${baseUrl}/api/update-lead-follow" \
+    -H "Authorization: Bearer ${apiKey}" \
+    -H "Content-Type: application/json" \
     -d '{
-      "id": "LEAD_ID",
-      "name": "Novo Nome",
-      "markDayAsSent": 1
+      "remoteJid": "REMOTE_JID_DO_LEAD",
+      "instance_name": "NOME_DA_INSTANCIA",
+      "dia": 2,
+      "name": "Nome do Lead (opcional)"
     }'`,
 
       listLeads: `curl -X GET "${baseUrl}/api/list-leads-follow?instance_name=INSTANCE_NAME&user_id=USER_ID" \\
     -H "Authorization: Bearer ${apiKey}" \\
     -H "Content-Type: application/json"`,
 
-      deactivateLead: `curl -X POST "${baseUrl}/api/deactivate-lead-follow" \\
-    -H "Authorization: Bearer ${apiKey}" \\
-    -H "Content-Type: application/json" \\
+      deactivateLead: `curl -X DELETE "${baseUrl}/api/deactivate-lead-follow" \
+    -H "Authorization: Bearer ${apiKey}" \
+    -H "Content-Type: application/json" \
     -d '{
-      "id": "LEAD_ID"
+      "remoteJid": "557331912851@s.whatsapp.net",
+      "instance_name": "impaai_testeal_1866",
+      "instance_token": "A57F6969-79CD-4285-A783-798460BDFFC6"
     }'`,
     }
   }
@@ -387,6 +406,18 @@ export default function AdminApiKeysPage() {
             <div className="text-sm text-purple-600 mt-2">Usuários únicos</div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Botão para documentação de API */}
+      <div className="flex justify-end mb-4">
+        <a
+          href="/admin/api-docs"
+          className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          📖 Documentação da API (Endpoints, cURL, exemplos)
+        </a>
       </div>
 
       {/* API Keys Table */}
@@ -510,18 +541,6 @@ export default function AdminApiKeysPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="text-blue-600 hover:text-blue-700 h-8 w-8"
-                          onClick={() => {
-                            setSelectedApiKeyForExamples(apiKey)
-                            setExamplesModalOpen(true)
-                          }}
-                          title="Ver exemplos de uso"
-                        >
-                          <Code className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
                           className="text-red-600 hover:text-red-700 h-8 w-8"
                           onClick={() => {
                             setSelectedApiKey(apiKey)
@@ -637,230 +656,6 @@ export default function AdminApiKeysPage() {
                   Criar API Key
                 </>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Examples Modal */}
-      <Dialog open={examplesModalOpen} onOpenChange={setExamplesModalOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5" />
-              Exemplos de Uso da API
-            </DialogTitle>
-            <DialogDescription>
-              Copie e cole estes exemplos no n8n ou outras ferramentas de integração.
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedApiKeyForExamples && (
-            <div className="space-y-6 py-4">
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <Key className="w-4 h-4 text-blue-600" />
-                  <span className="font-medium text-blue-900">API Key Selecionada:</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <code className="text-sm bg-white px-2 py-1 rounded border flex-1 truncate">
-                    {selectedApiKeyForExamples.name} - {maskApiKey(selectedApiKeyForExamples.api_key)}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => copyToClipboard(selectedApiKeyForExamples.api_key)}
-                    className="bg-white hover:bg-gray-50"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <Tabs defaultValue="list-agents" className="w-full">
-                <TabsList className="grid w-full grid-cols-6">
-                  <TabsTrigger value="list-agents">Listar Agentes</TabsTrigger>
-                  <TabsTrigger value="get-agent">Obter Agente</TabsTrigger>
-                  <TabsTrigger value="webhook">Webhook</TabsTrigger>
-                  <TabsTrigger value="add-lead">Adicionar Lead</TabsTrigger>
-                  <TabsTrigger value="update-lead">Atualizar Lead</TabsTrigger>
-                  <TabsTrigger value="list-leads">Listar Leads</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="list-agents" className="space-y-4 pt-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Listar todos os agentes</h4>
-                    <p className="text-sm text-gray-600 mb-3">
-                      Retorna a lista de todos os agentes disponíveis para o usuário.
-                    </p>
-                    <div className="relative group">
-                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
-                        <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).listAgents}</code>
-                      </pre>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
-                        onClick={() =>
-                          copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).listAgents)
-                        }
-                      >
-                        <Copy className="w-4 h-4 mr-1" /> Copiar
-                      </Button>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="get-agent" className="space-y-4 pt-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Obter detalhes de um agente específico</h4>
-                    <p className="text-sm text-gray-600 mb-3">
-                      Retorna os detalhes completos de um agente específico. Substitua AGENT_ID pelo ID do agente
-                      desejado.
-                    </p>
-                    <div className="relative group">
-                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
-                        <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).getAgent}</code>
-                      </pre>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
-                        onClick={() =>
-                          copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).getAgent)
-                        }
-                      >
-                        <Copy className="w-4 h-4 mr-1" /> Copiar
-                      </Button>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="webhook" className="space-y-4 pt-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Enviar mensagem via webhook</h4>
-                    <p className="text-sm text-gray-600 mb-3">
-                      Envia uma mensagem através de um agente específico. Substitua os valores conforme necessário.
-                    </p>
-                    <div className="relative group">
-                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
-                        <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).webhook}</code>
-                      </pre>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
-                        onClick={() => copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).webhook)}
-                      >
-                        <Copy className="w-4 h-4 mr-1" /> Copiar
-                      </Button>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="add-lead" className="space-y-4 pt-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Adicionar lead ao follow-up</h4>
-                    <p className="text-sm text-gray-600 mb-3">Adiciona um novo lead ao processo de follow-up 24hs.</p>
-                    <div className="relative group">
-                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
-                        <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).addLead}</code>
-                      </pre>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
-                        onClick={() => copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).addLead)}
-                      >
-                        <Copy className="w-4 h-4 mr-1" /> Copiar
-                      </Button>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="update-lead" className="space-y-4 pt-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Atualizar lead do follow-up</h4>
-                    <p className="text-sm text-gray-600 mb-3">Atualiza dados do lead ou marca um dia como enviado.</p>
-                    <div className="relative group">
-                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
-                        <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).updateLead}</code>
-                      </pre>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
-                        onClick={() =>
-                          copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).updateLead)
-                        }
-                      >
-                        <Copy className="w-4 h-4 mr-1" /> Copiar
-                      </Button>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="list-leads" className="space-y-4 pt-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Listar leads do follow-up</h4>
-                    <p className="text-sm text-gray-600 mb-3">Lista todos os leads de uma instância específica.</p>
-                    <div className="relative group">
-                      <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
-                        <code>{generateCurlExamples(selectedApiKeyForExamples.api_key).listLeads}</code>
-                      </pre>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
-                        onClick={() =>
-                          copyToClipboard(generateCurlExamples(selectedApiKeyForExamples.api_key).listLeads)
-                        }
-                      >
-                        <Copy className="w-4 h-4 mr-1" /> Copiar
-                      </Button>
-                    </div>
-
-                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 mt-3">
-                      <h5 className="font-medium text-blue-900 mb-1">Endpoint adicional:</h5>
-                      <p className="text-sm text-blue-800 mb-2">Para desativar um lead:</p>
-                      <code className="text-xs bg-white px-2 py-1 rounded border text-blue-700">
-                        {generateCurlExamples(selectedApiKeyForExamples.api_key).deactivateLead}
-                      </code>
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
-
-              <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-medium text-amber-900 mb-1">Dicas para uso no n8n:</h4>
-                    <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
-                      <li>Use o nó "HTTP Request" para fazer as chamadas.</li>
-                      <li>Configure o método HTTP correto (GET ou POST).</li>
-                      <li>Adicione o header "Authorization" com o valor "Bearer SUA_API_KEY".</li>
-                      <li>Para POST requests, configure o Content-Type como "application/json".</li>
-                      <li>Teste sempre em ambiente de desenvolvimento primeiro.</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setExamplesModalOpen(false)}>
-              Fechar
-            </Button>
-            <Button
-              onClick={() => window.open("https://docs.impa.ai/api-reference", "_blank")}
-              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {" "}
-              {/* Atualizar URL da documentação se necessário */}
-              <ExternalLink className="w-4 h-4" />
-              Ver Documentação Completa
             </Button>
           </DialogFooter>
         </DialogContent>

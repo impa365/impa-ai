@@ -16,7 +16,7 @@ export async function getConfig() {
     return configCache;
   }
 
-  // No servidor, ler diretamente das variáveis de ambiente (SEM )
+  // SEGURANÇA: No servidor, ler diretamente das variáveis de ambiente
   if (typeof window === "undefined") {
     const config = {
       supabaseUrl: process.env.SUPABASE_URL || "http://localhost:54321",
@@ -36,7 +36,7 @@ export async function getConfig() {
     return config;
   }
 
-  // No cliente, buscar da API
+  // SEGURANÇA: No cliente, SEMPRE buscar da API (nunca process.env)
   try {
     console.log("🌐 Client fetching config from /api/config...");
     const response = await fetch("/api/config", {
@@ -55,6 +55,11 @@ export async function getConfig() {
 
     const config = await response.json();
 
+    // Validar que recebemos configurações válidas
+    if (!config.supabaseUrl || !config.supabaseAnonKey) {
+      throw new Error("Invalid config received from API");
+    }
+
     // Cache no cliente
     configCache = config;
     cacheTimestamp = now;
@@ -67,10 +72,12 @@ export async function getConfig() {
   } catch (error) {
     console.error("❌ Failed to load config from /api/config:", error);
 
-    // Fallback apenas para desenvolvimento local
+    // SEGURANÇA: Fallback apenas para desenvolvimento local
     if (
       typeof window !== "undefined" &&
-      window.location.hostname === "localhost"
+      (window.location.hostname === "localhost" || 
+       window.location.hostname === "127.0.0.1" ||
+       window.location.hostname.includes("localhost"))
     ) {
       const fallbackConfig = {
         supabaseUrl: "http://localhost:54321",
@@ -84,7 +91,7 @@ export async function getConfig() {
       return fallbackConfig;
     }
 
-    // Em produção, não usar fallback - deixar falhar para debug
+    // SEGURANÇA: Em produção, não usar fallback - deixar falhar para forçar correção
     throw error;
   }
 }

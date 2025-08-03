@@ -55,6 +55,35 @@ export async function POST(request: NextRequest) {
     // Hash da senha
     const passwordHash = await bcrypt.hash(password, 12);
 
+    // Buscar limites padrão do banco de dados
+    let defaultAgentsLimit = 1;
+    let defaultConnectionsLimit = 1;
+    try {
+      const settingsResponse = await fetch(
+        `${supabaseUrl}/rest/v1/system_settings?select=setting_key,setting_value&setting_key=in.(default_agents_limit,max_connections_per_user)`,
+        {
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (settingsResponse.ok) {
+        const settings = await settingsResponse.json();
+        for (const setting of settings) {
+          if (setting.setting_key === "default_agents_limit") {
+            defaultAgentsLimit = parseInt(setting.setting_value) || 1;
+          }
+          if (setting.setting_key === "max_connections_per_user") {
+            defaultConnectionsLimit = parseInt(setting.setting_value) || 1;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Não foi possível buscar limites padrão do banco, usando fallback 1.");
+    }
+
     // Criar usuário via REST API
     const createResponse = await fetch(`${supabaseUrl}/rest/v1/user_profiles`, {
       method: "POST",
@@ -72,6 +101,8 @@ export async function POST(request: NextRequest) {
         password: passwordHash, // Corrigido: usar 'password' ao invés de 'password_hash'
         role: "user",
         status: "active",
+        agents_limit: defaultAgentsLimit,
+        connections_limit: defaultConnectionsLimit,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }),
