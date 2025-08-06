@@ -86,6 +86,7 @@ export default function AdminSettingsPage() {
     default_whatsapp_connections_limit: 1,
     default_agents_limit: 2,
     allow_public_registration: false,
+    landing_page_enabled: true,
   })
   const [loadingSettings, setLoadingSettings] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
@@ -569,6 +570,69 @@ export default function AdminSettingsPage() {
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Número máximo de agentes IA que novos usuários podem criar
               </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-gray-900 dark:text-gray-100">Interface e Experiência</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="landingPageEnabled" className="text-gray-900 dark:text-gray-100">
+                  Landing Page Ativa
+                </Label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Quando ativada, visitantes veem a landing page. Quando desativada, são direcionados direto para o login.
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="landingPageEnabled"
+                  checked={Boolean(systemSettings.landing_page_enabled)}
+                  onCheckedChange={async (checked) => {
+                    try {
+                      // Atualizar via API dedicada para landing page
+                      const response = await fetch("/api/system/landing-page-status", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ enabled: checked }),
+                      })
+
+                      const data = await response.json()
+
+                      if (data.success) {
+                        setSystemSettings((prev) => ({
+                          ...prev,
+                          landing_page_enabled: checked,
+                        }))
+                        toast({
+                          title: checked ? "Landing page ativada!" : "Landing page desativada!",
+                          description: checked 
+                            ? "Visitantes agora verão a landing page primeiro." 
+                            : "Visitantes serão direcionados direto para o login.",
+                        })
+                      } else {
+                        throw new Error(data.error || "Erro ao atualizar configuração")
+                      }
+                    } catch (error: any) {
+                      console.error("Erro ao atualizar landing page:", error)
+                      toast({
+                        title: "Erro ao atualizar configuração",
+                        description: error.message || "Não foi possível alterar o status da landing page.",
+                        variant: "destructive",
+                      })
+                    }
+                  }}
+                />
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {systemSettings.landing_page_enabled ? "Ativada" : "Desativada"}
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>

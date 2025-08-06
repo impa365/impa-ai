@@ -83,6 +83,7 @@ export default function LandingPage() {
   const [activeFeature, setActiveFeature] = useState(0);
   const [isVisible, setIsVisible] = useState({});
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isLandingEnabled, setIsLandingEnabled] = useState<boolean | null>(null);
   const { systemName, isLoading } = useSystemName();
 
   const features = [
@@ -94,12 +95,38 @@ export default function LandingPage() {
     "Analytics Avançado"
   ];
 
+  // Verificar se a landing page está ativa
   useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveFeature((prev) => (prev + 1) % features.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+    const checkLandingStatus = async () => {
+      try {
+        const response = await fetch('/api/system/landing-page-status');
+        const data = await response.json();
+        
+        if (data.success && !data.landingPageEnabled) {
+          // Landing page desativada - redirecionar para login
+          router.replace('/auth/login');
+          return;
+        }
+        
+        setIsLandingEnabled(true);
+      } catch (error) {
+        console.error('Erro ao verificar status da landing page:', error);
+        // Em caso de erro, redireciona para login por segurança
+        router.replace('/auth/login');
+      }
+    };
+
+    checkLandingStatus();
+  }, [router]);
+
+  useEffect(() => {
+    if (isLandingEnabled) {
+      const interval = setInterval(() => {
+        setActiveFeature((prev: number) => (prev + 1) % features.length);
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [isLandingEnabled, features.length]);
 
   const handleLogin = () => {
     router.push("/auth/login");
@@ -108,6 +135,18 @@ export default function LandingPage() {
   const handleDemo = () => {
     router.push("/demo");
   };
+
+  // Não renderizar nada até verificar o status
+  if (isLandingEnabled === null) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950">
