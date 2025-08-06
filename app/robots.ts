@@ -1,24 +1,26 @@
-import { MetadataRoute } from 'next'
+import type { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://localhost:3000';
+
   return {
-    rules: [
-      {
-        userAgent: '*',
-        allow: '/',
-        disallow: ['/admin/', '/dashboard/', '/api/'],
-      },
-      {
-        userAgent: 'Googlebot',
-        allow: '/',
-        disallow: ['/admin/', '/dashboard/', '/api/'],
-      },
-      {
-        userAgent: 'Bingbot',
-        allow: '/',
-        disallow: ['/admin/', '/dashboard/', '/api/'],
-      },
-    ],
-    sitemap: 'https://seu-dominio.com/sitemap.xml',
-  }
+    rules: {
+      userAgent: '*',
+      allow: [
+        '/',
+        '/landing',
+        '/demo',
+        '/auth/login',
+      ],
+      disallow: [
+        '/admin/',
+        '/dashboard/',
+        '/api/',
+        '/_next/',
+        '/private/',
+      ],
+    },
+    sitemap: `${baseUrl}/sitemap.xml`,
+    host: baseUrl,
+  };
 } 
