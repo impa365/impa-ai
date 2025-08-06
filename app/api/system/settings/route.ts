@@ -44,14 +44,16 @@ export async function GET() {
 
     // Converter array de configurações em objeto
     const settings: any = {}
-    data.forEach((setting: any) => {
-      try {
-        // Tentar fazer parse do JSON, se falhar usar o valor direto
-        settings[setting.setting_key] = JSON.parse(setting.setting_value)
-      } catch {
-        settings[setting.setting_key] = setting.setting_value
-      }
-    })
+    if (Array.isArray(data) && data.length > 0) {
+      data.forEach((setting: any) => {
+        try {
+          // Tentar fazer parse do JSON, se falhar usar o valor direto
+          settings[setting.setting_key] = JSON.parse(setting.setting_value)
+        } catch {
+          settings[setting.setting_key] = setting.setting_value
+        }
+      })
+    }
 
     // Atualizar cache
     cachedSettings = {
@@ -67,11 +69,13 @@ export async function GET() {
   } catch (error) {
     console.error("Erro ao buscar configurações:", error)
     
+    // Em caso de erro real de conexão, retornar settings vazio mas success true
+    // para não quebrar a aplicação
     return NextResponse.json({
-      success: false,
-      error: "Erro ao buscar configurações",
-      settings: {}
-    }, { status: 500 })
+      success: true,
+      settings: {},
+      error: "Erro ao conectar com o banco de dados"
+    })
   }
 }
 
