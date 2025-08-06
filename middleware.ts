@@ -19,6 +19,7 @@ export async function middleware(req: NextRequest) {
     "/api/integrations/evolution/evolutionBot/update",
     "/api/integrations/evolution/evolutionBot/delete",
     "/api/system/settings",
+    "/api/admin/branding",
   ];
 
   // Lista de páginas públicas
