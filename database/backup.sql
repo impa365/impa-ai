@@ -2140,7 +2140,8 @@ INSERT INTO impaai.system_settings VALUES ('6eaa5ead-8003-416f-ab12-32c9c08cebe0
 INSERT INTO impaai.system_settings VALUES ('09140303-5e49-4304-9df0-0e8d0972d81a', 'max_connections_per_user', '"1"', 'whatsapp', 'Máximo de conexões WhatsApp por usuário', false, false, '2025-07-04 21:24:26.082368-03', '2025-07-15 22:15:28.895396-03');
 INSERT INTO impaai.system_settings VALUES ('e7a7adbf-22f7-40ae-a465-1de87958a850', 'default_model', '"[object Object]"', 'agents', 'Modelo padrão', false, false, '2025-06-24 12:55:03.886934-03', '2025-07-15 22:15:28.954436-03');
 INSERT INTO impaai.system_settings VALUES ('980a2314-f8e8-42da-832a-3c54016128bb', 'system_name', '"Impa AI"', 'general', 'Nome do sistema', true, false, '2025-07-04 21:23:08.650997-03', '2025-07-15 22:26:30.623421-03');
-INSERT INTO impaai.system_settings VALUES (gen_random_uuid(), 'landing_page_enabled', 'true', 'interface', 'Controla se a landing page está ativa ou se deve mostrar login direto', false, false, NOW(), NOW());2:15:29.010996-03');
+INSERT INTO impaai.system_settings VALUES (gen_random_uuid(), 'landing_page_enabled', 'true', 'interface', 'Controla se a landing page está ativa ou se deve mostrar login direto', false, false, NOW(), NOW());
+INSERT INTO impaai.system_settings VALUES (gen_random_uuid(), 'footer_text', '"© 2024 Impa AI - Desenvolvido pela Comunidade IMPA"', 'interface', 'Texto personalizado do rodapé das páginas públicas', false, false, NOW(), NOW());2:15:29.010996-03');
 
 
 --

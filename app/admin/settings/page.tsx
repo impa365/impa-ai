@@ -87,6 +87,7 @@ export default function AdminSettingsPage() {
     default_agents_limit: 2,
     allow_public_registration: false,
     landing_page_enabled: true,
+    footer_text: "© 2024 Impa AI - Desenvolvido pela Comunidade IMPA",
   })
   const [loadingSettings, setLoadingSettings] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
@@ -633,6 +634,26 @@ export default function AdminSettingsPage() {
                   {systemSettings.landing_page_enabled ? "Ativada" : "Desativada"}
                 </span>
               </div>
+            </div>
+
+            <div>
+              <Label htmlFor="footerText" className="text-gray-900 dark:text-gray-100">
+                Texto do Rodapé
+              </Label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
+                Texto exibido no rodapé das páginas de login e outras páginas públicas
+              </p>
+              <Textarea
+                id="footerText"
+                value={systemSettings.footer_text || ""}
+                onChange={(e) => setSystemSettings(prev => ({
+                  ...prev,
+                  footer_text: e.target.value
+                }))}
+                placeholder="© 2024 Sua Empresa - Desenvolvido por..."
+                className="w-full"
+                rows={3}
+              />
             </div>
           </CardContent>
         </Card>
