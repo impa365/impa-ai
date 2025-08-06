@@ -1,66 +1,90 @@
-"use client"
+import type { Metadata } from "next"
+import { Suspense } from "react"
+import LandingPage from "./landing/page"
+import ClientRedirect from "@/components/client-redirect"
+import { getBaseUrl } from "@/lib/dynamic-url"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import DynamicTitle from "@/components/dynamic-title"
-import { getCurrentUser } from "@/lib/auth"
-import { useSystemName } from "@/hooks/use-system-config"
+// Metadata otimizada para SEO e AIO com URL dinâmica
+export async function generateMetadata(): Promise<Metadata> {
+  const baseUrl = getBaseUrl()
+  
+  return {
+    title: "Sistema de IA - Plataforma Enterprise de Agentes Inteligentes",
+    description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp. Arquitetura escalável, APIs robustas e tecnologias de ponta.",
+    keywords: [
+      "IA conversacional",
+      "WhatsApp Business",
+      "Agentes inteligentes",
+      "Automação",
+      "Chatbot",
+      "Evolution API",
+      "OpenAI",
+      "n8n",
+      "Enterprise"
+    ],
+    authors: [{ name: "IMPA AI Team" }],
+    creator: "IMPA AI",
+    publisher: "IMPA AI",
+    formatDetection: {
+      email: false,
+      address: false,
+      telephone: false,
+    },
+    metadataBase: new URL(baseUrl),
+    alternates: {
+      canonical: baseUrl,
+    },
+    openGraph: {
+      type: "website",
+      locale: "pt_BR",
+      url: baseUrl,
+      title: "Sistema de IA - Plataforma Enterprise de Agentes Inteligentes",
+      description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp.",
+      siteName: "Sistema de IA",
+      images: [
+        {
+          url: `${baseUrl}/placeholder-logo.png`,
+          width: 1200,
+          height: 630,
+          alt: "Sistema de IA - Plataforma Enterprise",
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Sistema de IA - Plataforma Enterprise de Agentes Inteligentes",
+      description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp.",
+      images: [`${baseUrl}/placeholder-logo.png`],
+    },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-video-preview": -1,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+      },
+    },
+    verification: {
+      google: "seu-google-verification-code",
+      yandex: "seu-yandex-verification-code",
+      yahoo: "seu-yahoo-verification-code",
+    },
+  }
+}
 
 export default function HomePage() {
-  const [loading, setLoading] = useState(true)
-  const router = useRouter()
-  const { systemName, isLoading: isLoadingSystemName } = useSystemName()
-
-  useEffect(() => {
-    const checkUser = async () => {
-      try {
-        const user = getCurrentUser()
-        if (user) {
-          // Se usuário logado, redirecionar para dashboard apropriado
-          if (user.role === "admin") {
-            router.push("/admin")
-          } else {
-            router.push("/dashboard")
-          }
-        } else {
-          // Se não logado, mostrar landing page
-          router.push("/landing")
-        }
-      } catch (error) {
-        console.error("Error checking user:", error)
-        // Em caso de erro, mostrar landing page
-        router.push("/landing")
-      }
-    }
-
-    checkUser()
-  }, [router])
-
-  if (loading) {
-    return (
-      <>
-        <DynamicTitle />
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto mb-8"></div>
-            <p className="text-white text-xl">
-              Carregando {systemName || "sistema"}...
-            </p>
-          </div>
-        </div>
-      </>
-    )
-  }
-
-  // Esta página não deveria ser renderizada, pois sempre redireciona
   return (
-    <>
-      <DynamicTitle />
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-        <div className="text-center">
-          <div className="animate-pulse text-white text-xl">Redirecionando...</div>
-        </div>
-      </div>
-    </>
+    <div>
+      {/* Renderiza a landing page diretamente para SEO/AIO */}
+      <LandingPage />
+      
+      {/* Componente client-side para redirecionamento de usuários logados */}
+      <Suspense fallback={null}>
+        <ClientRedirect />
+      </Suspense>
+    </div>
   )
 }

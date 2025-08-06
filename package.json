@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "next build",
-    "dev": "next dev",
+    "build": "node scripts/validate-env.js && next build",
+    "dev": "node scripts/validate-env.js && next dev",
     "lint": "next lint",
-    "start": "next start",
+    "start": "node scripts/validate-env.js && next start",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "validate-env": "node scripts/validate-env.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
