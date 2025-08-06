@@ -1,84 +1,82 @@
 import { NextResponse } from "next/server"
 
+// Cache simples em memória para otimização
+let cachedSettings: { settings: any; timestamp: number } | null = null
+const CACHE_DURATION = 30000 // 30 segundos
+
 export async function GET() {
   try {
+    // Verificar cache primeiro para performance máxima
+    if (cachedSettings && Date.now() - cachedSettings.timestamp < CACHE_DURATION) {
+      return NextResponse.json({
+        success: true,
+        settings: cachedSettings.settings
+      })
+    }
+
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
+      return NextResponse.json({
+        success: false,
+        error: "Configuração do banco não encontrada"
+      }, { status: 500 })
     }
 
-    // Buscar configurações da tabela system_settings
-    const response = await fetch(`${supabaseUrl}/rest/v1/system_settings?select=*`, {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-    })
+    // Buscar apenas configurações públicas ou específicas necessárias
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/system_settings?select=setting_key,setting_value&or=(setting_key.eq.footer_text,setting_key.eq.system_name,setting_key.eq.app_name,is_public.eq.true)`,
+      {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
 
     if (!response.ok) {
-      // Retornar valores padrão se a tabela não existir
-      return NextResponse.json({
-        success: true,
-        settings: {
-          default_whatsapp_connections_limit: 1,
-          default_agents_limit: 2,
-          allow_public_registration: false,
-        },
-      })
+      throw new Error(`Erro na consulta: ${response.status}`)
     }
 
-    const settingsArray = await response.json()
+    const data = await response.json()
 
-    // Converter array de configurações para objeto
-    const settings: Record<string, any> = {}
+    // Converter array de configurações em objeto
+    const settings: any = {}
+    data.forEach((setting: any) => {
+      try {
+        // Tentar fazer parse do JSON, se falhar usar o valor direto
+        settings[setting.setting_key] = JSON.parse(setting.setting_value)
+      } catch {
+        settings[setting.setting_key] = setting.setting_value
+      }
+    })
 
-    if (Array.isArray(settingsArray)) {
-      settingsArray.forEach((setting: any) => {
-        // Converter string para tipo apropriado
-        let value = setting.setting_value
-
-        // Tentar converter para número
-        if (!isNaN(value) && !isNaN(Number.parseFloat(value))) {
-          value = Number.parseFloat(value)
-        }
-        // Tentar converter para boolean
-        else if (value === "true" || value === "false") {
-          value = value === "true"
-        }
-
-        settings[setting.setting_key] = value
-      })
-    }
-
-    // Garantir valores padrão
-    const finalSettings = {
-      default_whatsapp_connections_limit: settings.default_whatsapp_connections_limit || 1,
-      default_agents_limit: settings.default_agents_limit || 2,
-      allow_public_registration: settings.allow_public_registration || false,
-      app_name: settings.app_name || "Impa AI",
-      app_version: settings.app_version || "1.0.0",
-      ...settings,
+    // Atualizar cache
+    cachedSettings = {
+      settings,
+      timestamp: Date.now()
     }
 
     return NextResponse.json({
       success: true,
-      settings: finalSettings,
+      settings
     })
-  } catch (error: any) {
-    console.error("Erro ao buscar configurações:", error.message)
+
+  } catch (error) {
+    console.error("Erro ao buscar configurações:", error)
+    
+    // Fallback com configurações padrão
+    const defaultSettings = {
+      footer_text: "© 2024 Impa AI - Desenvolvido pela Comunidade IMPA",
+      system_name: "Impa AI",
+      app_name: "Impa AI"
+    }
+
     return NextResponse.json({
-      success: false,
-      settings: {
-        default_whatsapp_connections_limit: 1,
-        default_agents_limit: 2,
-        allow_public_registration: false,
-      },
-      error: error.message,
+      success: true,
+      settings: defaultSettings
     })
   }
 }
@@ -86,115 +84,60 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
+    const { setting_key, setting_value } = body
+
+    if (!setting_key || setting_value === undefined) {
+      return NextResponse.json({
+        success: false,
+        error: "setting_key e setting_value são obrigatórios"
+      }, { status: 400 })
+    }
 
     const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Configuração do servidor incompleta",
+      return NextResponse.json({
+        success: false,
+        error: "Configuração do banco não encontrada"
+      }, { status: 500 })
+    }
+
+    // Atualizar configuração
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${setting_key}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
         },
-        { status: 500 },
-      )
-    }
-
-    // Processar cada configuração individualmente
-    const updates = []
-
-    for (const [key, value] of Object.entries(body)) {
-      // Pular chaves que não são configurações
-      if (key.startsWith("theme_") || key === "success" || key === "settings") {
-        continue
-      }
-
-      try {
-        // Verificar se a configuração já existe
-        const checkResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings?select=id&setting_key=eq.${key}`, {
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-          },
+        body: JSON.stringify({
+          setting_value: JSON.stringify(setting_value),
+          updated_at: new Date().toISOString()
         })
-
-        const existing = await checkResponse.json()
-        const settingExists = Array.isArray(existing) && existing.length > 0
-
-        if (settingExists) {
-          // Atualizar configuração existente
-          const updateResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${key}`, {
-            method: "PATCH",
-            headers: {
-              apikey: supabaseKey,
-              Authorization: `Bearer ${supabaseKey}`,
-              "Content-Type": "application/json",
-              "Accept-Profile": "impaai",
-              "Content-Profile": "impaai",
-            },
-            body: JSON.stringify({
-              setting_value: String(value),
-              updated_at: new Date().toISOString(),
-            }),
-          })
-
-          if (updateResponse.ok) {
-            updates.push(`${key}: atualizado`)
-          } else {
-            const errorText = await updateResponse.text()
-            console.error(`Erro ao atualizar ${key}:`, errorText)
-          }
-        } else {
-          // Criar nova configuração
-          const createResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings`, {
-            method: "POST",
-            headers: {
-              apikey: supabaseKey,
-              Authorization: `Bearer ${supabaseKey}`,
-              "Content-Type": "application/json",
-              "Accept-Profile": "impaai",
-              "Content-Profile": "impaai",
-            },
-            body: JSON.stringify({
-              setting_key: key,
-              setting_value: String(value),
-              category: key.includes("limit") ? "limits" : "general",
-              description: `Configuração do sistema para a chave ${key}`,
-              is_public: false,
-              requires_restart: false,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            }),
-          })
-
-          if (createResponse.ok) {
-            updates.push(`${key}: criado`)
-          } else {
-            const errorText = await createResponse.text()
-            console.error(`Erro ao criar ${key}:`, errorText)
-          }
-        }
-      } catch (settingError: any) {
-        console.error(`Erro ao processar configuração ${key}:`, settingError.message)
       }
+    )
+
+    if (!response.ok) {
+      throw new Error(`Erro ao atualizar: ${response.status}`)
     }
+
+    // Limpar cache para forçar atualização na próxima consulta
+    cachedSettings = null
 
     return NextResponse.json({
       success: true,
-      message: `Configurações salvas com sucesso! (${updates.length} atualizações)`,
-      updates: updates,
+      message: "Configuração atualizada com sucesso"
     })
-  } catch (error: any) {
-    console.error("Erro ao salvar configurações:", error.message)
-    return NextResponse.json(
-      {
-        success: false,
-        error: `Erro ao salvar configurações: ${error.message}`,
-      },
-      { status: 500 },
-    )
+
+  } catch (error) {
+    console.error("Erro ao atualizar configuração:", error)
+    return NextResponse.json({
+      success: false,
+      error: "Erro interno do servidor"
+    }, { status: 500 })
   }
 }

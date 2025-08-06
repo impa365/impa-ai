@@ -12,6 +12,7 @@ import { useSystemName } from "@/hooks/use-system-config"
 export default function LoginPage() {
   const [loading, setLoading] = useState(true)
   const [isLandingEnabled, setIsLandingEnabled] = useState<boolean | null>(null)
+  const [footerText, setFooterText] = useState<string>("")
   const router = useRouter()
   const { systemName, isLoading: isLoadingSystemName } = useSystemName()
 
@@ -37,7 +38,7 @@ export default function LoginPage() {
     checkUser()
   }, [router])
 
-  // Verificar se a landing page está ativa
+  // Verificar se a landing page está ativa e buscar texto do footer
   useEffect(() => {
     const checkLandingStatus = async () => {
       try {
@@ -55,8 +56,25 @@ export default function LoginPage() {
       }
     }
 
+    const loadFooterText = async () => {
+      try {
+        const response = await fetch('/api/system/settings')
+        const data = await response.json()
+        
+        if (data.success && data.settings.footer_text) {
+          setFooterText(data.settings.footer_text)
+        } else {
+          setFooterText(`© 2024 ${systemName || "Sistema de IA"} - Desenvolvido pela Comunidade IMPA`)
+        }
+      } catch (error) {
+        console.error('Erro ao carregar texto do footer:', error)
+        setFooterText(`© 2024 ${systemName || "Sistema de IA"} - Desenvolvido pela Comunidade IMPA`)
+      }
+    }
+
     checkLandingStatus()
-  }, [])
+    loadFooterText()
+  }, [systemName])
 
   const handleBackToLanding = () => {
     router.push("/landing")
@@ -124,7 +142,7 @@ export default function LoginPage() {
         {/* Footer */}
         <div className="p-6 text-center">
           <p className="text-gray-400 text-sm">
-            © 2024 {systemName || "Sistema de IA"} - Desenvolvido pela Comunidade IMPA
+            {footerText || `© 2024 ${systemName || "Sistema de IA"} - Desenvolvido pela Comunidade IMPA`}
           </p>
         </div>
       </div>
