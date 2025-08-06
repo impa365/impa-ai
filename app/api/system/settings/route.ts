@@ -67,17 +67,11 @@ export async function GET() {
   } catch (error) {
     console.error("Erro ao buscar configurações:", error)
     
-    // Fallback com configurações padrão
-    const defaultSettings = {
-      footer_text: "© 2024 Impa AI - Desenvolvido pela Comunidade IMPA",
-      system_name: "Impa AI",
-      app_name: "Impa AI"
-    }
-
     return NextResponse.json({
-      success: true,
-      settings: defaultSettings
-    })
+      success: false,
+      error: "Erro ao buscar configurações",
+      settings: {}
+    }, { status: 500 })
   }
 }
 

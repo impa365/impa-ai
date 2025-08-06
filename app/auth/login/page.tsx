@@ -64,11 +64,13 @@ export default function LoginPage() {
         if (data.success && data.settings.footer_text) {
           setFooterText(data.settings.footer_text)
         } else {
-          setFooterText(`© 2024 ${systemName || "Sistema de IA"} - Desenvolvido pela Comunidade IMPA`)
+          // Se não há dados no banco, não mostrar nada
+          setFooterText("")
         }
       } catch (error) {
         console.error('Erro ao carregar texto do footer:', error)
-        setFooterText(`© 2024 ${systemName || "Sistema de IA"} - Desenvolvido pela Comunidade IMPA`)
+        // Se há erro, não mostrar nada
+        setFooterText("")
       }
     }
 
@@ -140,11 +142,13 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <div className="p-6 text-center">
-          <p className="text-gray-400 text-sm">
-            {footerText || `© 2024 ${systemName || "Sistema de IA"} - Desenvolvido pela Comunidade IMPA`}
-          </p>
-        </div>
+        {footerText && (
+          <div className="p-6 text-center">
+            <p className="text-gray-400 text-sm">
+              {footerText}
+            </p>
+          </div>
+        )}
       </div>
     </>
   )
