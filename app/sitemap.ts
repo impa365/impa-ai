@@ -1,8 +1,7 @@
 import { MetadataRoute } from 'next'
-import { getBaseUrl } from '@/lib/dynamic-url'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = getBaseUrl()
+  const baseUrl = 'https://seu-dominio.com'
   
   return [
     {

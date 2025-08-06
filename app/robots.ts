@@ -1,9 +1,6 @@
 import { MetadataRoute } from 'next'
-import { getBaseUrl } from '@/lib/dynamic-url'
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = getBaseUrl()
-  
   return {
     rules: [
       {
@@ -22,6 +19,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/admin/', '/dashboard/', '/api/'],
       },
     ],
-    sitemap: `${baseUrl}/sitemap.xml`,
+    sitemap: 'https://seu-dominio.com/sitemap.xml',
   }
 } 

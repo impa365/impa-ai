@@ -2,12 +2,9 @@ import type { Metadata } from "next"
 import { Suspense } from "react"
 import LandingPage from "./landing/page"
 import ClientRedirect from "@/components/client-redirect"
-import { getBaseUrl } from "@/lib/dynamic-url"
 
-// Metadata otimizada para SEO e AIO com URL dinâmica
+// Metadata otimizada para SEO e AIO
 export async function generateMetadata(): Promise<Metadata> {
-  const baseUrl = getBaseUrl()
-  
   return {
     title: "Sistema de IA - Plataforma Enterprise de Agentes Inteligentes",
     description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp. Arquitetura escalável, APIs robustas e tecnologias de ponta.",
@@ -22,40 +19,9 @@ export async function generateMetadata(): Promise<Metadata> {
       "n8n",
       "Enterprise"
     ],
-    authors: [{ name: "IMPA AI Team" }],
+    authors: [{ name: "Comunidade IMPA" }],
     creator: "IMPA AI",
     publisher: "IMPA AI",
-    formatDetection: {
-      email: false,
-      address: false,
-      telephone: false,
-    },
-    metadataBase: new URL(baseUrl),
-    alternates: {
-      canonical: baseUrl,
-    },
-    openGraph: {
-      type: "website",
-      locale: "pt_BR",
-      url: baseUrl,
-      title: "Sistema de IA - Plataforma Enterprise de Agentes Inteligentes",
-      description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp.",
-      siteName: "Sistema de IA",
-      images: [
-        {
-          url: `${baseUrl}/placeholder-logo.png`,
-          width: 1200,
-          height: 630,
-          alt: "Sistema de IA - Plataforma Enterprise",
-        },
-      ],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: "Sistema de IA - Plataforma Enterprise de Agentes Inteligentes",
-      description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp.",
-      images: [`${baseUrl}/placeholder-logo.png`],
-    },
     robots: {
       index: true,
       follow: true,
@@ -67,6 +33,31 @@ export async function generateMetadata(): Promise<Metadata> {
         "max-snippet": -1,
       },
     },
+    openGraph: {
+      type: "website",
+      locale: "pt_BR",
+      url: "https://seu-dominio.com",
+      title: "Sistema de IA - Plataforma Enterprise de Agentes Inteligentes",
+      description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp.",
+      siteName: "Sistema de IA",
+      images: [
+        {
+          url: "/images/og-image.png",
+          width: 1200,
+          height: 630,
+          alt: "Sistema de IA - Plataforma Enterprise",
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Sistema de IA - Plataforma Enterprise",
+      description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais.",
+      images: ["/images/twitter-image.png"],
+    },
+    alternates: {
+      canonical: "https://seu-dominio.com",
+    },
     verification: {
       google: "seu-google-verification-code",
       yandex: "seu-yandex-verification-code",
@@ -77,14 +68,14 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function HomePage() {
   return (
-    <div>
-      {/* Renderiza a landing page diretamente para SEO/AIO */}
+    <>
+      {/* Renderização Server-Side da Landing Page para SEO/AIO */}
       <LandingPage />
       
-      {/* Componente client-side para redirecionamento de usuários logados */}
+      {/* Redirecionamento Client-Side apenas para usuários logados */}
       <Suspense fallback={null}>
         <ClientRedirect />
       </Suspense>
-    </div>
+    </>
   )
 }

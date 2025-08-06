@@ -3,122 +3,135 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider, defaultTheme } from "@/components/theme-provider"
-import { getBaseUrl } from "@/lib/dynamic-url"
 
 const inter = Inter({ subsets: ["latin"] })
 
-// Metadata otimizada para SEO e AIO com URL dinâmica
-export async function generateMetadata(): Promise<Metadata> {
-  const baseUrl = getBaseUrl()
-  
-  return {
-    title: {
-      default: "Sistema de IA - Plataforma Enterprise de Agentes Inteligentes",
-      template: "%s | Sistema de IA"
-    },
-    description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp. Arquitetura escalável, APIs robustas e tecnologias de ponta.",
-    keywords: [
-      "IA conversacional",
-      "WhatsApp Business", 
-      "Agentes inteligentes",
-      "Automação",
-      "Chatbot",
-      "Evolution API",
-      "OpenAI",
-      "n8n",
-      "Enterprise"
-    ],
-    authors: [{ name: "IMPA AI Team" }],
-    creator: "IMPA AI",
-    publisher: "IMPA AI",
-    formatDetection: {
-      email: false,
-      address: false,
-      telephone: false,
-    },
-    metadataBase: new URL(baseUrl),
-    alternates: {
-      canonical: baseUrl,
-    },
-    openGraph: {
-      type: "website",
-      locale: "pt_BR",
-      url: baseUrl,
-      title: "Sistema de IA - Plataforma Enterprise de Agentes Inteligentes",
-      description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp.",
-      siteName: "Sistema de IA",
-      images: [
-        {
-          url: `${baseUrl}/placeholder-logo.png`,
-          width: 1200,
-          height: 630,
-          alt: "Sistema de IA - Plataforma Enterprise",
-        },
-      ],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: "Sistema de IA - Plataforma Enterprise de Agentes Inteligentes",
-      description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp.",
-      images: [`${baseUrl}/placeholder-logo.png`],
-    },
-    robots: {
+// Metadata otimizada para SEO e AIO
+export const metadata: Metadata = {
+  title: {
+    default: "Sistema de IA - Plataforma Enterprise de Agentes Inteligentes",
+    template: "%s | Sistema de IA"
+  },
+  description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp. Arquitetura escalável, APIs robustas e tecnologias de ponta.",
+  keywords: [
+    "IA conversacional",
+    "WhatsApp Business", 
+    "Agentes inteligentes",
+    "Automação",
+    "Chatbot",
+    "Evolution API",
+    "OpenAI",
+    "n8n",
+    "Enterprise",
+    "Inteligência Artificial",
+    "Automação de Atendimento",
+    "WhatsApp API"
+  ],
+  authors: [{ name: "Comunidade IMPA" }],
+  creator: "IMPA AI",
+  publisher: "IMPA AI",
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  metadataBase: new URL('https://seu-dominio.com'),
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
       index: true,
       follow: true,
-      googleBot: {
-        index: true,
-        follow: true,
-        "max-video-preview": -1,
-        "max-image-preview": "large",
-        "max-snippet": -1,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "pt_BR",
+    url: "https://seu-dominio.com",
+    title: "Sistema de IA - Plataforma Enterprise de Agentes Inteligentes",
+    description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp.",
+    siteName: "Sistema de IA",
+    images: [
+      {
+        url: "/images/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Sistema de IA - Plataforma Enterprise",
       },
-    },
-    verification: {
-      google: "seu-google-verification-code",
-      yandex: "seu-yandex-verification-code",
-      yahoo: "seu-yahoo-verification-code",
-    },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sistema de IA - Plataforma Enterprise",
+    description: "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais.",
+    images: ["/images/twitter-image.png"],
+  },
+  alternates: {
+    canonical: "https://seu-dominio.com",
+  },
+  verification: {
+    google: "seu-google-verification-code",
+    yandex: "seu-yandex-verification-code", 
+    yahoo: "seu-yahoo-verification-code",
+  },
+  other: {
+    "google-site-verification": "seu-google-verification-code",
+    "msvalidate.01": "seu-bing-verification-code",
+    "yandex-verification": "seu-yandex-verification-code",
   }
 }
 
+// Layout SIMPLES - sem chamadas de banco
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
+    <html lang="pt-BR">
       <head>
-        {/* Meta tags para AIO (AI Optimization) */}
+        {/* Meta tags adicionais para AIO */}
         <meta name="ai-optimization" content="enabled" />
-        <meta name="ai-content-type" content="enterprise-platform" />
-        <meta name="ai-target-audience" content="business,developers,enterprise" />
-        <meta name="ai-features" content="whatsapp-integration,conversational-ai,automation" />
+        <meta name="ai-description" content="Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais com integração nativa ao WhatsApp. Sistema completo com arquitetura escalável, APIs robustas e tecnologias de ponta para automação de atendimento." />
+        <meta name="ai-keywords" content="IA conversacional, WhatsApp Business, Agentes inteligentes, Automação, Chatbot, Evolution API, OpenAI, n8n, Enterprise, Inteligência Artificial" />
+        <meta name="ai-category" content="Software, Tecnologia, IA, Automação" />
+        <meta name="ai-target-audience" content="Empresas, Desenvolvedores, Profissionais de Marketing, Agências" />
         
-        {/* Meta tags para SEO */}
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#000000" />
-        <meta name="msapplication-TileColor" content="#000000" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Sistema de IA" />
-        
-        {/* Favicon */}
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-        <link rel="manifest" href="/site.webmanifest" />
+        {/* Schema.org para melhor AIO */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "SoftwareApplication",
+              "name": "Sistema de IA",
+              "description": "Plataforma enterprise para criação e gerenciamento de agentes de IA conversacionais",
+              "url": "https://seu-dominio.com",
+              "applicationCategory": "BusinessApplication",
+              "operatingSystem": "Web",
+              "offers": {
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "BRL"
+              },
+              "author": {
+                "@type": "Organization",
+                "name": "Comunidade IMPA"
+              },
+              "aggregateRating": {
+                "@type": "AggregateRating",
+                "ratingValue": "4.8",
+                "ratingCount": "150"
+              }
+            })
+          }}
+        />
       </head>
       <body className={inter.className}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme={defaultTheme}
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-        </ThemeProvider>
+        <ThemeProvider serverFetchedTheme={defaultTheme}>{children}</ThemeProvider>
       </body>
     </html>
   )
