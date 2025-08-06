@@ -11,6 +11,7 @@ import { useSystemName } from "@/hooks/use-system-config"
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(true)
+  const [isLandingEnabled, setIsLandingEnabled] = useState<boolean | null>(null)
   const router = useRouter()
   const { systemName, isLoading: isLoadingSystemName } = useSystemName()
 
@@ -36,6 +37,27 @@ export default function LoginPage() {
     checkUser()
   }, [router])
 
+  // Verificar se a landing page está ativa
+  useEffect(() => {
+    const checkLandingStatus = async () => {
+      try {
+        const response = await fetch('/api/system/landing-page-status')
+        const data = await response.json()
+        
+        if (data.success) {
+          setIsLandingEnabled(data.landingPageEnabled)
+        } else {
+          setIsLandingEnabled(false)
+        }
+      } catch (error) {
+        console.error('Erro ao verificar status da landing page:', error)
+        setIsLandingEnabled(false)
+      }
+    }
+
+    checkLandingStatus()
+  }, [])
+
   const handleBackToLanding = () => {
     router.push("/landing")
   }
@@ -60,14 +82,18 @@ export default function LoginPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col">
         {/* Header com botão voltar */}
         <div className="p-6 flex items-center justify-between">
-          <Button
-            variant="ghost"
-            onClick={handleBackToLanding}
-            className="text-white hover:bg-white/10 flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Voltar ao Início
-          </Button>
+          {isLandingEnabled && (
+            <Button
+              variant="ghost"
+              onClick={handleBackToLanding}
+              className="text-white hover:bg-white/10 flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Voltar ao Início
+            </Button>
+          )}
+          
+          {!isLandingEnabled && <div />} {/* Spacer quando botão não existe */}
           
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
