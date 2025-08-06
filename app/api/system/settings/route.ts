@@ -84,60 +84,127 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { setting_key, setting_value } = body
-
-    if (!setting_key || setting_value === undefined) {
-      return NextResponse.json({
-        success: false,
-        error: "setting_key e setting_value são obrigatórios"
-      }, { status: 400 })
+    
+    // Verificar se é uma configuração individual ou múltiplas
+    if (body.setting_key && body.setting_value !== undefined) {
+      // Configuração individual (usado pela landing page)
+      return await updateSingleSetting(body.setting_key, body.setting_value)
+    } else {
+      // Múltiplas configurações (usado pelo admin panel)
+      return await updateMultipleSettings(body)
     }
-
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({
-        success: false,
-        error: "Configuração do banco não encontrada"
-      }, { status: 500 })
-    }
-
-    // Atualizar configuração
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${setting_key}`,
-      {
-        method: 'PATCH',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({
-          setting_value: JSON.stringify(setting_value),
-          updated_at: new Date().toISOString()
-        })
-      }
-    )
-
-    if (!response.ok) {
-      throw new Error(`Erro ao atualizar: ${response.status}`)
-    }
-
-    // Limpar cache para forçar atualização na próxima consulta
-    cachedSettings = null
-
-    return NextResponse.json({
-      success: true,
-      message: "Configuração atualizada com sucesso"
-    })
 
   } catch (error) {
-    console.error("Erro ao atualizar configuração:", error)
+    console.error("Erro ao processar configurações:", error)
     return NextResponse.json({
       success: false,
       error: "Erro interno do servidor"
     }, { status: 500 })
   }
+}
+
+// Função para atualizar uma configuração individual
+async function updateSingleSetting(setting_key: string, setting_value: any) {
+  const supabaseUrl = process.env.SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    return NextResponse.json({
+      success: false,
+      error: "Configuração do banco não encontrada"
+    }, { status: 500 })
+  }
+
+  // Atualizar configuração
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${setting_key}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        'Accept-Profile': 'impaai',
+        'Content-Profile': 'impaai',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({
+        setting_value: JSON.stringify(setting_value),
+        updated_at: new Date().toISOString()
+      })
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(`Erro ao atualizar: ${response.status}`)
+  }
+
+  // Limpar cache
+  cachedSettings = null
+
+  return NextResponse.json({
+    success: true,
+    message: "Configuração atualizada com sucesso"
+  })
+}
+
+// Função para atualizar múltiplas configurações
+async function updateMultipleSettings(settings: any) {
+  const supabaseUrl = process.env.SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    return NextResponse.json({
+      success: false,
+      error: "Configuração do banco não encontrada"
+    }, { status: 500 })
+  }
+
+  const updates = []
+  const errors = []
+
+  // Processar cada configuração
+  for (const [key, value] of Object.entries(settings)) {
+    // Pular chaves que não são configurações
+    if (key === 'success' || key === 'settings') continue
+
+    try {
+      const response = await fetch(
+        `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${key}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+            'Accept-Profile': 'impaai',
+            'Content-Profile': 'impaai',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            setting_value: JSON.stringify(value),
+            updated_at: new Date().toISOString()
+          })
+        }
+      )
+
+      if (response.ok) {
+        updates.push(`${key}: atualizado`)
+      } else {
+        errors.push(`${key}: erro ${response.status}`)
+      }
+    } catch (error) {
+      errors.push(`${key}: erro de conexão`)
+    }
+  }
+
+  // Limpar cache
+  cachedSettings = null
+
+  return NextResponse.json({
+    success: errors.length === 0,
+    message: `Configurações processadas. ${updates.length} atualizadas, ${errors.length} erros.`,
+    updates,
+    errors
+  })
 }
