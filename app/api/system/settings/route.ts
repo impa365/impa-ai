@@ -31,7 +31,9 @@ export async function GET() {
         headers: {
           'apikey': supabaseKey,
           'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept-Profile': 'impaai',
+          'Content-Profile': 'impaai'
         }
       }
     )

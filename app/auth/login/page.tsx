@@ -61,9 +61,13 @@ export default function LoginPage() {
         const response = await fetch('/api/system/settings')
         const data = await response.json()
         
-        if (data.success && data.settings.footer_text) {
+        console.log('Footer API Response:', data) // Debug log
+        
+        if (data.success && data.settings && data.settings.footer_text) {
+          console.log('Setting footer text:', data.settings.footer_text) // Debug log
           setFooterText(data.settings.footer_text)
         } else {
+          console.log('No footer text found in response') // Debug log
           // Se não há dados no banco, não mostrar nada
           setFooterText("")
         }
