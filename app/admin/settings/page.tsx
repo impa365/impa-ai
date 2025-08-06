@@ -92,6 +92,7 @@ export default function AdminSettingsPage() {
   const [loadingSettings, setLoadingSettings] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const [isLandingPageDisabled, setIsLandingPageDisabled] = useState(false)
 
   useEffect(() => {
     const currentUser = getCurrentUser()
@@ -115,7 +116,7 @@ export default function AdminSettingsPage() {
   const loadInitialData = async () => {
     setLoading(true)
     try {
-      await Promise.all([loadSystemSettings(), fetchIntegrations(), loadBrandingFromServer()])
+      await Promise.all([loadSystemSettings(), fetchIntegrations(), loadBrandingFromServer(), checkLandingPageAvailability()])
     } catch (error) {
       // Log apenas erro genérico, sem dados sensíveis
       console.error("Erro ao carregar dados iniciais")
@@ -580,61 +581,63 @@ export default function AdminSettingsPage() {
             <CardTitle className="text-gray-900 dark:text-gray-100">Interface e Experiência</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="landingPageEnabled" className="text-gray-900 dark:text-gray-100">
-                  Landing Page Ativa
-                </Label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Quando ativada, visitantes veem a landing page. Quando desativada, são direcionados direto para o login.
-                </p>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="landingPageEnabled"
-                  checked={Boolean(systemSettings.landing_page_enabled)}
-                  onCheckedChange={async (checked) => {
-                    try {
-                      // Atualizar via API dedicada para landing page
-                      const response = await fetch("/api/system/landing-page-status", {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({ enabled: checked }),
-                      })
-
-                      const data = await response.json()
-
-                      if (data.success) {
-                        setSystemSettings((prev) => ({
-                          ...prev,
-                          landing_page_enabled: checked,
-                        }))
-                        toast({
-                          title: checked ? "Landing page ativada!" : "Landing page desativada!",
-                          description: checked 
-                            ? "Visitantes agora verão a landing page primeiro." 
-                            : "Visitantes serão direcionados direto para o login.",
+            {!isLandingPageDisabled && (
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="landingPageEnabled" className="text-gray-900 dark:text-gray-100">
+                    Landing Page Ativa
+                  </Label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Quando ativada, visitantes veem a landing page. Quando desativada, são direcionados direto para o login.
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="landingPageEnabled"
+                    checked={Boolean(systemSettings.landing_page_enabled)}
+                    onCheckedChange={async (checked) => {
+                      try {
+                        // Atualizar via API dedicada para landing page
+                        const response = await fetch("/api/system/landing-page-status", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({ enabled: checked }),
                         })
-                      } else {
-                        throw new Error(data.error || "Erro ao atualizar configuração")
+
+                        const data = await response.json()
+
+                        if (data.success) {
+                          setSystemSettings((prev) => ({
+                            ...prev,
+                            landing_page_enabled: checked,
+                          }))
+                          toast({
+                            title: checked ? "Landing page ativada!" : "Landing page desativada!",
+                            description: checked 
+                              ? "Visitantes agora verão a landing page primeiro." 
+                              : "Visitantes serão direcionados direto para o login.",
+                          })
+                        } else {
+                          throw new Error(data.error || "Erro ao atualizar configuração")
+                        }
+                      } catch (error: any) {
+                        console.error("Erro ao atualizar landing page:", error)
+                        toast({
+                          title: "Erro ao atualizar configuração",
+                          description: error.message || "Não foi possível alterar o status da landing page.",
+                          variant: "destructive",
+                        })
                       }
-                    } catch (error: any) {
-                      console.error("Erro ao atualizar landing page:", error)
-                      toast({
-                        title: "Erro ao atualizar configuração",
-                        description: error.message || "Não foi possível alterar o status da landing page.",
-                        variant: "destructive",
-                      })
-                    }
-                  }}
-                />
-                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {systemSettings.landing_page_enabled ? "Ativada" : "Desativada"}
-                </span>
+                    }}
+                  />
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {systemSettings.landing_page_enabled ? "Ativada" : "Desativada"}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
 
             <div>
               <Label htmlFor="footerText" className="text-gray-900 dark:text-gray-100">
@@ -705,6 +708,23 @@ export default function AdminSettingsPage() {
   )
 
   // FUNÇÃO SEGURA - SEM LOGS DE DADOS SENSÍVEIS
+  // Verificar se a landing page está disponível (não desabilitada via env)
+  const checkLandingPageAvailability = async () => {
+    try {
+      const response = await fetch('/api/system/landing-page-status')
+      const data = await response.json()
+      
+      if (data.success && data.disabled) {
+        setIsLandingPageDisabled(true)
+      } else {
+        setIsLandingPageDisabled(false)
+      }
+    } catch (error) {
+      console.error('Erro ao verificar disponibilidade da landing page:', error)
+      setIsLandingPageDisabled(false)
+    }
+  }
+
   const loadBrandingFromServer = async () => {
     if (brandingLoaded) return
 

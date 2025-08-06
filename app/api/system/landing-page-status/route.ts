@@ -6,6 +6,16 @@ const CACHE_DURATION = 30000 // 30 segundos
 
 export async function GET() {
   try {
+    // Verificar se a landing page foi desabilitada completamente via variável de ambiente
+    if (process.env.DISABLE_LANDING_PAGE === 'true') {
+      return NextResponse.json({
+        success: true,
+        landingPageEnabled: false,
+        disabled: true,
+        message: "Landing page desabilitada via configuração do sistema"
+      })
+    }
+
     // Verificar cache primeiro para performance máxima
     if (cachedStatus && Date.now() - cachedStatus.timestamp < CACHE_DURATION) {
       return NextResponse.json({
@@ -105,6 +115,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // Verificar se a landing page foi desabilitada completamente via variável de ambiente
+    if (process.env.DISABLE_LANDING_PAGE === 'true') {
+      return NextResponse.json({
+        success: false,
+        error: "Landing page está desabilitada via configuração do sistema e não pode ser alterada",
+        disabled: true
+      }, { status: 403 })
+    }
+
     const body = await request.json()
     const { enabled } = body
 
