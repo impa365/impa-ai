@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
+// Função para criar cliente Supabase com verificação segura
+function createSupabaseClient() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Missing Supabase configuration");
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing Supabase configuration");
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    db: { schema: "impaai" },
+  });
 }
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  db: { schema: "impaai" },
-});
 
 // Função para verificar senha
 function verifyPassword(password: string, hash: string, salt: string): boolean {
@@ -29,7 +32,9 @@ async function logAccess(linkId: string, ip: string, userAgent: string) {
   try {
     // Tentar usar SUPABASE_SERVICE_ROLE_KEY, se não existir usar SUPABASE_ANON_KEY
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-    if (!serviceKey) return;
+    const supabaseUrl = process.env.SUPABASE_URL;
+    
+    if (!serviceKey || !supabaseUrl) return;
 
     const serviceSupabase = createClient(supabaseUrl, serviceKey, {
       db: { schema: "impaai" },
@@ -78,6 +83,8 @@ export async function GET(
   try {
     const { token } = await params;
     console.log("🔍 [SHARED-ACCESS] Acessando link:", token.substring(0, 10) + "...");
+
+    const supabase = createSupabaseClient();
 
     // Buscar link compartilhado com informações da conexão
     const { data: link, error } = await supabase
@@ -205,6 +212,8 @@ export async function POST(
                'unknown';
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
+    const supabase = createSupabaseClient();
+
     // Buscar link completo
     const { data: link, error } = await supabase
       .from("shared_whatsapp_links")
@@ -330,14 +339,14 @@ export async function POST(
         try {
           // Buscar configuração da Evolution API
           const integrationResponse = await fetch(
-            `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
+            `${process.env.SUPABASE_URL}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
             {
               headers: {
                 "Content-Type": "application/json",
                 "Accept-Profile": "impaai",
                 "Content-Profile": "impaai",
-                apikey: supabaseAnonKey,
-                Authorization: `Bearer ${supabaseAnonKey}`,
+                apikey: process.env.SUPABASE_ANON_KEY!,
+                Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY!}`,
               },
             }
           );
