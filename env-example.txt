@@ -1,0 +1,15 @@
+# Configurações do Supabase - COPIE PARA .env.local
+SUPABASE_URL=https://sua-instancia.supabase.co
+SUPABASE_ANON_KEY=sua-chave-anonima-do-supabase
+SUPABASE_SERVICE_ROLE_KEY=sua-chave-service-role-do-supabase
+
+# Configurações de JWT para autenticação
+JWT_SECRET=sua-chave-secreta-jwt-super-segura
+JWT_EXPIRY=7d
+
+# Configurações da aplicação
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=sua-chave-secreta-nextauth
+
+# Configurações opcionais
+NODE_ENV=development 

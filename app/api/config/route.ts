@@ -5,17 +5,25 @@ let configCache: { data: any; timestamp: number } | null = null
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutos
 
 export async function GET() {
+  console.log("=== /api/config - Iniciando requisição ===")
+  
   try {
     // Verificar cache primeiro
     const now = Date.now()
     if (configCache && (now - configCache.timestamp) < CACHE_TTL) {
+      console.log("✅ Cache válido encontrado, retornando dados em cache")
       return NextResponse.json(configCache.data)
     }
 
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
+    console.log("📋 Verificando variáveis de ambiente:")
+    console.log("SUPABASE_URL:", supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
+    console.log("SUPABASE_ANON_KEY:", supabaseKey ? `${supabaseKey.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
+
     if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ ERRO: Variáveis de ambiente não configuradas!")
       return NextResponse.json({ error: "Configuração do servidor inválida" }, { status: 500 })
     }
 
@@ -27,6 +35,9 @@ export async function GET() {
       "Content-Profile": "impaai",
     }
 
+    console.log("🔄 Fazendo requisição para system_themes...")
+    console.log("URL:", `${supabaseUrl}/rest/v1/system_themes?is_active=eq.true&order=is_default.desc,created_at.desc`)
+
     // Buscar apenas system_themes como fonte única de verdade
     // Priorizar: is_default=true AND is_active=true, depois apenas is_active=true
     const themeResponse = await fetch(
@@ -34,18 +45,30 @@ export async function GET() {
       { headers }
     )
 
+    console.log("📡 Resposta da requisição system_themes:")
+    console.log("Status:", themeResponse.status)
+    console.log("StatusText:", themeResponse.statusText)
+    console.log("OK:", themeResponse.ok)
+
     if (!themeResponse.ok) {
+      const errorText = await themeResponse.text()
+      console.error("❌ ERRO na requisição system_themes:")
+      console.error("Body:", errorText)
       return NextResponse.json({ error: "Erro ao buscar configurações" }, { status: 500 })
     }
 
     const themes = await themeResponse.json()
+    console.log("✅ Temas encontrados:", themes.length)
+    console.log("Primeiro tema:", themes[0] ? themes[0].name : "Nenhum")
     
     if (!themes || themes.length === 0) {
+      console.error("❌ ERRO: Nenhum tema ativo encontrado no banco")
       return NextResponse.json({ error: "Nenhum tema ativo encontrado" }, { status: 404 })
     }
 
     // Pegar o primeiro tema (que será o default se existir, senão o mais recente ativo)
     const activeTheme = themes[0]
+    console.log("🎨 Tema ativo selecionado:", activeTheme.name)
 
     const themeData = {
       systemName: activeTheme.display_name || activeTheme.name,
@@ -61,18 +84,30 @@ export async function GET() {
       customCss: activeTheme.custom_css,
     }
 
+    console.log("🔄 Fazendo requisição para system_settings...")
     // Buscar configuração de cadastro público do banco de dados
     const settingsResponse = await fetch(
       `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.allow_public_registration`, 
       { headers }
     )
 
+    console.log("📡 Resposta da requisição system_settings:")
+    console.log("Status:", settingsResponse.status)
+    console.log("StatusText:", settingsResponse.statusText)
+    console.log("OK:", settingsResponse.ok)
+
     let allowPublicRegistration = false // Padrão seguro
     if (settingsResponse.ok) {
       const settingsData = await settingsResponse.json()
+      console.log("✅ Settings data:", settingsData)
       if (settingsData && settingsData.length > 0) {
         allowPublicRegistration = settingsData[0].setting_value === 'true'
+        console.log("🔧 Allow public registration:", allowPublicRegistration)
       }
+    } else {
+      const errorText = await settingsResponse.text()
+      console.error("⚠️ AVISO: Erro ao buscar settings (continuando com padrão):")
+      console.error("Body:", errorText)
     }
 
     const settings = {
@@ -90,9 +125,15 @@ export async function GET() {
       timestamp: now
     }
 
+    console.log("✅ /api/config - Sucesso! Retornando dados")
     return NextResponse.json(apiResponse)
     
   } catch (error: any) {
+    console.error("💥 ERRO FATAL em /api/config:")
+    console.error("Tipo:", error.constructor.name)
+    console.error("Mensagem:", error.message)
+    console.error("Stack:", error.stack)
+    
     // Em caso de erro, retornar erro sem fallback hardcoded
     return NextResponse.json(
       { error: "Erro interno do servidor" },

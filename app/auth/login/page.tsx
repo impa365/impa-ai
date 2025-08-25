@@ -61,14 +61,20 @@ export default function LoginPage() {
         const response = await fetch('/api/system/settings')
         const data = await response.json()
         
-        if (data.success && data.settings.footer_text) {
+        console.log('Footer API Response:', data) // Debug log
+        
+        if (data.success && data.settings && data.settings.footer_text) {
+          console.log('Setting footer text:', data.settings.footer_text) // Debug log
           setFooterText(data.settings.footer_text)
         } else {
-          setFooterText(`© 2024 ${systemName || "Sistema de IA"} - Desenvolvido pela Comunidade IMPA`)
+          console.log('No footer text found in response') // Debug log
+          // Se não há dados no banco, não mostrar nada
+          setFooterText("")
         }
       } catch (error) {
         console.error('Erro ao carregar texto do footer:', error)
-        setFooterText(`© 2024 ${systemName || "Sistema de IA"} - Desenvolvido pela Comunidade IMPA`)
+        // Se há erro, não mostrar nada
+        setFooterText("")
       }
     }
 
@@ -140,11 +146,13 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <div className="p-6 text-center">
-          <p className="text-gray-400 text-sm">
-            {footerText || `© 2024 ${systemName || "Sistema de IA"} - Desenvolvido pela Comunidade IMPA`}
-          </p>
-        </div>
+        {footerText && (
+          <div className="p-6 text-center">
+            <p className="text-gray-400 text-sm">
+              {footerText}
+            </p>
+          </div>
+        )}
       </div>
     </>
   )
