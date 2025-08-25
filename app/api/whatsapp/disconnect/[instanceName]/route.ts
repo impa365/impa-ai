@@ -65,7 +65,12 @@ export async function DELETE(
       );
     }
 
+    console.log(`🔄 [DISCONNECT] Iniciando desconexão da instância: ${instanceName}`);
+
     // Desconectar instância na Evolution API
+    console.log(`🔗 [DISCONNECT] Chamando Evolution API: ${config.apiUrl}/instance/logout/${instanceName}`);
+    console.log(`🔑 [DISCONNECT] ApiKey configurada: ${!!config.apiKey}`);
+    
     const logoutResponse = await fetch(
       `${config.apiUrl}/instance/logout/${instanceName}`,
       {
@@ -77,18 +82,23 @@ export async function DELETE(
       }
     );
 
+    console.log(`📡 [DISCONNECT] Response status: ${logoutResponse.status}`);
+    console.log(`📡 [DISCONNECT] Response headers:`, Object.fromEntries(logoutResponse.headers.entries()));
+
     if (!logoutResponse.ok) {
       const errorText = await logoutResponse.text();
+      console.error(`❌ [DISCONNECT] Erro da Evolution API: ${logoutResponse.status} - ${errorText}`);
       return NextResponse.json(
         {
           success: false,
-          error: `Erro ao desconectar: ${logoutResponse.status}`,
+          error: `Erro ao desconectar: ${logoutResponse.status} - ${errorText}`,
         },
         { status: 500 }
       );
     }
 
     const logoutData = await logoutResponse.json();
+    console.log(`✅ [DISCONNECT] Evolution API response:`, logoutData);
 
     // Atualizar status no banco de dados
     const updateResponse = await fetch(

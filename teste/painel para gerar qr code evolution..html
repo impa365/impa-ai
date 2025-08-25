@@ -1,0 +1,2026 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel de Conexão Evolution</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      /* Paleta de cores claras */
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8fafc;
+      --bg-tertiary: #f1f5f9;
+      --accent-primary: #3b82f6;
+      --accent-secondary: #10b981;
+      --accent-warning: #f59e0b;
+      --accent-danger: #ef4444;
+      --text-primary: #0f172a;
+      --text-secondary: #334155;
+      --text-tertiary: #64748b;
+      --border-color: #e2e8f0;
+      --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      --transition-normal: all 0.3s ease;
+    }
+
+    /* Reset básico */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button, input {
+      font-family: inherit;
+      font-size: inherit;
+    }
+
+    /* Sidebar moderna */
+    .sidebar {
+      width: 280px;
+      background: var(--bg-secondary);
+      display: flex;
+      flex-direction: column;
+      padding: 24px 16px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+      border-right: 1px solid var(--border-color);
+      z-index: 10;
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 32px;
+      padding: 0 12px;
+    }
+
+    .logo-icon {
+      font-size: 24px;
+      color: var(--accent-primary);
+      margin-right: 12px;
+    }
+
+    .sidebar h2 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: 0.5px;
+    }
+
+    .sidebar-divider {
+      height: 1px;
+      background: var(--border-color);
+      margin: 12px 0;
+      opacity: 0.5;
+    }
+
+    .nav-section {
+      margin: 10px 0;
+    }
+
+    .nav-section-title {
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: var(--text-tertiary);
+      padding: 0 12px;
+      margin-bottom: 8px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      margin-bottom: 4px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: var(--transition-normal);
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .nav-item i {
+      font-size: 18px;
+      margin-right: 12px;
+      width: 24px;
+      text-align: center;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .nav-item.active {
+      background: var(--accent-primary);
+      color: white;
+    }
+
+    .btn-exit {
+      margin-top: auto;
+      background: var(--accent-danger);
+      border: none;
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition-normal);
+    }
+
+    .btn-exit i {
+      margin-right: 8px;
+    }
+
+    .btn-exit:hover {
+      background: #dc2626;
+      transform: translateY(-2px);
+    }
+
+    /* Main Container */
+    .main-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 20px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg-primary);
+    }
+
+    .page-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 16px;
+    }
+
+    .tab-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--accent-primary) var(--bg-secondary);
+    }
+
+    .tab-content::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .tab-content::-webkit-scrollbar-thumb {
+      background-color: var(--accent-primary);
+      border-radius: 20px;
+    }
+
+    .tab-content::-webkit-scrollbar-track {
+      background-color: var(--bg-secondary);
+    }
+
+    /* Cards modernos */
+    .card {
+      background: var(--bg-primary);
+      border-radius: 12px;
+      box-shadow: var(--card-shadow);
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid var(--border-color);
+      transition: var(--transition-normal);
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-header {
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-title {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    /* Profile Card */
+    .profile-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 40px 24px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .status-badge.connected {
+      background: rgba(16, 185, 129, 0.1);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .status-badge.disconnected {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .status-badge.connecting {
+      background: rgba(245, 158, 11, 0.1);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .profile-pic {
+      width: 128px;
+      height: 128px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      border: 4px solid var(--bg-tertiary);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    .profile-pic img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .profile-name {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .profile-number {
+      font-size: 1rem;
+      color: var(--text-tertiary);
+      margin-bottom: 24px;
+    }
+
+    .profile-buttons {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition-normal);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn i {
+      margin-right: 8px;
+    }
+
+    .btn-primary {
+      background: var(--accent-primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+      transform: translateY(-2px);
+    }
+
+    .btn-danger {
+      background: var(--accent-danger);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .btn-secondary:hover {
+      background: #e2e8f0;
+      transform: translateY(-2px);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .qr-container {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-top: 16px;
+      display: none;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+      border: 1px solid var(--border-color);
+    }
+
+    .qr-container img {
+      max-width: 240px;
+      height: auto;
+    }
+
+    .qr-info {
+      font-size: 0.9rem;
+      color: var(--text-tertiary);
+      margin-top: 12px;
+      font-weight: 500;
+    }
+
+    .qr-timer {
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .qr-timer-progress {
+      width: 180px;
+      height: 6px;
+      background-color: var(--bg-tertiary);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .qr-timer-bar {
+      height: 100%;
+      width: 100%;
+      background-color: var(--accent-primary);
+      border-radius: 3px;
+      transition: width 1s linear;
+    }
+
+    .qr-timer-text {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      min-width: 40px;
+      text-align: right;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 24px;
+    }
+
+    .stat-box {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-primary);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      transition: var(--transition-normal);
+      border: 1px solid var(--border-color);
+    }
+
+    .stat-box:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    .stat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .stat-icon {
+      background: rgba(59, 130, 246, 0.1);
+      color: var(--accent-primary);
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
+
+    .stat-icon.contacts {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--accent-secondary);
+    }
+
+    .stat-icon.chats {
+      background: rgba(59, 130, 246, 0.1);
+      color: var(--accent-primary);
+    }
+
+    .stat-icon.messages {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--accent-danger);
+    }
+
+    .stat-value {
+      font-size: 2.2rem;
+      font-weight: 700;
+      margin: 8px 0;
+    }
+
+    .stat-label {
+      font-size: 0.95rem;
+      color: var(--text-tertiary);
+      font-weight: 500;
+    }
+
+    .chart-container {
+      background: var(--bg-primary);
+      border-radius: 12px;
+      padding: 24px;
+      margin-top: 32px;
+      box-shadow: var(--card-shadow);
+      border: 1px solid var(--border-color);
+    }
+
+    /* Settings */
+    .settings-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      padding: 20px;
+      transition: var(--transition-normal);
+    }
+
+    .setting-row:hover {
+      background: #e2e8f0;
+    }
+
+    .setting-info {
+      flex: 1;
+    }
+
+    .setting-row h4 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .setting-description {
+      font-size: 0.9rem;
+      color: var(--text-tertiary);
+    }
+
+    /* Toggle Switch */
+    .toggle-wrap {
+      position: relative;
+      width: 52px;
+      height: 28px;
+    }
+
+    .toggle-wrap input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #cbd5e1;
+      border-radius: 28px;
+      transition: 0.4s;
+      cursor: pointer;
+    }
+
+    .toggle-slider:before {
+      content: "";
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      left: 4px;
+      bottom: 4px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.4s;
+    }
+
+    input:checked + .toggle-slider {
+      background: var(--accent-secondary);
+    }
+
+    input:checked + .toggle-slider:before {
+      transform: translateX(24px);
+    }
+
+    .msg-call-row {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .msg-call-row label {
+      font-size: 1rem;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .msg-call-input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      outline: none;
+      transition: var(--transition-normal);
+    }
+
+    .msg-call-input:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    .btn-save-config {
+      margin-top: 24px;
+      align-self: flex-end;
+    }
+
+    /* Modal */
+    .modal-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(5px);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+
+    .modal {
+      background: var(--bg-primary);
+      padding: 32px;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 480px;
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+      border: 1px solid var(--border-color);
+    }
+
+    .modal h2 {
+      margin-bottom: 24px;
+      font-size: 1.4rem;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+    }
+
+    .modal h2 i {
+      margin-right: 12px;
+      color: var(--accent-primary);
+    }
+
+    .modal label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    .modal input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      outline: none;
+      transition: var(--transition-normal);
+    }
+
+    .modal input:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    .modal .alert {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      display: none;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      font-weight: 500;
+    }
+
+    .modal button {
+      margin-top: 16px;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent-primary);
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition-normal);
+    }
+
+    .modal button:hover {
+      background: #2563eb;
+      transform: translateY(-2px);
+    }
+
+    /* Logs */
+    .logs-section {
+      margin-top: 16px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .logs-header {
+      padding: 12px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logs-container {
+      background: var(--bg-tertiary);
+      color: var(--text-tertiary);
+      padding: 16px;
+      height: 220px;
+      overflow-y: auto;
+      font-family: 'Consolas', 'Monaco', monospace;
+      display: none;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .log-entry {
+      font-size: 0.9rem;
+      margin-bottom: 6px;
+      border-bottom: 1px dashed var(--border-color);
+      padding-bottom: 6px;
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    /* Toasts */
+    .toast-container {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 9999;
+    }
+
+    .toast {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      display: flex;
+      align-items: center;
+      min-width: 300px;
+      animation: fadeIn 0.3s ease forwards;
+    }
+
+    .toast.success {
+      border-left: 6px solid var(--accent-secondary);
+    }
+
+    .toast.success i {
+      color: var(--accent-secondary);
+    }
+
+    .toast.error {
+      border-left: 6px solid var(--accent-danger);
+    }
+
+    .toast.error i {
+      color: var(--accent-danger);
+    }
+
+    .toast i {
+      margin-right: 12px;
+      font-size: 1.2rem;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateX(40px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    /* Tutorial Inline */
+    .tutorial-inline {
+      margin-top: 16px;
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      max-width: 400px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .tutorial-inline-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .tutorial-inline-header i {
+      color: var(--accent-primary);
+      margin-right: 8px;
+      font-size: 1rem;
+    }
+
+    .tutorial-inline-steps {
+      padding-left: 20px;
+      margin: 0;
+    }
+
+    .tutorial-inline-steps li {
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+
+    .tutorial-inline-steps li:last-child {
+      margin-bottom: 0;
+    }
+
+    /* Adicionar após o estilo .tutorial-inline-steps li:last-child */
+    .tutorial-inline.footer-position {
+      margin-top: 30px;
+      padding: 12px;
+      font-size: 0.85rem;
+      background-color: rgba(241, 245, 249, 0.8);
+      border-top: 1px solid var(--border-color);
+      max-width: 100%;
+    }
+
+    .tutorial-inline.footer-position .tutorial-inline-header {
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+    }
+
+    .tutorial-inline.footer-position .tutorial-inline-steps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding-left: 0;
+    }
+
+    .tutorial-inline.footer-position .tutorial-inline-steps li {
+      margin-bottom: 0;
+      flex: 1 1 45%;
+      list-style-position: inside;
+    }
+
+    /* Ajustar o QR Container para ficar mais proeminente */
+    .qr-container {
+      margin-top: 20px;
+      padding: 24px;
+      max-width: 300px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* Responsividade para tablet e mobile */
+    @media (max-width: 991px) {
+      .sidebar {
+        width: 76px;
+        padding: 20px 8px;
+      }
+
+      .sidebar-header {
+        justify-content: center;
+        padding: 0;
+      }
+
+      .logo-text, .nav-section-title, .nav-item span {
+        display: none;
+      }
+
+      .nav-item {
+        justify-content: center;
+        padding: 12px;
+      }
+
+      .nav-item i {
+        margin-right: 0;
+        font-size: 22px;
+      }
+
+      .btn-exit {
+        padding: 12px;
+      }
+
+      .btn-exit i {
+        margin-right: 0;
+      }
+
+      .header {
+        padding: 16px 24px;
+      }
+
+      .tab-content {
+        padding: 24px 16px;
+      }
+    }
+
+    @media (max-width: 767px) {
+      body {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+        flex-direction: row;
+        justify-content: space-between;
+        padding: 12px 16px;
+        height: auto;
+      }
+
+      .sidebar-nav {
+        display: flex;
+        flex: 1;
+        justify-content: space-around;
+      }
+
+      .nav-section {
+        display: flex;
+        margin: 0;
+      }
+
+      .nav-item {
+        margin-bottom: 0;
+        padding: 8px 12px;
+      }
+
+      .sidebar-header, .sidebar-divider, .nav-section-title {
+        display: none;
+      }
+
+      .btn-exit {
+        margin-top: 0;
+        padding: 8px 12px;
+        margin-left: 8px;
+      }
+
+      .header {
+        padding: 12px 16px;
+      }
+
+      .page-title {
+        font-size: 1.2rem;
+      }
+
+      .profile-pic {
+        width: 96px;
+        height: 96px;
+      }
+
+      .profile-buttons {
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .btn {
+        width: 100%;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <i class="fas fa-bolt logo-icon"></i>
+      <h2 class="logo-text">Evolution API</h2>
+    </div>
+    
+    <div class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-title">Navegação</div>
+        <div class="nav-item active" data-target="tabProfile">
+          <i class="fas fa-user"></i>
+          <span>Perfil</span>
+        </div>
+        <div class="nav-item" data-target="tabStats">
+          <i class="fas fa-chart-bar"></i>
+          <span>Estatísticas</span>
+        </div>
+        <div class="nav-item" data-target="tabSettings">
+          <i class="fas fa-cog"></i>
+          <span>Configurações</span>
+        </div>
+      </div>
+    </div>
+    
+    <button class="btn-exit" id="btnExit">
+      <i class="fas fa-sign-out-alt"></i>
+      <span>Sair</span>
+    </button>
+  </div>
+
+  <!-- Main Container -->
+  <div class="main-container">
+    <div class="header">
+      <h1 class="page-title">Painel WhatsApp</h1>
+      <div class="header-actions">
+        <button class="btn btn-secondary" id="btnToggleLogs">
+          <i class="fas fa-terminal"></i>
+          Exibir Logs
+        </button>
+      </div>
+    </div>
+
+    <!-- Profile Tab -->
+    <div class="tab-content" id="tabProfile" style="display:block;">
+      <div class="card profile-card">
+        <div id="statusBadge" class="status-badge disconnected">Desconectado</div>
+        <div class="profile-pic" id="profilePic">
+          <i class="fas fa-user" style="font-size: 48px; color: #94a3b8;"></i>
+        </div>
+        <div class="profile-name" id="profileName">---</div>
+        <div class="profile-number" id="profileNumber">---</div>
+        
+        <div class="profile-buttons">
+          <button class="btn btn-primary" id="btnConnect" style="display:none;">
+            <i class="fas fa-link"></i>
+            Conectar
+          </button>
+          <button class="btn btn-danger" id="btnDisconnect" style="display:none;">
+            <i class="fas fa-unlink"></i>
+            Desconectar
+          </button>
+        </div>
+
+        <!-- QR Code Container -->
+        <div class="qr-container" id="qrContainer">
+          <img src="/placeholder.svg" alt="QR Code" id="qrImage">
+          <p class="qr-info" id="qrInfo">Escaneie o QR Code</p>
+          <div class="qr-timer">
+            <div class="qr-timer-progress">
+              <div class="qr-timer-bar" id="qrTimerBar"></div>
+            </div>
+            <div class="qr-timer-text" id="qrTimerText">40s</div>
+          </div>
+        </div>
+
+        <!-- Tutorial Inline -->
+        <div class="tutorial-inline" id="tutorialInline" style="display:none;">
+          <div class="tutorial-inline-header">
+            <i class="fas fa-info-circle"></i>
+            <span>Como conectar seu WhatsApp</span>
+          </div>
+          <ol class="tutorial-inline-steps">
+            <li>Clique em <strong>"Conectar"</strong> para gerar o QR Code</li>
+            <li>Abra o WhatsApp no seu celular e vá em <em>Configurações &gt; Aparelhos conectados</em></li>
+            <li>Toque em <strong>"Parear dispositivo"</strong> e aponte a câmera para o QR Code</li>
+            <li>Aguarde alguns segundos até o status mudar para <strong>"Conectado"</strong></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Tab -->
+    <div class="tab-content" id="tabStats" style="display:none;">
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-header">
+            <div class="stat-icon contacts">
+              <i class="fas fa-address-book"></i>
+            </div>
+          </div>
+          <div class="stat-value" id="countContacts">0</div>
+          <div class="stat-label">Contatos</div>
+        </div>
+        
+        <div class="stat-box">
+          <div class="stat-header">
+            <div class="stat-icon chats">
+              <i class="fas fa-comments"></i>
+            </div>
+          </div>
+          <div class="stat-value" id="countChats">0</div>
+          <div class="stat-label">Conversas</div>
+        </div>
+        
+        <div class="stat-box">
+          <div class="stat-header">
+            <div class="stat-icon messages">
+              <i class="fas fa-envelope"></i>
+            </div>
+          </div>
+          <div class="stat-value" id="countMessages">0</div>
+          <div class="stat-label">Mensagens</div>
+        </div>
+      </div>
+      
+      <div class="chart-container">
+        <div class="card-header">
+          <h3 class="card-title">Métricas Comparativas</h3>
+        </div>
+        <canvas id="statsChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div class="tab-content" id="tabSettings" style="display:none;">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Configurações de Privacidade e Comportamento</h3>
+        </div>
+        
+        <div class="settings-list">
+          <div class="setting-row">
+            <div class="setting-info">
+              <h4>Ignorar Grupos</h4>
+              <div class="setting-description">Não receber mensagens de grupos</div>
+            </div>
+            <label class="toggle-wrap">
+              <input type="checkbox" id="checkGroupsIgnore">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          
+          <div class="setting-row">
+            <div class="setting-info">
+              <h4>Marcar Lidas</h4>
+              <div class="setting-description">Marcar mensagens como lidas automaticamente</div>
+            </div>
+            <label class="toggle-wrap">
+              <input type="checkbox" id="checkReadMessages">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          
+          <div class="setting-row">
+            <div class="setting-info">
+              <h4>Sempre Online</h4>
+              <div class="setting-description">Manter status online constantemente</div>
+            </div>
+            <label class="toggle-wrap">
+              <input type="checkbox" id="checkAlwaysOnline">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          
+          <div class="setting-row">
+            <div class="setting-info">
+              <h4>Ver Status</h4>
+              <div class="setting-description">Permitir visualizar status dos contatos</div>
+            </div>
+            <label class="toggle-wrap">
+              <input type="checkbox" id="checkReadStatus">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          
+          <div class="setting-row">
+            <div class="setting-info">
+              <h4>Rejeitar Chamadas</h4>
+              <div class="setting-description">Rejeita chamadas automaticamente</div>
+            </div>
+            <label class="toggle-wrap">
+              <input type="checkbox" id="checkRejectCall">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          
+          <div class="msg-call-row" id="msgCallRow">
+            <label for="inputMsgCall">Mensagem ao Rejeitar Chamadas:</label>
+            <input type="text" id="inputMsgCall" class="msg-call-input" placeholder="Ex: Não posso atender no momento, envie uma mensagem.">
+          </div>
+          
+          <div class="setting-row">
+            <div class="setting-info">
+              <h4>Sincronizar Histórico</h4>
+              <div class="setting-description">Sincroniza histórico completo de mensagens</div>
+            </div>
+            <label class="toggle-wrap">
+              <input type="checkbox" id="checkSyncFullHistory">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          
+          <button class="btn btn-primary btn-save-config" id="btnSaveSettings">
+            <i class="fas fa-save"></i>
+            Salvar Configurações
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Logs Section -->
+    <div class="logs-section">
+      <div class="logs-header">
+        <!-- Logs toggle button é movido para o header principal -->
+      </div>
+      <div class="logs-container" id="logsContainer"></div>
+    </div>
+  </div>
+
+  <!-- Modal para configuração inicial -->
+  <div class="modal-bg" id="modalBg">
+    <div class="modal">
+      <h2>
+        <i class="fas fa-plug"></i>
+        Conectar à API
+      </h2>
+      <div class="alert" id="modalAlert">Erro</div>
+      
+      <label for="inputBaseUrl">URL Base:</label>
+      <input type="text" id="inputBaseUrl" placeholder="https://api.exemplo.com">
+      
+      <label for="inputApiKey">API Key:</label>
+      <input type="text" id="inputApiKey" placeholder="Sua API Key">
+      
+      <button id="btnModalConfirm">
+        <i class="fas fa-check-circle"></i>
+        Confirmar
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- JavaScript -->
+  <script>
+    /* =============== Sessão, Logs, Variáveis Globais =============== */
+    let baseUrl = '';
+    let apikey = '';
+    let selectedInst = null;
+    let isQrVisible = false;
+    let logsVisible = false;
+    const logsArray = [];
+    let qrTimer = null;
+    let qrExpiryTime = 40; // Tempo em segundos para expiração do QR Code
+
+    // Função para exibir toasts
+    function showToast(message, type = "success") {
+      const toastEl = document.createElement('div');
+      toastEl.classList.add('toast', type === 'error' ? 'error' : 'success');
+      
+      const icon = document.createElement('i');
+      icon.className = type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-check-circle';
+      toastEl.appendChild(icon);
+      
+      const textEl = document.createElement('span');
+      textEl.textContent = message;
+      toastEl.appendChild(textEl);
+
+      const container = document.getElementById('toastContainer');
+      container.appendChild(toastEl);
+
+      setTimeout(() => {
+        if (toastEl) {
+          toastEl.style.opacity = '0';
+          toastEl.style.transform = 'translateX(40px)';
+          setTimeout(() => container.removeChild(toastEl), 300);
+        }
+      }, 3000);
+    }
+
+    // Logs
+    function addLog(message) {
+      const timestamp = new Date().toLocaleTimeString();
+      const entry = `[${timestamp}] ${message}`;
+      logsArray.push(entry);
+
+      if (logsVisible) {
+        const logsContainer = document.getElementById('logsContainer');
+        const div = document.createElement('div');
+        div.classList.add('log-entry');
+        div.textContent = entry;
+        logsContainer.appendChild(div);
+        logsContainer.scrollTop = logsContainer.scrollHeight;
+      }
+    }
+
+    function toggleLogs() {
+      const logsContainer = document.getElementById('logsContainer');
+      logsVisible = !logsVisible;
+      logsContainer.style.display = logsVisible ? 'block' : 'none';
+      btnToggleLogs.innerHTML = logsVisible ? 
+        '<i class="fas fa-times"></i> Ocultar Logs' : 
+        '<i class="fas fa-terminal"></i> Exibir Logs';
+      
+      if (logsVisible) {
+        logsContainer.innerHTML = '';
+        logsArray.forEach(log => {
+          const div = document.createElement('div');
+          div.classList.add('log-entry');
+          div.textContent = log;
+          logsContainer.appendChild(div);
+        });
+        logsContainer.scrollTop = logsContainer.scrollHeight;
+      }
+    }
+
+    function saveSessionData() {
+      const payload = { baseUrl, apikey, instance: selectedInst };
+      sessionStorage.setItem('whatsappData', JSON.stringify(payload));
+      addLog("Sessão salva no sessionStorage");
+    }
+
+    function loadSessionData() {
+      const raw = sessionStorage.getItem('whatsappData');
+      if (!raw) return false;
+      try {
+        const data = JSON.parse(raw);
+        if (!data || !data.baseUrl || !data.apikey || !data.instance) return false;
+        baseUrl = data.baseUrl;
+        apikey = data.apikey;
+        selectedInst = data.instance;
+        addLog("Sessão carregada do sessionStorage");
+        return true;
+      } catch (err) {
+        addLog("Erro ao carregar sessão: " + err.message);
+        return false;
+      }
+    }
+
+    function clearSessionData() {
+      sessionStorage.removeItem('whatsappData');
+      addLog("Sessão limpa do sessionStorage");
+    }
+
+    // Modificar a função showTutorial para posicionar o tutorial no rodapé quando o QR Code estiver visível
+    function showTutorial() {
+      const tutorialInline = document.getElementById('tutorialInline');
+      const qrContainer = document.getElementById('qrContainer');
+      
+      tutorialInline.style.display = 'block';
+      
+      // Se o QR Code estiver visível, posicionar o tutorial no rodapé
+      if (qrContainer.style.display === 'block') {
+        tutorialInline.classList.add('footer-position');
+      } else {
+        tutorialInline.classList.remove('footer-position');
+      }
+    }
+
+    // Esconde tutorial
+    function hideTutorial() {
+      const tutorialInline = document.getElementById('tutorialInline');
+      tutorialInline.style.display = 'none';
+    }
+
+    /* =============== API FUNCTIONS =============== */
+    async function fetchInstances() {
+      addLog("Chamando fetchInstances...");
+      const url = `${baseUrl}/instance/fetchInstances`;
+      const resp = await fetch(url, {
+        method: 'GET',
+        headers: { 'apikey': apikey }
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        addLog(`Erro fetchInstances, status=${resp.status}, body=${text}`);
+        throw new Error('Falha ao obter instâncias');
+      }
+      const data = await resp.json();
+      addLog("Resposta fetchInstances: " + JSON.stringify(data));
+      return data;
+    }
+
+    async function connectInstance(instName) {
+      addLog("Iniciando connectInstance para " + instName);
+      const url = `${baseUrl}/instance/connect/${instName}`;
+      const resp = await fetch(url, {
+        method: 'GET',
+        headers: { 'apikey': apikey }
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        addLog(`Erro connectInstance, status=${resp.status}, body=${text}`);
+        throw new Error('Erro ao conectar instância');
+      }
+      const data = await resp.json();
+      addLog("Resposta connectInstance: " + JSON.stringify(data));
+      return data;
+    }
+
+    async function logoutInstance(instName) {
+      addLog("Iniciando logoutInstance para " + instName);
+      const url = `${baseUrl}/instance/logout/${instName}`;
+      const resp = await fetch(url, {
+        method: 'DELETE',
+        headers: { 'apikey': apikey }
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        addLog(`Erro logoutInstance, status=${resp.status}, body=${text}`);
+        throw new Error('Erro ao desconectar instância');
+      }
+      const data = await resp.json();
+      addLog("Resposta logoutInstance: " + JSON.stringify(data));
+      return data;
+    }
+
+    async function setSettings(instName, settingsObj) {
+      addLog("Iniciando setSettings com: " + JSON.stringify(settingsObj));
+      const url = `${baseUrl}/settings/set/${instName}`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': apikey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(settingsObj)
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        addLog(`Erro setSettings, status=${resp.status}, body=${text}`);
+        throw new Error('Falha ao salvar configurações');
+      }
+      const data = await resp.json();
+      addLog("Resposta setSettings: " + JSON.stringify(data));
+      return data;
+    }
+
+    function startQrTimer() {
+      // Limpar timer anterior se existir
+      if (qrTimer) {
+        clearInterval(qrTimer);
+      }
+      
+      const timerBar = document.getElementById('qrTimerBar');
+      const timerText = document.getElementById('qrTimerText');
+      
+      // Inicializar com valor máximo
+      let timeLeft = qrExpiryTime;
+      timerText.textContent = `${timeLeft}s`;
+      timerBar.style.width = '100%';
+      
+      // Iniciar contagem regressiva
+      qrTimer = setInterval(() => {
+        timeLeft--;
+        
+        // Atualizar texto e barra de progresso
+        timerText.textContent = `${timeLeft}s`;
+        const percentage = (timeLeft / qrExpiryTime) * 100;
+        timerBar.style.width = `${percentage}%`;
+        
+        // Mudar cor quando estiver acabando o tempo
+        if (timeLeft <= 10) {
+          timerBar.style.backgroundColor = 'var(--accent-warning)';
+        }
+        if (timeLeft <= 5) {
+          timerBar.style.backgroundColor = 'var(--accent-danger)';
+        }
+        
+        // Quando o tempo acabar
+        if (timeLeft <= 0) {
+          clearInterval(qrTimer);
+          
+          // Se ainda estiver no estado de conexão, tentar obter um novo QR Code
+          if (selectedInst && selectedInst.connectionStatus === 'connecting') {
+            onConnectClick(); // Recarregar o QR Code
+            addLog("QR Code expirado, solicitando um novo");
+          }
+        }
+      }, 1000);
+    }
+
+    /* =============== RENDER UI =============== */
+    let statsChart = null;
+
+    function initializeChart(contatos, conversas, mensagens) {
+      const ctx = document.getElementById('statsChart').getContext('2d');
+      if (statsChart) {
+        statsChart.destroy();
+      }
+      
+      // Configuração de cores para tema claro
+      Chart.defaults.color = '#64748b';
+      Chart.defaults.borderColor = '#e2e8f0';
+      
+      statsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Contatos', 'Conversas', 'Mensagens'],
+          datasets: [{
+            label: 'Quantidade',
+            data: [contatos, conversas, mensagens],
+            backgroundColor: [
+              'rgba(16, 185, 129, 0.6)',
+              'rgba(59, 130, 246, 0.6)',
+              'rgba(239, 68, 68, 0.6)'
+            ],
+            borderColor: [
+              'rgba(16, 185, 129, 1)',
+              'rgba(59, 130, 246, 1)',
+              'rgba(239, 68, 68, 1)'
+            ],
+            borderWidth: 1,
+            borderRadius: 6,
+            maxBarThickness: 60
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            },
+            title: {
+              display: true,
+              text: 'Comparação de Estatísticas',
+              color: '#0f172a',
+              font: {
+                size: 16,
+                weight: 'bold'
+              },
+              padding: {
+                bottom: 20
+              }
+            },
+            tooltip: {
+              backgroundColor: '#f8fafc',
+              titleColor: '#0f172a',
+              bodyColor: '#334155',
+              borderColor: '#e2e8f0',
+              borderWidth: 1,
+              borderRadius: 8,
+              padding: 12,
+              displayColors: false,
+              titleFont: {
+                size: 14,
+                weight: 'bold'
+              },
+              bodyFont: {
+                size: 14
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: {
+                color: 'rgba(148, 163, 184, 0.1)',
+                drawBorder: false
+              },
+              ticks: {
+                padding: 10,
+                font: {
+                  size: 12
+                }
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              },
+              ticks: {
+                padding: 10,
+                font: {
+                  size: 12
+                }
+              }
+            }
+          },
+          animation: {
+            duration: 1500,
+            easing: 'easeOutQuart'
+          }
+        }
+      });
+    }
+
+    function updateStatusBadge(status) {
+      const badge = document.getElementById('statusBadge');
+      badge.className = 'status-badge';
+      
+      if (status === 'open') {
+        badge.classList.add('connected');
+        badge.textContent = 'Conectado';
+      } else if (status === 'connecting') {
+        badge.classList.add('connecting');
+        badge.textContent = 'Conectando';
+      } else {
+        badge.classList.add('disconnected');
+        badge.textContent = 'Desconectado';
+      }
+    }
+
+    // Modificar a função renderUI para ajustar a posição do tutorial quando o QR Code for exibido
+    async function renderUI() {
+      if (!selectedInst) return;
+      
+      // Atualizar informações de perfil
+      document.getElementById('profileName').textContent = selectedInst.profileName || selectedInst.name || '---';
+      document.getElementById('profileNumber').textContent = selectedInst.number || selectedInst.ownerJid || '---';
+      
+      // Atualizar o título da página com o nome da instância
+      const activeSection = document.querySelector('.nav-item.active');
+      const sectionName = activeSection ? 
+        (activeSection.getAttribute('data-target') === 'tabProfile' ? 'Perfil' : 
+         activeSection.getAttribute('data-target') === 'tabStats' ? 'Estatísticas' : 'Configurações') : 'Perfil';
+      updatePageTitle(sectionName);
+      
+      // Atualizar foto de perfil
+      const profilePic = document.getElementById('profilePic');
+      profilePic.innerHTML = '';
+      if (selectedInst.profilePicUrl) {
+        const img = document.createElement('img');
+        img.src = selectedInst.profilePicUrl;
+        profilePic.appendChild(img);
+      } else {
+        profilePic.innerHTML = '<i class="fas fa-user" style="font-size: 48px; color: #94a3b8;"></i>';
+      }
+      
+      // Atualizar status da conexão
+      const st = selectedInst.connectionStatus || 'close';
+      updateStatusBadge(st);
+      
+      const tutorialInline = document.getElementById('tutorialInline');
+      
+      if (st === 'close') {
+        btnConnect.style.display = 'inline-flex';
+        btnDisconnect.style.display = 'none';
+        qrContainer.style.display = 'none';
+        isQrVisible = false;
+        if (qrTimer) {
+          clearInterval(qrTimer);
+          qrTimer = null;
+        }
+        addLog("Status da instância: close");
+        tutorialInline.classList.remove('footer-position');
+        showTutorial();
+      } else if (st === 'open') {
+        btnConnect.style.display = 'none';
+        btnDisconnect.style.display = 'inline-flex';
+        qrContainer.style.display = 'none';
+        isQrVisible = false;
+        if (qrTimer) {
+          clearInterval(qrTimer);
+          qrTimer = null;
+        }
+        addLog("Status da instância: open");
+        hideTutorial();
+      } else if (st === 'connecting') {
+        addLog("Status da instância: connecting");
+        btnConnect.style.display = 'none';
+        btnDisconnect.style.display = 'inline-flex';
+        qrContainer.style.display = isQrVisible ? 'block' : 'none';
+        
+        // Se o QR Code estiver visível, posicionar o tutorial no rodapé
+        if (isQrVisible) {
+          tutorialInline.classList.add('footer-position');
+        } else {
+          tutorialInline.classList.remove('footer-position');
+        }
+        
+        showTutorial();
+      }
+      
+      // Atualizar estatísticas
+      let c = 0, h = 0, m = 0;
+      if (selectedInst._count) {
+        c = selectedInst._count.Contact || 0;
+        h = selectedInst._count.Chat || 0;
+        m = selectedInst._count.Message || 0;
+      }
+      
+      // Animação para contadores
+      animateCounter('countContacts', c);
+      animateCounter('countChats', h);
+      animateCounter('countMessages', m);
+      
+      // Inicializar gráfico
+      initializeChart(c, h, m);
+      
+      // Carregar configurações
+      if (selectedInst.Setting) {
+        checkGroupsIgnore.checked = !!selectedInst.Setting.groupsIgnore;
+        checkReadMessages.checked = !!selectedInst.Setting.readMessages;
+        checkAlwaysOnline.checked = !!selectedInst.Setting.alwaysOnline;
+        checkReadStatus.checked = !!selectedInst.Setting.readStatus;
+        checkRejectCall.checked = !!selectedInst.Setting.rejectCall;
+        checkSyncFullHistory.checked = !!selectedInst.Setting.syncFullHistory;
+        inputMsgCall.value = selectedInst.Setting.msgCall || "";
+      } else {
+        checkGroupsIgnore.checked = false;
+        checkReadMessages.checked = false;
+        checkAlwaysOnline.checked = false;
+        checkReadStatus.checked = false;
+        checkRejectCall.checked = false;
+        checkSyncFullHistory.checked = false;
+        inputMsgCall.value = "";
+      }
+      
+      // Exibir/ocultar campo de mensagem de rejeição de chamada
+      toggleMsgCallField();
+    }
+
+    // Animação de contador
+    function animateCounter(id, targetValue) {
+      const el = document.getElementById(id);
+      const currentValue = parseInt(el.textContent) || 0;
+      const duration = 1500; // ms
+      const stepTime = 50; // ms
+      const steps = duration / stepTime;
+      const increment = (targetValue - currentValue) / steps;
+      
+      let currentStep = 0;
+      const interval = setInterval(() => {
+        currentStep++;
+        const newValue = Math.round(currentValue + (increment * currentStep));
+        el.textContent = newValue;
+        
+        if (currentStep >= steps) {
+          el.textContent = targetValue;
+          clearInterval(interval);
+        }
+      }, stepTime);
+    }
+
+    function toggleMsgCallField() {
+      msgCallRow.style.display = checkRejectCall.checked ? 'flex' : 'none';
+    }
+
+    // Modificar a função onConnectClick para ajustar a posição do tutorial quando o QR Code for exibido
+    async function onConnectClick() {
+      if (!selectedInst) return;
+      btnConnect.disabled = true;
+      try {
+        const data = await connectInstance(selectedInst.name);
+        selectedInst.connectionStatus = data.state || 'connecting';
+        saveSessionData();
+        if (data.base64) {
+          qrImage.src = data.base64;
+          qrInfo.textContent = "Escaneie o QR Code para conectar";
+          isQrVisible = true;
+          startQrTimer(); // Iniciar o contador regressivo
+          
+          // Ajustar a posição do tutorial quando o QR Code for exibido
+          const tutorialInline = document.getElementById('tutorialInline');
+          tutorialInline.classList.add('footer-position');
+        }
+        renderUI();
+      } catch (err) {
+        addLog("Erro ao conectar: " + err.message);
+        showToast("Erro ao conectar: " + err.message, "error");
+      } finally {
+        btnConnect.disabled = false;
+      }
+    }
+
+    async function onDisconnectClick() {
+      if (!selectedInst) return;
+      btnDisconnect.disabled = true;
+      try {
+        await logoutInstance(selectedInst.name);
+        selectedInst.connectionStatus = 'close';
+        saveSessionData();
+        renderUI();
+        showToast("Instância desconectada com sucesso!", "success");
+      } catch (err) {
+        addLog("Erro ao desconectar: " + err.message);
+        showToast("Erro ao desconectar: " + err.message, "error");
+      } finally {
+        btnDisconnect.disabled = false;
+      }
+    }
+
+    async function onSaveSettingsClick() {
+      if (!selectedInst) return;
+      if (!selectedInst.Setting) selectedInst.Setting = {};
+
+      const finalMsgCall = checkRejectCall.checked ? inputMsgCall.value.trim() : "";
+
+      const payload = {
+        groupsIgnore: checkGroupsIgnore.checked,
+        readMessages: checkReadMessages.checked,
+        alwaysOnline: checkAlwaysOnline.checked,
+        readStatus: checkReadStatus.checked,
+        rejectCall: checkRejectCall.checked,
+        msgCall: finalMsgCall,
+        syncFullHistory: checkSyncFullHistory.checked
+      };
+
+      btnSaveSettings.disabled = true;
+      try {
+        const data = await setSettings(selectedInst.name, payload);
+        selectedInst.Setting = data.settings.settings;
+        saveSessionData();
+        addLog("Configurações salvas com sucesso!");
+        showToast("Configurações salvas com sucesso!", "success");
+        renderUI();
+      } catch (err) {
+        addLog("Erro ao salvar configurações: " + err.message);
+        showToast("Erro ao salvar: " + err.message, "error");
+      } finally {
+        btnSaveSettings.disabled = false;
+      }
+    }
+
+    /* =============== INICIALIZAÇÃO =============== */
+    window.addEventListener('load', async () => {
+      // Verificar se há parâmetros na URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlBaseParam = urlParams.get('baseUrl');
+      const apiKeyParam = urlParams.get('apiKey');
+      
+      // Se ambos os parâmetros estiverem presentes, usá-los
+      if (urlBaseParam && apiKeyParam) {
+        baseUrl = decodeURIComponent(urlBaseParam);
+        apikey = decodeURIComponent(apiKeyParam);
+        addLog(`Parâmetros carregados da URL: baseUrl=${baseUrl}`);
+        
+        // Remover os parâmetros da URL por segurança
+        const cleanUrl = window.location.protocol + "//" + 
+                         window.location.host + 
+                         window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+        
+        try {
+          const instances = await fetchInstances();
+          if (!instances || !instances.length) {
+            throw new Error('Nenhuma instância encontrada');
+          }
+          selectedInst = instances[0];
+          selectedInst.connectionStatus = selectedInst.connectionStatus || 'close';
+          saveSessionData();
+          modalBg.style.display = 'none';
+          renderUI();
+          showToast("Conectado com sucesso à API!", "success");
+        } catch (error) {
+          addLog("Erro fetchInstances: " + error.message);
+          modalAlert.textContent = 'Erro: ' + error.message;
+          modalAlert.style.display = 'block';
+          modalBg.style.display = 'flex';
+        }
+      } else {
+        // Caso contrário, verificar se há dados salvos na sessão
+        const hasSession = loadSessionData();
+        modalBg.style.display = hasSession && selectedInst ? 'none' : 'flex';
+        if (hasSession && selectedInst) {
+          renderUI();
+        }
+      }
+      
+      // Atualiza o título da página com base na aba ativa
+      updatePageTitle('Perfil');
+    });
+
+    // Modificar a função updatePageTitle para incluir o nome da instância
+
+    function updatePageTitle(section) {
+      const pageTitle = document.querySelector('.page-title');
+      const instanceName = selectedInst ? (selectedInst.profileName || selectedInst.name || 'WhatsApp') : 'WhatsApp';
+      pageTitle.textContent = `${instanceName} - ${section}`;
+    }
+
+
+    // ========== Verificação periódica do status da instância ==========
+    setInterval(async () => {
+      if (!baseUrl || !apikey || !selectedInst) return;
+      try {
+        const instances = await fetchInstances();
+        const current = instances.find(inst => inst.name === selectedInst.name);
+        if (!current) return;
+
+        // Atualiza o status da instância, se tiver mudado
+        if (selectedInst.connectionStatus !== current.connectionStatus) {
+          selectedInst.connectionStatus = current.connectionStatus;
+          selectedInst.profilePicUrl = current.profilePicUrl;
+          selectedInst.profileName = current.profileName;
+          selectedInst.number = current.number;
+          selectedInst._count = current._count;
+          selectedInst.Setting = current.Setting;
+
+          saveSessionData(); // atualiza a sessão
+          renderUI(); // atualiza o painel
+        }
+      } catch (err) {
+        addLog("Erro ao verificar status: " + err.message);
+      }
+    }, 5000); // a cada 5 segundos
+
+    /* =============== DOM ELEMENTS & EVENT LISTENERS =============== */
+    const modalBg = document.getElementById('modalBg');
+    const modalAlert = document.getElementById('modalAlert');
+    const inputBaseUrl = document.getElementById('inputBaseUrl');
+    const inputApiKey = document.getElementById('inputApiKey');
+    const btnModalConf = document.getElementById('btnModalConfirm');
+    const btnExit = document.getElementById('btnExit');
+    const navItems = document.querySelectorAll('.nav-item');
+
+    const tabProfile = document.getElementById('tabProfile');
+    const tabStats = document.getElementById('tabStats');
+    const tabSettings = document.getElementById('tabSettings');
+
+    const btnConnect = document.getElementById('btnConnect');
+    const btnDisconnect = document.getElementById('btnDisconnect');
+    const qrContainer = document.getElementById('qrContainer');
+    const qrImage = document.getElementById('qrImage');
+    const qrInfo = document.getElementById('qrInfo');
+
+    const btnToggleLogs = document.getElementById('btnToggleLogs');
+    const logsContainer = document.getElementById('logsContainer');
+
+    // Configs
+    const checkGroupsIgnore = document.getElementById('checkGroupsIgnore');
+    const checkReadMessages = document.getElementById('checkReadMessages');
+    const checkAlwaysOnline = document.getElementById('checkAlwaysOnline');
+    const checkReadStatus = document.getElementById('checkReadStatus');
+    const checkRejectCall = document.getElementById('checkRejectCall');
+    const msgCallRow = document.getElementById('msgCallRow');
+    const inputMsgCall = document.getElementById('inputMsgCall');
+    const checkSyncFullHistory = document.getElementById('checkSyncFullHistory');
+    const btnSaveSettings = document.getElementById('btnSaveSettings');
+
+    // Event Listeners
+    btnModalConf.addEventListener('click', async () => {
+      const urlVal = inputBaseUrl.value.trim();
+      const keyVal = inputApiKey.value.trim();
+      if (!urlVal || !keyVal) {
+        modalAlert.textContent = 'Preencha todos os campos.';
+        modalAlert.style.display = 'block';
+        return;
+      }
+      modalAlert.style.display = 'none';
+      baseUrl = urlVal;
+      apikey = keyVal;
+      addLog(`Iniciando fetchInstances com baseUrl=${baseUrl}`);
+
+      try {
+        const instances = await fetchInstances();
+        if (!instances || !instances.length) {
+          throw new Error('Nenhuma instância encontrada');
+        }
+        selectedInst = instances[0];
+        selectedInst.connectionStatus = selectedInst.connectionStatus || 'close';
+        saveSessionData();
+        modalBg.style.display = 'none';
+        renderUI();
+        showToast("Conectado com sucesso à API!", "success");
+      } catch (error) {
+        addLog("Erro fetchInstances: " + error.message);
+        modalAlert.textContent = 'Erro: ' + error.message;
+        modalAlert.style.display = 'block';
+        modalBg.style.display = 'flex';
+      }
+    });
+
+    navItems.forEach(item => {
+      item.addEventListener('click', () => {
+        navItems.forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+
+        tabProfile.style.display = 'none';
+        tabStats.style.display = 'none';
+        tabSettings.style.display = 'none';
+
+        const targetId = item.getAttribute('data-target');
+        document.getElementById(targetId).style.display = 'block';
+        
+        // Atualizar título da página
+        const section = targetId === 'tabProfile' ? 'Perfil' : 
+                        targetId === 'tabStats' ? 'Estatísticas' : 'Configurações';
+        updatePageTitle(section);
+        
+        addLog("Alterando aba para: " + targetId);
+      });
+    });
+
+    // Botoes
+    btnConnect.addEventListener('click', onConnectClick);
+    btnDisconnect.addEventListener('click', onDisconnectClick);
+    btnSaveSettings.addEventListener('click', onSaveSettingsClick);
+    btnToggleLogs.addEventListener('click', toggleLogs);
+    btnExit.addEventListener('click', () => {
+      clearSessionData();
+      showToast("Sessão encerrada", "success");
+      setTimeout(() => location.reload(), 1000);
+    });
+    checkRejectCall.addEventListener('change', toggleMsgCallField);
+    
+    // Inputs com efeitos de foco
+    const allInputs = document.querySelectorAll('input[type="text"]');
+    allInputs.forEach(input => {
+      input.addEventListener('focus', () => {
+        input.style.borderColor = 'var(--accent-primary)';
+        input.style.boxShadow = '0 0 0 2px rgba(59, 130, 246, 0.2)';
+      });
+      
+      input.addEventListener('blur', () => {
+        input.style.borderColor = 'var(--border-color)';
+        input.style.boxShadow = 'none';
+      });
+    });
+    
+    // Adicionar efeitos de hover aos cards
+    const cards = document.querySelectorAll('.card');
+    cards.forEach(card => {
+      card.addEventListener('mouseenter', () => {
+        card.style.transform = 'translateY(-5px)';
+        card.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.1)';
+      });
+      
+      card.addEventListener('mouseleave', () => {
+        card.style.transform = 'translateY(0)';
+        card.style.boxShadow = 'var(--card-shadow)';
+      });
+    });
+  </script>
+</body>
+</html>

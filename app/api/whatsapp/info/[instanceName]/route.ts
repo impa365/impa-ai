@@ -54,7 +54,22 @@ export async function GET(
     const connections = await connectionResponse.json();
     const instanceConnection = connections[0];
 
+    console.log(`🔍 [INFO] Conexão encontrada:`, {
+      hasConnection: !!instanceConnection,
+      connectionFields: instanceConnection ? Object.keys(instanceConnection) : [],
+      hasToken: !!instanceConnection?.instance_token
+    });
+
+    if (!instanceConnection) {
+      console.error(`❌ [INFO] Nenhuma conexão encontrada para instância: ${instanceName}`);
+      return NextResponse.json(
+        { success: false, error: "Instância não encontrada no banco de dados" },
+        { status: 404 }
+      );
+    }
+
     if (!instanceConnection?.instance_token) {
+      console.error(`❌ [INFO] Token não encontrado para instância: ${instanceName}. Campos disponíveis:`, Object.keys(instanceConnection));
       return NextResponse.json(
         { success: false, error: "Token da instância não encontrado" },
         { status: 500 }

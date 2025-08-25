@@ -18,14 +18,18 @@ import {
   RefreshCw,
   Info,
   AlertCircle,
+  Share2,
+  LogOut,
+  Download,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import AdminWhatsAppConnectionModal from "@/components/admin-whatsapp-connection-modal";
 import WhatsAppQRModal from "@/components/whatsapp-qr-modal";
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal";
 import WhatsAppInfoModal from "@/components/whatsapp-info-modal";
-import { getCurrentUser } from "@/lib/auth";
-import AdminWhatsAppConnectionModal from "@/components/admin-whatsapp-connection-modal";
 import TransferConnectionModal from "@/components/transfer-connection-modal";
+import { WhatsAppSharedLinksModal } from "@/components/whatsapp-shared-links-modal";
+import { WhatsAppImportModal } from "@/components/whatsapp-import-modal";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +38,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { getCurrentUser } from "@/lib/auth";
+import { fetchWhatsAppConnections } from "@/lib/whatsapp-connections";
 import { deleteEvolutionInstance } from "@/lib/whatsapp-api-client";
 import {
   Select,
@@ -42,7 +48,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { fetchWhatsAppConnections } from "@/lib/whatsapp-connections";
 
 export default function AdminWhatsAppPage() {
   const [connections, setConnections] = useState([]);
@@ -70,7 +75,17 @@ export default function AdminWhatsAppPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [connectionToDelete, setConnectionToDelete] = useState<any>(null);
 
+  // Estados para confirmação de desconexão
+  const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
+  const [connectionToDisconnect, setConnectionToDisconnect] = useState<any>(null);
+
   const [syncing, setSyncing] = useState(false);
+
+  // Estado para modal de links compartilhados
+  const [sharedLinksModalOpen, setSharedLinksModalOpen] = useState(false);
+
+  // Estado para modal de importação
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   // Auto-sync silencioso a cada 30 segundos + eventos
   const autoSync = useCallback(async (showMessage = false) => {
@@ -91,6 +106,12 @@ export default function AdminWhatsAppPage() {
       // Silently handle auto-sync errors
     }
   }, []);
+
+  // Função para abrir modal de links compartilhados
+  const handleOpenShareModal = (connection: any) => {
+    setSelectedConnection(connection);
+    setSharedLinksModalOpen(true);
+  };
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -218,6 +239,46 @@ export default function AdminWhatsAppPage() {
     }
   };
 
+  const handleDisconnectInstance = async (connection: any) => {
+    setConnectionToDisconnect(connection);
+    setDisconnectConfirmOpen(true);
+  };
+
+  const confirmDisconnectInstance = async () => {
+    if (!connectionToDisconnect) return;
+
+    try {
+      setSyncing(true);
+      setSaveMessage("Desconectando instância...");
+
+      const response = await fetch(
+        `/api/whatsapp/disconnect/${connectionToDisconnect.instance_name}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        await loadConnections();
+        setSaveMessage(`✅ Instância ${connectionToDisconnect.connection_name} desconectada`);
+        setTimeout(() => setSaveMessage(""), 3000);
+        setDisconnectConfirmOpen(false);
+        setConnectionToDisconnect(null);
+      } else {
+        setSaveMessage(`❌ Erro ao desconectar: ${result.error}`);
+        setTimeout(() => setSaveMessage(""), 5000);
+      }
+    } catch (error) {
+      console.error("Erro ao desconectar:", error);
+      setSaveMessage("❌ Erro ao desconectar instância");
+      setTimeout(() => setSaveMessage(""), 3000);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleDeleteConnection = (connection: any) => {
     setConnectionToDelete(connection);
     setDeleteConfirmOpen(true);
@@ -316,6 +377,14 @@ export default function AdminWhatsAppPage() {
           >
             <Plus className="w-4 h-4" />
             Nova Conexão
+          </Button>
+          <Button
+            onClick={() => setImportModalOpen(true)}
+            variant="outline"
+            className="border-blue-200 text-blue-600 hover:bg-blue-50"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Importar Instância
           </Button>
         </div>
       </div>
@@ -496,18 +565,29 @@ export default function AdminWhatsAppPage() {
                     <div className="flex gap-1">
                       {connection.status === "connected" ||
                       connection.status === "connecting" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedConnection(connection);
-                            setInfoModalOpen(true);
-                          }}
-                          title="Ver Informações"
-                          className="border-blue-200 text-blue-600 hover:bg-blue-50"
-                        >
-                          <Info className="w-4 h-4" />
-                        </Button>
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedConnection(connection);
+                              setInfoModalOpen(true);
+                            }}
+                            title="Ver Informações"
+                            className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                          >
+                            <Info className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDisconnectInstance(connection)}
+                            title="Desconectar"
+                            className="border-orange-200 text-orange-600 hover:bg-orange-50"
+                          >
+                            <LogOut className="w-4 h-4" />
+                          </Button>
+                        </>
                       ) : (
                         <Button
                           variant="outline"
@@ -563,6 +643,15 @@ export default function AdminWhatsAppPage() {
                         className="border-blue-200 text-blue-600 hover:bg-blue-50"
                       >
                         <RefreshCw className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenShareModal(connection)}
+                        title="Compartilhar Link"
+                        className="border-purple-200 text-purple-600 hover:bg-purple-50"
+                      >
+                        <Share2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
@@ -631,6 +720,17 @@ export default function AdminWhatsAppPage() {
         }}
       />
 
+      {/* Modal de Links Compartilhados */}
+      <WhatsAppSharedLinksModal
+        isOpen={sharedLinksModalOpen}
+        onClose={() => {
+          setSharedLinksModalOpen(false);
+          setSelectedConnection(null);
+        }}
+        connections={connections}
+        preSelectedConnection={selectedConnection}
+      />
+
       {/* Modal de confirmação de exclusão */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent>
@@ -655,6 +755,38 @@ export default function AdminWhatsAppPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de confirmação de desconexão */}
+      <Dialog open={disconnectConfirmOpen} onOpenChange={setDisconnectConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Desconexão</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja desconectar a instância "
+              {connectionToDisconnect?.connection_name}"? Esta ação não pode ser
+              desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDisconnectConfirmOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={confirmDisconnectInstance}>
+              Desconectar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de importação */}
+      <WhatsAppImportModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        onSuccess={loadConnections}
+      />
     </div>
   );
 }
