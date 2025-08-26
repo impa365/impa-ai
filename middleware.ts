@@ -20,10 +20,13 @@ export async function middleware(req: NextRequest) {
     "/api/integrations/evolution/evolutionBot/delete",
     "/api/system/settings",
     "/api/admin/branding",
+    "/api/whatsapp/shared-links/access", // Links compartilhados - acesso público
+    "/api/whatsapp/shared-links/qr-code", // QR Code via links compartilhados - acesso público
+    "/api/whatsapp/shared-links/disconnect", // Disconnect via links compartilhados - acesso público
   ];
 
   // Lista de páginas públicas
-  const publicPages = ["/"];
+  const publicPages = ["/", "/shared/whatsapp", "/auth/login", "/landing", "/demo"];
 
   // Lista de rotas que precisam de role admin
   const adminRoutes = ["/admin", "/api/admin"];
@@ -96,7 +99,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // Se for uma página pública
-  if (publicPages.includes(pathname)) {
+  if (publicPages.some(page => pathname === page || pathname.startsWith(page + "/"))) {
     return NextResponse.next();
   }
 
