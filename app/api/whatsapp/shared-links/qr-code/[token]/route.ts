@@ -206,8 +206,8 @@ export async function POST(
       );
     }
 
-    const connection = await connectionResponse.json();
-    if (!connection || connection.length === 0) {
+    const connections = await connectionResponse.json();
+    if (!connections || connections.length === 0) {
       return NextResponse.json(
         { 
           success: false, 
@@ -217,6 +217,8 @@ export async function POST(
         { status: 404, headers: securityHeaders }
       );
     }
+
+    const connection = connections[0];
 
     // Buscar configuração da Evolution API
     const integrationResponse = await fetch(
@@ -530,7 +532,7 @@ export async function POST(
       }
 
     } catch (evolutionError: any) {
-      console.error("�� [QR-GENERATE] Erro fatal na Evolution API:", {
+      console.error("💥 [QR-GENERATE] Erro fatal na Evolution API:", {
         name: evolutionError.name,
         message: evolutionError.message,
         stack: evolutionError.stack,
