@@ -69,7 +69,7 @@ export default function SharedWhatsAppPage() {
     return () => clearInterval(interval);
   }, [isAuthenticated, connectionData?.qr_code, qrTimer]);
 
-  // Carregar informações do link
+  // Carregar informações do link (APENAS UMA VEZ)
   useEffect(() => {
     const fetchConnectionData = async () => {
       try {
@@ -83,10 +83,12 @@ export default function SharedWhatsAppPage() {
           setConnectionData(data.data);
           
           // Se tem permissão para QR Code e não está conectado, gerar automaticamente
+          // IMPORTANTE: Só gerar se não requer senha E não tem QR Code ainda
           if (data.data.permissions.qr_code && 
               data.data.connection?.status !== 'connected' && 
               data.data.connection?.status !== 'open' &&
-              !data.data.requires_password) { // IMPORTANTE: Só gerar se não requer senha
+              !data.data.requires_password &&
+              !data.data.qr_code) { // ← NOVO: Só gerar se não tem QR Code ainda
             
             console.log("🔄 Auto-gerando QR Code...");
             
@@ -119,12 +121,16 @@ export default function SharedWhatsAppPage() {
                   }
                 }));
                 console.log("✅ Instância já conectada");
+              } else if (qrData.code === 'RATE_LIMITED') {
+                console.log("⚠️ Rate limit atingido - não tentando novamente");
               }
             } catch (qrError) {
               console.log("⚠️ Erro ao gerar QR Code automaticamente:", qrError);
             }
           } else if (data.data.requires_password) {
             console.log("🔐 Link protegido por senha - QR Code será gerado após autenticação");
+          } else if (data.data.qr_code) {
+            console.log("ℹ️ QR Code já existe - não gerando novamente");
           }
         } else {
           setError(data.error || "Erro ao carregar dados");
@@ -138,8 +144,10 @@ export default function SharedWhatsAppPage() {
     };
 
     fetchConnectionData();
+  }, [token]); // ← CORRIGIDO: Removido qrTimer das dependências
 
-    // Timer para expiração do QR Code
+  // Timer separado para QR Code (não recarrega página)
+  useEffect(() => {
     let timer: NodeJS.Timeout;
     if (qrTimer > 0) {
       timer = setInterval(() => {
@@ -150,7 +158,7 @@ export default function SharedWhatsAppPage() {
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [token, qrTimer]);
+  }, [qrTimer]);
 
   // Função para gerar QR Code
   const generateQRCode = async () => {

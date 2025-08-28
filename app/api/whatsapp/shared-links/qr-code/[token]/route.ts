@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { 
-  checkRateLimit,
+  checkQRRateLimit,
   sanitizeIP,
   getSecurityHeaders,
   logSecurityEvent,
@@ -19,9 +19,9 @@ export async function POST(
     const { token } = await params;
     console.log("🔗 [QR-GENERATE] Gerando QR Code para token:", token.substring(0, 10) + "...");
 
-    // Sanitizar IP e aplicar rate limiting
+    // Sanitizar IP e aplicar rate limiting específico para QR Code
     const clientIP = sanitizeIP(request);
-    const rateCheck = checkRateLimit(clientIP);
+    const rateCheck = checkQRRateLimit(clientIP, token);
     
     if (!rateCheck.allowed) {
       logSecurityEvent({
