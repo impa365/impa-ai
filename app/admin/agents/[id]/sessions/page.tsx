@@ -71,6 +71,7 @@ export default function AdminAgentSessionsPage() {
   const [selectAll, setSelectAll] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
   const [logs, setLogs] = useState<string[]>([])
+  const [massUpdateLoading, setMassUpdateLoading] = useState(false)
   
   // Filtros
   const [nameFilter, setNameFilter] = useState("")
@@ -230,18 +231,64 @@ export default function AdminAgentSessionsPage() {
       return
     }
 
-    const promises = Array.from(selectedSessions).map(sessionId => {
-      const session = sessions.find(s => s.id === sessionId)
-      if (session) {
-        return changeSessionStatus(session.remoteJid, massUpdateStatus)
-      }
-      return Promise.resolve()
-    })
+    try {
+      setMassUpdateLoading(true)
+      const sessionIds = Array.from(selectedSessions)
+      
+      addLog(`🔄 Iniciando atualização em massa de ${sessionIds.length} sessões para status: ${massUpdateStatus}`)
 
-    await Promise.all(promises)
-    setSelectedSessions(new Set())
-    setSelectAll(false)
-    addLog(`Status de ${selectedSessions.size} sessões alterado para ${massUpdateStatus}`)
+      const response = await fetch(`/api/agents/${agentId}/sessions/mass-update-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          sessionIds, 
+          status: massUpdateStatus 
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Erro ao processar operação em massa')
+      }
+
+      const data = await response.json()
+      
+      // Log detalhado dos resultados
+      addLog(`✅ Operação concluída: ${data.data.successful} sucessos, ${data.data.failed} falhas`)
+      
+      if (data.data.failed > 0) {
+        addLog(`⚠️ Algumas sessões falharam. Verifique os logs para mais detalhes.`)
+        data.data.results.errors.forEach((error: any) => {
+          addLog(`❌ ${error.remoteJid}: ${error.error}`)
+        })
+      }
+
+      toast({
+        title: "Operação Concluída",
+        description: data.message,
+        variant: data.data.failed > 0 ? "destructive" : "default"
+      })
+      
+      // Limpar seleções
+      setSelectedSessions(new Set())
+      setSelectAll(false)
+      
+      // Recarregar sessões apenas uma vez
+      await loadSessions()
+      
+    } catch (error) {
+      console.error('Erro na operação em massa:', error)
+      addLog(`❌ Erro na operação em massa: ${error}`)
+      toast({
+        title: "Erro",
+        description: "Não foi possível processar a operação em massa",
+        variant: "destructive"
+      })
+    } finally {
+      setMassUpdateLoading(false)
+    }
   }
 
   const toggleSelectAll = () => {
@@ -409,9 +456,16 @@ export default function AdminAgentSessionsPage() {
                 variant="default"
                 size="sm"
                 onClick={handleMassStatusUpdate}
-                disabled={selectedSessions.size === 0}
+                disabled={selectedSessions.size === 0 || massUpdateLoading}
               >
-                Alterar Status das Selecionadas
+                {massUpdateLoading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  "Alterar Status das Selecionadas"
+                )}
               </Button>
             </div>
             <div className="text-sm text-gray-500">

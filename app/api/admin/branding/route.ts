@@ -49,7 +49,7 @@ export async function GET() {
 
     // Converter para formato esperado pelo frontend
     const theme = {
-      systemName: activeTheme.display_name || "Impa AI",
+      systemName: activeTheme.display_name || "Sistema AI",
       description: activeTheme.description || "",
       logoIcon: activeTheme.logo_icon || "🤖",
       primaryColor: activeTheme.colors?.primary || "#3b82f6",

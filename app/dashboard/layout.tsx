@@ -78,7 +78,7 @@ export default function DashboardLayout({
                   <span className="text-lg">{theme?.logoIcon || "🤖"}</span>
                 )}
               </div>
-              <span className="font-semibold text-lg">{theme?.systemName || "Impa AI"}</span>
+              <span className="font-semibold text-lg">{theme?.systemName || "Sistema AI"}</span>
             </div>
             <p className="text-sm text-gray-600 mt-1">Olá, {user?.email}</p>
           </div>
@@ -108,7 +108,7 @@ export default function DashboardLayout({
               Sair
             </Button>
             <div className="text-xs text-gray-500 mt-2">
-              <div>{theme?.systemName || "Impa AI"} Platform</div>
+              <div>{theme?.systemName || "Sistema AI"} Platform</div>
               <div>v{appVersion}</div>
             </div>
           </div>

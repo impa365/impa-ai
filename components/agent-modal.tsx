@@ -389,6 +389,8 @@ export function AgentModal({
         calendar_meeting_id: agentData.calendar_meeting_id,
         chatnode_integration: agentData.chatnode_integration,
         orimon_integration: agentData.orimon_integration,
+        model: agentData.model,
+        model_config: agentData.model_config,
       })
 
       setFormData(agentData)
@@ -405,6 +407,27 @@ export function AgentModal({
       })
     }
   }, [agent, currentUser, selectedUserId, isAdmin])
+
+  // useEffect específico para sincronizar modelSelection com o modelo do agente
+  useEffect(() => {
+    if (agent && formData.model && formData.model_config && llmConfig?.default_models) {
+      const selectedProvider = formData.model_config
+      const defaultModel = llmConfig.default_models[selectedProvider]
+      
+      // Se o modelo do agente é igual ao modelo padrão do provedor, usar "default"
+      // Caso contrário, usar "custom"
+      if (formData.model === defaultModel) {
+        setModelSelection("default")
+        console.log("✅ [AgentModal] Modelo padrão detectado, definindo modelSelection como 'default'")
+      } else {
+        setModelSelection("custom")
+        console.log("✅ [AgentModal] Modelo personalizado detectado, definindo modelSelection como 'custom'")
+      }
+    } else if (!agent) {
+      // Para novo agente, sempre usar modelo padrão
+      setModelSelection("default")
+    }
+  }, [agent, formData.model, formData.model_config, llmConfig])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target
@@ -603,7 +626,7 @@ _______________________________________
         user_id: formData.user_id,
         whatsapp_connection_id: formData.whatsapp_connection_id,
         evolution_bot_id: formData.evolution_bot_id,
-        model: formData.model || systemDefaultModel,
+        model: formData.model ? String(formData.model) : (systemDefaultModel || "gpt-4o-mini"),
       model_config: formData.model_config || "openai",
         // Campos para sincronização Evolution API
         trigger_type: validTriggerType,
@@ -1032,13 +1055,15 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                     onValueChange={(value) => {
                       console.log("🔄 [AgentModal] Provedor selecionado:", value)
                       // Ao trocar provedor, automaticamente usar o modelo padrão desse provedor
-                      const defaultModelForProvider = llmConfig?.default_models?.[value] || "gpt-4o-mini"
+                      const defaultModelForProvider = llmConfig?.default_models?.[value] || systemDefaultModel || "gpt-4o-mini"
                       console.log("📋 [AgentModal] Modelo padrão para", value, ":", defaultModelForProvider)
                       setFormData((prev) => ({ 
                         ...prev, 
                         model_config: value,
-                        model: defaultModelForProvider
+                        model: String(defaultModelForProvider)
                       }))
+                      // Quando trocar de provedor, usar modelo padrão
+                      setModelSelection("default")
                     }}
                     disabled={loadingLlmConfig || !llmConfig}
                   >
@@ -1136,9 +1161,11 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                         setModelSelection(value)
                       if (value === "default") {
                           const selectedProvider = formData.model_config || "openai"
-                          const defaultModel = llmConfig?.default_models?.[selectedProvider] || "gpt-4o-mini"
-                          setFormData((prev) => ({ ...prev, model: defaultModel }))
+                          const defaultModel = llmConfig?.default_models?.[selectedProvider] || systemDefaultModel || "gpt-4o-mini"
+                          console.log("🔧 [AgentModal] Definindo modelo padrão:", defaultModel, "para provedor:", selectedProvider)
+                          setFormData((prev) => ({ ...prev, model: String(defaultModel) }))
                       } else {
+                          console.log("🔧 [AgentModal] Definindo modelo personalizado (vazio)")
                           setFormData((prev) => ({ ...prev, model: "" }))
                       }
                     }}

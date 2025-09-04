@@ -39,7 +39,7 @@ export function useTheme() {
 // Temas predefinidos
 export const themePresets: Record<string, ThemeConfig> = {
   blue: {
-    systemName: "Impa AI",
+    systemName: "Sistema AI",
     description: "Plataforma de construção de agentes de IA",
     logoIcon: "🤖",
     primaryColor: "#3b82f6",
@@ -47,7 +47,7 @@ export const themePresets: Record<string, ThemeConfig> = {
     accentColor: "#8b5cf6",
   },
   purple: {
-    systemName: "Impa AI",
+    systemName: "Sistema AI",
     description: "Plataforma de construção de agentes de IA",
     logoIcon: "🔮",
     primaryColor: "#8b5cf6",
@@ -55,7 +55,7 @@ export const themePresets: Record<string, ThemeConfig> = {
     accentColor: "#3b82f6",
   },
   green: {
-    systemName: "Impa AI",
+    systemName: "Sistema AI",
     description: "Plataforma de construção de agentes de IA",
     logoIcon: "🌱",
     primaryColor: "#10b981",
@@ -63,7 +63,7 @@ export const themePresets: Record<string, ThemeConfig> = {
     accentColor: "#f59e0b",
   },
   orange: {
-    systemName: "Impa AI",
+    systemName: "Sistema AI",
     description: "Plataforma de construção de agentes de IA",
     logoIcon: "🔥",
     primaryColor: "#f97316",
@@ -71,7 +71,7 @@ export const themePresets: Record<string, ThemeConfig> = {
     accentColor: "#10b981",
   },
   dark: {
-    systemName: "Impa AI",
+    systemName: "Sistema AI",
     description: "Plataforma de construção de agentes de IA",
     logoIcon: "⚡",
     primaryColor: "#6366f1",

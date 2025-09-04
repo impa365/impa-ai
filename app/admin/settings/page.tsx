@@ -87,7 +87,7 @@ export default function AdminSettingsPage() {
     default_agents_limit: 2,
     allow_public_registration: false,
     landing_page_enabled: true,
-    footer_text: "© 2024 Impa AI - Desenvolvido pela Comunidade IMPA",
+    footer_text: "© 2024 Sistema AI - Desenvolvido pela Comunidade IMPA",
   })
   const [loadingSettings, setLoadingSettings] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
