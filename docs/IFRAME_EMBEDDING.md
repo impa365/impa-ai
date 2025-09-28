@@ -12,10 +12,11 @@ Este guia mostra como incorporar o painel IMPA AI em outros sistemas via iframe.
 <iframe src="https://seudominio.com/embed/dashboard" width="100%" height="800px"></iframe>
 ```
 
-### 2. **Rotas Diretas** (Mesmo domínio)
+### 2. **Rotas Diretas** (Qualquer domínio)
 ```html
-<!-- Apenas se o iframe estiver no mesmo domínio -->
+<!-- Agora funciona de qualquer domínio -->
 <iframe src="https://seudominio.com/admin" width="100%" height="800px"></iframe>
+<iframe src="https://seudominio.com/dashboard" width="100%" height="800px"></iframe>
 ```
 
 ## 🔧 Como Funciona
@@ -29,8 +30,8 @@ Este guia mostra como incorporar o painel IMPA AI em outros sistemas via iframe.
 
 **✅ Headers de Segurança Ajustados:**
 - `/embed/*` → `X-Frame-Options: ALLOWALL` (qualquer domínio)
-- `/admin/*` → `X-Frame-Options: SAMEORIGIN` (mesmo domínio)
-- `/dashboard/*` → `X-Frame-Options: SAMEORIGIN` (mesmo domínio)
+- `/admin/*` → `X-Frame-Options: ALLOWALL` (qualquer domínio)
+- `/dashboard/*` → `X-Frame-Options: ALLOWALL` (qualquer domínio)
 
 ## 📋 Exemplos Práticos
 
@@ -113,10 +114,10 @@ Este guia mostra como incorporar o painel IMPA AI em outros sistemas via iframe.
    - Ideal para sistemas externos
    - Headers: `frame-ancestors *`
 
-2. **🏠 Mesmo Domínio** (`/admin/*`, `/dashboard/*`)
-   - Permite apenas do mesmo domínio
-   - Maior segurança
-   - Headers: `frame-ancestors 'self' *.impa365.com`
+2. **🌍 Acesso Aberto** (`/admin/*`, `/dashboard/*`)
+   - Permite iframe de qualquer domínio
+   - Configurado para máxima compatibilidade
+   - Headers: `frame-ancestors *`
 
 ### **Recomendações de Segurança**
 
@@ -219,13 +220,61 @@ curl -I https://seudominio.com/embed/admin
 
 ---
 
+## 🌐 Incorporação Cross-Domain
+
+### **✅ Agora Funciona Entre Domínios Diferentes:**
+
+```html
+<!-- Site: exemplo.com incorporando painel.impa365.com -->
+<iframe src="https://painel.impa365.com/admin"></iframe>
+
+<!-- Site: meusite.cloud incorporando aiteste.impa365.com -->
+<iframe src="https://aiteste.impa365.com/dashboard"></iframe>
+
+<!-- Site: qualquerdominio.org incorporando sistema.impa365.com -->
+<iframe src="https://sistema.impa365.com/embed/admin"></iframe>
+```
+
+### **🎯 Exemplos de Uso Real:**
+
+**1. Site WordPress + Painel IMPA:**
+```html
+<!-- Em qualquer página do WordPress -->
+<iframe 
+  src="https://aiteste.impa365.com/admin"
+  width="100%" 
+  height="800px"
+  frameborder="0">
+</iframe>
+```
+
+**2. Sistema Interno + Dashboard:**
+```html
+<!-- Sistema interno da empresa -->
+<iframe 
+  src="https://painel.impa365.com/dashboard"
+  width="100%" 
+  height="600px">
+</iframe>
+```
+
+**3. Portal Cliente + Agentes:**
+```html
+<!-- Portal do cliente -->
+<iframe 
+  src="https://sistema.impa365.com/admin/agents"
+  width="100%" 
+  height="700px">
+</iframe>
+```
+
 ## 🎉 Exemplo Funcionando
 
-Agora você pode usar:
+Agora você pode usar de **qualquer domínio**:
 
 ```html
 <iframe 
-  src="https://aiteste.impa365.com/embed/admin"
+  src="https://aiteste.impa365.com/admin"
   width="100%" 
   height="800px"
   frameborder="0"
@@ -233,4 +282,4 @@ Agora você pode usar:
 </iframe>
 ```
 
-**✅ Sem mais "Redirecionando..." - Funcionando perfeitamente!** 
+**✅ Funciona de qualquer domínio - problema resolvido!** 

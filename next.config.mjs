@@ -20,21 +20,21 @@ const nextConfig = {
   async headers() {
     return [
       {
-        // Rotas que podem ser incorporadas em iframes
+        // Rotas admin e dashboard - permite qualquer domínio
         source: '/(admin|dashboard)/:path*',
         headers: [
           {
             key: 'X-Frame-Options',
-            value: 'SAMEORIGIN' // Permite iframe do mesmo domínio
+            value: 'ALLOWALL' // Permite iframe de qualquer domínio
           },
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' *.impa365.com impa365.com;"
+            value: "frame-ancestors *;" // Permite qualquer domínio
           }
         ],
       },
       {
-        // Rota especial para embedding externo com parâmetro
+        // Rota especial para embedding externo
         source: '/embed/:path*',
         headers: [
           {
@@ -43,7 +43,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors *;"
+            value: "frame-ancestors *;" // Permite qualquer domínio
           }
         ],
       }

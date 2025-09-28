@@ -150,10 +150,10 @@ export async function middleware(req: NextRequest) {
     response.headers.set('Content-Security-Policy', 'frame-ancestors *;');
   }
   
-  // Se for rota admin ou dashboard, permitir iframe do mesmo domínio
+  // Se for rota admin ou dashboard, permitir iframe de qualquer domínio
   if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) {
-    response.headers.set('X-Frame-Options', 'SAMEORIGIN');
-    response.headers.set('Content-Security-Policy', "frame-ancestors 'self' *.impa365.com impa365.com;");
+    response.headers.set('X-Frame-Options', 'ALLOWALL');
+    response.headers.set('Content-Security-Policy', 'frame-ancestors *;');
   }
 
   return response;
