@@ -144,16 +144,33 @@ export async function middleware(req: NextRequest) {
   // Configurar headers especiais para rotas de embed
   const response = NextResponse.next();
   
-  // Se for uma rota de embed, permitir iframe de qualquer origem
-  if (pathname.startsWith("/embed")) {
-    response.headers.set('X-Frame-Options', 'ALLOWALL');
-    response.headers.set('Content-Security-Policy', 'frame-ancestors *;');
+  // Verificar configurações de embedding via env vars
+  const allowEmbedding = process.env.ALLOW_IFRAME_EMBEDDING !== 'false';
+  const embedPolicy = process.env.IFRAME_EMBEDDING_POLICY || 'ALLOWALL';
+  const allowedDomains = process.env.IFRAME_ALLOWED_DOMAINS || '*';
+  
+  // Configurar CSP baseado nas configurações
+  let cspValue = "frame-ancestors 'none';";
+  if (allowEmbedding) {
+    if (embedPolicy === 'ALLOWALL' || allowedDomains === '*') {
+      cspValue = "frame-ancestors *;";
+    } else if (embedPolicy === 'SAMEORIGIN') {
+      cspValue = "frame-ancestors 'self';";
+    } else if (allowedDomains && allowedDomains !== '*') {
+      const domains = allowedDomains.split(',').map(d => d.trim()).join(' ');
+      cspValue = `frame-ancestors 'self' ${domains};`;
+    }
   }
   
-  // Se for rota admin ou dashboard, permitir iframe de qualquer domínio
-  if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) {
-    response.headers.set('X-Frame-Options', 'ALLOWALL');
-    response.headers.set('Content-Security-Policy', 'frame-ancestors *;');
+  // Aplicar headers para rotas de embed, admin e dashboard
+  if (pathname.startsWith("/embed") || pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) {
+    if (!allowEmbedding) {
+      response.headers.set('X-Frame-Options', 'DENY');
+      response.headers.set('Content-Security-Policy', "frame-ancestors 'none';");
+    } else {
+      response.headers.set('X-Frame-Options', embedPolicy);
+      response.headers.set('Content-Security-Policy', cspValue);
+    }
   }
 
   return response;

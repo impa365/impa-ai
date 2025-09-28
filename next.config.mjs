@@ -18,18 +18,60 @@ const nextConfig = {
   
   // Headers personalizados para permitir iframe embedding
   async headers() {
+    // Verificar variável de ambiente para controlar embed
+    const allowEmbedding = process.env.ALLOW_IFRAME_EMBEDDING !== 'false' // Default: true
+    const embedPolicy = process.env.IFRAME_EMBEDDING_POLICY || 'ALLOWALL' // ALLOWALL, SAMEORIGIN, DENY
+    const allowedDomains = process.env.IFRAME_ALLOWED_DOMAINS || '*' // Lista de domínios ou *
+    
+    console.log('🖼️ [IFRAME CONFIG]', {
+      allowEmbedding,
+      embedPolicy,
+      allowedDomains
+    })
+    
+    // Se embedding está desabilitado, usar DENY
+    if (!allowEmbedding) {
+      return [
+        {
+          source: '/(admin|dashboard|embed)/:path*',
+          headers: [
+            {
+              key: 'X-Frame-Options',
+              value: 'DENY'
+            },
+            {
+              key: 'Content-Security-Policy',
+              value: "frame-ancestors 'none';"
+            }
+          ],
+        }
+      ]
+    }
+    
+    // Configurar CSP baseado nos domínios permitidos
+    let cspValue = "frame-ancestors 'none';"
+    if (embedPolicy === 'ALLOWALL' || allowedDomains === '*') {
+      cspValue = "frame-ancestors *;"
+    } else if (embedPolicy === 'SAMEORIGIN') {
+      cspValue = "frame-ancestors 'self';"
+    } else if (allowedDomains && allowedDomains !== '*') {
+      // Lista específica de domínios
+      const domains = allowedDomains.split(',').map(d => d.trim()).join(' ')
+      cspValue = `frame-ancestors 'self' ${domains};`
+    }
+    
     return [
       {
-        // Rotas admin e dashboard - permite qualquer domínio
+        // Rotas admin e dashboard
         source: '/(admin|dashboard)/:path*',
         headers: [
           {
             key: 'X-Frame-Options',
-            value: 'ALLOWALL' // Permite iframe de qualquer domínio
+            value: embedPolicy
           },
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors *;" // Permite qualquer domínio
+            value: cspValue
           }
         ],
       },
@@ -39,11 +81,11 @@ const nextConfig = {
         headers: [
           {
             key: 'X-Frame-Options',
-            value: 'ALLOWALL' // Permite iframe de qualquer domínio
+            value: embedPolicy
           },
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors *;" // Permite qualquer domínio
+            value: cspValue
           }
         ],
       }

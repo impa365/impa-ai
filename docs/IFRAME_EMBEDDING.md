@@ -198,24 +198,86 @@ curl -I https://aiteste.impa365.com/embed/admin
 **Causa**: CSP bloqueando recursos externos
 **Solução**: Configure CSP adequadamente no servidor
 
+## ⚙️ Configuração via Variáveis de Ambiente
+
+### **🎛️ Variáveis Disponíveis:**
+
+| Variável | Valores | Padrão | Descrição |
+|----------|---------|--------|-----------|
+| `ALLOW_IFRAME_EMBEDDING` | `true`, `false` | `true` | Permite/bloqueia iframe embedding |
+| `IFRAME_EMBEDDING_POLICY` | `ALLOWALL`, `SAMEORIGIN`, `DENY` | `ALLOWALL` | Política de embedding |
+| `IFRAME_ALLOWED_DOMAINS` | `*`, `domain.com,*.domain.com` | `*` | Domínios específicos permitidos |
+
+### **📋 Cenários de Configuração:**
+
+#### **1. 🚫 Bloquear Completamente (Máxima Segurança)**
+```yaml
+environment:
+  - ALLOW_IFRAME_EMBEDDING=false
+```
+**Resultado**: Nenhum iframe funcionará
+
+#### **2. 🏠 Apenas Mesmo Domínio**
+```yaml
+environment:
+  - ALLOW_IFRAME_EMBEDDING=true
+  - IFRAME_EMBEDDING_POLICY=SAMEORIGIN
+```
+**Resultado**: Só funciona de subdomínios do mesmo domínio
+
+#### **3. 🎯 Domínios Específicos**
+```yaml
+environment:
+  - ALLOW_IFRAME_EMBEDDING=true
+  - IFRAME_EMBEDDING_POLICY=ALLOWALL
+  - IFRAME_ALLOWED_DOMAINS=exemplo.com,*.exemplo.com,parceiro.org
+```
+**Resultado**: Só funciona dos domínios listados
+
+#### **4. 🌍 Todos os Domínios (Padrão Atual)**
+```yaml
+environment:
+  - ALLOW_IFRAME_EMBEDDING=true
+  - IFRAME_EMBEDDING_POLICY=ALLOWALL
+  - IFRAME_ALLOWED_DOMAINS=*
+```
+**Resultado**: Funciona de qualquer domínio
+
+### **🐳 Configuração no Portainer Stack:**
+
+```yaml
+version: '3.8'
+services:
+  impa-ai:
+    image: your-image
+    environment:
+      # Bloquear embedding para maior segurança
+      - ALLOW_IFRAME_EMBEDDING=false
+      
+      # OU permitir apenas domínios específicos
+      # - ALLOW_IFRAME_EMBEDDING=true
+      # - IFRAME_ALLOWED_DOMAINS=meusite.com,*.meusite.com
+      
+      # Outras configurações...
+      - NODE_ENV=production
+```
+
 ## 🚀 Implantação
 
-### **1. Verificar Configuração**
+### **1. Configurar Variáveis no Portainer**
+1. Editar Stack
+2. Adicionar variáveis de ambiente
+3. Update Stack
+
+### **2. Verificar Headers**
 ```bash
-# Reiniciar aplicação após mudanças
-docker restart impa-ai
+# Verificar se configuração está ativa
+curl -I https://seudominio.com/admin
 ```
 
-### **2. Atualizar Next.js**
-```bash
-# Rebuild da aplicação
-npm run build
-```
-
-### **3. Validar Headers**
-```bash
-# Verificar headers em produção
-curl -I https://seudominio.com/embed/admin
+### **3. Testar iframe**
+```html
+<iframe src="https://seudominio.com/admin"></iframe>
 ```
 
 ---
