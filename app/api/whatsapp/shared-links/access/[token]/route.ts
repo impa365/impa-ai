@@ -302,6 +302,15 @@ export async function GET(
 
     console.log("✅ [SHARED-ACCESS] Informações do link retornadas");
 
+    // Registrar acesso (mesmo sem senha)
+    const forwarded = request.headers.get('x-forwarded-for');
+    const ip = forwarded?.split(',')[0] || 
+               request.headers.get('x-real-ip') || 
+               'unknown';
+    const userAgent = request.headers.get('user-agent') || 'unknown';
+    
+    await logAccess(link.id, ip, userAgent);
+
     return NextResponse.json({
       success: true,
       data: linkInfo

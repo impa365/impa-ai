@@ -408,9 +408,11 @@ export function AgentModal({
     }
   }, [agent, currentUser, selectedUserId, isAdmin])
 
-  // useEffect específico para sincronizar modelSelection com o modelo do agente
+  // useEffect específico para sincronizar modelSelection com o modelo do agente APENAS na inicialização
   useEffect(() => {
-    if (agent && formData.model && formData.model_config && llmConfig?.default_models) {
+    // APENAS sincronizar quando abrindo o modal com um agente existente
+    // NÃO interferir durante a digitação do usuário
+    if (agent && formData.model && formData.model_config && llmConfig?.default_models && open) {
       const selectedProvider = formData.model_config
       const defaultModel = llmConfig.default_models[selectedProvider]
       
@@ -423,11 +425,11 @@ export function AgentModal({
         setModelSelection("custom")
         console.log("✅ [AgentModal] Modelo personalizado detectado, definindo modelSelection como 'custom'")
       }
-    } else if (!agent) {
+    } else if (!agent && open) {
       // Para novo agente, sempre usar modelo padrão
       setModelSelection("default")
     }
-  }, [agent, formData.model, formData.model_config, llmConfig])
+  }, [agent, formData.model_config, llmConfig, open]) // ⚠️ REMOVIDO formData.model da dependência!
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target
@@ -1158,18 +1160,29 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                       name="model_selection"
                       value={modelSelection}
                       onValueChange={(value: "default" | "custom") => {
+                        console.log("🎯 [AgentModal] Usuário mudou seleção de modelo para:", value)
                         setModelSelection(value)
-                      if (value === "default") {
+                        
+                        if (value === "default") {
                           const selectedProvider = formData.model_config || "openai"
                           const defaultModel = llmConfig?.default_models?.[selectedProvider] || systemDefaultModel || "gpt-4o-mini"
                           console.log("🔧 [AgentModal] Definindo modelo padrão:", defaultModel, "para provedor:", selectedProvider)
                           setFormData((prev) => ({ ...prev, model: String(defaultModel) }))
-                      } else {
-                          console.log("🔧 [AgentModal] Definindo modelo personalizado (vazio)")
-                          setFormData((prev) => ({ ...prev, model: "" }))
-                      }
-                    }}
-                  >
+                        } else {
+                          console.log("🔧 [AgentModal] Usuário escolheu modelo personalizado - mantendo valor atual ou limpando")
+                          // Se já tem um valor personalizado, manter. Se não, limpar para o usuário digitar
+                          const currentModel = formData.model || ""
+                          const selectedProvider = formData.model_config || "openai"
+                          const defaultModel = llmConfig?.default_models?.[selectedProvider] || systemDefaultModel || "gpt-4o-mini"
+                          
+                          // Se o modelo atual é o padrão, limpar para o usuário digitar um personalizado
+                          if (currentModel === defaultModel) {
+                            setFormData((prev) => ({ ...prev, model: "" }))
+                          }
+                          // Se já é um modelo personalizado, manter o valor atual
+                        }
+                      }}
+                    >
                     <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
                         <SelectValue placeholder="Usar modelo padrão ou personalizado" />
                     </SelectTrigger>
@@ -1224,11 +1237,31 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                   <Select
                     name="whatsapp_connection_id"
                     value={formData.whatsapp_connection_id || ""}
-                    onValueChange={(value) => handleSelectChange("whatsapp_connection_id", value)}
+                    onValueChange={(value) => {
+                      console.log("🔗 [AgentModal] Selecionando conexão:", value)
+                      handleSelectChange("whatsapp_connection_id", value)
+                    }}
                     disabled={
-                      (!selectedUserId && isAdmin) ||
-                      loadingConnections ||
-                      (!whatsappConnections.length && !!selectedUserId)
+                      (() => {
+                        const isDisabled = (!selectedUserId && isAdmin) ||
+                          loadingConnections ||
+                          (!whatsappConnections.length && !!selectedUserId)
+                        
+                        console.log("🔍 [AgentModal] Debug do Select WhatsApp:", {
+                          selectedUserId,
+                          isAdmin,
+                          loadingConnections,
+                          whatsappConnectionsLength: whatsappConnections.length,
+                          isDisabled,
+                          reasons: {
+                            noUserAndAdmin: (!selectedUserId && isAdmin),
+                            loading: loadingConnections,
+                            noConnectionsButHasUser: (!whatsappConnections.length && !!selectedUserId)
+                          }
+                        })
+                        
+                        return isDisabled
+                      })()
                     }
                   >
                     <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">

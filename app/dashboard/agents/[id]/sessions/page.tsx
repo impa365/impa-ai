@@ -230,9 +230,12 @@ export default function AgentSessionsPage() {
       setMassUpdateLoading(true)
       const sessionIds = Array.from(selectedSessions)
       
-      addLog(`🔄 Iniciando atualização em massa de ${sessionIds.length} sessões para status: ${massUpdateStatus}`)
+      // Obter os dados completos das sessões selecionadas
+      const selectedSessionsData = filteredSessions.filter(session => selectedSessions.has(session.id))
+      
+      addLog(`🔄 Iniciando processamento assíncrono de ${sessionIds.length} sessões para status: ${massUpdateStatus}`)
 
-      const response = await fetch(`/api/agents/${agentId}/sessions/mass-update-status`, {
+      const response = await fetch(`/api/agents/${agentId}/sessions/mass-update-async`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -240,50 +243,114 @@ export default function AgentSessionsPage() {
         credentials: 'include',
         body: JSON.stringify({ 
           sessionIds, 
+          sessions: selectedSessionsData,
           status: massUpdateStatus 
         })
       })
 
       if (!response.ok) {
-        throw new Error('Erro ao processar operação em massa')
+        throw new Error('Erro ao iniciar processamento assíncrono')
       }
 
       const data = await response.json()
       
-      // Log detalhado dos resultados
-      addLog(`✅ Operação concluída: ${data.data.successful} sucessos, ${data.data.failed} falhas`)
+      addLog(`✅ Job criado com sucesso! ID: ${data.jobId}`)
+      addLog(`📊 ${data.data.totalSessions} sessões serão processadas em background`)
+      addLog(`⏱️ Tempo estimado: ${data.data.estimatedTime}`)
       
-      if (data.data.failed > 0) {
-        addLog(`⚠️ Algumas sessões falharam. Verifique os logs para mais detalhes.`)
-        data.data.results.errors.forEach((error: any) => {
-          addLog(`❌ ${error.remoteJid}: ${error.error}`)
-        })
-      }
-
       toast({
-        title: "Operação Concluída",
-        description: data.message,
-        variant: data.data.failed > 0 ? "destructive" : "default"
+        title: "✅ Processamento Iniciado",
+        description: `${data.data.totalSessions} sessões estão sendo processadas em background. Você pode navegar livremente!`,
+        duration: 5000
       })
       
       // Limpar seleções
       setSelectedSessions(new Set())
       setSelectAll(false)
       
-      // Recarregar sessões apenas uma vez
-      await loadSessions()
+      // Iniciar polling do status do job
+      if (data.jobId) {
+        pollJobStatus(data.jobId)
+      }
       
     } catch (error) {
-      console.error('Erro na operação em massa:', error)
-      addLog(`❌ Erro na operação em massa: ${error}`)
+      console.error('Erro ao iniciar processamento assíncrono:', error)
+      addLog(`❌ Erro ao iniciar processamento: ${error}`)
       toast({
         title: "Erro",
-        description: "Não foi possível processar a operação em massa",
+        description: "Não foi possível iniciar o processamento assíncrono",
         variant: "destructive"
       })
     } finally {
       setMassUpdateLoading(false)
     }
+  }
+
+  // Função para fazer polling do status do job
+  const pollJobStatus = async (jobId: string) => {
+    const checkStatus = async () => {
+      try {
+        const response = await fetch(`/api/jobs/${jobId}/status`, {
+          method: 'GET',
+          credentials: 'include'
+        })
+
+        if (!response.ok) {
+          throw new Error('Erro ao consultar status do job')
+        }
+
+        const data = await response.json()
+        const job = data.job
+
+        // Atualizar logs com progresso
+        if (job.status === 'running') {
+          addLog(`🔄 Progresso: ${job.progress}% (${job.processed_items}/${job.total_items})`)
+          
+          // Continuar polling se ainda está rodando
+          setTimeout(checkStatus, 2000) // Verifica a cada 2 segundos
+        } else if (job.status === 'completed') {
+          addLog(`✅ Processamento concluído!`)
+          addLog(`📊 Resultados: ${job.successful_items} sucessos, ${job.failed_items} falhas`)
+          
+          if (data.results) {
+            addLog(`📝 ${data.results.summary}`)
+            
+            // Log erros se houver
+            if (data.results.errors && data.results.errors.length > 0) {
+              data.results.errors.forEach((error: any) => {
+                addLog(`❌ ${error.remoteJid}: ${error.error}`)
+              })
+            }
+          }
+          
+          toast({
+            title: "🎉 Processamento Concluído",
+            description: `${job.successful_items} sucessos, ${job.failed_items} falhas`,
+            variant: job.failed_items > 0 ? "destructive" : "default",
+            duration: 5000
+          })
+          
+          // Recarregar sessões
+          await loadSessions()
+        } else if (job.status === 'failed') {
+          addLog(`❌ Processamento falhou: ${job.error_message}`)
+          
+          toast({
+            title: "❌ Processamento Falhou",
+            description: job.error_message || "Erro desconhecido",
+            variant: "destructive",
+            duration: 5000
+          })
+        }
+        
+      } catch (error) {
+        console.error('Erro ao consultar status do job:', error)
+        addLog(`❌ Erro ao consultar status: ${error}`)
+      }
+    }
+
+    // Iniciar verificação
+    setTimeout(checkStatus, 1000) // Primeira verificação após 1 segundo
   }
 
   const toggleSelectAll = () => {

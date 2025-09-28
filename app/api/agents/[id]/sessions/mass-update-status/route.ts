@@ -9,7 +9,7 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { sessionIds, status } = body;
+    const { sessionIds, sessions: sessionsData, status } = body;
     
     // Verificar autenticação
     const user = await getCurrentServerUser(request);
@@ -20,10 +20,11 @@ export async function POST(
       );
     }
 
-    // Validar parâmetros
-    if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
+    // Validar parâmetros - aceitar tanto sessionIds quanto sessionsData
+    if ((!Array.isArray(sessionIds) || sessionIds.length === 0) && 
+        (!Array.isArray(sessionsData) || sessionsData.length === 0)) {
       return NextResponse.json(
-        { error: "sessionIds deve ser um array não vazio" },
+        { error: "sessionIds ou sessions deve ser um array não vazio" },
         { status: 400 }
       );
     }
@@ -43,7 +44,8 @@ export async function POST(
     }
 
     // Rate limiting - máximo 50 sessões por operação
-    if (sessionIds.length > 50) {
+    const totalSessions = sessionsData ? sessionsData.length : sessionIds.length;
+    if (totalSessions > 50) {
       return NextResponse.json(
         { error: "Máximo de 50 sessões por operação" },
         { status: 400 }
@@ -121,24 +123,44 @@ export async function POST(
       );
     }
 
-    // Buscar as sessões no banco para obter os remoteJids
-    const { data: sessions, error: sessionsError } = await supabase
-      .from("evolution_sessions")
-      .select("id, remoteJid")
-      .in("id", sessionIds)
-      .eq("botId", agent.evolution_bot_id);
+    // Determinar as sessões a processar
+    let sessions: Array<{id: string, remoteJid: string}>;
+    
+    if (sessionsData) {
+      // Se recebemos os dados das sessões diretamente, usar eles
+      sessions = sessionsData.map((session: any) => ({
+        id: session.id,
+        remoteJid: session.remoteJid
+      }));
+    } else {
+      // Fallback: buscar as sessões no banco para obter os remoteJids
+      const { data: dbSessions, error: sessionsError } = await supabase
+        .from("evolution_sessions")
+        .select("id, remoteJid")
+        .in("id", sessionIds)
+        .eq("botId", agent.evolution_bot_id);
 
-    if (sessionsError) {
-      console.error("❌ Erro ao buscar sessões:", sessionsError);
-      return NextResponse.json(
-        { error: "Erro ao buscar sessões" },
-        { status: 500 }
-      );
+      if (sessionsError) {
+        console.error("❌ Erro ao buscar sessões:", sessionsError);
+        return NextResponse.json(
+          { error: "Erro ao buscar sessões" },
+          { status: 500 }
+        );
+      }
+
+      if (!dbSessions || dbSessions.length === 0) {
+        return NextResponse.json(
+          { error: "Nenhuma sessão encontrada" },
+          { status: 404 }
+        );
+      }
+      
+      sessions = dbSessions;
     }
 
-    if (!sessions || sessions.length === 0) {
+    if (sessions.length === 0) {
       return NextResponse.json(
-        { error: "Nenhuma sessão encontrada" },
+        { error: "Nenhuma sessão válida encontrada" },
         { status: 404 }
       );
     }
