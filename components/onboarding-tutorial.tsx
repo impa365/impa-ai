@@ -41,7 +41,7 @@ interface TutorialStep {
 const tutorialSteps: TutorialStep[] = [
   {
     id: 1,
-      title: "Bem-vindo à Impa AI! 🎉",
+      title: "Bem-vindo à Sistema AI! 🎉",
     description:
       "Vamos te ajudar a configurar sua primeira IA para WhatsApp em apenas 4 passos simples. Este tutorial levará cerca de 5 minutos.",
     icon: <Zap className="w-8 h-8 text-blue-500" />,

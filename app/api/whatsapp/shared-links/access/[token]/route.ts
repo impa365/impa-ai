@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
+// Função para criar cliente Supabase com verificação segura
+function createSupabaseClient() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Missing Supabase configuration");
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing Supabase configuration");
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    db: { schema: "impaai" },
+  });
 }
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  db: { schema: "impaai" },
-});
 
 // Função para verificar senha
 function verifyPassword(password: string, hash: string, salt: string): boolean {
@@ -29,7 +32,9 @@ async function logAccess(linkId: string, ip: string, userAgent: string) {
   try {
     // Tentar usar SUPABASE_SERVICE_ROLE_KEY, se não existir usar SUPABASE_ANON_KEY
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-    if (!serviceKey) return;
+    const supabaseUrl = process.env.SUPABASE_URL;
+    
+    if (!serviceKey || !supabaseUrl) return;
 
     const serviceSupabase = createClient(supabaseUrl, serviceKey, {
       db: { schema: "impaai" },
@@ -70,6 +75,124 @@ async function logAccess(linkId: string, ip: string, userAgent: string) {
   }
 }
 
+// Função para verificar status real na Evolution API
+async function getRealConnectionStatus(instanceName: string) {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.warn("⚠️ [STATUS-CHECK] Configuração do Supabase não disponível");
+      return null;
+    }
+
+    // Buscar configuração da Evolution API
+    const integrationResponse = await fetch(
+      `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Accept-Profile": "impaai",
+          "Content-Profile": "impaai",
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
+      }
+    );
+
+    if (!integrationResponse.ok) {
+      console.warn("⚠️ [STATUS-CHECK] Erro ao buscar config da Evolution API");
+      return null;
+    }
+
+    const integrations = await integrationResponse.json();
+    if (!integrations || integrations.length === 0) {
+      console.warn("⚠️ [STATUS-CHECK] Evolution API não configurada");
+      return null;
+    }
+
+    const config = integrations[0].config;
+    if (!config?.apiUrl || !config?.apiKey) {
+      console.warn("⚠️ [STATUS-CHECK] Configuração da Evolution API incompleta");
+      return null;
+    }
+
+    // Verificar status real na Evolution API
+    console.log(`🔍 [STATUS-CHECK] Verificando status real de: ${instanceName}`);
+    const statusResponse = await fetch(
+      `${config.apiUrl}/instance/connectionState/${instanceName}`,
+      {
+        method: "GET",
+        headers: {
+          apikey: config.apiKey,
+        },
+        signal: AbortSignal.timeout(8000), // 8 segundos timeout
+      }
+    );
+
+    if (!statusResponse.ok) {
+      console.warn(`⚠️ [STATUS-CHECK] Erro ${statusResponse.status} ao verificar status`);
+      return null;
+    }
+
+    const statusData = await statusResponse.json();
+    
+    let realStatus = "disconnected";
+    if (statusData?.instance?.state) {
+      switch (statusData.instance.state) {
+        case "open":
+          realStatus = "connected";
+          break;
+        case "connecting":
+          realStatus = "connecting";
+          break;
+        case "close":
+        default:
+          realStatus = "disconnected";
+          break;
+      }
+    }
+
+    console.log(`✅ [STATUS-CHECK] Status real: ${realStatus} (Evolution: ${statusData?.instance?.state})`);
+
+    // Atualizar status no banco se for diferente
+    try {
+      await fetch(
+        `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept-Profile": "impaai",
+            "Content-Profile": "impaai",
+            apikey: supabaseAnonKey,
+            Authorization: `Bearer ${supabaseAnonKey}`,
+            Prefer: "return=minimal",
+          },
+          body: JSON.stringify({
+            status: realStatus,
+            updated_at: new Date().toISOString(),
+          }),
+        }
+      );
+      console.log(`🔄 [STATUS-CHECK] Status atualizado no banco: ${realStatus}`);
+    } catch (updateError) {
+      console.warn("⚠️ [STATUS-CHECK] Erro ao atualizar status no banco:", updateError);
+    }
+
+    return {
+      status: realStatus,
+      phoneNumber: statusData?.instance?.wuid || statusData?.instance?.number || null,
+      profileName: statusData?.instance?.profileName || null,
+      profilePicUrl: statusData?.instance?.profilePicUrl || null,
+    };
+
+  } catch (error) {
+    console.warn("⚠️ [STATUS-CHECK] Erro ao verificar status real:", error);
+    return null;
+  }
+}
+
 // GET - Obter informações do link (sem senha)
 export async function GET(
   request: NextRequest,
@@ -78,6 +201,8 @@ export async function GET(
   try {
     const { token } = await params;
     console.log("🔍 [SHARED-ACCESS] Acessando link:", token.substring(0, 10) + "...");
+
+    const supabase = createSupabaseClient();
 
     // Buscar link compartilhado com informações da conexão
     const { data: link, error } = await supabase
@@ -153,13 +278,18 @@ export async function GET(
       );
     }
 
+    // Verificar status real na Evolution API
+    const realStatus = await getRealConnectionStatus(connection.instance_name);
+    
     // Retornar informações públicas do link
     const linkInfo = {
       connection: {
         name: connection.connection_name,
         instance_name: connection.instance_name,
-        status: connection.status,
-        phone_number: connection.phone_number
+        status: realStatus?.status || connection.status,
+        phone_number: realStatus?.phoneNumber || connection.phone_number,
+        profile_name: realStatus?.profileName || null,
+        profile_pic_url: realStatus?.profilePicUrl || null
       },
       permissions: link.permissions,
       requires_password: !!link.password_hash,
@@ -171,6 +301,15 @@ export async function GET(
     };
 
     console.log("✅ [SHARED-ACCESS] Informações do link retornadas");
+
+    // Registrar acesso (mesmo sem senha)
+    const forwarded = request.headers.get('x-forwarded-for');
+    const ip = forwarded?.split(',')[0] || 
+               request.headers.get('x-real-ip') || 
+               'unknown';
+    const userAgent = request.headers.get('user-agent') || 'unknown';
+    
+    await logAccess(link.id, ip, userAgent);
 
     return NextResponse.json({
       success: true,
@@ -204,6 +343,8 @@ export async function POST(
                request.headers.get('x-real-ip') || 
                'unknown';
     const userAgent = request.headers.get('user-agent') || 'unknown';
+
+    const supabase = createSupabaseClient();
 
     // Buscar link completo
     const { data: link, error } = await supabase
@@ -309,13 +450,18 @@ export async function POST(
       );
     }
 
+    // Verificar status real na Evolution API
+    const realStatus = await getRealConnectionStatus(connection.instance_name);
+
     // Montar resposta baseada nas permissões
     const responseData: any = {
       connection: {
         name: connection.connection_name,
         instance_name: connection.instance_name,
-        status: connection.status,
-        phone_number: connection.phone_number
+        status: realStatus?.status || connection.status,
+        phone_number: realStatus?.phoneNumber || connection.phone_number,
+        profile_name: realStatus?.profileName || null,
+        profile_pic_url: realStatus?.profilePicUrl || null
       },
       permissions: link.permissions
     };
@@ -330,14 +476,14 @@ export async function POST(
         try {
           // Buscar configuração da Evolution API
           const integrationResponse = await fetch(
-            `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
+            `${process.env.SUPABASE_URL}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
             {
               headers: {
                 "Content-Type": "application/json",
                 "Accept-Profile": "impaai",
                 "Content-Profile": "impaai",
-                apikey: supabaseAnonKey,
-                Authorization: `Bearer ${supabaseAnonKey}`,
+                apikey: process.env.SUPABASE_ANON_KEY!,
+                Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY!}`,
               },
             }
           );

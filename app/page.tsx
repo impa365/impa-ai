@@ -78,6 +78,7 @@ import {
   X
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
+import AuthRecoverySystem from "@/lib/auth-recovery";
 
 export default function HomePage() {
   const router = useRouter();
@@ -85,6 +86,8 @@ export default function HomePage() {
   const [isLandingPageEnabled, setIsLandingPageEnabled] = useState(true);
   const [isCheckingStatus, setIsCheckingStatus] = useState(true);
   const [showLandingPage, setShowLandingPage] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [showEmergencyButton, setShowEmergencyButton] = useState(false);
   const { systemName, isLoading } = useSystemName();
 
   const features = [
@@ -96,12 +99,40 @@ export default function HomePage() {
     "Analytics Avançado"
   ];
 
-  // Verificação ultra-rápida do status da landing page e usuário
+  // Verificação ultra-rápida do status da landing page e usuário com recuperação automática
   useEffect(() => {
     const checkStatusAndUser = async () => {
       try {
-        // Verificar status da landing page primeiro (com cache de 30s)
-        const statusResponse = await fetch("/api/system/landing-page-status");
+        // Verificar se precisa de recuperação antes de continuar
+        if (AuthRecoverySystem.needsRecovery()) {
+          console.log('🔧 Sistema detectou necessidade de recuperação');
+          setIsRecovering(true);
+          
+          const recoverySuccess = await AuthRecoverySystem.performRecovery();
+          if (!recoverySuccess) {
+            setShowEmergencyButton(true);
+            setIsRecovering(false);
+            return;
+          }
+          // Se chegou aqui, a página será recarregada automaticamente
+          return;
+        }
+
+        // Verificar se deve mostrar botão de emergência
+        if (AuthRecoverySystem.shouldShowEmergencyButton()) {
+          setShowEmergencyButton(true);
+        }
+
+        // Verificar status da landing page com timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos timeout
+
+        const statusResponse = await fetch("/api/system/landing-page-status", {
+          signal: controller.signal,
+          cache: 'no-cache'
+        });
+        
+        clearTimeout(timeoutId);
         const statusData = await statusResponse.json();
         
         const landingEnabled = statusData.success ? statusData.landingPageEnabled : false;
@@ -127,9 +158,22 @@ export default function HomePage() {
             router.push("/auth/login");
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Erro ao verificar status:", error);
-        // Em caso de erro, redirecionar para login por segurança
+        
+        // Se foi timeout, tentar recuperação
+        if (error.name === 'AbortError') {
+          console.log('⏱️ Timeout detectado, iniciando recuperação...');
+          setIsRecovering(true);
+          const recoverySuccess = await AuthRecoverySystem.performRecovery();
+          if (!recoverySuccess) {
+            setShowEmergencyButton(true);
+          }
+          setIsRecovering(false);
+          return;
+        }
+        
+        // Em caso de outros erros, redirecionar para login por segurança
         router.push("/auth/login");
       } finally {
         setIsCheckingStatus(false);
@@ -157,14 +201,38 @@ export default function HomePage() {
   };
 
   // Loading state enquanto verifica status
-  if (isCheckingStatus) {
+  if (isCheckingStatus || isRecovering) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto mb-8"></div>
-          <p className="text-white text-xl">
-            Carregando {systemName || "sistema"}...
+          <p className="text-white text-xl mb-4">
+            {isRecovering ? "Recuperando sistema..." : `Carregando ${systemName || "sistema"}...`}
           </p>
+          
+          {isRecovering && (
+            <div className="text-blue-300 text-sm mb-6">
+              <p>🔧 Detectamos um problema e estamos corrigindo automaticamente</p>
+              <p>Isso pode levar alguns segundos...</p>
+            </div>
+          )}
+          
+          {showEmergencyButton && (
+            <div className="mt-8 p-4 bg-red-900/30 rounded-lg border border-red-500/30">
+              <p className="text-red-300 text-sm mb-4">
+                ⚠️ Sistema com problemas persistentes
+              </p>
+              <button
+                onClick={() => AuthRecoverySystem.emergencyCleanup()}
+                className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+              >
+                🚨 Limpeza de Emergência
+              </button>
+              <p className="text-red-200 text-xs mt-2">
+                Isso irá limpar todos os dados e recarregar a página
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );

@@ -356,8 +356,8 @@ export async function POST(request: NextRequest) {
       connection_id,
       user_id: user.id,
       token,
-      password_hash: passwordHash,
-      salt: passwordSalt,
+      password_hash,
+      salt,
       permissions,
       expires_at,
       max_uses

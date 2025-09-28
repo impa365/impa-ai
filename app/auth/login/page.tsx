@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import LoginForm from "@/components/login-form"
 import DynamicTitle from "@/components/dynamic-title"
 import { getCurrentUser } from "@/lib/auth"
+import AuthRecoverySystem from "@/lib/auth-recovery"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Bot } from "lucide-react"
 import { useSystemName } from "@/hooks/use-system-config"
@@ -19,6 +20,13 @@ export default function LoginPage() {
   useEffect(() => {
     const checkUser = async () => {
       try {
+        // Verificar se precisa de recuperação primeiro
+        if (AuthRecoverySystem.needsRecovery()) {
+          console.log('🔧 Login: Sistema detectou necessidade de recuperação');
+          await AuthRecoverySystem.performRecovery();
+          return; // A página será recarregada automaticamente
+        }
+
         const user = getCurrentUser()
         if (user) {
           if (user.role === "admin") {
@@ -31,6 +39,13 @@ export default function LoginPage() {
         }
       } catch (error) {
         console.error("Error checking user:", error)
+        
+        // Se houve erro, tentar recuperação
+        if (AuthRecoverySystem.needsRecovery()) {
+          await AuthRecoverySystem.performRecovery();
+          return;
+        }
+        
         setLoading(false)
       }
     }

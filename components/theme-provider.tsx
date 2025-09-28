@@ -23,7 +23,7 @@ export interface ThemeConfig {
 
 // Tema padrão exportado
 export const defaultTheme: ThemeConfig = {
-  systemName: "Impa AI",
+  systemName: "Sistema AI",
   description: "Tema padrão azul da plataforma",
   logoIcon: "🤖",
   primaryColor: "#3b82f6",

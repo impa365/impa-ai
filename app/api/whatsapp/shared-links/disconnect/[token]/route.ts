@@ -201,7 +201,61 @@ export async function POST(
     const evolutionConfig = integrations[0].config;
 
     try {
-      // Desconectar via Evolution API
+      // Verificar status atual antes de tentar desconectar
+      console.log("🔍 [DISCONNECT] Verificando status atual...");
+      const statusResponse = await fetch(
+        `${evolutionConfig.apiUrl}/instance/connectionState/${connection.instance_name}`,
+        {
+          method: "GET",
+          headers: {
+            apikey: evolutionConfig.apiKey,
+          },
+          signal: AbortSignal.timeout(8000)
+        }
+      );
+
+      let currentStatus = "unknown";
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        currentStatus = statusData?.instance?.state || "unknown";
+        console.log("📊 [DISCONNECT] Status atual na Evolution API:", currentStatus);
+        
+        // Se já está desconectado, apenas atualizar o banco
+        if (currentStatus === "close" || !currentStatus || currentStatus === "disconnected") {
+          console.log("ℹ️ [DISCONNECT] Instância já está desconectada, atualizando banco...");
+          
+          // Atualizar status no banco
+          await fetch(
+            `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${connection.instance_name}`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                "Accept-Profile": "impaai",
+                "Content-Profile": "impaai",
+                apikey: supabaseAnonKey,
+                Authorization: `Bearer ${supabaseAnonKey}`,
+                Prefer: "return=minimal",
+              },
+              body: JSON.stringify({
+                status: "disconnected",
+                updated_at: new Date().toISOString(),
+              }),
+            }
+          );
+
+          return NextResponse.json({
+            success: true,
+            data: {
+              instance_name: connection.instance_name,
+              status: 'disconnected',
+              message: "Instância já estava desconectada"
+            }
+          }, { headers: securityHeaders });
+        }
+      }
+      
+      // Desconectar via Evolution API se ainda estiver conectado
       console.log("🔄 [DISCONNECT] Chamando Evolution API para desconectar...");
       console.log("🔗 [DISCONNECT] URL:", `${evolutionConfig.apiUrl}/instance/logout/${connection.instance_name}`);
       console.log("🔑 [DISCONNECT] ApiKey presente:", !!evolutionConfig.apiKey);
@@ -247,6 +301,31 @@ export async function POST(
 
       const disconnectData = await disconnectResponse.json();
       console.log("✅ [DISCONNECT] Evolution API response:", disconnectData);
+      
+      // Atualizar status no banco após disconnect bem-sucedido
+      try {
+        await fetch(
+          `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${connection.instance_name}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept-Profile": "impaai",
+              "Content-Profile": "impaai",
+              apikey: supabaseAnonKey,
+              Authorization: `Bearer ${supabaseAnonKey}`,
+              Prefer: "return=minimal",
+            },
+            body: JSON.stringify({
+              status: "disconnected",
+              updated_at: new Date().toISOString(),
+            }),
+          }
+        );
+        console.log("🔄 [DISCONNECT] Status atualizado no banco: disconnected");
+      } catch (updateError) {
+        console.warn("⚠️ [DISCONNECT] Erro ao atualizar status no banco:", updateError);
+      }
       
       // Log de sucesso
       logSecurityEvent({

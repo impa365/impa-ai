@@ -136,9 +136,22 @@ export function getCurrentUser(): UserProfile | null {
     // Primeiro, tentar localStorage
     const userStr = localStorage.getItem("user")
     if (userStr) {
-      const user = JSON.parse(userStr) as UserProfile
-      console.log("✅ Usuário encontrado no localStorage:", user.email)
-      return user
+      try {
+        const user = JSON.parse(userStr) as UserProfile
+        
+        // Validar se o objeto user tem as propriedades essenciais
+        if (!user.id || !user.email || !user.role) {
+          console.warn("⚠️ Dados de usuário incompletos no localStorage, removendo...");
+          localStorage.removeItem("user");
+          throw new Error("Dados de usuário incompletos");
+        }
+        
+        console.log("✅ Usuário encontrado no localStorage:", user.email)
+        return user
+      } catch (parseError) {
+        console.warn("🗑️ Dados corrompidos no localStorage, limpando...");
+        localStorage.removeItem("user");
+      }
     }
 
     // Se não encontrou no localStorage, tentar cookie do cliente
@@ -148,11 +161,24 @@ export function getCurrentUser(): UserProfile | null {
     if (userCookie) {
       const cookieValue = userCookie.split("=")[1]
       if (cookieValue) {
-        const user = JSON.parse(decodeURIComponent(cookieValue)) as UserProfile
-        console.log("✅ Usuário encontrado no cookie do cliente:", user.email)
-        // Sincronizar com localStorage
-        localStorage.setItem("user", JSON.stringify(user))
-        return user
+        try {
+          const user = JSON.parse(decodeURIComponent(cookieValue)) as UserProfile
+          
+          // Validar se o objeto user tem as propriedades essenciais
+          if (!user.id || !user.email || !user.role) {
+            console.warn("⚠️ Dados de usuário incompletos no cookie, removendo...");
+            document.cookie = "impaai_user_client=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+            throw new Error("Dados de usuário incompletos");
+          }
+          
+          console.log("✅ Usuário encontrado no cookie do cliente:", user.email)
+          // Sincronizar com localStorage
+          localStorage.setItem("user", JSON.stringify(user))
+          return user
+        } catch (parseError) {
+          console.warn("🗑️ Cookie corrompido, limpando...");
+          document.cookie = "impaai_user_client=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        }
       }
     }
 
@@ -160,6 +186,13 @@ export function getCurrentUser(): UserProfile | null {
     return null
   } catch (error) {
     console.error("❌ Erro ao obter usuário:", error)
+    // Em caso de erro crítico, limpar tudo
+    try {
+      localStorage.removeItem("user");
+      document.cookie = "impaai_user_client=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    } catch (cleanupError) {
+      console.error("❌ Erro ao limpar dados corrompidos:", cleanupError);
+    }
     return null
   }
 }

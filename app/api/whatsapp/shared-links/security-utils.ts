@@ -8,7 +8,10 @@ const SECURITY_CONFIG = {
   PASSWORD_MIN_LENGTH: 6,
   SESSION_TIMEOUT_MINUTES: 30,
   RATE_LIMIT_WINDOW_MINUTES: 1,
-  MAX_REQUESTS_PER_MINUTE: 10
+  MAX_REQUESTS_PER_MINUTE: 10,
+  // Configurações específicas para QR Code
+  QR_RATE_LIMIT_WINDOW_MINUTES: 2, // Janela maior para QR Code
+  QR_MAX_REQUESTS_PER_WINDOW: 3    // Máximo 3 tentativas em 2 minutos
 };
 
 // Store para rate limiting e bloqueios (em produção, usar Redis)
@@ -108,6 +111,41 @@ export function checkRateLimit(ip: string): { allowed: boolean; resetTime?: numb
     return { 
       allowed: false, 
       resetTime: data.lastReset + (SECURITY_CONFIG.RATE_LIMIT_WINDOW_MINUTES * 60 * 1000)
+    };
+  }
+  
+  // Adicionar request atual
+  data.requests.push(now);
+  securityStore.set(key, data);
+  
+  return { allowed: true };
+}
+
+// Rate limiting específico para QR Code (mais permissivo)
+export function checkQRRateLimit(ip: string, token: string): { allowed: boolean; resetTime?: number } {
+  const key = `qr_rate_${ip}_${token.substring(0, 10)}`;
+  const now = Date.now();
+  
+  let data: RateLimitData = securityStore.get(key) || {
+    requests: [],
+    lastReset: now
+  };
+  
+  // Reset a cada 2 minutos para QR Code
+  if (now - data.lastReset > SECURITY_CONFIG.QR_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000) {
+    data = { requests: [], lastReset: now };
+  }
+  
+  // Remover requests antigos
+  const windowStart = now - (SECURITY_CONFIG.QR_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000);
+  data.requests = data.requests.filter(timestamp => timestamp > windowStart);
+  
+  // Verificar limite (3 tentativas em 2 minutos)
+  if (data.requests.length >= SECURITY_CONFIG.QR_MAX_REQUESTS_PER_WINDOW) {
+    securityStore.set(key, data);
+    return { 
+      allowed: false, 
+      resetTime: data.lastReset + (SECURITY_CONFIG.QR_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000)
     };
   }
   

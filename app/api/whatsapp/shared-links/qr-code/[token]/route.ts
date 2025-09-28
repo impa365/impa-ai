@@ -1,11 +1,62 @@
 import { NextRequest, NextResponse } from "next/server";
 import { 
-  checkRateLimit,
+  checkQRRateLimit,
   sanitizeIP,
   getSecurityHeaders,
   logSecurityEvent,
   validateTokenFormat
 } from "../../security-utils";
+import { createClient } from "@supabase/supabase-js";
+
+// Função para incrementar uso do link
+async function incrementLinkUsage(linkId: string, ip: string, userAgent: string) {
+  try {
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+    const supabaseUrl = process.env.SUPABASE_URL;
+    
+    if (!serviceKey || !supabaseUrl) return;
+
+    const serviceSupabase = createClient(supabaseUrl, serviceKey, {
+      db: { schema: "impaai" },
+    });
+
+    const accessLog = {
+      timestamp: new Date().toISOString(),
+      ip,
+      user_agent: userAgent,
+      action: 'QR_CODE_GENERATED'
+    };
+
+    // Buscar dados atuais primeiro
+    const { data: currentLink } = await serviceSupabase
+      .from("shared_whatsapp_links")
+      .select("current_uses, access_logs")
+      .eq("id", linkId)
+      .single();
+
+    if (currentLink) {
+      const newUses = (currentLink.current_uses || 0) + 1;
+      const currentLogs = Array.isArray(currentLink.access_logs) ? currentLink.access_logs : [];
+      const newLogs = [...currentLogs, accessLog];
+
+      // Atualizar logs de acesso e contador
+      await serviceSupabase
+        .from("shared_whatsapp_links")
+        .update({
+          current_uses: newUses,
+          last_accessed_at: new Date().toISOString(),
+          last_accessed_ip: ip,
+          access_logs: newLogs
+        })
+        .eq("id", linkId);
+        
+      console.log("✅ [QR-GENERATE] Uso incrementado:", newUses);
+    }
+
+  } catch (error) {
+    console.error("⚠️ [QR-GENERATE] Erro ao incrementar uso:", error);
+  }
+}
 
 // POST - Gerar QR Code via Evolution API
 export async function POST(
@@ -19,9 +70,9 @@ export async function POST(
     const { token } = await params;
     console.log("🔗 [QR-GENERATE] Gerando QR Code para token:", token.substring(0, 10) + "...");
 
-    // Sanitizar IP e aplicar rate limiting
+    // Sanitizar IP e aplicar rate limiting específico para QR Code
     const clientIP = sanitizeIP(request);
-    const rateCheck = checkRateLimit(clientIP);
+    const rateCheck = checkQRRateLimit(clientIP, token);
     
     if (!rateCheck.allowed) {
       logSecurityEvent({
@@ -206,8 +257,8 @@ export async function POST(
       );
     }
 
-    const connection = await connectionResponse.json();
-    if (!connection || connection.length === 0) {
+    const connections = await connectionResponse.json();
+    if (!connections || connections.length === 0) {
       return NextResponse.json(
         { 
           success: false, 
@@ -217,6 +268,8 @@ export async function POST(
         { status: 404, headers: securityHeaders }
       );
     }
+
+    const connection = connections[0];
 
     // Buscar configuração da Evolution API
     const integrationResponse = await fetch(
@@ -491,6 +544,10 @@ export async function POST(
       // Verificar se tem QR Code na resposta
       if (qrData.qrcode && qrData.qrcode.base64) {
         console.log("✅ [QR-GENERATE] QR Code gerado com sucesso (qrcode.base64)");
+        
+        // Incrementar uso do link
+        await incrementLinkUsage(link.id, clientIP, request.headers.get('user-agent') || 'unknown');
+        
         return NextResponse.json({
           success: true,
           data: {
@@ -503,6 +560,10 @@ export async function POST(
       } else if (qrData.base64) {
         // Formato alternativo
         console.log("✅ [QR-GENERATE] QR Code gerado com sucesso (base64)");
+        
+        // Incrementar uso do link
+        await incrementLinkUsage(link.id, clientIP, request.headers.get('user-agent') || 'unknown');
+        
         return NextResponse.json({
           success: true,
           data: {
@@ -530,7 +591,7 @@ export async function POST(
       }
 
     } catch (evolutionError: any) {
-      console.error("�� [QR-GENERATE] Erro fatal na Evolution API:", {
+      console.error("💥 [QR-GENERATE] Erro fatal na Evolution API:", {
         name: evolutionError.name,
         message: evolutionError.message,
         stack: evolutionError.stack,

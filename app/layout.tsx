@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider, defaultTheme } from "@/components/theme-provider"
+import SystemHealthMonitor from "@/components/system-health-monitor"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -21,7 +22,10 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={inter.className}>
-        <ThemeProvider serverFetchedTheme={defaultTheme}>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <SystemHealthMonitor />
+        </ThemeProvider>
       </body>
     </html>
   )

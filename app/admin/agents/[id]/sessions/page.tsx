@@ -71,6 +71,7 @@ export default function AdminAgentSessionsPage() {
   const [selectAll, setSelectAll] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
   const [logs, setLogs] = useState<string[]>([])
+  const [massUpdateLoading, setMassUpdateLoading] = useState(false)
   
   // Filtros
   const [nameFilter, setNameFilter] = useState("")
@@ -230,18 +231,129 @@ export default function AdminAgentSessionsPage() {
       return
     }
 
-    const promises = Array.from(selectedSessions).map(sessionId => {
-      const session = sessions.find(s => s.id === sessionId)
-      if (session) {
-        return changeSessionStatus(session.remoteJid, massUpdateStatus)
-      }
-      return Promise.resolve()
-    })
+    try {
+      setMassUpdateLoading(true)
+      const sessionIds = Array.from(selectedSessions)
+      
+      // Obter os dados completos das sessões selecionadas
+      const selectedSessionsData = filteredSessions.filter(session => selectedSessions.has(session.id))
+      
+      addLog(`🔄 Iniciando processamento assíncrono de ${sessionIds.length} sessões para status: ${massUpdateStatus}`)
 
-    await Promise.all(promises)
-    setSelectedSessions(new Set())
-    setSelectAll(false)
-    addLog(`Status de ${selectedSessions.size} sessões alterado para ${massUpdateStatus}`)
+      const response = await fetch(`/api/agents/${agentId}/sessions/mass-update-async`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          sessionIds, 
+          sessions: selectedSessionsData,
+          status: massUpdateStatus 
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Erro ao iniciar processamento assíncrono')
+      }
+
+      const data = await response.json()
+      
+      addLog(`✅ Job criado com sucesso! ID: ${data.jobId}`)
+      addLog(`📊 ${data.data.totalSessions} sessões serão processadas em background`)
+      addLog(`⏱️ Tempo estimado: ${data.data.estimatedTime}`)
+      
+      toast({
+        title: "✅ Processamento Iniciado",
+        description: `${data.data.totalSessions} sessões estão sendo processadas em background. Você pode navegar livremente!`,
+        duration: 5000
+      })
+      
+      // Limpar seleções
+      setSelectedSessions(new Set())
+      setSelectAll(false)
+      
+      // Iniciar polling do status do job
+      if (data.jobId) {
+        pollJobStatus(data.jobId)
+      }
+      
+    } catch (error) {
+      console.error('Erro na operação em massa:', error)
+      addLog(`❌ Erro na operação em massa: ${error}`)
+      toast({
+        title: "Erro",
+        description: "Não foi possível processar a operação em massa",
+        variant: "destructive"
+      })
+    } finally {
+      setMassUpdateLoading(false)
+    }
+  }
+
+  // Função para fazer polling do status do job
+  const pollJobStatus = async (jobId: string) => {
+    const checkStatus = async () => {
+      try {
+        const response = await fetch(`/api/jobs/${jobId}/status`, {
+          method: 'GET',
+          credentials: 'include'
+        })
+
+        if (!response.ok) {
+          throw new Error('Erro ao consultar status do job')
+        }
+
+        const data = await response.json()
+        const job = data.job
+
+        // Atualizar logs com progresso
+        if (job.status === 'running') {
+          addLog(`🔄 Progresso: ${job.progress}% (${job.processed_items}/${job.total_items})`)
+          
+          // Continuar polling se ainda está rodando
+          setTimeout(checkStatus, 2000) // Verifica a cada 2 segundos
+        } else if (job.status === 'completed') {
+          addLog(`✅ Processamento concluído!`)
+          addLog(`📊 Resultados: ${job.successful_items} sucessos, ${job.failed_items} falhas`)
+          
+          if (data.results) {
+            addLog(`📝 ${data.results.summary}`)
+            
+            // Log erros se houver
+            if (data.results.errors && data.results.errors.length > 0) {
+              data.results.errors.forEach((error: any) => {
+                addLog(`❌ ${error.remoteJid}: ${error.error}`)
+              })
+            }
+          }
+          
+          toast({
+            title: "🎉 Processamento Concluído",
+            description: `${job.successful_items} sucessos, ${job.failed_items} falhas`,
+            variant: job.failed_items > 0 ? "destructive" : "default"
+          })
+          
+          // Recarregar sessões
+          await loadSessions()
+        } else if (job.status === 'failed') {
+          addLog(`❌ Processamento falhou: ${job.error_message}`)
+          
+          toast({
+            title: "❌ Processamento Falhou",
+            description: job.error_message || "Erro desconhecido",
+            variant: "destructive"
+          })
+        }
+        
+      } catch (error) {
+        console.error('Erro ao consultar status do job:', error)
+        addLog(`❌ Erro ao consultar status: ${error}`)
+      }
+    }
+
+    // Iniciar verificação
+    setTimeout(checkStatus, 1000) // Primeira verificação após 1 segundo
   }
 
   const toggleSelectAll = () => {
@@ -409,9 +521,16 @@ export default function AdminAgentSessionsPage() {
                 variant="default"
                 size="sm"
                 onClick={handleMassStatusUpdate}
-                disabled={selectedSessions.size === 0}
+                disabled={selectedSessions.size === 0 || massUpdateLoading}
               >
-                Alterar Status das Selecionadas
+                {massUpdateLoading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  "Alterar Status das Selecionadas"
+                )}
               </Button>
             </div>
             <div className="text-sm text-gray-500">
