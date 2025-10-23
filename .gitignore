@@ -46,3 +46,6 @@ Thumbs.db
 
 # Docker
 .dockerignore
+
+# YoYo AI version control directory
+.yoyo/

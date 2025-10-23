@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Plus, AlertCircle } from "lucide-react"
-import { createEvolutionInstance } from "@/lib/whatsapp-api-client"
 import InstanceCreationModal from "./instance-creation-modal"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { adminApi } from "@/lib/api-client"
@@ -28,10 +27,11 @@ export default function AdminWhatsAppConnectionModal({
   onSuccess,
 }: AdminWhatsAppConnectionModalProps) {
   const [connectionName, setConnectionName] = useState("")
+  const [apiType, setApiType] = useState<"evolution" | "uazapi">("evolution")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [users, setUsers] = useState<any[]>([])
-  const [selectedUserId, setSelectedUserId] = useState("")
+  const [selectedUserId, setSelectedUserId] = useState(adminId) // Iniciar com adminId
   const [loadingUsers, setLoadingUsers] = useState(false)
 
   const [creationModalOpen, setCreationModalOpen] = useState(false)
@@ -39,9 +39,11 @@ export default function AdminWhatsAppConnectionModal({
 
   useEffect(() => {
     if (open) {
+      // Pré-selecionar o usuário logado (admin) ao abrir o modal
+      setSelectedUserId(adminId)
       fetchUsers()
     }
-  }, [open])
+  }, [open, adminId])
 
   const fetchUsers = async () => {
     setLoadingUsers(true)
@@ -55,7 +57,10 @@ export default function AdminWhatsAppConnectionModal({
 
       if (response.data?.users) {
         setUsers(response.data.users)
-        setSelectedUserId(adminId)
+        // Manter o usuário logado pré-selecionado
+        if (!selectedUserId) {
+          setSelectedUserId(adminId)
+        }
       }
     } catch (error) {
       console.error("Erro ao buscar usuários:", error)
@@ -99,13 +104,26 @@ export default function AdminWhatsAppConnectionModal({
     setLoading(true)
 
     try {
-      const result = await createEvolutionInstance(connectionName.trim(), selectedUserId)
+      const response = await fetch("/api/whatsapp/create-instance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          connectionName: connectionName.trim(),
+          userId: selectedUserId,
+          apiType: apiType,
+        }),
+      })
+
+      const result = await response.json()
 
       if (result.success) {
         onSuccess()
         setCreationModalOpen(false)
         setConnectionName("")
         setSelectedUserId(adminId)
+        setApiType("evolution")
       } else {
         setError(result.error || "Erro ao criar conexão")
         setCreationModalOpen(false)
@@ -124,6 +142,7 @@ export default function AdminWhatsAppConnectionModal({
   const handleModalClose = (open: boolean) => {
     if (!open) {
       setConnectionName("")
+      setApiType("evolution")
       setError("")
       setLoading(false)
       setIsCreating(false)
@@ -161,6 +180,34 @@ export default function AdminWhatsAppConnectionModal({
                 <AlertDescription className="text-destructive-foreground">{error}</AlertDescription>
               </Alert>
             )}
+
+            <div className="space-y-2">
+              <Label htmlFor="apiType" className="text-gray-900 dark:text-gray-100">
+                Tipo de API WhatsApp
+              </Label>
+              <Select value={apiType} onValueChange={(value: "evolution" | "uazapi") => setApiType(value)} disabled={loading}>
+                <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                  <SelectValue placeholder="Selecione a API" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="evolution">
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">Evolution API</span>
+                      <span className="text-xs text-gray-500">API oficial com EvolutionBot</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="uazapi">
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">Uazapi</span>
+                      <span className="text-xs text-gray-500">API alternativa com recursos completos</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Escolha qual API de WhatsApp deseja utilizar para esta conexão
+              </p>
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="connectionName" className="text-gray-900 dark:text-gray-100">
@@ -203,6 +250,9 @@ export default function AdminWhatsAppConnectionModal({
                   )}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Por padrão, a conexão será criada para você. Selecione outro usuário se necessário.
+              </p>
             </div>
 
             <div className="flex justify-end gap-2">

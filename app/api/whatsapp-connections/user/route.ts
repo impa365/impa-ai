@@ -27,9 +27,9 @@ export async function GET(request: NextRequest) {
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    // Buscar conexões do usuário
+    // Buscar conexões do usuário (incluindo api_type)
     const connectionsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=*&user_id=eq.${user.id}&order=created_at.desc`,
+      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,connection_name,instance_name,phone_number,status,api_type,created_at,updated_at,last_sync,messages_sent,messages_received&user_id=eq.${user.id}&order=created_at.desc`,
       { headers },
     )
 
@@ -78,6 +78,7 @@ export async function GET(request: NextRequest) {
           instance_name: conn.instance_name,
           phone_number: conn.phone_number,
           status: conn.status,
+          api_type: conn.api_type || "evolution", // CRÍTICO: Incluir api_type
           created_at: conn.created_at,
           updated_at: conn.updated_at,
           last_sync: conn.last_sync,

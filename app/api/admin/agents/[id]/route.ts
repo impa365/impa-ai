@@ -1,11 +1,141 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-export async function PUT(
+export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const agentId = params.id;
+    const { id: agentId } = await params;
+    console.log("📡 [GET AGENT] Iniciando busca do agente:", agentId);
+
+    // Verificar variáveis de ambiente em runtime
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ [GET AGENT] Variáveis de ambiente não configuradas");
+      return NextResponse.json(
+        { error: "Configuração do servidor incompleta" },
+        { status: 500 }
+      );
+    }
+
+    console.log("🔍 [GET AGENT] Buscando agente no banco...");
+
+    // Buscar agente com dados relacionados
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Accept-Profile": "impaai",
+          "Content-Profile": "impaai",
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ [GET AGENT] Erro ao buscar agente no banco:", response.status, errorText);
+      return NextResponse.json(
+        { error: `Erro ao buscar agente: ${response.status}` },
+        { status: response.status }
+      );
+    }
+
+    const agentData = await response.json();
+    const agent = agentData[0];
+
+    if (!agent) {
+      console.error("❌ [GET AGENT] Agente não encontrado:", agentId);
+      return NextResponse.json(
+        { error: "Agente não encontrado" },
+        { status: 404 }
+      );
+    }
+
+    console.log("✅ [GET AGENT] Agente encontrado:", agent.name);
+
+    // Se tem whatsapp_connection_id, buscar dados da conexão
+    if (agent.whatsapp_connection_id) {
+      console.log("🔍 [GET AGENT] Buscando dados da conexão WhatsApp...");
+      
+      const connectionResponse = await fetch(
+        `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${agent.whatsapp_connection_id}`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Accept-Profile": "impaai",
+            "Content-Profile": "impaai",
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+        }
+      );
+
+      if (connectionResponse.ok) {
+        const connections = await connectionResponse.json();
+        const connection = connections[0];
+        
+        if (connection) {
+          agent.connection = connection;
+          console.log("✅ [GET AGENT] Conexão encontrada:", connection.connection_name);
+        }
+      }
+    }
+
+    // Se tem bot_id, buscar dados do bot Uazapi
+    if (agent.bot_id) {
+      console.log("🤖 [GET AGENT] Buscando dados do bot Uazapi...");
+      
+      const botResponse = await fetch(
+        `${supabaseUrl}/rest/v1/bots?id=eq.${agent.bot_id}`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Accept-Profile": "impaai",
+            "Content-Profile": "impaai",
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+        }
+      );
+
+      if (botResponse.ok) {
+        const bots = await botResponse.json();
+        const bot = bots[0];
+        
+        if (bot) {
+          agent.bot = bot;
+          console.log("✅ [GET AGENT] Bot encontrado:", bot.nome);
+        }
+      }
+    }
+
+    console.log("✅ [GET AGENT] Retornando dados do agente");
+
+    return NextResponse.json({ agent });
+  } catch (error: any) {
+    console.error("❌ [GET AGENT] Erro geral ao buscar agente:", error);
+    console.error("❌ [GET AGENT] Stack trace:", error.stack);
+    return NextResponse.json(
+      { 
+        error: "Erro interno do servidor",
+        details: error.message 
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: agentId } = await params;
     const body = await request.json();
 
     // Verificar variáveis de ambiente em runtime
@@ -50,10 +180,10 @@ export async function PUT(
     const updatedAgent = await response.json();
     const agent = updatedAgent[0] || updatedAgent;
 
-    // 2. Se tem evolution_bot_id, sincronizar com Evolution API
-    if (agent.evolution_bot_id && agent.whatsapp_connection_id) {
+    // 2. Sincronizar com API externa (Evolution ou Uazapi)
+    if (agent.whatsapp_connection_id) {
       try {
-        console.log("🔄 Sincronizando agente atualizado com Evolution API...");
+        console.log("🔄 Sincronizando agente atualizado...");
 
         // Buscar dados da conexão WhatsApp
         const connectionResponse = await fetch(
@@ -80,7 +210,61 @@ export async function PUT(
           return NextResponse.json(agent);
         }
 
-        // Buscar configurações da Evolution API
+        const apiType = connection.api_type || "evolution"
+
+        // 2a. Se for Uazapi e tem bot_id, atualizar bot Uazapi
+        if (apiType === "uazapi" && agent.bot_id) {
+          console.log("🤖 [UAZAPI] Atualizando bot Uazapi...")
+          try {
+            const { updateUazapiBotInDatabase } = await import("@/lib/uazapi-bot-helpers")
+
+            // Preparar dados do bot para atualização
+            const botUpdateData: any = {}
+
+            // Atualizar campos básicos do bot
+            if (body.name) botUpdateData.nome = body.name
+
+            // Campos específicos de bot Uazapi (se enviados)
+            if (body.bot_gatilho) botUpdateData.gatilho = body.bot_gatilho
+            if (body.bot_operador) botUpdateData.operador_gatilho = body.bot_operador
+            if (body.bot_value !== undefined) botUpdateData.value_gatilho = body.bot_value
+            if (body.bot_debounce !== undefined) botUpdateData.debounce = Number(body.bot_debounce)
+            if (body.bot_splitMessage !== undefined) botUpdateData.splitMessage = Number(body.bot_splitMessage)
+            if (body.bot_ignoreJids) {
+              // Converter array para string
+              if (Array.isArray(body.bot_ignoreJids)) {
+                botUpdateData.ignoreJids = body.bot_ignoreJids.join(",") + ","
+              } else {
+                botUpdateData.ignoreJids = body.bot_ignoreJids
+              }
+            }
+            if (body.bot_padrao !== undefined) botUpdateData.padrao = Boolean(body.bot_padrao)
+
+            console.log("📝 [UAZAPI] Dados de atualização do bot:", botUpdateData)
+
+            // Atualizar bot no banco
+            const updateResult = await updateUazapiBotInDatabase({
+              botId: agent.bot_id,
+              botData: botUpdateData,
+              supabaseUrl,
+              supabaseKey,
+            })
+
+            if (updateResult.success) {
+              console.log("✅ [UAZAPI] Bot atualizado com sucesso")
+            } else {
+              console.warn("⚠️ [UAZAPI] Erro ao atualizar bot:", updateResult.error)
+            }
+          } catch (uazapiError) {
+            console.warn("⚠️ [UAZAPI] Erro ao atualizar bot Uazapi:", uazapiError)
+          }
+        }
+
+        // 2b. Se for Evolution e tem evolution_bot_id, atualizar Evolution API
+        if (apiType === "evolution" && agent.evolution_bot_id) {
+          console.log("🤖 Atualizando bot na Evolution API...")
+
+          // Buscar configurações da Evolution API
         const evolutionResponse = await fetch(
           `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true`,
           {
@@ -191,16 +375,14 @@ export async function PUT(
             errorText
           );
         }
-      } catch (evolutionError) {
-        console.error(
-          "❌ Erro na sincronização com Evolution API:",
-          evolutionError
-        );
-        // Não falha a operação, apenas loga o erro
       }
+    } catch (syncError) {
+      console.error("❌ Erro ao sincronizar com API externa:", syncError);
+      // Não falha a operação, apenas loga o erro
     }
+  }
 
-    return NextResponse.json(agent);
+  return NextResponse.json(agent);
   } catch (error) {
     console.error("❌ Erro geral ao atualizar agente:", error);
     return NextResponse.json(
@@ -212,10 +394,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const agentId = params.id;
+    const { id: agentId } = await params;
 
     // Verificar variáveis de ambiente em runtime
     const supabaseUrl = process.env.SUPABASE_URL;

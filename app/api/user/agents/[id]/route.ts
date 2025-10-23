@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   console.log("📡 API: GET /api/user/agents/[id] chamada")
 
   try {
-    const agentId = params.id
+    const { id: agentId } = await params
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
@@ -51,10 +51,12 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   console.log("📡 API: PUT /api/user/agents/[id] chamada")
 
   try {
+    const { id: agentId } = await params
+    
     // Buscar usuário atual do cookie
     const { cookies } = await import("next/headers")
     const cookieStore = await cookies()
@@ -70,8 +72,6 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     } catch (error) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
-
-    const agentId = params.id
     const agentData = await request.json()
 
     console.log("🔄 Atualizando agente:", agentId, "para usuário:", currentUser.id)
@@ -182,10 +182,10 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     const [updatedAgent] = await updateResponse.json()
     console.log("✅ Agente atualizado com sucesso no banco:", updatedAgent.id)
 
-    // Buscar agente atual para obter evolution_bot_id e connection info (igual ao admin)
-    console.log("🔍 Buscando agente atual para sincronização Evolution API...")
+    // Buscar agente atual para obter evolution_bot_id, bot_id e connection info
+    console.log("🔍 Buscando agente atual para sincronização...")
     const currentAgentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(instance_name)&id=eq.${agentId}&user_id=eq.${currentUser.id}`,
+      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(instance_name,api_type,id)&id=eq.${agentId}&user_id=eq.${currentUser.id}`,
       { headers }
     )
 
@@ -193,6 +193,59 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       const currentAgents = await currentAgentResponse.json()
       if (currentAgents && currentAgents.length > 0) {
         const currentAgent = currentAgents[0]
+        const apiType = currentAgent.whatsapp_connections?.api_type || "evolution"
+
+        // Atualizar bot Uazapi se existir
+        if (apiType === "uazapi" && currentAgent.bot_id) {
+          console.log("🤖 [UAZAPI] Atualizando bot Uazapi...")
+          try {
+            const { updateUazapiBotInDatabase } = await import("@/lib/uazapi-bot-helpers")
+
+            // Preparar dados do bot para atualização
+            const botUpdateData: any = {}
+
+            // Atualizar campos básicos do bot
+            if (agentData.name) botUpdateData.nome = agentData.name
+
+            // Campos específicos de bot Uazapi (se enviados)
+            if (agentData.bot_gatilho) botUpdateData.gatilho = agentData.bot_gatilho
+            if (agentData.bot_operador) botUpdateData.operador_gatilho = agentData.bot_operador
+            if (agentData.bot_value !== undefined) botUpdateData.value_gatilho = agentData.bot_value
+            if (agentData.bot_debounce !== undefined) botUpdateData.debounce = Number(agentData.bot_debounce)
+            if (agentData.bot_splitMessage !== undefined) botUpdateData.splitMessage = Number(agentData.bot_splitMessage)
+            if (agentData.bot_ignoreJids) {
+              // Converter array para string
+              if (Array.isArray(agentData.bot_ignoreJids)) {
+                botUpdateData.ignoreJids = agentData.bot_ignoreJids.join(",") + ","
+              } else {
+                botUpdateData.ignoreJids = agentData.bot_ignoreJids
+              }
+            }
+            if (agentData.bot_padrao !== undefined) botUpdateData.padrao = Boolean(agentData.bot_padrao)
+
+            console.log("📝 [UAZAPI] Dados de atualização do bot:", botUpdateData)
+
+            // Atualizar bot no banco
+            const updateResult = await updateUazapiBotInDatabase({
+              botId: currentAgent.bot_id,
+              botData: botUpdateData,
+              supabaseUrl,
+              supabaseKey,
+            })
+
+            if (updateResult.success) {
+              console.log("✅ [UAZAPI] Bot atualizado com sucesso")
+            } else {
+              console.warn("⚠️ [UAZAPI] Erro ao atualizar bot:", updateResult.error)
+            }
+
+            // TODO: Se a URL do webhook mudou, atualizar webhook na Uazapi
+            // Isso seria feito apenas se agentData.bot_url_api for enviado
+            // Por enquanto, apenas atualizamos os dados no banco
+          } catch (uazapiError) {
+            console.warn("⚠️ [UAZAPI] Erro ao atualizar bot Uazapi:", uazapiError)
+          }
+        }
 
         // Atualizar bot na Evolution API se existir (EXATAMENTE igual ao admin)
         if (currentAgent.evolution_bot_id && currentAgent.whatsapp_connections?.instance_name) {
@@ -297,10 +350,12 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   console.log("📡 API: DELETE /api/user/agents/[id] chamada")
 
   try {
+    const { id: agentId } = await params
+    
     // Buscar usuário atual do cookie
     const { cookies } = await import("next/headers")
     const cookieStore = await cookies()
@@ -316,8 +371,6 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     } catch (error) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
-
-    const agentId = params.id
     console.log("🗑️ Deletando agente:", agentId, "para usuário:", currentUser.id)
 
     const supabaseUrl = process.env.SUPABASE_URL

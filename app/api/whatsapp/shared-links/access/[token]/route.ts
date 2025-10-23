@@ -75,8 +75,12 @@ async function logAccess(linkId: string, ip: string, userAgent: string) {
   }
 }
 
-// Função para verificar status real na Evolution API
-async function getRealConnectionStatus(instanceName: string) {
+// Função para verificar status real na API (Evolution ou Uazapi)
+async function getRealConnectionStatus(
+  instanceName: string,
+  apiType: string = "evolution",
+  instanceToken?: string
+) {
   try {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
@@ -86,6 +90,113 @@ async function getRealConnectionStatus(instanceName: string) {
       return null;
     }
 
+    // === UAZAPI ===
+    if (apiType === "uazapi") {
+      console.log(`🔵 [STATUS-CHECK-UAZAPI] Verificando status: ${instanceName}`);
+      
+      if (!instanceToken) {
+        console.warn("⚠️ [STATUS-CHECK-UAZAPI] Token da instância não disponível");
+        return null;
+      }
+
+      // Buscar configuração da Uazapi
+      const uazapiIntegrationResponse = await fetch(
+        `${supabaseUrl}/rest/v1/integrations?type=eq.uazapi&is_active=eq.true&select=config`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Accept-Profile": "impaai",
+            "Content-Profile": "impaai",
+            apikey: supabaseAnonKey,
+            Authorization: `Bearer ${supabaseAnonKey}`,
+          },
+        }
+      );
+
+      if (!uazapiIntegrationResponse.ok) {
+        console.warn("⚠️ [STATUS-CHECK-UAZAPI] Erro ao buscar config da Uazapi");
+        return null;
+      }
+
+      const uazapiIntegrations = await uazapiIntegrationResponse.json();
+      if (!uazapiIntegrations || uazapiIntegrations.length === 0) {
+        console.warn("⚠️ [STATUS-CHECK-UAZAPI] Uazapi não configurada");
+        return null;
+      }
+
+      const uazapiConfig = uazapiIntegrations[0].config;
+      
+      // Verificar status na Uazapi
+      const statusResponse = await fetch(
+        `${uazapiConfig.serverUrl}/instance/status`,
+        {
+          method: "GET",
+          headers: {
+            "token": instanceToken,
+          },
+          signal: AbortSignal.timeout(8000),
+        }
+      );
+
+      if (!statusResponse.ok) {
+        console.warn(`⚠️ [STATUS-CHECK-UAZAPI] Erro ${statusResponse.status}`);
+        return null;
+      }
+
+      const statusData = await statusResponse.json();
+      const instanceStatus = statusData.instance?.status || "disconnected";
+      const profileName = statusData.instance?.profileName || null;
+      const profilePicUrl = statusData.instance?.profilePicUrl || null;
+      
+      // Mapear status da Uazapi
+      let realStatus = "disconnected";
+      switch (instanceStatus) {
+        case "connected":
+          realStatus = "connected";
+          break;
+        case "connecting":
+          realStatus = "connecting";
+          break;
+        default:
+          realStatus = "disconnected";
+      }
+
+      // Atualizar status no banco
+      try {
+        await fetch(
+          `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept-Profile": "impaai",
+              "Content-Profile": "impaai",
+              apikey: supabaseAnonKey,
+              Authorization: `Bearer ${supabaseAnonKey}`,
+              Prefer: "return=minimal",
+            },
+            body: JSON.stringify({
+              status: realStatus,
+              updated_at: new Date().toISOString(),
+            }),
+          }
+        );
+        console.log(`✅ [STATUS-CHECK-UAZAPI] Status atualizado: ${realStatus}`);
+      } catch (updateError) {
+        console.warn("⚠️ [STATUS-CHECK-UAZAPI] Erro ao atualizar status:", updateError);
+      }
+
+      return {
+        status: realStatus,
+        phoneNumber: statusData.status?.jid?.user || null,
+        profileName,
+        profilePicUrl,
+      };
+    }
+
+    // === EVOLUTION API (comportamento original) ===
+    console.log(`🟢 [STATUS-CHECK-EVOLUTION] Verificando status: ${instanceName}`);
+    
     // Buscar configuração da Evolution API
     const integrationResponse = await fetch(
       `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
@@ -101,24 +212,23 @@ async function getRealConnectionStatus(instanceName: string) {
     );
 
     if (!integrationResponse.ok) {
-      console.warn("⚠️ [STATUS-CHECK] Erro ao buscar config da Evolution API");
+      console.warn("⚠️ [STATUS-CHECK-EVOLUTION] Erro ao buscar config");
       return null;
     }
 
     const integrations = await integrationResponse.json();
     if (!integrations || integrations.length === 0) {
-      console.warn("⚠️ [STATUS-CHECK] Evolution API não configurada");
+      console.warn("⚠️ [STATUS-CHECK-EVOLUTION] Evolution API não configurada");
       return null;
     }
 
     const config = integrations[0].config;
     if (!config?.apiUrl || !config?.apiKey) {
-      console.warn("⚠️ [STATUS-CHECK] Configuração da Evolution API incompleta");
+      console.warn("⚠️ [STATUS-CHECK-EVOLUTION] Configuração incompleta");
       return null;
     }
 
     // Verificar status real na Evolution API
-    console.log(`🔍 [STATUS-CHECK] Verificando status real de: ${instanceName}`);
     const statusResponse = await fetch(
       `${config.apiUrl}/instance/connectionState/${instanceName}`,
       {
@@ -131,7 +241,7 @@ async function getRealConnectionStatus(instanceName: string) {
     );
 
     if (!statusResponse.ok) {
-      console.warn(`⚠️ [STATUS-CHECK] Erro ${statusResponse.status} ao verificar status`);
+      console.warn(`⚠️ [STATUS-CHECK-EVOLUTION] Erro ${statusResponse.status}`);
       return null;
     }
 
@@ -220,7 +330,9 @@ export async function GET(
           connection_name,
           instance_name,
           status,
-          phone_number
+          phone_number,
+          api_type,
+          instance_token
         )
       `)
       .eq("token", token)
@@ -278,8 +390,15 @@ export async function GET(
       );
     }
 
-    // Verificar status real na Evolution API
-    const realStatus = await getRealConnectionStatus(connection.instance_name);
+    // Verificar status real na API correta (Evolution ou Uazapi)
+    const apiType = connection.api_type || "evolution";
+    console.log(`🔍 [SHARED-ACCESS] API Type: ${apiType}`);
+    
+    const realStatus = await getRealConnectionStatus(
+      connection.instance_name,
+      apiType,
+      connection.instance_token
+    );
     
     // Retornar informações públicas do link
     const linkInfo = {
@@ -289,7 +408,8 @@ export async function GET(
         status: realStatus?.status || connection.status,
         phone_number: realStatus?.phoneNumber || connection.phone_number,
         profile_name: realStatus?.profileName || null,
-        profile_pic_url: realStatus?.profilePicUrl || null
+        profile_pic_url: realStatus?.profilePicUrl || null,
+        api_type: apiType // ✅ INCLUIR api_type
       },
       permissions: link.permissions,
       requires_password: !!link.password_hash,

@@ -47,6 +47,7 @@ interface WhatsAppConnection {
   instance_name: string;
   phone_number?: string;
   status: "connected" | "connecting" | "disconnected" | "error";
+  api_type?: "evolution" | "uazapi";
   created_at: string;
   updated_at?: string;
 }
@@ -706,6 +707,19 @@ export default function WhatsAppPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* Tag da API */}
+                    <Badge
+                      variant="outline"
+                      className={
+                        connection.api_type === "uazapi"
+                          ? "bg-purple-50 text-purple-700 border-purple-200"
+                          : "bg-green-50 text-green-700 border-green-200"
+                      }
+                    >
+                      {connection.api_type === "uazapi" ? "Uazapi" : "Evolution API"}
+                    </Badge>
+                    
+                    {/* Status Badge */}
                     <Badge
                       variant={
                         connection.status === "connected"
@@ -739,8 +753,13 @@ export default function WhatsAppPage() {
                             setSelectedConnection(connection);
                             setInfoModalOpen(true);
                           }}
-                          title="Ver Informações"
-                          className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                          disabled={connection.api_type === "uazapi"}
+                          title={
+                            connection.api_type === "uazapi"
+                              ? "Em breve para Uazapi"
+                              : "Ver Informações"
+                          }
+                          className="border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Info className="w-4 h-4" />
                         </Button>
@@ -765,8 +784,13 @@ export default function WhatsAppPage() {
                           setSelectedConnection(connection);
                           setSettingsModalOpen(true);
                         }}
-                        title="Configurações"
-                        className="border-gray-200 text-gray-600 hover:bg-gray-50"
+                        disabled={connection.api_type === "uazapi"}
+                        title={
+                          connection.api_type === "uazapi"
+                            ? "Em breve para Uazapi"
+                            : "Configurações"
+                        }
+                        className="border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>

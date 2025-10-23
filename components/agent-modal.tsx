@@ -179,6 +179,20 @@ export function AgentModal({
   const [newIgnoreJid, setNewIgnoreJid] = useState("")
   const [pendingSubmit, setPendingSubmit] = useState(false)
 
+  // Estados para Uazapi
+  const [selectedConnectionApiType, setSelectedConnectionApiType] = useState<string | null>(null)
+  const [botFormData, setBotFormData] = useState({
+    bot_gatilho: "Todos",
+    bot_operador: "Contém",
+    bot_value: "",
+    bot_debounce: 5,
+    bot_splitMessage: 2,
+    bot_ignoreJids: ["@g.us"], // Array igual ao Evolution
+    bot_padrao: false, // Bot padrão da conexão
+  })
+  const [newBotIgnoreJid, setNewBotIgnoreJid] = useState("")
+  const [showBotIgnoreJidsWarning, setShowBotIgnoreJidsWarning] = useState(false)
+
   const isAdmin = currentUser?.role === "admin"
 
   // Função para garantir que @g.us esteja sempre presente
@@ -408,6 +422,91 @@ export function AgentModal({
     }
   }, [agent, currentUser, selectedUserId, isAdmin])
 
+  // useEffect para detectar o api_type da conexão quando editando um agente (busca do BACKEND)
+  useEffect(() => {
+    const fetchConnectionApiType = async () => {
+      // Só buscar se estiver editando um agente e ele tiver uma conexão
+      if (!agent || !agent.whatsapp_connection_id) {
+        console.log("🔍 [AgentModal] Não está editando ou não tem conexão, resetando api_type")
+        setSelectedConnectionApiType(null)
+        return
+      }
+
+      try {
+        console.log("🔄 [AgentModal] Buscando api_type da conexão do BACKEND:", agent.whatsapp_connection_id)
+        
+        // Buscar dados da conexão via API (BACKEND)
+        const response = await fetch(`/api/whatsapp-connections/info/${agent.whatsapp_connection_id}`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error(`Erro HTTP: ${response.status}`)
+        }
+
+        const data = await response.json()
+        
+        if (data.success && data.connection) {
+          const apiType = data.connection.api_type || "evolution"
+          console.log("✅ [AgentModal] API Type detectado do BACKEND:", apiType)
+          setSelectedConnectionApiType(apiType)
+          
+          // Se for Uazapi e o agente tiver bot_id, buscar dados do bot
+          if (apiType === "uazapi" && agent.bot_id) {
+            console.log("🤖 [AgentModal] Agente Uazapi detectado, buscando dados do bot...")
+            try {
+              const botResponse = await fetch(`/api/bots/${agent.bot_id}`, {
+                method: "GET",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+              })
+
+              if (botResponse.ok) {
+                const botData = await botResponse.json()
+                if (botData.success && botData.bot) {
+                  console.log("✅ [AgentModal] Dados do bot Uazapi carregados:", botData.bot)
+                  
+                  // Converter ignoreJids de string para array
+                  let ignoreJidsArray = ["@g.us"]
+                  if (botData.bot.ignoreJids) {
+                    const jidsString = botData.bot.ignoreJids.replace(/,\s*$/, "") // Remove vírgula final
+                    ignoreJidsArray = jidsString.split(",").map((jid: string) => jid.trim()).filter(Boolean)
+                  }
+
+                  // Preencher botFormData com os dados do bot
+                  setBotFormData({
+                    bot_gatilho: botData.bot.gatilho || "Todos",
+                    bot_operador: botData.bot.operador_gatilho || "Contém",
+                    bot_value: botData.bot.value_gatilho || "",
+                    bot_debounce: botData.bot.debounce || 5,
+                    bot_splitMessage: botData.bot.splitMessage || 2,
+                    bot_ignoreJids: ignoreJidsArray,
+                    bot_padrao: Boolean(botData.bot.padrao) || false,
+                  })
+                  console.log("✅ [AgentModal] botFormData preenchido com dados do bot")
+                }
+              }
+            } catch (botError) {
+              console.warn("⚠️ [AgentModal] Erro ao buscar dados do bot:", botError)
+            }
+          }
+        } else {
+          throw new Error(data.error || "Erro ao buscar dados da conexão")
+        }
+      } catch (error: any) {
+        console.error("❌ [AgentModal] Erro ao buscar api_type da conexão:", error)
+        // Em caso de erro, assumir evolution por padrão
+        setSelectedConnectionApiType("evolution")
+      }
+    }
+
+    fetchConnectionApiType()
+  }, [agent, open])
+
   // useEffect específico para sincronizar modelSelection com o modelo do agente APENAS na inicialização
   useEffect(() => {
     // APENAS sincronizar quando abrindo o modal com um agente existente
@@ -479,6 +578,42 @@ export function AgentModal({
       ignore_jids: currentJids.filter((jid) => jid !== "@g.us"),
     }))
     setShowIgnoreJidsWarning(false)
+  }
+
+  // Funções para manipular bot_ignoreJids (Uazapi)
+  const handleAddBotIgnoreJid = () => {
+    if (!newBotIgnoreJid.trim()) return
+
+    const currentJids = botFormData.bot_ignoreJids || ["@g.us"]
+    if (!currentJids.includes(newBotIgnoreJid.trim())) {
+      setBotFormData((prev) => ({
+        ...prev,
+        bot_ignoreJids: [...currentJids, newBotIgnoreJid.trim()],
+      }))
+    }
+    setNewBotIgnoreJid("")
+  }
+
+  const handleRemoveBotIgnoreJid = (jidToRemove: string) => {
+    if (jidToRemove === "@g.us") {
+      setShowBotIgnoreJidsWarning(true)
+      return
+    }
+
+    const currentJids = botFormData.bot_ignoreJids || ["@g.us"]
+    setBotFormData((prev) => ({
+      ...prev,
+      bot_ignoreJids: currentJids.filter((jid) => jid !== jidToRemove),
+    }))
+  }
+
+  const confirmRemoveBotGroupsJid = () => {
+    const currentJids = botFormData.bot_ignoreJids || ["@g.us"]
+    setBotFormData((prev) => ({
+      ...prev,
+      bot_ignoreJids: currentJids.filter((jid) => jid !== "@g.us"),
+    }))
+    setShowBotIgnoreJidsWarning(false)
   }
 
   const convertCurlToDescription = () => {
@@ -644,6 +779,16 @@ _______________________________________
         delay_message: formData.delay_message,
         expire_time: formData.expire_time,
         ignore_jids: finalIgnoreJids,
+        // Campos para bot Uazapi (apenas se for uazapi)
+        ...(selectedConnectionApiType === "uazapi" && {
+          bot_gatilho: botFormData.bot_gatilho,
+          bot_operador: botFormData.bot_operador,
+          bot_value: botFormData.bot_value,
+          bot_debounce: botFormData.bot_debounce,
+          bot_splitMessage: botFormData.bot_splitMessage,
+          bot_ignoreJids: botFormData.bot_ignoreJids, // Array - será convertido para string no servidor
+          bot_padrao: botFormData.bot_padrao,
+        }),
       }
 
       // Escolher a API correta baseada no contexto
@@ -729,8 +874,20 @@ _______________________________________
       setError("A conexão WhatsApp é obrigatória.")
       return
     }
-    if (!formData.trigger_value?.trim() && formData.trigger_type === "keyword") {
+    // ============================================
+    // VALIDAÇÕES DE UX (Frontend - apenas para melhorar experiência)
+    // As validações REAIS e de SEGURANÇA estão no BACKEND
+    // ============================================
+    
+    // Validação específica para Evolution (NÃO validar para Uazapi)
+    if (selectedConnectionApiType !== "uazapi" && !formData.trigger_value?.trim() && formData.trigger_type === "keyword") {
       setError("A palavra-chave de ativação é obrigatória para bots com ativação por palavra-chave.")
+      return
+    }
+    
+    // Validação de UX para Uazapi (backend valida novamente por segurança)
+    if (selectedConnectionApiType === "uazapi" && botFormData.bot_gatilho === "Palavra-chave" && !botFormData.bot_value?.trim()) {
+      setError("A palavra-chave do bot é obrigatória quando o gatilho é 'Palavra-chave'.")
       return
     }
     if (!formData.training_prompt?.trim()) {
@@ -1240,6 +1397,12 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                     onValueChange={(value) => {
                       console.log("🔗 [AgentModal] Selecionando conexão:", value)
                       handleSelectChange("whatsapp_connection_id", value)
+                      
+                      // Detectar api_type da conexão selecionada
+                      const selectedConn = whatsappConnections.find(conn => conn.id === value)
+                      const apiType = selectedConn?.api_type || "evolution"
+                      setSelectedConnectionApiType(apiType)
+                      console.log("🔍 [AgentModal] API Type detectado:", apiType)
                     }}
                     disabled={
                       (() => {
@@ -1302,6 +1465,228 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
               </CardContent>
             </Card>
 
+            {/* Card de configurações para Uazapi */}
+            {selectedConnectionApiType === "uazapi" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
+                    <Bot className="w-5 h-5 mr-2" />
+                    Configurações do Bot (Uazapi)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="bot_gatilho" className="text-gray-900 dark:text-gray-100">
+                      Tipo de Gatilho *
+                      {botFormData.bot_padrao && (
+                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
+                          (Desabilitado - Bot Padrão)
+                        </span>
+                      )}
+                    </Label>
+                    <Select
+                      value={botFormData.bot_gatilho}
+                      onValueChange={(value) => {
+                        setBotFormData(prev => ({ ...prev, bot_gatilho: value }))
+                        // Se mudar para "Palavra-chave", limpar o value se estava vazio
+                        if (value !== "Palavra-chave") {
+                          setBotFormData(prev => ({ ...prev, bot_value: "" }))
+                        }
+                      }}
+                      disabled={botFormData.bot_padrao}
+                    >
+                      <SelectTrigger 
+                        className={`bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 ${
+                          botFormData.bot_padrao ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                        disabled={botFormData.bot_padrao}
+                      >
+                        <SelectValue placeholder="Selecione o tipo de gatilho" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                        <SelectItem value="Palavra-chave">Palavra-chave</SelectItem>
+                        <SelectItem value="Todos">Todos</SelectItem>
+                        <SelectItem value="Avançado">Avançado</SelectItem>
+                        <SelectItem value="Nenhum">Nenhum</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                      {botFormData.bot_padrao 
+                        ? "🔒 Bot padrão não usa gatilho - é acionado automaticamente" 
+                        : "Como o bot será ativado (padrão: Todos)"}
+                    </p>
+                  </div>
+
+                  {botFormData.bot_gatilho === "Palavra-chave" && !botFormData.bot_padrao && (
+                    <>
+                      <div>
+                        <Label htmlFor="bot_operador" className="text-gray-900 dark:text-gray-100">
+                          Operador de Comparação *
+                        </Label>
+                        <Select
+                          value={botFormData.bot_operador}
+                          onValueChange={(value) => setBotFormData(prev => ({ ...prev, bot_operador: value }))}
+                        >
+                          <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                            <SelectValue placeholder="Selecione o operador" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                            <SelectItem value="Contém">Contém</SelectItem>
+                            <SelectItem value="Igual">Igual</SelectItem>
+                            <SelectItem value="Começa Com">Começa Com</SelectItem>
+                            <SelectItem value="Termina Com">Termina Com</SelectItem>
+                            <SelectItem value="Regex">Regex</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="bot_value" className="text-gray-900 dark:text-gray-100">
+                          Palavra-chave *
+                        </Label>
+                        <Input
+                          id="bot_value"
+                          name="bot_value"
+                          value={botFormData.bot_value}
+                          onChange={(e) => setBotFormData(prev => ({ ...prev, bot_value: e.target.value }))}
+                          placeholder="Ex: oi|olá|bom dia"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          Use | para separar múltiplas palavras (ex: oi|olá|bom dia)
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  <div>
+                    <Label htmlFor="bot_debounce" className="text-gray-900 dark:text-gray-100">
+                      Debounce (segundos)
+                    </Label>
+                    <Input
+                      id="bot_debounce"
+                      name="bot_debounce"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={botFormData.bot_debounce}
+                      onChange={(e) => setBotFormData(prev => ({ ...prev, bot_debounce: Number(e.target.value) }))}
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                      Tempo de espera antes de processar mensagens (padrão: 5 segundos)
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="bot_splitMessage" className="text-gray-900 dark:text-gray-100">
+                      Split Message (quebras de linha)
+                    </Label>
+                    <Input
+                      id="bot_splitMessage"
+                      name="bot_splitMessage"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={botFormData.bot_splitMessage}
+                      onChange={(e) => setBotFormData(prev => ({ ...prev, bot_splitMessage: Number(e.target.value) }))}
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                      Quantas quebras de linha (\\n) para dividir mensagem em múltiplas (padrão: 2)
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex-1">
+                      <Label htmlFor="bot_padrao" className="text-gray-900 dark:text-gray-100 font-medium">
+                        Bot Padrão da Conexão
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                        Se ativado, este bot será o bot principal da conexão. Usado no n8n quando não há palavra-chave correspondente.
+                        {botFormData.bot_padrao && (
+                          <span className="block mt-1 text-blue-600 dark:text-blue-400 font-medium">
+                            ⚠️ Bots padrão não precisam de gatilho - serão acionados automaticamente.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <Switch
+                      id="bot_padrao"
+                      checked={botFormData.bot_padrao}
+                      onCheckedChange={(checked) => {
+                        setBotFormData(prev => ({ 
+                          ...prev, 
+                          bot_padrao: checked,
+                          // Se ativar bot padrão, setar gatilho para "Nenhum"
+                          bot_gatilho: checked ? "Nenhum" : prev.bot_gatilho,
+                          // Limpar palavra-chave se setar como padrão
+                          bot_value: checked ? "" : prev.bot_value,
+                        }))
+                      }}
+                      className={switchStyles}
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-gray-900 dark:text-gray-100">
+                      JIDs Ignorados (Números/Grupos que não ativam o Bot)
+                    </Label>
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <Input
+                          value={newBotIgnoreJid}
+                          onChange={(e) => setNewBotIgnoreJid(e.target.value)}
+                          placeholder="Ex: @s.whatsapp.net, @g.us, 5511999999999@s.whatsapp.net"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === "Tab") {
+                              e.preventDefault()
+                              handleAddBotIgnoreJid()
+                            }
+                          }}
+                        />
+                        <Button type="button" onClick={handleAddBotIgnoreJid} variant="outline" size="sm">
+                          Adicionar
+                        </Button>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {(botFormData.bot_ignoreJids || ["@g.us"]).map((jid, index) => (
+                          <div
+                            key={index}
+                            className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                              jid === "@g.us"
+                                ? "bg-red-100 text-red-800 border border-red-200"
+                                : "bg-gray-100 text-gray-800 border border-gray-200"
+                            }`}
+                          >
+                            <span>{jid}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveBotIgnoreJid(jid)}
+                              className={`ml-1 hover:bg-red-200 rounded-full w-4 h-4 flex items-center justify-center ${
+                                jid === "@g.us" ? "text-red-600" : "text-gray-600"
+                              }`}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        <strong>@g.us</strong> (grupos) é obrigatório para evitar spam em grupos do WhatsApp. Você pode
+                        adicionar números específicos ou outros tipos de JIDs para ignorar. Use Enter ou Tab para adicionar.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Card de configurações Evolution - só aparece se NÃO for Uazapi */}
+            {selectedConnectionApiType !== "uazapi" && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
@@ -1440,7 +1825,10 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                 </div>
               </CardContent>
             </Card>
+            )}
 
+            {/* Card de Tempo e Comportamento - também só para Evolution */}
+            {selectedConnectionApiType !== "uazapi" && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
@@ -1630,7 +2018,9 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                 </div>
               </CardContent>
             </Card>
+            )}
 
+            {/* Funcionalidades Extras - comum para Evolution e Uazapi */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
@@ -2003,6 +2393,62 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                     variant="outline"
                     className="bg-green-600 text-white hover:bg-green-700 font-semibold shadow"
                     onClick={() => setShowIgnoreJidsWarning(false)}
+                  >
+                    Cancelar (Recomendado)
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* Modal de Aviso para Remoção de @g.us do Bot Uazapi */}
+          {showBotIgnoreJidsWarning && (
+            <Dialog open={showBotIgnoreJidsWarning} onOpenChange={setShowBotIgnoreJidsWarning}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-red-600 flex items-center">
+                    ⚠️ Atenção: Configuração Importante do Bot
+                  </DialogTitle>
+                  <DialogDescription className="text-gray-600">
+                    Você está tentando remover <strong>@g.us</strong> da lista de JIDs ignorados do bot Uazapi.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-yellow-800 mb-2">Por que isso é importante?</h4>
+                    <ul className="text-sm text-yellow-700 space-y-1">
+                      <li>
+                        • <strong>@g.us</strong> representa todos os grupos do WhatsApp
+                      </li>
+                      <li>• Sem essa proteção, seu bot será ativado em TODOS os grupos</li>
+                      <li>• Isso pode incomodar outros membros dos grupos</li>
+                      <li>• Pode gerar spam e prejudicar a experiência dos usuários</li>
+                      <li>• Sua conta pode ser banida por comportamento inadequado</li>
+                    </ul>
+                  </div>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-sm text-red-700">
+                      <strong>Atenção:</strong> Esta é uma proteção padrão recomendada. Remova apenas se você tiver
+                      certeza absoluta do que está fazendo e compreende os riscos envolvidos.
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter className="flex justify-between">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => {
+                      confirmRemoveBotGroupsJid()
+                      setShowBotIgnoreJidsWarning(false)
+                    }}
+                  >
+                    Remover Mesmo Assim
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="bg-green-600 text-white hover:bg-green-700 font-semibold shadow"
+                    onClick={() => setShowBotIgnoreJidsWarning(false)}
                   >
                     Cancelar (Recomendado)
                   </Button>

@@ -136,7 +136,7 @@ export async function POST(request: Request) {
         "Content-Profile": "impaai",
       },
       body: JSON.stringify({
-        name: name || (type === "evolution_api" ? "Evolution API" : "n8n"),
+        name: name || (type === "evolution_api" ? "Evolution API" : type === "n8n" ? "n8n" : type === "uazapi" ? "Uazapi" : "n8n Session"),
         type,
         config,
         is_active: true,

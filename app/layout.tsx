@@ -4,6 +4,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider, defaultTheme } from "@/components/theme-provider"
 import SystemHealthMonitor from "@/components/system-health-monitor"
+import { QuestSystemManager } from "@/components/quest-system/quest-system-manager"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -25,6 +26,7 @@ export default function RootLayout({
         <ThemeProvider>
           {children}
           <SystemHealthMonitor />
+          <QuestSystemManager />
         </ThemeProvider>
       </body>
     </html>

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Plus, AlertCircle } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 import InstanceCreationModal from "./instance-creation-modal"
 
@@ -26,6 +27,7 @@ export default function WhatsAppConnectionModal({
   onSuccess,
 }: WhatsAppConnectionModalProps) {
   const [connectionName, setConnectionName] = useState("")
+  const [apiType, setApiType] = useState<"evolution" | "uazapi">("evolution")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -70,6 +72,7 @@ export default function WhatsAppConnectionModal({
         body: JSON.stringify({
           connectionName: connectionName.trim(),
           userId: userId,
+          apiType: apiType,
         }),
       })
 
@@ -79,6 +82,7 @@ export default function WhatsAppConnectionModal({
         onSuccess()
         setCreationModalOpen(false)
         setConnectionName("")
+        setApiType("evolution")
       } else {
         setError(result.error || "Erro ao criar conexão")
         setCreationModalOpen(false)
@@ -133,6 +137,34 @@ export default function WhatsAppConnectionModal({
                 <AlertDescription className="text-destructive-foreground">{error}</AlertDescription>
               </Alert>
             )}
+
+            <div className="space-y-2">
+              <Label htmlFor="apiType" className="text-gray-900 dark:text-gray-100">
+                Tipo de API WhatsApp
+              </Label>
+              <Select value={apiType} onValueChange={(value: "evolution" | "uazapi") => setApiType(value)} disabled={loading}>
+                <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                  <SelectValue placeholder="Selecione a API" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="evolution">
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">Evolution API</span>
+                      <span className="text-xs text-gray-500">API oficial com EvolutionBot</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="uazapi">
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">Uazapi</span>
+                      <span className="text-xs text-gray-500">API alternativa com recursos completos</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Escolha qual API de WhatsApp deseja utilizar para esta conexão
+              </p>
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="connectionName" className="text-gray-900 dark:text-gray-100">

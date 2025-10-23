@@ -345,12 +345,14 @@ export default function UserAgentsPage() {
                     Ver
                   </Button>
 
-                  {agent.evolution_bot_id && (
+                  {/* Botão de sessões: Evolution Bot OU Uazapi Bot */}
+                  {(agent.evolution_bot_id || agent.bot_id) && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => router.push(`/dashboard/agents/${agent.id}/sessions`)}
                       className="gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                      title={agent.bot_id ? "Ver sessões do Bot Uazapi" : "Ver sessões do Evolution Bot"}
                     >
                       <Users className="h-4 w-4" />
                       Sessões

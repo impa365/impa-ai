@@ -26,6 +26,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { DynamicTitle } from "@/components/dynamic-title"
+import { QuestSettingsTab } from "@/components/quest-system/quest-settings-tab"
 
 export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false)
@@ -40,6 +41,10 @@ export default function AdminSettingsPage() {
     evolutionApiKey: "",
     n8nFlowUrl: "",
     n8nApiKey: "",
+    uazapiServerUrl: "",
+    uazapiApiKey: "",
+    n8nSessionWebhookUrl: "",
+    n8nSessionApiKey: "",
   })
 
   // Estados para upload de arquivos
@@ -311,6 +316,17 @@ export default function AdminSettingsPage() {
         if (!integrationForm.n8nFlowUrl.trim()) {
           throw new Error("URL do Fluxo n8n é obrigatória")
         }
+      } else if (type === "uazapi") {
+        if (!integrationForm.uazapiServerUrl.trim()) {
+          throw new Error("URL do Servidor Uazapi é obrigatória")
+        }
+        if (!integrationForm.uazapiApiKey.trim()) {
+          throw new Error("API Key Global da Uazapi é obrigatória")
+        }
+      } else if (type === "n8n_session") {
+        if (!integrationForm.n8nSessionWebhookUrl.trim()) {
+          throw new Error("URL do Webhook do Session é obrigatória")
+        }
       }
 
       // Preparar dados de configuração
@@ -325,6 +341,16 @@ export default function AdminSettingsPage() {
           flowUrl: integrationForm.n8nFlowUrl.trim(),
           apiKey: integrationForm.n8nApiKey?.trim() || null,
         }
+      } else if (type === "uazapi") {
+        config = {
+          serverUrl: integrationForm.uazapiServerUrl.trim(),
+          apiKey: integrationForm.uazapiApiKey.trim(),
+        }
+      } else if (type === "n8n_session") {
+        config = {
+          webhookUrl: integrationForm.n8nSessionWebhookUrl.trim(),
+          apiKey: integrationForm.n8nSessionApiKey?.trim() || null,
+        }
       }
 
       const response = await fetch("/api/integrations", {
@@ -334,7 +360,7 @@ export default function AdminSettingsPage() {
         },
         body: JSON.stringify({
           type,
-          name: type === "evolution_api" ? "Evolution API" : "n8n",
+          name: type === "evolution_api" ? "Evolution API" : type === "n8n" ? "n8n" : type === "uazapi" ? "Uazapi" : "n8n_session",
           config,
         }),
       })
@@ -357,6 +383,10 @@ export default function AdminSettingsPage() {
           evolutionApiKey: "",
           n8nFlowUrl: "",
           n8nApiKey: "",
+          uazapiServerUrl: "",
+          uazapiApiKey: "",
+          n8nSessionWebhookUrl: "",
+          n8nSessionApiKey: "",
         })
 
         toast({
@@ -1031,6 +1061,10 @@ export default function AdminSettingsPage() {
         evolutionApiKey: "",
         n8nFlowUrl: "",
         n8nApiKey: "",
+        uazapiServerUrl: "",
+        uazapiApiKey: "",
+        n8nSessionWebhookUrl: "",
+        n8nSessionApiKey: "",
       })
 
       // Depois preencher com dados existentes (SEM LOGS)
@@ -1045,6 +1079,18 @@ export default function AdminSettingsPage() {
           ...prev,
           n8nFlowUrl: config.flowUrl || "",
           n8nApiKey: config.apiKey || "",
+        }))
+      } else if (type === "uazapi") {
+        setIntegrationForm((prev) => ({
+          ...prev,
+          uazapiServerUrl: config.serverUrl || "",
+          uazapiApiKey: config.apiKey || "",
+        }))
+      } else if (type === "n8n_session") {
+        setIntegrationForm((prev) => ({
+          ...prev,
+          n8nSessionWebhookUrl: config.webhookUrl || "",
+          n8nSessionApiKey: config.apiKey || "",
         }))
       }
 
@@ -1093,10 +1139,10 @@ export default function AdminSettingsPage() {
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
                 <Image src="/images/n8n-logo.png" alt="n8n" width={40} height={40} className="rounded" />
               </div>
-              <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">n8n</h4>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Automação de fluxos de trabalho</p>
+              <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">n8n - IA Direta</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Fluxo direto da IA com EvolutionBot</p>
               <Button
-                onClick={() => openIntegrationModal("n8n", "n8n")}
+                onClick={() => openIntegrationModal("n8n", "n8n - IA Direta")}
                 className={
                   getIntegrationConfig("n8n").flowUrl ? "w-full bg-green-600 text-white hover:bg-green-700" : "w-full"
                 }
@@ -1107,15 +1153,40 @@ export default function AdminSettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="opacity-50">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Plus className="w-8 h-8 text-gray-400" />
+              <div className="w-16 h-16 mx-auto mb-4 bg-purple-100 rounded-lg flex items-center justify-center">
+                <span className="text-3xl">🔗</span>
               </div>
-              <h4 className="font-semibold mb-2">Em Breve</h4>
-              <p className="text-sm text-gray-600 mb-4">Nova integração chegando</p>
-              <Button className="w-full" variant="outline" disabled>
-                Em Breve
+              <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Uazapi</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">API WhatsApp alternativa</p>
+              <Button
+                onClick={() => openIntegrationModal("uazapi", "Uazapi")}
+                className={
+                  getIntegrationConfig("uazapi").serverUrl ? "w-full bg-green-600 text-white hover:bg-green-700" : "w-full"
+                }
+                variant={getIntegrationConfig("uazapi").serverUrl ? undefined : "outline"}
+              >
+                {getIntegrationConfig("uazapi").serverUrl ? "Configurado" : "Configurar"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 bg-pink-100 rounded-lg flex items-center justify-center">
+                <Image src="/images/n8n-logo.png" alt="n8n Session" width={40} height={40} className="rounded" />
+              </div>
+              <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">n8n Session</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Webhook com debounce e gatilhos</p>
+              <Button
+                onClick={() => openIntegrationModal("n8n_session", "n8n Session")}
+                className={
+                  getIntegrationConfig("n8n_session").webhookUrl ? "w-full bg-green-600 text-white hover:bg-green-700" : "w-full"
+                }
+                variant={getIntegrationConfig("n8n_session").webhookUrl ? undefined : "outline"}
+              >
+                {getIntegrationConfig("n8n_session").webhookUrl ? "Configurado" : "Configurar"}
               </Button>
             </CardContent>
           </Card>
@@ -1179,6 +1250,9 @@ export default function AdminSettingsPage() {
                       required
                       className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Fluxo direto da IA que se conecta com a ferramenta EvolutionBot da Evolution API
+                    </p>
                   </div>
                   <div>
                     <Label htmlFor="n8nApiKey" className="text-gray-900 dark:text-gray-100">
@@ -1190,6 +1264,78 @@ export default function AdminSettingsPage() {
                       value={integrationForm.n8nApiKey}
                       onChange={(e) => setIntegrationForm({ ...integrationForm, n8nApiKey: e.target.value })}
                       placeholder="API Key (se necessário)"
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                  </div>
+                </>
+              )}
+
+              {selectedIntegration?.type === "uazapi" && (
+                <>
+                  <div>
+                    <Label htmlFor="uazapiServerUrl" className="text-gray-900 dark:text-gray-100">
+                      URL do Servidor *
+                    </Label>
+                    <Input
+                      id="uazapiServerUrl"
+                      value={integrationForm.uazapiServerUrl}
+                      onChange={(e) => setIntegrationForm({ ...integrationForm, uazapiServerUrl: e.target.value })}
+                      placeholder="https://free.uazapi.com"
+                      required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      URL base do servidor Uazapi (ex: https://free.uazapi.com)
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="uazapiApiKey" className="text-gray-900 dark:text-gray-100">
+                      API Key Global *
+                    </Label>
+                    <Input
+                      id="uazapiApiKey"
+                      type="password"
+                      value={integrationForm.uazapiApiKey}
+                      onChange={(e) => setIntegrationForm({ ...integrationForm, uazapiApiKey: e.target.value })}
+                      placeholder="Sua API Key Global"
+                      required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Token de administrador para gerenciar instâncias
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {selectedIntegration?.type === "n8n_session" && (
+                <>
+                  <div>
+                    <Label htmlFor="n8nSessionWebhookUrl" className="text-gray-900 dark:text-gray-100">
+                      URL do Webhook do Session *
+                    </Label>
+                    <Input
+                      id="n8nSessionWebhookUrl"
+                      value={integrationForm.n8nSessionWebhookUrl}
+                      onChange={(e) => setIntegrationForm({ ...integrationForm, n8nSessionWebhookUrl: e.target.value })}
+                      placeholder="https://nwook.impa365.com/webhook/impa-ai-crm"
+                      required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Fluxo n8n com debounce, gatilhos e split de mensagens (simula EvolutionBot)
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="n8nSessionApiKey" className="text-gray-900 dark:text-gray-100">
+                      API Key do Webhook (Opcional)
+                    </Label>
+                    <Input
+                      id="n8nSessionApiKey"
+                      type="password"
+                      value={integrationForm.n8nSessionApiKey}
+                      onChange={(e) => setIntegrationForm({ ...integrationForm, n8nSessionApiKey: e.target.value })}
+                      placeholder="API Key (se configurado no webhook)"
                       className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
                   </div>
@@ -1241,6 +1387,7 @@ export default function AdminSettingsPage() {
             <TabsTrigger value="system">Sistema</TabsTrigger>
             <TabsTrigger value="integrations">Integrações</TabsTrigger>
             <TabsTrigger value="branding">Branding</TabsTrigger>
+            <TabsTrigger value="tutorial">Tutorial</TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile" className="mt-4">
@@ -1394,6 +1541,10 @@ export default function AdminSettingsPage() {
 
           <TabsContent value="branding" className="mt-4">
             {renderBrandingSettings()}
+          </TabsContent>
+
+          <TabsContent value="tutorial" className="mt-4">
+            <QuestSettingsTab />
           </TabsContent>
         </Tabs>
       </div>

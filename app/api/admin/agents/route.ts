@@ -181,28 +181,69 @@ export async function POST(request: Request) {
     // PRIMEIRO: Criar agente no banco para obter o ID real
     console.log("💾 Criando agente no banco de dados primeiro...");
 
-    // Preparar dados para inserção no banco - CORRIGIR formatação do ignore_jids
+    // Preparar dados para inserção no banco - APENAS campos que existem em ai_agents
     const ignoreJidsArray = Array.isArray(agentData.ignore_jids)
       ? agentData.ignore_jids
       : ["@g.us"];
 
+    // ============================================
+    // IMPORTANTE: Incluir APENAS campos da tabela ai_agents
+    // NÃO incluir campos bot_* que são para a tabela bots
+    // ============================================
     const dbAgentData = {
-      ...agentData,
+      // Campos básicos
+      name: agentData.name,
+      description: agentData.description,
+      user_id: agentData.user_id,
+      whatsapp_connection_id: agentData.whatsapp_connection_id,
+      
+      // Configurações da IA
+      identity_description: agentData.identity_description,
+      training_prompt: agentData.training_prompt,
+      voice_tone: agentData.voice_tone,
+      main_function: agentData.main_function,
+      model: agentData.model,
+      model_config: agentData.model_config,
+      temperature: Number(agentData.temperature) || 0.7,
+      
+      // Status
+      status: agentData.status || "active",
+      is_default: Boolean(agentData.is_default),
+      
+      // Evolution API fields
       evolution_bot_id: null, // Será preenchido depois
-      // Garantir que campos booleanos sejam strings para o Supabase
-      transcribe_audio: String(Boolean(agentData.transcribe_audio)),
-      understand_images: String(Boolean(agentData.understand_images)),
-      voice_response_enabled: String(Boolean(agentData.voice_response_enabled)),
-      calendar_integration: String(Boolean(agentData.calendar_integration)),
-      chatnode_integration: String(Boolean(agentData.chatnode_integration)),
-      orimon_integration: String(Boolean(agentData.orimon_integration)),
-      is_default: String(Boolean(agentData.is_default)),
-      listening_from_me: String(Boolean(agentData.listening_from_me)),
-      stop_bot_from_me: String(Boolean(agentData.stop_bot_from_me)),
-      keep_open: String(Boolean(agentData.keep_open)),
-      split_messages: String(Boolean(agentData.split_messages)),
-      // CORRIGIR: Usar formato PostgreSQL array ao invés de JSON string
+      trigger_type: agentData.trigger_type || "keyword",
+      trigger_operator: agentData.trigger_operator || "equals",
+      trigger_value: agentData.trigger_value,
+      keyword_finish: agentData.keyword_finish,
+      debounce_time: Number(agentData.debounce_time) || 10,
+      listening_from_me: Boolean(agentData.listening_from_me),
+      stop_bot_from_me: Boolean(agentData.stop_bot_from_me),
+      keep_open: Boolean(agentData.keep_open),
+      split_messages: Boolean(agentData.split_messages),
+      delay_message: Number(agentData.delay_message) || 1000,
+      unknown_message: agentData.unknown_message,
+      expire_time: Number(agentData.expire_time) || 0,
       ignore_jids: `{${ignoreJidsArray.map((jid) => `"${jid}"`).join(",")}}`,
+      
+      // Funcionalidades extras
+      transcribe_audio: Boolean(agentData.transcribe_audio),
+      understand_images: Boolean(agentData.understand_images),
+      voice_response_enabled: Boolean(agentData.voice_response_enabled),
+      voice_provider: agentData.voice_provider,
+      voice_api_key: agentData.voice_api_key,
+      voice_id: agentData.voice_id,
+      calendar_integration: Boolean(agentData.calendar_integration),
+      calendar_api_key: agentData.calendar_api_key,
+      calendar_meeting_id: agentData.calendar_meeting_id,
+      chatnode_integration: Boolean(agentData.chatnode_integration),
+      chatnode_api_key: agentData.chatnode_api_key,
+      chatnode_bot_id: agentData.chatnode_bot_id,
+      orimon_integration: Boolean(agentData.orimon_integration),
+      orimon_api_key: agentData.orimon_api_key,
+      orimon_bot_id: agentData.orimon_bot_id,
+      
+      // NÃO incluir bot_* campos aqui! Eles são para a tabela bots
     };
 
     const createAgentResponse = await fetch(
@@ -262,9 +303,238 @@ export async function POST(request: Request) {
       console.log("⚠️ N8N não configurado, continuando sem webhook N8N");
     }
 
-    // TERCEIRO: Criar bot na Evolution API usando o ID real do agente
+    // ============================================
+    // DETECTAR API TYPE E CRIAR BOT APROPRIADO
+    // ============================================
+    const apiType = connection.api_type || "evolution";
+    console.log(`✅ Conexão validada: ${connection.connection_name} (${apiType})`);
+
     let evolutionBotId = null;
-    if (connection.instance_name) {
+    let createdBotId = null;
+
+    if (apiType === "uazapi") {
+      // ==================== UAZAPI ====================
+      console.log("🤖 [UAZAPI] Iniciando criação de bot customizado");
+
+      try {
+        // Buscar configuração do N8N Session
+        console.log("🔍 [UAZAPI] Buscando configuração N8N Session...");
+        const n8nSessionResponse = await fetch(
+          `${supabaseUrl}/rest/v1/integrations?select=*&type=eq.n8n_session&is_active=eq.true`,
+          { headers }
+        );
+
+        let n8nSessionUrl = null;
+        if (n8nSessionResponse.ok) {
+          const n8nSessions = await n8nSessionResponse.json();
+          if (n8nSessions && n8nSessions.length > 0) {
+            const n8nSessionConfig =
+              typeof n8nSessions[0].config === "string"
+                ? JSON.parse(n8nSessions[0].config)
+                : n8nSessions[0].config;
+            n8nSessionUrl = n8nSessionConfig.webhookUrl || n8nSessionConfig.webhook_url;
+          }
+        }
+
+        if (!n8nSessionUrl) {
+          throw new Error("N8N Session não configurado. Configure em Integrações.");
+        }
+
+        console.log("✅ [UAZAPI] N8N Session encontrado");
+
+        // VALIDAÇÕES DE SEGURANÇA (BACKEND)
+        console.log("🔒 [UAZAPI] Validando dados do bot...");
+        
+        const validGatilhos = ["Palavra-chave", "Todos", "Avançado", "Nenhum"];
+        if (!validGatilhos.includes(agentData.bot_gatilho)) {
+          throw new Error(`Tipo de gatilho inválido: ${agentData.bot_gatilho}`);
+        }
+
+        const validOperadores = ["Contém", "Igual", "Começa Com", "Termina Com", "Regex"];
+        if (!validOperadores.includes(agentData.bot_operador)) {
+          throw new Error(`Operador de gatilho inválido: ${agentData.bot_operador}`);
+        }
+
+        if (agentData.bot_gatilho === "Palavra-chave") {
+          if (!agentData.bot_value || agentData.bot_value.trim() === "") {
+            throw new Error("A palavra-chave é obrigatória quando o tipo de gatilho é 'Palavra-chave'");
+          }
+        }
+
+        console.log("✅ [UAZAPI] Validações passaram com sucesso");
+
+        // ETAPA 1: Criar bot no banco
+        console.log("📝 [UAZAPI] ETAPA 1/3: Criando bot no banco...");
+        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+        
+        // Converter bot_ignoreJids de array para string com vírgulas
+        let ignoreJidsString = "@g.us,";
+        if (agentData.bot_ignoreJids) {
+          if (Array.isArray(agentData.bot_ignoreJids)) {
+            ignoreJidsString = agentData.bot_ignoreJids.join(",") + ",";
+          } else if (typeof agentData.bot_ignoreJids === "string") {
+            ignoreJidsString = agentData.bot_ignoreJids;
+          }
+        }
+        console.log("🔍 [UAZAPI] ignoreJids convertido:", ignoreJidsString);
+        
+        const botPayload = {
+          nome: agentData.name,
+          url_api: n8nWebhookUrl
+            ? `${n8nWebhookUrl}?agentId=${agentId}`
+            : `${baseUrl}/api/agents/webhook?agentId=${agentId}`,
+          apikey: n8nIntegrations?.[0]?.api_key || null,
+          gatilho: agentData.bot_gatilho || "Todos",
+          operador_gatilho: agentData.bot_operador || "Contém",
+          value_gatilho: agentData.bot_value || null,
+          debounce: agentData.bot_debounce || 5,
+          splitMessage: agentData.bot_splitMessage || 2,
+          ignoreJids: ignoreJidsString,
+          padrao: Boolean(agentData.bot_padrao) || false,
+          user_id: agentData.user_id,
+          connection_id: agentData.whatsapp_connection_id,
+        };
+
+        const createBotResponse = await fetch(`${supabaseUrl}/rest/v1/bots`, {
+          method: "POST",
+          headers: { ...headers, Prefer: "return=representation", "Content-Profile": "impaai", "Accept-Profile": "impaai" },
+          body: JSON.stringify(botPayload),
+        });
+
+        if (!createBotResponse.ok) {
+          const errorText = await createBotResponse.text();
+          throw new Error(`Falha ao criar bot no banco: ${errorText}`);
+        }
+
+        const [createdBot] = await createBotResponse.json();
+        createdBotId = createdBot.id;
+        console.log(`✅ [UAZAPI] Bot criado no banco: ${createdBotId}`);
+
+        // ETAPA 2: Configurar webhook na Uazapi
+        console.log("🌐 [UAZAPI] ETAPA 2/3: Configurando webhook na Uazapi...");
+
+        const { createUazapiWebhook, shouldIgnoreGroups } = await import("@/lib/uazapi-webhook-helpers");
+        const { getUazapiConfigServer } = await import("@/lib/uazapi-server");
+
+        const uazapiConfig = await getUazapiConfigServer();
+        if (!uazapiConfig) {
+          throw new Error("Uazapi não configurada");
+        }
+
+        const webhookUrl = `${n8nSessionUrl}?botId=${createdBotId}`;
+        const ignoreGroups = shouldIgnoreGroups(botPayload.ignoreJids);
+
+        const webhookResult = await createUazapiWebhook({
+          uazapiServerUrl: uazapiConfig.serverUrl,
+          instanceToken: connection.instance_token,
+          webhookUrl,
+          ignoreGroups,
+        });
+
+        if (!webhookResult.success) {
+          throw new Error(`Falha ao criar webhook na Uazapi: ${webhookResult.error}`);
+        }
+
+        console.log(`✅ [UAZAPI] Webhook configurado: ${webhookResult.webhookId}`);
+
+        // ETAPA 3: Salvar webhook_id no bot
+        console.log("💾 [UAZAPI] ETAPA 3/3: Salvando webhook_id no bot...");
+        const updateBotResponse = await fetch(
+          `${supabaseUrl}/rest/v1/bots?id=eq.${createdBotId}`,
+          {
+            method: "PATCH",
+            headers: { ...headers, "Content-Profile": "impaai", "Accept-Profile": "impaai" },
+            body: JSON.stringify({ webhook_id: webhookResult.webhookId }),
+          }
+        );
+
+        if (!updateBotResponse.ok) {
+          throw new Error("Falha ao salvar webhook_id no bot");
+        }
+
+        console.log("✅ [UAZAPI] webhook_id salvo no bot");
+
+        // ETAPA 4: Vincular bot ao agente
+        console.log("🔗 [UAZAPI] Vinculando bot ao agente...");
+        const updateAgentResponse = await fetch(
+          `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
+          {
+            method: "PATCH",
+            headers: { ...headers, "Content-Profile": "impaai", "Accept-Profile": "impaai" },
+            body: JSON.stringify({ bot_id: createdBotId }),
+          }
+        );
+
+        if (!updateAgentResponse.ok) {
+          throw new Error("Falha ao vincular bot ao agente");
+        }
+
+        console.log("✅ [UAZAPI] Bot vinculado ao agente com sucesso!");
+
+      } catch (uazapiError: any) {
+        console.error("❌ [UAZAPI] Erro:", uazapiError.message);
+
+        // ROLLBACK
+        console.log("🔄 [UAZAPI] Iniciando ROLLBACK...");
+
+        try {
+          console.log(`🗑️ [UAZAPI ROLLBACK] Deletando agente: ${agentId}`);
+          await fetch(`${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`, {
+            method: "DELETE",
+            headers: { ...headers, "Content-Profile": "impaai", "Accept-Profile": "impaai" },
+          });
+          console.log("✅ [UAZAPI ROLLBACK] Agente deletado");
+        } catch (e) {
+          console.error("❌ [UAZAPI ROLLBACK] Falha ao deletar agente:", e);
+        }
+
+        if (createdBotId) {
+          try {
+            console.log(`🗑️ [UAZAPI ROLLBACK] Deletando bot: ${createdBotId}`);
+
+            const getBotResponse = await fetch(
+              `${supabaseUrl}/rest/v1/bots?id=eq.${createdBotId}&select=webhook_id`,
+              { headers: { ...headers, "Content-Profile": "impaai", "Accept-Profile": "impaai" } }
+            );
+
+            if (getBotResponse.ok) {
+              const [bot] = await getBotResponse.json();
+
+              if (bot?.webhook_id) {
+                console.log(`🗑️ [UAZAPI ROLLBACK] Deletando webhook: ${bot.webhook_id}`);
+                const { deleteUazapiWebhook } = await import("@/lib/uazapi-webhook-helpers");
+                const { getUazapiConfigServer } = await import("@/lib/uazapi-server");
+                const uazapiConfig = await getUazapiConfigServer();
+
+                if (uazapiConfig) {
+                  await deleteUazapiWebhook({
+                    uazapiServerUrl: uazapiConfig.serverUrl,
+                    instanceToken: connection.instance_token,
+                    webhookId: bot.webhook_id,
+                  });
+                  console.log("✅ [UAZAPI ROLLBACK] Webhook deletado");
+                }
+              }
+            }
+
+            await fetch(`${supabaseUrl}/rest/v1/bots?id=eq.${createdBotId}`, {
+              method: "DELETE",
+              headers: { ...headers, "Content-Profile": "impaai", "Accept-Profile": "impaai" },
+            });
+            console.log("✅ [UAZAPI ROLLBACK] Bot deletado");
+          } catch (e) {
+            console.error("❌ [UAZAPI ROLLBACK] Falha ao deletar bot:", e);
+          }
+        }
+
+        console.log("🔄 [UAZAPI ROLLBACK] Completo");
+        throw new Error(`Falha ao criar agente Uazapi: ${uazapiError.message}`);
+      }
+
+    } else {
+      // ==================== EVOLUTION API ====================
+      // TERCEIRO: Criar bot na Evolution API usando o ID real do agente
+      if (connection.instance_name) {
       console.log("🤖 Criando bot na Evolution API com agentId:", agentId);
       try {
         // PROBLEMA IDENTIFICADO: Usar URL absoluta ao invés de relativa no Docker
@@ -386,13 +656,16 @@ export async function POST(request: Request) {
         // Continuar sem o bot da Evolution API
       }
     }
+    } // Fechar bloco else do Evolution
 
     console.log("✅ Processo completo - Agente criado com sucesso:", agentId);
 
     return NextResponse.json({
       success: true,
-      agent: { ...newAgent, evolution_bot_id: evolutionBotId },
+      agent: { ...newAgent, evolution_bot_id: evolutionBotId, bot_id: createdBotId },
       evolutionBotId: evolutionBotId,
+      botId: createdBotId,
+      message: "Agente criado com sucesso",
     });
   } catch (error: any) {
     console.error("❌ Erro ao criar agente:", error.message);

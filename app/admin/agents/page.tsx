@@ -214,7 +214,7 @@ export default function AdminAgentsPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Gerenciar Agentes IA</h1>
           <p className="text-gray-600">Administre todos os agentes do sistema</p>
         </div>
-        <Button onClick={handleCreateAgent} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button onClick={handleCreateAgent} className="bg-blue-600 hover:bg-blue-700 text-white" data-quest-id="new-agent-button">
           <Plus className="w-4 h-4 mr-2" />
           Criar Agente
         </Button>
@@ -372,13 +372,14 @@ export default function AdminAgentsPage() {
                     <Button variant="ghost" size="sm" onClick={() => handleEditAgent(agent)}>
                       <Edit className="w-4 h-4" />
                     </Button>
-                    {agent.evolution_bot_id && (
+                    {/* Botão de sessões: Evolution Bot OU Uazapi Bot */}
+                    {(agent.evolution_bot_id || agent.bot_id) && (
                       <Button 
                         variant="ghost" 
                         size="sm" 
                         className="text-blue-600 hover:text-blue-700"
                         onClick={() => router.push(`/admin/agents/${agent.id}/sessions`)}
-                        title="Ver sessões do Evolution Bot"
+                        title={agent.bot_id ? "Ver sessões do Bot Uazapi" : "Ver sessões do Evolution Bot"}
                       >
                         <Users className="w-4 h-4" />
                       </Button>
