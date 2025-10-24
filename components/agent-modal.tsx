@@ -21,7 +21,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Sparkles, Eye, EyeOff, Volume2, Users, MessageSquare, Clock } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Bot, Sparkles, Eye, EyeOff, Volume2, Users, MessageSquare, Clock, Search, Filter } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
 import { fetchWhatsAppConnections, fetchUsers } from "@/lib/whatsapp-connections"
@@ -178,6 +179,26 @@ export function AgentModal({
   const [tempIgnoreJids, setTempIgnoreJids] = useState<string[]>([])
   const [newIgnoreJid, setNewIgnoreJid] = useState("")
   const [pendingSubmit, setPendingSubmit] = useState(false)
+
+  // Estados para filtros de conexão
+  const [connectionSearch, setConnectionSearch] = useState("")
+  const [connectionApiTypeFilter, setConnectionApiTypeFilter] = useState<string>("all")
+
+  // Função para filtrar conexões
+  const filteredConnections = whatsappConnections.filter((conn) => {
+    // Filtro por busca (nome ou telefone)
+    const matchesSearch = 
+      connectionSearch === "" ||
+      conn.connection_name?.toLowerCase().includes(connectionSearch.toLowerCase()) ||
+      conn.phone_number?.toLowerCase().includes(connectionSearch.toLowerCase())
+
+    // Filtro por tipo de API
+    const matchesApiType =
+      connectionApiTypeFilter === "all" ||
+      (conn.api_type || "evolution") === connectionApiTypeFilter
+
+    return matchesSearch && matchesApiType
+  })
 
   // Estados para Uazapi
   const [selectedConnectionApiType, setSelectedConnectionApiType] = useState<string | null>(null)
@@ -1387,10 +1408,85 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                   </div>
                 )}
 
-                <div>
+                <div className="space-y-3">
                   <Label htmlFor="whatsapp_connection_id" className="text-gray-900 dark:text-gray-100">
                     Conexão WhatsApp *
                   </Label>
+
+                  {/* Filtros de Conexão */}
+                  {whatsappConnections.length > 0 && (
+                    <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                      {/* Busca por nome/telefone */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Input
+                          placeholder="Buscar por nome ou telefone..."
+                          value={connectionSearch}
+                          onChange={(e) => setConnectionSearch(e.target.value)}
+                          className="pl-10 bg-white dark:bg-gray-800"
+                        />
+                      </div>
+
+                      {/* Filtro por tipo de API */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Filter className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Tipo:</span>
+                        <div className="flex gap-2 flex-wrap">
+                          <Button
+                            type="button"
+                            variant={connectionApiTypeFilter === "all" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setConnectionApiTypeFilter("all")}
+                            className="h-8"
+                          >
+                            Todas ({whatsappConnections.length})
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={connectionApiTypeFilter === "uazapi" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setConnectionApiTypeFilter("uazapi")}
+                            className="h-8 bg-purple-600 hover:bg-purple-700 text-white border-purple-600"
+                          >
+                            🚀 Uazapi ({whatsappConnections.filter(c => (c.api_type || "evolution") === "uazapi").length})
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={connectionApiTypeFilter === "evolution" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setConnectionApiTypeFilter("evolution")}
+                            className="h-8 bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
+                          >
+                            ⚡ Evolution ({whatsappConnections.filter(c => (c.api_type || "evolution") === "evolution").length})
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Contador de resultados filtrados */}
+                      {(connectionSearch || connectionApiTypeFilter !== "all") && (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500 dark:text-gray-400">
+                            Mostrando {filteredConnections.length} de {whatsappConnections.length} conexões
+                          </span>
+                          {(connectionSearch || connectionApiTypeFilter !== "all") && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setConnectionSearch("")
+                                setConnectionApiTypeFilter("all")
+                              }}
+                              className="h-6 text-xs"
+                            >
+                              Limpar filtros
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <Select
                     name="whatsapp_connection_id"
                     value={formData.whatsapp_connection_id || ""}
@@ -1438,13 +1534,29 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                         }
                       />
                     </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                      {whatsappConnections.length > 0 ? (
-                        whatsappConnections.map((conn) => (
-                          <SelectItem key={conn.id} value={conn.id}>
-                            {conn.connection_name} ({conn.phone_number || "Número não disponível"})
-                          </SelectItem>
-                        ))
+                    <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 max-h-[300px]">
+                      {filteredConnections.length > 0 ? (
+                        filteredConnections.map((conn) => {
+                          const apiType = conn.api_type || "evolution"
+                          const apiIcon = apiType === "uazapi" ? "🚀" : "⚡"
+                          const apiColor = apiType === "uazapi" ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                          
+                          return (
+                            <SelectItem key={conn.id} value={conn.id}>
+                              <div className="flex items-center gap-2 py-1">
+                                <Badge variant="outline" className={`text-xs font-bold px-2 ${apiColor}`}>
+                                  {apiIcon} {apiType.toUpperCase()}
+                                </Badge>
+                                <span className="font-medium">{conn.connection_name}</span>
+                                <span className="text-gray-500 dark:text-gray-400">({conn.phone_number || "Número não disponível"})</span>
+                              </div>
+                            </SelectItem>
+                          )
+                        })
+                      ) : whatsappConnections.length > 0 ? (
+                        <SelectItem value="no-results" disabled>
+                          Nenhuma conexão encontrada com os filtros aplicados
+                        </SelectItem>
                       ) : (
                         <SelectItem value="no-connections" disabled>
                           {selectedUserId
