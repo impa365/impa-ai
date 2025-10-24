@@ -384,7 +384,7 @@ export async function POST(request: Request) {
             ? `${n8nWebhookUrl}?agentId=${agentId}`
             : `${baseUrl}/api/agents/webhook?agentId=${agentId}`,
           apikey: n8nIntegrations?.[0]?.api_key || null,
-          gatilho: agentData.bot_gatilho || "Todos",
+          gatilho: agentData.bot_gatilho || "Palavra-chave",
           operador_gatilho: agentData.bot_operador || "Contém",
           value_gatilho: agentData.bot_value || null,
           debounce: agentData.bot_debounce || 5,

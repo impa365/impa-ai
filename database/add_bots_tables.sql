@@ -33,7 +33,7 @@ CREATE TABLE impaai.bots (
   nome TEXT NOT NULL,
   url_api TEXT NOT NULL,                    -- Webhook n8n - IA Direta + agentId
   apikey TEXT,                              -- Opcional: API Key de autenticação
-  gatilho impaai.tipo_gatilho_enum DEFAULT 'Todos'::impaai.tipo_gatilho_enum,
+  gatilho impaai.tipo_gatilho_enum DEFAULT 'Palavra-chave'::impaai.tipo_gatilho_enum,
   operador_gatilho impaai.operador_gatilho_enum DEFAULT 'Contém'::impaai.operador_gatilho_enum,
   value_gatilho TEXT,                       -- Valor para comparar (ex: "oi|olá|bom dia")
   debounce NUMERIC DEFAULT 5,               -- Segundos de espera antes de processar

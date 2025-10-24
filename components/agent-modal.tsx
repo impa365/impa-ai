@@ -203,7 +203,7 @@ export function AgentModal({
   // Estados para Uazapi
   const [selectedConnectionApiType, setSelectedConnectionApiType] = useState<string | null>(null)
   const [botFormData, setBotFormData] = useState({
-    bot_gatilho: "Todos",
+    bot_gatilho: "Palavra-chave",
     bot_operador: "Contém",
     bot_value: "",
     bot_debounce: 5,
@@ -505,7 +505,7 @@ export function AgentModal({
 
                   // Preencher botFormData com os dados do bot
                   setBotFormData({
-                    bot_gatilho: botData.bot.gatilho || "Todos",
+                    bot_gatilho: botData.bot.gatilho || "Palavra-chave",
                     bot_operador: botData.bot.operador_gatilho || "Contém",
                     bot_value: botData.bot.value_gatilho || "",
                     bot_debounce: botData.bot.debounce || 5,
