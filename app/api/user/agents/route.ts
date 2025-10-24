@@ -472,6 +472,7 @@ export async function POST(request: Request) {
 
         // ETAPA 4: Vincular bot ao agente
         console.log("🔗 [UAZAPI] Vinculando bot ao agente...")
+        console.log(`📝 [UAZAPI] Atualizando agente ${agentId} com bot_id: ${createdBotId}`)
         const updateAgentResponse = await fetch(
           `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
           {
@@ -482,7 +483,10 @@ export async function POST(request: Request) {
         )
 
         if (!updateAgentResponse.ok) {
-          throw new Error("Falha ao vincular bot ao agente")
+          const errorText = await updateAgentResponse.text()
+          console.error(`❌ [UAZAPI] Erro ao vincular bot - Status: ${updateAgentResponse.status}`)
+          console.error(`❌ [UAZAPI] Erro detalhado:`, errorText)
+          throw new Error(`Falha ao vincular bot ao agente: ${updateAgentResponse.status} - ${errorText}`)
         }
 
         console.log("✅ [UAZAPI] Bot vinculado ao agente com sucesso!")

@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { verifyAuth } from "@/lib/auth-server"
+import { getCurrentServerUser } from "@/lib/auth-server"
 import { deleteUazapiWebhook } from "@/lib/uazapi-webhook-helpers"
 import { getUazapiConfigServer } from "@/lib/uazapi-server"
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 /**
  * GET /api/bots/[id]
@@ -18,13 +15,22 @@ export async function GET(
     const { id } = await params
 
     // Verificar autenticação
-    const authResult = await verifyAuth(request)
-    if (!authResult.authenticated || !authResult.user) {
+    const user = await getCurrentServerUser(request)
+    if (!user) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
-
-    const { user } = authResult
     console.log(`🔍 [GET /api/bots/${id}] Buscando bot`)
+
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ [GET /api/bots] Variáveis de ambiente não encontradas")
+      return NextResponse.json(
+        { error: "Configuração do Supabase não encontrada" },
+        { status: 500 }
+      )
+    }
 
     const headers = {
       apikey: supabaseKey,
@@ -80,15 +86,24 @@ export async function PUT(
     const { id } = await params
 
     // Verificar autenticação
-    const authResult = await verifyAuth(request)
-    if (!authResult.authenticated || !authResult.user) {
+    const user = await getCurrentServerUser(request)
+    if (!user) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
-
-    const { user } = authResult
     const body = await request.json()
 
     console.log(`📝 [PUT /api/bots/${id}] Atualizando bot`)
+
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ [PUT /api/bots] Variáveis de ambiente não encontradas")
+      return NextResponse.json(
+        { error: "Configuração do Supabase não encontrada" },
+        { status: 500 }
+      )
+    }
 
     const headers = {
       apikey: supabaseKey,
@@ -181,13 +196,22 @@ export async function DELETE(
     const { id } = await params
 
     // Verificar autenticação
-    const authResult = await verifyAuth(request)
-    if (!authResult.authenticated || !authResult.user) {
+    const user = await getCurrentServerUser(request)
+    if (!user) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
-
-    const { user } = authResult
     console.log(`🗑️ [DELETE /api/bots/${id}] Deletando bot`)
+
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ [DELETE /api/bots] Variáveis de ambiente não encontradas")
+      return NextResponse.json(
+        { error: "Configuração do Supabase não encontrada" },
+        { status: 500 }
+      )
+    }
 
     const headers = {
       apikey: supabaseKey,
@@ -217,34 +241,61 @@ export async function DELETE(
     // Se tem webhook_id, tentar deletar o webhook da Uazapi
     if (bot.webhook_id) {
       console.log(`🔄 [DELETE /api/bots/${id}] Tentando deletar webhook: ${bot.webhook_id}`)
+      console.log(`📝 [DELETE /api/bots/${id}] Dados do bot:`, {
+        id: bot.id,
+        webhook_id: bot.webhook_id,
+        connection_id: bot.connection_id,
+        user_id: bot.user_id
+      })
 
       // Buscar connection para pegar instance_token
       const getConnectionResponse = await fetch(
-        `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${bot.connection_id}&select=instance_token`,
+        `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${bot.connection_id}&select=instance_token,api_type`,
         { headers }
       )
 
+      console.log(`📡 [DELETE /api/bots/${id}] Response da connection: ${getConnectionResponse.status}`)
+
       if (getConnectionResponse.ok) {
         const connections = await getConnectionResponse.json()
+        console.log(`📊 [DELETE /api/bots/${id}] Connections encontradas: ${connections.length}`)
+        
         if (connections.length > 0) {
           const connection = connections[0]
-          const uazapiConfig = await getUazapiConfigServer()
+          console.log(`🔗 [DELETE /api/bots/${id}] Connection API Type: ${connection.api_type}`)
+          
+          // Verificar se é Uazapi
+          if (connection.api_type !== 'uazapi') {
+            console.log(`⚠️ [DELETE /api/bots/${id}] Connection não é Uazapi, pulando deleção de webhook`)
+          } else {
+            const uazapiConfig = await getUazapiConfigServer()
 
-          if (uazapiConfig) {
-            const deleteResult = await deleteUazapiWebhook({
-              uazapiServerUrl: uazapiConfig.serverUrl,
-              instanceToken: connection.instance_token,
-              webhookId: bot.webhook_id,
-            })
-
-            if (!deleteResult.success) {
-              console.warn(`⚠️ [DELETE /api/bots/${id}] Falha ao deletar webhook, mas continuando: ${deleteResult.error}`)
+            if (!uazapiConfig) {
+              console.error(`❌ [DELETE /api/bots/${id}] Uazapi config não encontrada!`)
             } else {
-              console.log(`✅ [DELETE /api/bots/${id}] Webhook deletado da Uazapi`)
+              console.log(`🔧 [DELETE /api/bots/${id}] Deletando webhook na Uazapi...`)
+              const deleteResult = await deleteUazapiWebhook({
+                uazapiServerUrl: uazapiConfig.serverUrl,
+                instanceToken: connection.instance_token,
+                webhookId: bot.webhook_id,
+              })
+
+              if (!deleteResult.success) {
+                console.warn(`⚠️ [DELETE /api/bots/${id}] Falha ao deletar webhook, mas continuando: ${deleteResult.error}`)
+              } else {
+                console.log(`✅ [DELETE /api/bots/${id}] Webhook deletado da Uazapi com sucesso!`)
+              }
             }
           }
+        } else {
+          console.warn(`⚠️ [DELETE /api/bots/${id}] Connection não encontrada para connection_id: ${bot.connection_id}`)
         }
+      } else {
+        const errorText = await getConnectionResponse.text()
+        console.error(`❌ [DELETE /api/bots/${id}] Erro ao buscar connection: ${getConnectionResponse.status} - ${errorText}`)
       }
+    } else {
+      console.log(`ℹ️ [DELETE /api/bots/${id}] Bot não possui webhook_id, pulando deleção de webhook`)
     }
 
     // Deletar bot do banco

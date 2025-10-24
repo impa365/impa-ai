@@ -456,6 +456,7 @@ export async function POST(request: Request) {
 
         // ETAPA 4: Vincular bot ao agente
         console.log("🔗 [UAZAPI] Vinculando bot ao agente...");
+        console.log(`📝 [UAZAPI] Atualizando agente ${agentId} com bot_id: ${createdBotId}`);
         const updateAgentResponse = await fetch(
           `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
           {
@@ -466,7 +467,10 @@ export async function POST(request: Request) {
         );
 
         if (!updateAgentResponse.ok) {
-          throw new Error("Falha ao vincular bot ao agente");
+          const errorText = await updateAgentResponse.text();
+          console.error(`❌ [UAZAPI] Erro ao vincular bot - Status: ${updateAgentResponse.status}`);
+          console.error(`❌ [UAZAPI] Erro detalhado:`, errorText);
+          throw new Error(`Falha ao vincular bot ao agente: ${updateAgentResponse.status} - ${errorText}`);
         }
 
         console.log("✅ [UAZAPI] Bot vinculado ao agente com sucesso!");
@@ -956,6 +960,42 @@ export async function DELETE(request: Request) {
               evolutionError
             );
           }
+        }
+
+        // Deletar bot Uazapi e webhook se existir
+        if (agent.bot_id) {
+          console.log(`🗑️ [DELETE AGENT] Agente tem bot_id: ${agent.bot_id}, iniciando deleção...`);
+          try {
+            const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+            const deleteBotUrl = `${baseUrl}/api/bots/${agent.bot_id}`;
+
+            console.log(`🔗 [DELETE AGENT] URL do bot para delete: ${deleteBotUrl}`);
+
+            const deleteBotResponse = await fetch(deleteBotUrl, {
+              method: "DELETE",
+              headers: {
+                "Content-Type": "application/json",
+                "Cookie": request.headers.get("cookie") || "",
+              },
+            });
+
+            console.log(`📥 [DELETE AGENT] Resposta do delete do bot: ${deleteBotResponse.status}`);
+
+            if (deleteBotResponse.ok) {
+              console.log("✅ [DELETE AGENT] Bot e webhook deletados com sucesso");
+            } else {
+              const errorText = await deleteBotResponse.text();
+              console.warn(
+                `⚠️ [DELETE AGENT] Erro ao deletar bot: ${deleteBotResponse.status} - ${errorText}`
+              );
+            }
+          } catch (botError: any) {
+            console.warn(
+              `⚠️ [DELETE AGENT] Erro ao deletar bot: ${botError.message}`
+            );
+          }
+        } else {
+          console.log("ℹ️ [DELETE AGENT] Agente não possui bot_id, pulando deleção de bot/webhook");
         }
       }
     }

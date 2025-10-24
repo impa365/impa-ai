@@ -442,6 +442,42 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       }
     }
 
+    // Deletar bot Uazapi e webhook se existir
+    if (agent.bot_id) {
+      console.log(`🗑️ [DELETE AGENT USER] Agente tem bot_id: ${agent.bot_id}, iniciando deleção...`)
+      try {
+        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+        const deleteBotUrl = `${baseUrl}/api/bots/${agent.bot_id}`
+
+        console.log(`🔗 [DELETE AGENT USER] URL do bot para delete: ${deleteBotUrl}`)
+
+        const deleteBotResponse = await fetch(deleteBotUrl, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            "Cookie": request.headers.get("cookie") || "",
+          },
+        })
+
+        console.log(`📥 [DELETE AGENT USER] Resposta do delete do bot: ${deleteBotResponse.status}`)
+
+        if (deleteBotResponse.ok) {
+          console.log("✅ [DELETE AGENT USER] Bot e webhook deletados com sucesso")
+        } else {
+          const errorText = await deleteBotResponse.text()
+          console.warn(
+            `⚠️ [DELETE AGENT USER] Erro ao deletar bot: ${deleteBotResponse.status} - ${errorText}`
+          )
+        }
+      } catch (botError: any) {
+        console.warn(
+          `⚠️ [DELETE AGENT USER] Erro ao deletar bot: ${botError.message}`
+        )
+      }
+    } else {
+      console.log("ℹ️ [DELETE AGENT USER] Agente não possui bot_id, pulando deleção de bot/webhook")
+    }
+
     // Deletar agente do banco
     console.log("💾 Deletando agente do banco de dados...")
     const deleteResponse = await fetch(

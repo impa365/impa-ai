@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { verifyAuth } from "@/lib/auth-server"
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+import { getCurrentServerUser } from "@/lib/auth-server"
 
 /**
  * GET /api/bots
@@ -11,13 +8,22 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 export async function GET(request: NextRequest) {
   try {
     // Verificar autenticação
-    const authResult = await verifyAuth(request)
-    if (!authResult.authenticated || !authResult.user) {
+    const user = await getCurrentServerUser(request)
+    if (!user) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
-
-    const { user } = authResult
     console.log(`🔍 [GET /api/bots] Buscando bots do usuário: ${user.email}`)
+
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ [GET /api/bots] Variáveis de ambiente não encontradas")
+      return NextResponse.json(
+        { error: "Configuração do Supabase não encontrada" },
+        { status: 500 }
+      )
+    }
 
     const headers = {
       apikey: supabaseKey,
@@ -65,15 +71,24 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Verificar autenticação
-    const authResult = await verifyAuth(request)
-    if (!authResult.authenticated || !authResult.user) {
+    const user = await getCurrentServerUser(request)
+    if (!user) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
-
-    const { user } = authResult
     const body = await request.json()
 
     console.log(`📝 [POST /api/bots] Criando bot para usuário: ${user.email}`)
+
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ [POST /api/bots] Variáveis de ambiente não encontradas")
+      return NextResponse.json(
+        { error: "Configuração do Supabase não encontrada" },
+        { status: 500 }
+      )
+    }
 
     // Validações
     if (!body.nome || !body.url_api || !body.connection_id) {
