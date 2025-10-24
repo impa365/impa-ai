@@ -304,7 +304,12 @@ export function AgentModal({
       if (user.role === "admin") {
         loadUsers()
         if (agent?.user_id) {
+          // Editando agente existente - usar user_id do agente
           setSelectedUserId(agent.user_id)
+        } else {
+          // Criando novo agente - pré-selecionar usuário atual (admin)
+          setSelectedUserId(user.id)
+          loadWhatsAppConnections(user.id, true)
         }
       } else {
         setSelectedUserId(user.id)
