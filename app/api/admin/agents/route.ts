@@ -829,8 +829,20 @@ export async function PUT(request: Request) {
       ? agentData.ignore_jids
       : ["@g.us"];
 
+    // Filtrar apenas campos da tabela ai_agents (excluir campos de bot)
+    const { 
+      bot_gatilho, 
+      bot_operador, 
+      bot_value, 
+      bot_debounce, 
+      bot_splitMessage, 
+      bot_ignoreJids, 
+      bot_padrao,
+      ...aiAgentFields 
+    } = agentData;
+
     const dbAgentData = {
-      ...agentData,
+      ...aiAgentFields,
       // Garantir que campos booleanos sejam strings para o Supabase
       transcribe_audio: String(Boolean(agentData.transcribe_audio)),
       understand_images: String(Boolean(agentData.understand_images)),

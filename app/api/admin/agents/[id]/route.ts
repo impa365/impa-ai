@@ -149,7 +149,57 @@ export async function PUT(
       );
     }
 
-    // 1. Atualizar no banco primeiro
+    // 1. Atualizar no banco primeiro - filtrar apenas campos da tabela ai_agents
+    const aiAgentFields = {
+      name: body.name,
+      identity_description: body.identity_description,
+      training_prompt: body.training_prompt,
+      voice_tone: body.voice_tone,
+      main_function: body.main_function,
+      temperature: body.temperature,
+      transcribe_audio: body.transcribe_audio,
+      understand_images: body.understand_images,
+      voice_response_enabled: body.voice_response_enabled,
+      voice_provider: body.voice_provider,
+      voice_api_key: body.voice_api_key,
+      voice_id: body.voice_id,
+      calendar_integration: body.calendar_integration,
+      calendar_api_key: body.calendar_api_key,
+      calendar_meeting_id: body.calendar_meeting_id,
+      chatnode_integration: body.chatnode_integration,
+      chatnode_api_key: body.chatnode_api_key,
+      chatnode_bot_id: body.chatnode_bot_id,
+      orimon_integration: body.orimon_integration,
+      orimon_api_key: body.orimon_api_key,
+      orimon_bot_id: body.orimon_bot_id,
+      description: body.description,
+      status: body.status,
+      is_default: body.is_default,
+      user_id: body.user_id,
+      whatsapp_connection_id: body.whatsapp_connection_id,
+      model: body.model,
+      model_config: body.model_config,
+      // Campos Evolution API
+      trigger_type: body.trigger_type,
+      trigger_operator: body.trigger_operator,
+      trigger_value: body.trigger_value,
+      keyword_finish: body.keyword_finish,
+      debounce_time: body.debounce_time,
+      listening_from_me: body.listening_from_me,
+      stop_bot_from_me: body.stop_bot_from_me,
+      keep_open: body.keep_open,
+      split_messages: body.split_messages,
+      unknown_message: body.unknown_message,
+      delay_message: body.delay_message,
+      expire_time: body.expire_time,
+      ignore_jids: body.ignore_jids,
+    };
+
+    // Remover campos undefined/null
+    const filteredFields = Object.fromEntries(
+      Object.entries(aiAgentFields).filter(([_, value]) => value !== undefined && value !== null)
+    );
+
     const response = await fetch(
       `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
       {
@@ -161,7 +211,7 @@ export async function PUT(
           Authorization: `Bearer ${supabaseKey}`,
           Prefer: "return=representation",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(filteredFields),
       }
     );
 
