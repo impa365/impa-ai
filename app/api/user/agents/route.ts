@@ -41,7 +41,7 @@ export async function GET() {
     console.log("🔍 Buscando agentes do usuário:", currentUser.id)
     // FILTRAR NO BACKEND - apenas agentes do usuário atual
     const agentsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(id,connection_name,phone_number,instance_name,status)&user_id=eq.${currentUser.id}&order=created_at.desc`,
+      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(id,connection_name,phone_number,instance_name,status,api_type)&user_id=eq.${currentUser.id}&order=created_at.desc`,
       { headers },
     )
 

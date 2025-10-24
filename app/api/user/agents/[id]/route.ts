@@ -22,7 +22,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     // Buscar agente com conexão WhatsApp
     const agentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!inner(id,connection_name,phone_number,instance_name)&id=eq.${agentId}`,
+      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!inner(id,connection_name,phone_number,instance_name,api_type)&id=eq.${agentId}`,
       { headers },
     )
 

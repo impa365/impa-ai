@@ -28,7 +28,7 @@ export async function GET() {
     console.log("🔍 Buscando agentes...");
     // Buscar agentes com joins - incluindo model_config para provedor LLM
     const agentsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,user_profiles!ai_agents_user_id_fkey(id,email,full_name),whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(connection_name,status)&order=created_at.desc`,
+      `${supabaseUrl}/rest/v1/ai_agents?select=*,user_profiles!ai_agents_user_id_fkey(id,email,full_name),whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(connection_name,status,api_type)&order=created_at.desc`,
       { headers }
     );
 

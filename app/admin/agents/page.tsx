@@ -335,8 +335,20 @@ export default function AdminAgentsPage() {
                     <div className="text-xs text-gray-500">
                       Proprietário: {agent.user_profiles?.full_name || agent.user_profiles?.email || "N/A"}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      Conexão: {agent.whatsapp_connections?.connection_name || "N/A"}
+                    <div className="text-xs text-gray-500 flex items-center gap-2">
+                      <span>Conexão: {agent.whatsapp_connections?.connection_name || "N/A"}</span>
+                      {agent.whatsapp_connections?.api_type && (
+                        <Badge 
+                          variant="outline" 
+                          className={`text-xs font-bold px-2 ${
+                            agent.whatsapp_connections.api_type === "uazapi" 
+                              ? "bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900 dark:text-purple-200" 
+                              : "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-200"
+                          }`}
+                        >
+                          {agent.whatsapp_connections.api_type === "uazapi" ? "🚀 UAZAPI" : "⚡ EVOLUTION"}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </div>
