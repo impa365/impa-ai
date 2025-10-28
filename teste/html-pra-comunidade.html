@@ -1,0 +1,1530 @@
+<div id="impa365-wrapper">
+    <style>
+        /* RESET E ISOLAMENTO TOTAL - NÃO AFETA NADA FORA DO CONTAINER */
+        #impa365-wrapper {
+            all: initial;
+            display: block;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        #impa365-wrapper *,
+        #impa365-wrapper *::before,
+        #impa365-wrapper *::after {
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        
+        #impa365-wrapper svg {
+            display: block !important;
+        }
+
+        #impa365-wrapper .impa365-container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%);
+            border-radius: 32px;
+            padding: 4rem 3rem;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 0 80px rgba(99, 102, 241, 0.3),
+                0 0 160px rgba(168, 85, 247, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        #impa365-wrapper .impa365-container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+            animation: impa365-rotate 20s linear infinite;
+            pointer-events: none;
+        }
+
+        #impa365-wrapper .impa365-container::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.5), transparent);
+            pointer-events: none;
+        }
+
+        @keyframes impa365-rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #impa365-wrapper .impa365-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        #impa365-wrapper .impa365-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        #impa365-wrapper .impa365-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            padding: 0.5rem 1.25rem;
+            border-radius: 50px;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #a5b4fc;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        #impa365-wrapper .impa365-badge::before {
+            content: '✦';
+            color: #6366f1;
+            animation: impa365-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes impa365-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        #impa365-wrapper .impa365-title {
+            font-size: clamp(2.5rem, 5vw, 4.5rem);
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff 0%, #e0e7ff 50%, #c7d2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+        }
+
+        #impa365-wrapper .impa365-subtitle {
+            font-size: clamp(1.1rem, 2vw, 1.35rem);
+            color: #94a3b8;
+            font-weight: 400;
+            max-width: 700px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* Community Benefits Banner */
+        #impa365-wrapper .impa365-benefits-banner {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.8) 100%);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 24px;
+            padding: 3rem 2.5rem;
+            margin-top: 3rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #impa365-wrapper .impa365-benefits-banner::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #a855f7, #c084fc, #e879f9);
+            pointer-events: none;
+        }
+        
+        #impa365-wrapper .impa365-benefits-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        #impa365-wrapper .impa365-benefits-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a855f7 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.75rem;
+            line-height: 1.2;
+        }
+        
+        #impa365-wrapper .impa365-benefits-subtitle {
+            font-size: 1.15rem;
+            color: #94a3b8;
+            margin: 0;
+        }
+        
+        #impa365-wrapper .impa365-benefits-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2.5rem;
+        }
+        
+        @media (min-width: 768px) and (max-width: 1199px) {
+            #impa365-wrapper .impa365-benefits-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 1200px) {
+            #impa365-wrapper .impa365-benefits-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        #impa365-wrapper .impa365-benefits-box {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(168, 85, 247, 0.2);
+            border-radius: 20px;
+            padding: 2.5rem 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #impa365-wrapper .impa365-benefits-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #a855f7, #c084fc);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease;
+            pointer-events: none;
+        }
+        
+        #impa365-wrapper .impa365-benefits-box:hover::before {
+            transform: translateX(0);
+        }
+        
+        #impa365-wrapper .impa365-benefits-box:hover {
+            background: rgba(15, 23, 42, 0.9);
+            border-color: rgba(168, 85, 247, 0.4);
+            transform: translateY(-8px);
+            box-shadow: 0 20px 60px rgba(168, 85, 247, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-benefits-icon {
+            width: 70px;
+            height: 70px;
+            margin: 0 auto 1.5rem;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
+        }
+        
+        #impa365-wrapper .impa365-benefits-box:hover .impa365-benefits-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
+        
+        #impa365-wrapper .impa365-icon-mentorship {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(196, 132, 252, 0.2));
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-lives {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(244, 114, 182, 0.2));
+            border: 1px solid rgba(236, 72, 153, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-courses {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(52, 211, 153, 0.2));
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-benefits-icon svg {
+            width: 32px !important;
+            height: 32px !important;
+            stroke-width: 2 !important;
+            fill: none !important;
+            stroke-linecap: round !important;
+            stroke-linejoin: round !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-mentorship svg {
+            stroke: #c084fc !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-lives svg {
+            stroke: #f472b6 !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-courses svg {
+            stroke: #34d399 !important;
+        }
+        
+        #impa365-wrapper .impa365-benefits-box h3 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 0.75rem;
+        }
+        
+        #impa365-wrapper .impa365-benefits-box p {
+            font-size: 0.95rem;
+            color: #94a3b8;
+            margin: 0;
+            line-height: 1.6;
+        }
+        
+        #impa365-wrapper .impa365-benefits-highlight {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(196, 132, 252, 0.1));
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #c084fc;
+            font-weight: 600;
+        }
+
+        #impa365-wrapper .impa365-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        #impa365-wrapper .impa365-card {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 24px;
+            padding: 2.5rem;
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        #impa365-wrapper .impa365-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #6366f1, #a855f7, #6366f1);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease;
+            pointer-events: none;
+        }
+
+        #impa365-wrapper .impa365-card:hover::before {
+            transform: translateX(0);
+        }
+
+        #impa365-wrapper .impa365-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 24px;
+            padding: 1px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.3));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+        }
+
+        #impa365-wrapper .impa365-card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(99, 102, 241, 0.4);
+            box-shadow: 
+                0 20px 60px rgba(99, 102, 241, 0.3),
+                0 0 40px rgba(168, 85, 247, 0.2);
+        }
+
+        #impa365-wrapper .impa365-card:hover::after {
+            opacity: 1;
+        }
+
+        #impa365-wrapper .impa365-icon-box {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            position: relative;
+            transition: all 0.4s ease;
+        }
+
+        #impa365-wrapper .impa365-card:hover .impa365-icon-box {
+            transform: rotate(10deg) scale(1.1);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.3));
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+        }
+
+        #impa365-wrapper .impa365-icon-box svg {
+            width: 32px !important;
+            height: 32px !important;
+            stroke: #a5b4fc !important;
+            stroke-width: 2 !important;
+            fill: none !important;
+            stroke-linecap: round !important;
+            stroke-linejoin: round !important;
+            transition: all 0.4s ease !important;
+            display: block !important;
+        }
+
+        #impa365-wrapper .impa365-card:hover .impa365-icon-box svg {
+            stroke: #6366f1 !important;
+            filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.8)) !important;
+        }
+
+        #impa365-wrapper .impa365-card-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 0.75rem;
+            line-height: 1.3;
+        }
+
+        #impa365-wrapper .impa365-card-text {
+            font-size: 1rem;
+            color: #94a3b8;
+            line-height: 1.7;
+            font-weight: 400;
+        }
+
+        #impa365-wrapper .impa365-stats {
+            display: flex;
+            gap: 3rem;
+            justify-content: center;
+            margin-top: 4rem;
+            padding-top: 3rem;
+            border-top: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        #impa365-wrapper .impa365-stat {
+            text-align: center;
+        }
+
+        #impa365-wrapper .impa365-stat-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        #impa365-wrapper .impa365-stat-label {
+            font-size: 0.9rem;
+            color: #64748b;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        /* ChatFlow Banner - REDESIGN LIMPO */
+        #impa365-wrapper .impa365-chatflow-banner {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.8) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 24px;
+            padding: 3rem 2.5rem;
+            margin-top: 3rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #impa365-wrapper .impa365-chatflow-banner::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+            pointer-events: none;
+        }
+        
+        #impa365-wrapper .impa365-chatflow-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        #impa365-wrapper .impa365-exclusive-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            color: white;
+            padding: 0.5rem 1.25rem;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-chatflow-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.75rem;
+            line-height: 1.2;
+        }
+        
+        #impa365-wrapper .impa365-chatflow-subtitle {
+            font-size: 1.15rem;
+            color: #94a3b8;
+            margin: 0;
+        }
+        
+        #impa365-wrapper .impa365-chatflow-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+        
+        @media (min-width: 768px) and (max-width: 1199px) {
+            #impa365-wrapper .impa365-chatflow-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 1200px) {
+            #impa365-wrapper .impa365-chatflow-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        #impa365-wrapper .impa365-feature-box {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 16px;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        #impa365-wrapper .impa365-feature-box:hover {
+            background: rgba(15, 23, 42, 0.9);
+            border-color: rgba(99, 102, 241, 0.4);
+            transform: translateY(-5px);
+        }
+        
+        #impa365-wrapper .impa365-feature-icon {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 1.25rem;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
+        }
+        
+        #impa365-wrapper .impa365-feature-box:hover .impa365-feature-icon {
+            transform: scale(1.1);
+        }
+        
+        #impa365-wrapper .impa365-icon-purple {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-blue {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(96, 165, 250, 0.2));
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-green {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(52, 211, 153, 0.2));
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-orange {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(251, 191, 36, 0.2));
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-pink {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(244, 114, 182, 0.2));
+            border: 1px solid rgba(236, 72, 153, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-cyan {
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(34, 211, 238, 0.2));
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-feature-icon svg {
+            width: 28px !important;
+            height: 28px !important;
+            stroke: #a5b4fc !important;
+            stroke-width: 2 !important;
+            fill: none !important;
+            stroke-linecap: round !important;
+            stroke-linejoin: round !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-purple svg {
+            stroke: #a78bfa !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-blue svg {
+            stroke: #60a5fa !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-green svg {
+            stroke: #34d399 !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-orange svg {
+            stroke: #fbbf24 !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-pink svg {
+            stroke: #f472b6 !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-cyan svg {
+            stroke: #22d3ee !important;
+        }
+        
+        #impa365-wrapper .impa365-feature-box h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 0.5rem;
+        }
+        
+        #impa365-wrapper .impa365-feature-box p {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            margin: 0;
+            line-height: 1.5;
+        }
+        
+        #impa365-wrapper .impa365-chatflow-cta {
+            text-align: center;
+        }
+        
+        #impa365-wrapper .impa365-chatflow-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            color: white !important;
+            padding: 1rem 2.5rem;
+            border-radius: 12px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            text-decoration: none !important;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 24px rgba(99, 102, 241, 0.4);
+            cursor: pointer;
+        }
+        
+        #impa365-wrapper .impa365-chatflow-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 35px rgba(99, 102, 241, 0.6);
+            background: linear-gradient(135deg, #7c3aed, #c026d3);
+        }
+        
+        #impa365-wrapper .impa365-chatflow-button svg {
+            width: 20px !important;
+            height: 20px !important;
+            stroke: white !important;
+            stroke-width: 2.5 !important;
+            fill: none !important;
+            stroke-linecap: round !important;
+            stroke-linejoin: round !important;
+            transition: transform 0.3s ease;
+        }
+        
+        #impa365-wrapper .impa365-chatflow-button:hover svg {
+            transform: translateX(5px);
+        }
+        
+        /* Orimon AI Banner */
+        #impa365-wrapper .impa365-orimon-banner {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.8) 100%);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 24px;
+            padding: 3rem 2.5rem;
+            margin-top: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #impa365-wrapper .impa365-orimon-banner::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #10b981, #34d399, #6ee7b7);
+            pointer-events: none;
+        }
+        
+        #impa365-wrapper .impa365-orimon-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        #impa365-wrapper .impa365-orimon-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.75rem;
+            line-height: 1.2;
+        }
+        
+        #impa365-wrapper .impa365-orimon-subtitle {
+            font-size: 1.15rem;
+            color: #94a3b8;
+            margin: 0;
+        }
+        
+        #impa365-wrapper .impa365-orimon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+        
+        @media (min-width: 768px) and (max-width: 1199px) {
+            #impa365-wrapper .impa365-orimon-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 1200px) {
+            #impa365-wrapper .impa365-orimon-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        
+        #impa365-wrapper .impa365-orimon-box {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 16px;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        #impa365-wrapper .impa365-orimon-box:hover {
+            background: rgba(15, 23, 42, 0.9);
+            border-color: rgba(16, 185, 129, 0.4);
+            transform: translateY(-5px);
+        }
+        
+        #impa365-wrapper .impa365-orimon-icon {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 1.25rem;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
+        }
+        
+        #impa365-wrapper .impa365-orimon-box:hover .impa365-orimon-icon {
+            transform: scale(1.1);
+        }
+        
+        #impa365-wrapper .impa365-icon-ai {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(52, 211, 153, 0.2));
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-rag {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(96, 165, 250, 0.2));
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-n8n {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(167, 139, 250, 0.2));
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-social {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(251, 191, 36, 0.2));
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-orimon-icon svg {
+            width: 28px !important;
+            height: 28px !important;
+            stroke-width: 2 !important;
+            fill: none !important;
+            stroke-linecap: round !important;
+            stroke-linejoin: round !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-ai svg {
+            stroke: #34d399 !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-rag svg {
+            stroke: #60a5fa !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-n8n svg {
+            stroke: #a78bfa !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-social svg {
+            stroke: #fbbf24 !important;
+        }
+        
+        #impa365-wrapper .impa365-orimon-box h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 0.5rem;
+        }
+        
+        #impa365-wrapper .impa365-orimon-box p {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            margin: 0;
+            line-height: 1.5;
+        }
+        
+        #impa365-wrapper .impa365-orimon-cta {
+            text-align: center;
+        }
+        
+        #impa365-wrapper .impa365-orimon-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: linear-gradient(135deg, #10b981, #34d399);
+            color: white !important;
+            padding: 1rem 2.5rem;
+            border-radius: 12px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            text-decoration: none !important;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 24px rgba(16, 185, 129, 0.4);
+            cursor: pointer;
+        }
+        
+        #impa365-wrapper .impa365-orimon-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 35px rgba(16, 185, 129, 0.6);
+            background: linear-gradient(135deg, #059669, #10b981);
+        }
+        
+        #impa365-wrapper .impa365-orimon-button svg {
+            width: 20px !important;
+            height: 20px !important;
+            stroke: white !important;
+            stroke-width: 2.5 !important;
+            fill: none !important;
+            stroke-linecap: round !important;
+            stroke-linejoin: round !important;
+            transition: transform 0.3s ease;
+        }
+        
+        #impa365-wrapper .impa365-orimon-button:hover svg {
+            transform: translateX(5px);
+        }
+
+        /* ImpaAI Banner */
+        #impa365-wrapper .impa365-impaai-banner {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.8) 100%);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+            border-radius: 24px;
+            padding: 3rem 2.5rem;
+            margin-top: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #impa365-wrapper .impa365-impaai-banner::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #06b6d4, #22d3ee, #67e8f9);
+            pointer-events: none;
+        }
+        
+        #impa365-wrapper .impa365-impaai-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        #impa365-wrapper .impa365-impaai-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.75rem;
+            line-height: 1.2;
+        }
+        
+        #impa365-wrapper .impa365-impaai-subtitle {
+            font-size: 1.15rem;
+            color: #94a3b8;
+            margin: 0;
+        }
+        
+        #impa365-wrapper .impa365-impaai-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+        
+        @media (min-width: 768px) and (max-width: 1199px) {
+            #impa365-wrapper .impa365-impaai-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 1200px) {
+            #impa365-wrapper .impa365-impaai-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        #impa365-wrapper .impa365-impaai-box {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(6, 182, 212, 0.2);
+            border-radius: 16px;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        #impa365-wrapper .impa365-impaai-box:hover {
+            background: rgba(15, 23, 42, 0.9);
+            border-color: rgba(6, 182, 212, 0.4);
+            transform: translateY(-5px);
+        }
+        
+        #impa365-wrapper .impa365-impaai-icon {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 1.25rem;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
+        }
+        
+        #impa365-wrapper .impa365-impaai-box:hover .impa365-impaai-icon {
+            transform: scale(1.1);
+        }
+        
+        #impa365-wrapper .impa365-icon-whatsapp {
+            background: linear-gradient(135deg, rgba(37, 211, 102, 0.2), rgba(52, 211, 153, 0.2));
+            border: 1px solid rgba(37, 211, 102, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-evolution {
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(34, 211, 238, 0.2));
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-uazapi {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-automation {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(251, 191, 36, 0.2));
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-analytics {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(244, 114, 182, 0.2));
+            border: 1px solid rgba(236, 72, 153, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-icon-integration {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(52, 211, 153, 0.2));
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        #impa365-wrapper .impa365-impaai-icon svg {
+            width: 28px !important;
+            height: 28px !important;
+            stroke-width: 2 !important;
+            fill: none !important;
+            stroke-linecap: round !important;
+            stroke-linejoin: round !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-whatsapp svg {
+            stroke: #25d366 !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-evolution svg {
+            stroke: #22d3ee !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-uazapi svg {
+            stroke: #a78bfa !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-automation svg {
+            stroke: #fbbf24 !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-analytics svg {
+            stroke: #f472b6 !important;
+        }
+        
+        #impa365-wrapper .impa365-icon-integration svg {
+            stroke: #34d399 !important;
+        }
+        
+        #impa365-wrapper .impa365-impaai-box h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 0.5rem;
+        }
+        
+        #impa365-wrapper .impa365-impaai-box p {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            margin: 0;
+            line-height: 1.5;
+        }
+        
+        #impa365-wrapper .impa365-impaai-cta {
+            text-align: center;
+        }
+        
+        #impa365-wrapper .impa365-impaai-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: linear-gradient(135deg, #06b6d4, #22d3ee);
+            color: white !important;
+            padding: 1rem 2.5rem;
+            border-radius: 12px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            text-decoration: none !important;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 24px rgba(6, 182, 212, 0.4);
+            cursor: pointer;
+        }
+        
+        #impa365-wrapper .impa365-impaai-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 35px rgba(6, 182, 212, 0.6);
+            background: linear-gradient(135deg, #0891b2, #06b6d4);
+        }
+        
+        #impa365-wrapper .impa365-impaai-button svg {
+            width: 20px !important;
+            height: 20px !important;
+            stroke: white !important;
+            stroke-width: 2.5 !important;
+            fill: none !important;
+            stroke-linecap: round !important;
+            stroke-linejoin: round !important;
+            transition: transform 0.3s ease;
+        }
+        
+        #impa365-wrapper .impa365-impaai-button:hover svg {
+            transform: translateX(5px);
+        }
+
+        @media (max-width: 768px) {
+            #impa365-wrapper .impa365-container {
+                padding: 2.5rem 1.5rem;
+                border-radius: 24px;
+            }
+
+            #impa365-wrapper .impa365-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            #impa365-wrapper .impa365-stats {
+                flex-direction: column;
+                gap: 2rem;
+            }
+            
+            #impa365-wrapper .impa365-chatflow-banner {
+                padding: 2rem 1.5rem;
+            }
+            
+            #impa365-wrapper .impa365-chatflow-title {
+                font-size: 2rem;
+            }
+            
+            #impa365-wrapper .impa365-chatflow-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            #impa365-wrapper .impa365-orimon-banner {
+                padding: 2rem 1.5rem;
+            }
+            
+            #impa365-wrapper .impa365-orimon-title {
+                font-size: 2rem;
+            }
+            
+            #impa365-wrapper .impa365-orimon-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            #impa365-wrapper .impa365-impaai-banner {
+                padding: 2rem 1.5rem;
+            }
+            
+            #impa365-wrapper .impa365-impaai-title {
+                font-size: 2rem;
+            }
+            
+            #impa365-wrapper .impa365-impaai-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            #impa365-wrapper .impa365-benefits-banner {
+                padding: 2rem 1.5rem;
+            }
+            
+            #impa365-wrapper .impa365-benefits-title {
+                font-size: 2rem;
+            }
+            
+            #impa365-wrapper .impa365-benefits-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            #impa365-wrapper .impa365-header {
+                margin-bottom: 2.5rem;
+            }
+
+            #impa365-wrapper .impa365-card {
+                padding: 2rem;
+            }
+        }
+    </style>
+
+    <div class="impa365-container">
+        <div class="impa365-content">
+            <header class="impa365-header">
+                <div class="impa365-badge">Comunidade Exclusiva</div>
+                <h1 class="impa365-title">Impa 365</h1>
+                <p class="impa365-subtitle">
+                    Transforme seu negócio com inovação, aprendizado contínuo e uma comunidade poderosa ao seu lado
+                </p>
+            </header>
+
+            <div class="impa365-benefits-banner">
+                <div class="impa365-benefits-header">
+                    <span class="impa365-exclusive-badge">💎 Benefícios Exclusivos</span>
+                    <h2 class="impa365-benefits-title">O que você recebe na Comunidade</h2>
+                    <p class="impa365-benefits-subtitle">Acesso completo a mentoria, conteúdo exclusivo e treinamentos avançados</p>
+                </div>
+                
+                <div class="impa365-benefits-grid">
+                    <div class="impa365-benefits-box">
+                        <div class="impa365-benefits-icon impa365-icon-mentorship">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                        </div>
+                        <h3>Mentoria Individual</h3>
+                        <p>1 hora de call personalizada por mês com especialistas para acelerar seu crescimento e resolver dúvidas específicas.</p>
+                        <div class="impa365-benefits-highlight">
+                            ✨ Incluso na assinatura
+                        </div>
+                    </div>
+                    
+                    <div class="impa365-benefits-box">
+                        <div class="impa365-benefits-icon impa365-icon-lives">
+                            <svg viewBox="0 0 24 24">
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                <line x1="8" y1="21" x2="16" y2="21"/>
+                                <line x1="12" y1="17" x2="12" y2="21"/>
+                                <circle cx="12" cy="8" r="2"/>
+                            </svg>
+                        </div>
+                        <h3>Conteúdo Semanal</h3>
+                        <p>Lives exclusivas, meets ao vivo e vídeos semanais com as últimas tendências em automação e marketing digital.</p>
+                        <div class="impa365-benefits-highlight">
+                            📺 Toda semana
+                        </div>
+                    </div>
+                    
+                    <div class="impa365-benefits-box">
+                        <div class="impa365-benefits-icon impa365-icon-courses">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                            </svg>
+                        </div>
+                        <h3>Cursos Avançados</h3>
+                        <p>Treinamentos completos de Evolution API, N8N, Chatwoot, Cal.com, VibeCoding e outras ferramentas essenciais.</p>
+                        <div class="impa365-benefits-highlight">
+                            🎓 Certificação inclusa
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="impa365-grid">
+                <article class="impa365-card">
+                    <div class="impa365-icon-box">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                        </svg>
+                    </div>
+                    <h3 class="impa365-card-title">Inovação Tecnológica</h3>
+                    <p class="impa365-card-text">Domine o marketing digital, automação e IA para revolucionar seu negócio e se destacar no mercado competitivo.</p>
+                </article>
+
+                <article class="impa365-card">
+                    <div class="impa365-icon-box">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <path d="M9 3v18M3 9h18M3 15h18"/>
+                        </svg>
+                    </div>
+                    <h3 class="impa365-card-title">Conteúdo Exclusivo</h3>
+                    <p class="impa365-card-text">Cursos avançados, workshops práticos e materiais que desenvolvem habilidades essenciais para o sucesso digital.</p>
+                </article>
+
+                <article class="impa365-card">
+                    <div class="impa365-icon-box">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                    </div>
+                    <h3 class="impa365-card-title">Comunidade Viva</h3>
+                    <p class="impa365-card-text">Networking estratégico, mentorias personalizadas e suporte 24/7 para seu crescimento integral e sustentável.</p>
+                </article>
+
+                <article class="impa365-card">
+                    <div class="impa365-icon-box">
+                        <svg viewBox="0 0 24 24">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <h3 class="impa365-card-title">Resultados Reais</h3>
+                    <p class="impa365-card-text">Estratégias validadas, ferramentas atualizadas e metodologias comprovadas para alcançar resultados consistentes.</p>
+                </article>
+            </div>
+
+            <div class="impa365-chatflow-banner">
+                <div class="impa365-chatflow-header">
+                    <span class="impa365-exclusive-badge">🎁 Bônus Exclusivo</span>
+                    <h2 class="impa365-chatflow-title">ChatFlow Ilimitado</h2>
+                    <p class="impa365-chatflow-subtitle">Plataforma completa de atendimento multicanal com IA</p>
+                </div>
+                
+                <div class="impa365-chatflow-grid">
+                    <div class="impa365-feature-box">
+                        <div class="impa365-feature-icon impa365-icon-purple">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                        </div>
+                        <h3>Conexões Ilimitadas</h3>
+                        <p>WhatsApp, Instagram, Facebook e mais</p>
+                    </div>
+                    
+                    <div class="impa365-feature-box">
+                        <div class="impa365-feature-icon impa365-icon-blue">
+                            <svg viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                                <line x1="12" y1="17" x2="12.01" y2="17"/>
+                            </svg>
+                        </div>
+                        <h3>Agentes de IA</h3>
+                        <p>Automação inteligente de conversas</p>
+                    </div>
+                    
+                    <div class="impa365-feature-box">
+                        <div class="impa365-feature-icon impa365-icon-green">
+                            <svg viewBox="0 0 24 24">
+                                <polyline points="16 18 22 12 16 6"/>
+                                <polyline points="8 6 2 12 8 18"/>
+                            </svg>
+                        </div>
+                        <h3>Integrações</h3>
+                        <p>Conecte com suas ferramentas favoritas</p>
+                    </div>
+                    
+                    <div class="impa365-feature-box">
+                        <div class="impa365-feature-icon impa365-icon-orange">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                        </div>
+                        <h3>Usuários Ilimitados</h3>
+                        <p>Toda sua equipe pode usar</p>
+                    </div>
+                    
+                    <div class="impa365-feature-box">
+                        <div class="impa365-feature-icon impa365-icon-pink">
+                            <svg viewBox="0 0 24 24">
+                                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                                <line x1="12" y1="18" x2="12.01" y2="18"/>
+                            </svg>
+                        </div>
+                        <h3>App Mobile</h3>
+                        <p>Disponível para Android e iOS</p>
+                    </div>
+                    
+                    <div class="impa365-feature-box">
+                        <div class="impa365-feature-icon impa365-icon-cyan">
+                            <svg viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M12 1v6m0 6v6"/>
+                                <circle cx="12" cy="12" r="10"/>
+                            </svg>
+                        </div>
+                        <h3>Flow Builder</h3>
+                        <p>Crie fluxos visuais sem código</p>
+                    </div>
+                </div>
+                
+                <div class="impa365-chatflow-cta">
+                    <a href="https://chatflow.impa365.com" target="_blank" class="impa365-chatflow-button">
+                        <span>Conhecer o ChatFlow</span>
+                        <svg viewBox="0 0 24 24">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+
+            <div class="impa365-orimon-banner">
+                <div class="impa365-orimon-header">
+                    <span class="impa365-exclusive-badge">🤖 Bônus IA Avançada</span>
+                    <h2 class="impa365-orimon-title">Orimon AI - 10 Bots Inclusos</h2>
+                    <p class="impa365-orimon-subtitle">Plataforma profissional de IA conversacional com RAG e treinamento customizado</p>
+                </div>
+                
+                <div class="impa365-orimon-grid">
+                    <div class="impa365-orimon-box">
+                        <div class="impa365-orimon-icon impa365-icon-ai">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                <path d="M2 17l10 5 10-5"/>
+                                <path d="M2 12l10 5 10-5"/>
+                            </svg>
+                        </div>
+                        <h3>10 Bots de IA</h3>
+                        <p>Treine múltiplas IAs customizadas</p>
+                    </div>
+                    
+                    <div class="impa365-orimon-box">
+                        <div class="impa365-orimon-icon impa365-icon-rag">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                                <line x1="10" y1="10" x2="10" y2="10"/>
+                                <line x1="14" y1="10" x2="14" y2="10"/>
+                            </svg>
+                        </div>
+                        <h3>RAG Avançado</h3>
+                        <p>Busca semântica em documentos</p>
+                    </div>
+                    
+                    <div class="impa365-orimon-box">
+                        <div class="impa365-orimon-icon impa365-icon-n8n">
+                            <svg viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M12 1v6m0 6v6"/>
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="16"/>
+                                <line x1="8" y1="12" x2="16" y2="12"/>
+                            </svg>
+                        </div>
+                        <h3>Integração N8N</h3>
+                        <p>Conecte com seus fluxos de automação</p>
+                    </div>
+                    
+                    <div class="impa365-orimon-box">
+                        <div class="impa365-orimon-icon impa365-icon-social">
+                            <svg viewBox="0 0 24 24">
+                                <circle cx="18" cy="5" r="3"/>
+                                <circle cx="6" cy="12" r="3"/>
+                                <circle cx="18" cy="19" r="3"/>
+                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                            </svg>
+                        </div>
+                        <h3>Redes Sociais</h3>
+                        <p>Integre com todas as plataformas</p>
+                    </div>
+                </div>
+                
+                <div class="impa365-orimon-cta">
+                    <a href="https://orimon.ai" target="_blank" class="impa365-orimon-button">
+                        <span>Conhecer o Orimon AI</span>
+                        <svg viewBox="0 0 24 24">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+
+            <div class="impa365-impaai-banner">
+                <div class="impa365-impaai-header">
+                    <span class="impa365-exclusive-badge">🚀 Plataforma Principal</span>
+                    <h2 class="impa365-impaai-title">ImpaAI - Automação Inteligente</h2>
+                    <p class="impa365-impaai-subtitle">Plataforma completa de automação WhatsApp com IA, conexões múltiplas e gestão avançada</p>
+                </div>
+                
+                <div class="impa365-impaai-grid">
+                    <div class="impa365-impaai-box">
+                        <div class="impa365-impaai-icon impa365-icon-whatsapp">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+                            </svg>
+                        </div>
+                        <h3>WhatsApp Business</h3>
+                        <p>Automação completa com IA para WhatsApp Business</p>
+                    </div>
+                    
+                    <div class="impa365-impaai-box">
+                        <div class="impa365-impaai-icon impa365-icon-evolution">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                <path d="M2 17l10 5 10-5"/>
+                                <path d="M2 12l10 5 10-5"/>
+                            </svg>
+                        </div>
+                        <h3>Evolution API</h3>
+                        <p>Integração nativa com Evolution API</p>
+                    </div>
+                    
+                    <div class="impa365-impaai-box">
+                        <div class="impa365-impaai-icon impa365-icon-uazapi">
+                            <svg viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M12 1v6m0 6v6"/>
+                                <circle cx="12" cy="12" r="10"/>
+                            </svg>
+                        </div>
+                        <h3>UazAPI</h3>
+                        <p>Suporte completo para UazAPI</p>
+                    </div>
+                    
+                    <div class="impa365-impaai-box">
+                        <div class="impa365-impaai-icon impa365-icon-automation">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M9 12l2 2 4-4"/>
+                                <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
+                            </svg>
+                        </div>
+                        <h3>Automação Inteligente</h3>
+                        <p>Fluxos automáticos com IA avançada</p>
+                    </div>
+                    
+                    <div class="impa365-impaai-box">
+                        <div class="impa365-impaai-icon impa365-icon-analytics">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M3 3v18h18"/>
+                                <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/>
+                            </svg>
+                        </div>
+                        <h3>Analytics Avançado</h3>
+                        <p>Relatórios e métricas detalhadas</p>
+                    </div>
+                    
+                    <div class="impa365-impaai-box">
+                        <div class="impa365-impaai-icon impa365-icon-integration">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                                <path d="M9 14l2 2 4-4"/>
+                            </svg>
+                        </div>
+                        <h3>Integrações</h3>
+                        <p>Conecte com suas ferramentas favoritas</p>
+                    </div>
+                </div>
+                
+                <div class="impa365-impaai-cta">
+                    <button class="impa365-impaai-button">
+                        <span>Conhecer o ImpaAI</span>
+                        <svg viewBox="0 0 24 24">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="impa365-stats">
+                <div class="impa365-stat">
+                    <span class="impa365-stat-number">365</span>
+                    <span class="impa365-stat-label">Dias de Suporte</span>
+                </div>
+                <div class="impa365-stat">
+                    <span class="impa365-stat-number">24/7</span>
+                    <span class="impa365-stat-label">Acesso Total</span>
+                </div>
+                <div class="impa365-stat">
+                    <span class="impa365-stat-number">100%</span>
+                    <span class="impa365-stat-label">Prático</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

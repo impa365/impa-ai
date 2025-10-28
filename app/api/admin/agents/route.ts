@@ -705,16 +705,17 @@ export async function PUT(request: Request) {
       Authorization: `Bearer ${supabaseKey}`,
     };
 
-    // Buscar agente atual para obter evolution_bot_id e connection info
+    // Buscar agente atual para obter evolution_bot_id, bot_id e connection info
     const currentAgentResponse = await fetch(
       `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(instance_name)&id=eq.${id}`,
       { headers }
     );
 
+    let currentAgent = null;
     if (currentAgentResponse.ok) {
       const currentAgents = await currentAgentResponse.json();
       if (currentAgents && currentAgents.length > 0) {
-        const currentAgent = currentAgents[0];
+        currentAgent = currentAgents[0];
 
         // Atualizar bot na Evolution API se existir
         if (
@@ -876,6 +877,66 @@ export async function PUT(request: Request) {
     }
 
     console.log("✅ Agente atualizado com sucesso");
+
+    // ============================================
+    // ATUALIZAR CONFIGURAÇÕES DO BOT (UazAPI)
+    // ============================================
+    if (currentAgent.bot_id && (bot_gatilho || bot_operador || bot_value || bot_debounce || bot_splitMessage || bot_ignoreJids || bot_padrao !== undefined)) {
+      console.log("🤖 [UAZAPI] Atualizando configurações do bot:", currentAgent.bot_id);
+      
+      try {
+        // Preparar dados do bot
+        const botData: any = {};
+        
+        if (bot_gatilho !== undefined) botData.gatilho = bot_gatilho;
+        if (bot_operador !== undefined) botData.operador_gatilho = bot_operador;
+        if (bot_value !== undefined) botData.value_gatilho = bot_value;
+        if (bot_debounce !== undefined) botData.debounce = Number(bot_debounce);
+        if (bot_splitMessage !== undefined) botData.splitMessage = Number(bot_splitMessage);
+        if (bot_padrao !== undefined) botData.padrao = Boolean(bot_padrao);
+        
+        // Processar ignoreJids se fornecido
+        if (bot_ignoreJids !== undefined) {
+          let ignoreJidsString = "@g.us,";
+          if (Array.isArray(bot_ignoreJids)) {
+            ignoreJidsString = bot_ignoreJids.join(",") + ",";
+          } else if (typeof bot_ignoreJids === "string") {
+            ignoreJidsString = bot_ignoreJids;
+          }
+          botData.ignoreJids = ignoreJidsString;
+        }
+
+        console.log("📝 [UAZAPI] Dados do bot para atualização:", botData);
+
+        // Atualizar bot na tabela bots
+        const updateBotResponse = await fetch(
+          `${supabaseUrl}/rest/v1/bots?id=eq.${currentAgent.bot_id}`,
+          {
+            method: "PATCH",
+            headers: {
+              ...headers,
+              "Content-Profile": "impaai",
+              "Accept-Profile": "impaai",
+            },
+            body: JSON.stringify(botData),
+          }
+        );
+
+        if (!updateBotResponse.ok) {
+          const errorText = await updateBotResponse.text();
+          console.error("❌ [UAZAPI] Erro ao atualizar bot:", updateBotResponse.status, errorText);
+          throw new Error(`Erro ao atualizar bot: ${updateBotResponse.status}`);
+        }
+
+        console.log("✅ [UAZAPI] Bot atualizado com sucesso");
+      } catch (botError: any) {
+        console.error("❌ [UAZAPI] Erro ao atualizar bot:", botError.message);
+        // Não falhar a operação principal se o bot falhar
+        console.warn("⚠️ [UAZAPI] Continuando sem atualizar bot");
+      }
+    } else {
+      console.log("ℹ️ [UAZAPI] Nenhuma configuração de bot para atualizar");
+    }
 
     return NextResponse.json({
       success: true,

@@ -160,8 +160,8 @@ export default function WhatsAppSettingsModal({
             rejectCall: apiSettings.rejectCall ?? defaultEvolutionSettings.rejectCall,
             msgCall: apiSettings.msgCall || defaultEvolutionSettings.msgCall,
             syncFullHistory: apiSettings.syncFullHistory ?? defaultEvolutionSettings.syncFullHistory,
-          }
-          setSettings(newSettings)
+        }
+        setSettings(newSettings)
         }
         
         setDataSource(result.source)
