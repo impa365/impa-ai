@@ -54,7 +54,6 @@ export default function AgentSessionsPage() {
         throw new Error("Erro ao buscar agente")
       }
       const agentData = await agentResponse.json()
-      setAgent(agentData.agent)
       
       // 🔍 DEBUG: Ver o que está chegando
       console.log("🔍 [DEBUG] Dados do agente recebidos:", {
@@ -63,9 +62,11 @@ export default function AgentSessionsPage() {
         whatsapp_connection_id: agentData.agent?.whatsapp_connection_id,
         evolution_bot_id: agentData.agent?.evolution_bot_id,
       })
+      
+      setAgent(agentData.agent)
 
-      // Buscar sessões
-      await fetchSessions()
+      // Buscar sessões passando o agente diretamente (não esperar pelo state)
+      await fetchSessions(agentData.agent)
     } catch (error: any) {
       console.error("❌ Erro ao buscar dados:", error)
       toast({
@@ -78,11 +79,15 @@ export default function AgentSessionsPage() {
     }
   }
 
-  const fetchSessions = async () => {
+  const fetchSessions = async (agentData?: any) => {
     try {
+      // Usar o agente passado como parâmetro ou o do state
+      const currentAgent = agentData || agent
+      
       // 🔒 SEGURANÇA: Validar que o agente tem bot_id ou connection_id
-      if (!agent?.bot_id && !agent?.whatsapp_connection_id) {
+      if (!currentAgent?.bot_id && !currentAgent?.whatsapp_connection_id) {
         console.error("❌ SEGURANÇA: Agente sem bot_id ou connection_id!")
+        console.error("🔍 [DEBUG] currentAgent:", currentAgent)
         toast({
           title: "Erro de Configuração",
           description: "Este agente não possui bot_id ou conexão WhatsApp configurada. Não é possível buscar sessões.",
@@ -94,12 +99,12 @@ export default function AgentSessionsPage() {
 
       // Construir URL com filtro de bot_id para separar Uazapi de Evolution
       let url = `/api/bot-sessions`
-      if (agent.bot_id) {
-        url += `?bot_id=${agent.bot_id}`
-        console.log("🔍 Buscando sessões do bot:", agent.bot_id)
-      } else if (agent.whatsapp_connection_id) {
-        url += `?connection_id=${agent.whatsapp_connection_id}`
-        console.log("🔍 Buscando sessões da conexão:", agent.whatsapp_connection_id)
+      if (currentAgent.bot_id) {
+        url += `?bot_id=${currentAgent.bot_id}`
+        console.log("🔍 Buscando sessões do bot:", currentAgent.bot_id)
+      } else if (currentAgent.whatsapp_connection_id) {
+        url += `?connection_id=${currentAgent.whatsapp_connection_id}`
+        console.log("🔍 Buscando sessões da conexão:", currentAgent.whatsapp_connection_id)
       }
       
       const response = await fetch(url)
