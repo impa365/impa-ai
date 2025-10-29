@@ -61,12 +61,25 @@ export default function AgentSessionsPage() {
         bot_id: agentData.agent?.bot_id,
         whatsapp_connection_id: agentData.agent?.whatsapp_connection_id,
         evolution_bot_id: agentData.agent?.evolution_bot_id,
+        api_type: agentData.agent?.connection?.api_type,
       })
       
       setAgent(agentData.agent)
 
-      // Buscar sessões passando o agente diretamente (não esperar pelo state)
-      await fetchSessions(agentData.agent)
+      // 🔍 Verificar tipo de API antes de buscar sessões
+      const apiType = agentData.agent?.connection?.api_type
+      
+      if (apiType === 'evolution') {
+        console.log("ℹ️ Agente Evolution - Não busca sessões da tabela bot_sessions")
+        // Evolution API não usa a tabela bot_sessions
+        setSessions([])
+      } else if (apiType === 'uazapi') {
+        // Buscar sessões passando o agente diretamente (não esperar pelo state)
+        await fetchSessions(agentData.agent)
+      } else {
+        console.warn("⚠️ api_type não identificado:", apiType)
+        setSessions([])
+      }
     } catch (error: any) {
       console.error("❌ Erro ao buscar dados:", error)
       toast({
@@ -425,10 +438,24 @@ export default function AgentSessionsPage() {
             {filteredSessions.length === 0 && (
               <div className="text-center py-12 text-gray-500">
                 <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p>Nenhuma sessão encontrada</p>
-                <p className="text-sm mt-2">
-                  As sessões aparecerão aqui quando o bot responder conversas
-                </p>
+                {agent?.connection?.api_type === 'evolution' ? (
+                  <>
+                    <p className="font-medium">⚡ Agente Evolution API</p>
+                    <p className="text-sm mt-2">
+                      A funcionalidade de gerenciamento de sessões não está disponível para agentes Evolution.
+                    </p>
+                    <p className="text-sm mt-1 text-blue-600">
+                      As sessões são gerenciadas automaticamente pela Evolution API.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p>Nenhuma sessão encontrada</p>
+                    <p className="text-sm mt-2">
+                      As sessões aparecerão aqui quando o bot responder conversas
+                    </p>
+                  </>
+                )}
               </div>
             )}
           </div>
