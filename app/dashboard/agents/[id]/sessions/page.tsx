@@ -72,19 +72,32 @@ export default function AgentSessionsPage() {
 
   const fetchSessions = async () => {
     try {
+      // 🔒 SEGURANÇA: Validar que o agente tem bot_id ou connection_id
+      if (!agent?.bot_id && !agent?.whatsapp_connection_id) {
+        console.error("❌ SEGURANÇA: Agente sem bot_id ou connection_id!")
+        toast({
+          title: "Erro de Configuração",
+          description: "Este agente não possui bot_id ou conexão WhatsApp configurada. Não é possível buscar sessões.",
+          variant: "destructive",
+        })
+        setSessions([])
+        return
+      }
+
       // Construir URL com filtro de bot_id para separar Uazapi de Evolution
       let url = `/api/bot-sessions`
-      if (agent?.bot_id) {
+      if (agent.bot_id) {
         url += `?bot_id=${agent.bot_id}`
         console.log("🔍 Buscando sessões do bot:", agent.bot_id)
-      } else if (agent?.whatsapp_connection_id) {
+      } else if (agent.whatsapp_connection_id) {
         url += `?connection_id=${agent.whatsapp_connection_id}`
         console.log("🔍 Buscando sessões da conexão:", agent.whatsapp_connection_id)
       }
       
       const response = await fetch(url)
       if (!response.ok) {
-        throw new Error("Erro ao buscar sessões")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erro ao buscar sessões")
       }
       const data = await response.json()
       setSessions(data.sessions || [])
@@ -92,7 +105,7 @@ export default function AgentSessionsPage() {
       console.error("❌ Erro ao buscar sessões:", error)
       toast({
         title: "Erro",
-        description: "Falha ao carregar sessões",
+        description: error.message || "Falha ao carregar sessões",
         variant: "destructive",
       })
     }

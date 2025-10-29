@@ -59,6 +59,19 @@ export async function GET(request: Request) {
       "Content-Profile": "impaai",
     }
 
+    // 🔒 SEGURANÇA: EXIGIR bot_id ou connection_id para evitar vazamento de dados
+    if (!botId && !connectionId) {
+      console.error("❌ SEGURANÇA: Tentativa de buscar TODAS as sessões sem filtro!")
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Filtro obrigatório: bot_id ou connection_id deve ser fornecido",
+          details: "Por segurança, não é permitido buscar todas as sessões sem filtro",
+        },
+        { status: 400 }
+      )
+    }
+
     // Construir query - buscar direto da bot_sessions
     // IMPORTANTE: Sempre filtrar deleted_at IS NULL para ocultar sessões inativas
     let query = `${supabaseUrl}/rest/v1/bot_sessions?select=*&deleted_at=is.null`
