@@ -72,7 +72,17 @@ export default function AgentSessionsPage() {
 
   const fetchSessions = async () => {
     try {
-      const response = await fetch(`/api/bot-sessions`)
+      // Construir URL com filtro de bot_id para separar Uazapi de Evolution
+      let url = `/api/bot-sessions`
+      if (agent?.bot_id) {
+        url += `?bot_id=${agent.bot_id}`
+        console.log("🔍 Buscando sessões do bot:", agent.bot_id)
+      } else if (agent?.whatsapp_connection_id) {
+        url += `?connection_id=${agent.whatsapp_connection_id}`
+        console.log("🔍 Buscando sessões da conexão:", agent.whatsapp_connection_id)
+      }
+      
+      const response = await fetch(url)
       if (!response.ok) {
         throw new Error("Erro ao buscar sessões")
       }

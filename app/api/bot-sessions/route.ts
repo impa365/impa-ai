@@ -63,7 +63,17 @@ export async function GET(request: Request) {
     // IMPORTANTE: Sempre filtrar deleted_at IS NULL para ocultar sessões inativas
     let query = `${supabaseUrl}/rest/v1/bot_sessions?select=*&deleted_at=is.null`
 
-    // Filtros
+    // Filtros CRÍTICOS para separar Uazapi de Evolution
+    if (botId) {
+      query += `&bot_id=eq.${botId}`
+      console.log("🔍 Filtrando por bot_id:", botId)
+    }
+    if (connectionId) {
+      query += `&connection_id=eq.${connectionId}`
+      console.log("🔍 Filtrando por connection_id:", connectionId)
+    }
+    
+    // Filtros adicionais
     if (remoteJid) query += `&remoteJid=eq.${remoteJid}`
     if (status) query += `&status=eq.${status === "true"}`
 
