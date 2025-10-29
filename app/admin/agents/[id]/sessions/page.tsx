@@ -55,6 +55,14 @@ export default function AgentSessionsPage() {
       }
       const agentData = await agentResponse.json()
       setAgent(agentData.agent)
+      
+      // 🔍 DEBUG: Ver o que está chegando
+      console.log("🔍 [DEBUG] Dados do agente recebidos:", {
+        name: agentData.agent?.name,
+        bot_id: agentData.agent?.bot_id,
+        whatsapp_connection_id: agentData.agent?.whatsapp_connection_id,
+        evolution_bot_id: agentData.agent?.evolution_bot_id,
+      })
 
       // Buscar sessões
       await fetchSessions()

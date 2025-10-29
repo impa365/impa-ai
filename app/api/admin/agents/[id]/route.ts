@@ -57,6 +57,8 @@ export async function GET(
     }
 
     console.log("✅ [GET AGENT] Agente encontrado:", agent.name);
+    console.log("🔍 [GET AGENT] bot_id:", agent.bot_id || "NULL");
+    console.log("🔍 [GET AGENT] whatsapp_connection_id:", agent.whatsapp_connection_id || "NULL");
 
     // Se tem whatsapp_connection_id, buscar dados da conexão
     if (agent.whatsapp_connection_id) {
