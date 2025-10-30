@@ -261,7 +261,7 @@ export default function UazapiAgentSessionsPage() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => router.back()}
+          onClick={() => router.push("/admin/agents")}
           className="flex items-center gap-2"
         >
           <ArrowLeft className="w-4 h-4" />
