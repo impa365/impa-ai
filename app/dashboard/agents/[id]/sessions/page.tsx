@@ -269,9 +269,14 @@ export default function AgentSessionsPage() {
   }
 
   const filteredSessions = sessions.filter((session) => {
-    const matchesSearch = formatPhone(session.remoteJid)
-      .toLowerCase()
-      .includes(searchFilter.toLowerCase())
+    // Buscar tanto no número formatado quanto no número limpo (sem formatação)
+    const formattedPhone = formatPhone(session.remoteJid).toLowerCase()
+    const rawPhone = session.remoteJid.split("@")[0] // Número limpo: 5573981062304
+    const searchLower = searchFilter.toLowerCase()
+    
+    const matchesSearch = 
+      formattedPhone.includes(searchLower) || // Busca no formatado: +55 (73) 8106-2304
+      rawPhone.includes(searchFilter)         // Busca no limpo: 5573981062304
 
     const matchesStatus =
       statusFilter === "all" ||
