@@ -1,485 +1,702 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, Pause, Play, Trash2, Search, MessageSquare, Clock } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { 
+  ArrowLeft, 
+  Filter, 
+  MoreVertical, 
+  Users, 
+  Clock, 
+  MessageSquare, 
+  Activity,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  CheckSquare,
+  Square
+} from "lucide-react"
+import { getCurrentUser } from "@/lib/auth"
 import { useToast } from "@/components/ui/use-toast"
-import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogFooter,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from "@/components/ui/alert-dialog"
 
-interface BotSession {
+interface Session {
+  id: string
   sessionId: string
   remoteJid: string
-  status: boolean
-  ultimo_status: string
-  criado_em: string
+  pushName: string
+  status: "opened" | "paused" | "closed" | "delete"
+  awaitUser: boolean
+  context: any
+  type: string
+  createdAt: string
+  updatedAt: string
+  instanceId: string
+  parameters: any
+  botId: string
 }
 
-export default function AgentSessionsPage() {
+interface Agent {
+  id: string
+  name: string
+  evolution_bot_id: string
+}
+
+const SESSION_STATUS_COLORS = {
+  opened: "bg-green-100 text-green-800",
+  paused: "bg-yellow-100 text-yellow-800", 
+  closed: "bg-red-100 text-red-800",
+  delete: "bg-gray-100 text-gray-800"
+}
+
+export default function AdminAgentSessionsPage() {
   const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
   const agentId = params.id as string
 
-  const [agent, setAgent] = useState<any>(null)
-  const [sessions, setSessions] = useState<BotSession[]>([])
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [filteredSessions, setFilteredSessions] = useState<Session[]>([])
+  const [agent, setAgent] = useState<Agent | null>(null)
   const [loading, setLoading] = useState(true)
-  const [searchFilter, setSearchFilter] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused">("all")
+  const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set())
+  const [selectAll, setSelectAll] = useState(false)
+  const [showLogs, setShowLogs] = useState(false)
+  const [logs, setLogs] = useState<string[]>([])
+  const [massUpdateLoading, setMassUpdateLoading] = useState(false)
+  
+  // Filtros
+  const [nameFilter, setNameFilter] = useState("")
+  const [numberFilter, setNumberFilter] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [timeFilter, setTimeFilter] = useState("all")
+  
+  // Paginação
+  const [sessionsPerPage] = useState(9)
+  const [sessionsDisplayed, setSessionsDisplayed] = useState(9)
+  
+  // Modais
+  const [statusModal, setStatusModal] = useState<{open: boolean, sessionId: string, remoteJid: string}>({
+    open: false,
+    sessionId: "",
+    remoteJid: ""
+  })
+  const [newStatus, setNewStatus] = useState<"opened" | "paused" | "closed" | "delete">("opened")
+  const [massUpdateStatus, setMassUpdateStatus] = useState<"opened" | "paused" | "closed" | "delete">("opened")
 
   useEffect(() => {
-    fetchData()
-  }, [])
+    const user = getCurrentUser()
+    if (!user) {
+      router.push("/")
+      return
+    }
 
-  const fetchData = async () => {
+    // Verificar se é admin
+    if (user.role !== "admin") {
+      router.push("/dashboard")
+      return
+    }
+
+    loadSessions()
+  }, [agentId, router])
+
+  useEffect(() => {
+    applyFilters()
+  }, [sessions, nameFilter, numberFilter, statusFilter, timeFilter])
+
+  const loadSessions = async () => {
     try {
       setLoading(true)
+      const user = getCurrentUser()
+      if (!user) return
 
-      // Buscar dados do agente
-      const agentResponse = await fetch(`/api/admin/agents/${agentId}`)
-      if (!agentResponse.ok) {
-        throw new Error("Erro ao buscar agente")
-      }
-      const agentData = await agentResponse.json()
-      
-      // 🔍 DEBUG: Ver o que está chegando
-      console.log("🔍 [DEBUG] Dados do agente recebidos:", {
-        name: agentData.agent?.name,
-        bot_id: agentData.agent?.bot_id,
-        whatsapp_connection_id: agentData.agent?.whatsapp_connection_id,
-        evolution_bot_id: agentData.agent?.evolution_bot_id,
-        api_type: agentData.agent?.connection?.api_type,
+      const response = await fetch(`/api/agents/${agentId}/sessions`, {
+        method: 'GET',
+        credentials: 'include'
       })
-      
-      setAgent(agentData.agent)
 
-      // 🔍 Verificar tipo de API antes de buscar sessões
-      const apiType = agentData.agent?.connection?.api_type
-      
-      if (apiType === 'evolution') {
-        console.log("ℹ️ Agente Evolution - Buscar sessões da Evolution API")
-        // Buscar sessões da Evolution API
-        await fetchEvolutionSessions()
-      } else if (apiType === 'uazapi') {
-        // Buscar sessões passando o agente diretamente (não esperar pelo state)
-        await fetchSessions(agentData.agent)
-      } else {
-        console.warn("⚠️ api_type não identificado:", apiType)
-        setSessions([])
+      if (!response.ok) {
+        throw new Error('Erro ao carregar sessões')
       }
-    } catch (error: any) {
-      console.error("❌ Erro ao buscar dados:", error)
+
+      const data = await response.json()
+      setSessions(data.data || [])
+      setAgent(data.agent)
+      addLog(`Carregadas ${data.data?.length || 0} sessões`)
+    } catch (error) {
+      console.error('Erro ao carregar sessões:', error)
       toast({
         title: "Erro",
-        description: error.message || "Falha ao carregar dados",
-        variant: "destructive",
+        description: "Não foi possível carregar as sessões",
+        variant: "destructive"
       })
     } finally {
       setLoading(false)
     }
   }
 
-  const fetchEvolutionSessions = async () => {
-    try {
-      console.log("🔍 Buscando sessões da Evolution API para agente:", agentId)
+  const applyFilters = () => {
+    let filtered = sessions.filter(session => {
+      const matchesName = !nameFilter || session.pushName?.toLowerCase().includes(nameFilter.toLowerCase())
+      const matchesNumber = !numberFilter || session.remoteJid.includes(numberFilter)
+      const matchesStatus = statusFilter === "all" || session.status === statusFilter
       
-      const response = await fetch(`/api/agents/${agentId}/sessions`)
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Erro ao buscar sessões da Evolution")
+      let matchesTime = true
+      if (timeFilter && timeFilter !== "all") {
+        const diffMinutes = (Date.now() - new Date(session.updatedAt).getTime()) / 60000
+        switch (timeFilter) {
+          case "5":
+            matchesTime = diffMinutes <= 5
+            break
+          case "10":
+            matchesTime = diffMinutes <= 10
+            break
+          case "30":
+            matchesTime = diffMinutes <= 30
+            break
+          case "60":
+            matchesTime = diffMinutes <= 60
+            break
+          case ">60":
+            matchesTime = diffMinutes > 60
+            break
+          case ">120":
+            matchesTime = diffMinutes > 120
+            break
+        }
       }
       
+      return matchesName && matchesNumber && matchesStatus && matchesTime
+    })
+    
+    setFilteredSessions(filtered)
+    setSessionsDisplayed(Math.min(sessionsPerPage, filtered.length))
+  }
+
+  const addLog = (message: string) => {
+    const timestamp = new Date().toLocaleString()
+    setLogs(prev => [...prev, `[${timestamp}] ${message}`])
+  }
+
+  const changeSessionStatus = async (remoteJid: string, status: "opened" | "paused" | "closed" | "delete") => {
+    try {
+      const user = getCurrentUser()
+      if (!user) return
+
+      const response = await fetch(`/api/agents/${agentId}/sessions/change-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ remoteJid, status })
+      })
+
+      if (!response.ok) {
+        throw new Error('Erro ao alterar status da sessão')
+      }
+
       const data = await response.json()
-      console.log("✅ Sessões Evolution recebidas:", data.data)
+      addLog(`Status da sessão ${remoteJid} alterado para ${status}`)
+      toast({
+        title: "Sucesso",
+        description: `Status da sessão alterado para ${status}`,
+      })
       
-      // Mapear formato Evolution para o formato esperado
-      const mappedSessions = (data.data || []).map((session: any) => ({
-        sessionId: session.remoteJid || session.id,
-        remoteJid: session.remoteJid,
-        status: session.status === 'opened' || session.status === true,
-        ultimo_status: session.updatedAt || session.ultimo_status || new Date().toISOString(),
-        criado_em: session.createdAt || session.criado_em || new Date().toISOString(),
-      }))
-      
-      setSessions(mappedSessions)
-    } catch (error: any) {
-      console.error("❌ Erro ao buscar sessões Evolution:", error)
+      // Recarregar sessões
+      await loadSessions()
+    } catch (error) {
+      console.error('Erro ao alterar status:', error)
       toast({
         title: "Erro",
-        description: error.message || "Falha ao carregar sessões da Evolution API",
-        variant: "destructive",
+        description: "Não foi possível alterar o status da sessão",
+        variant: "destructive"
       })
-      setSessions([])
     }
   }
 
-  const fetchSessions = async (agentData?: any) => {
+  const handleMassStatusUpdate = async () => {
+    if (selectedSessions.size === 0) {
+      toast({
+        title: "Atenção",
+        description: "Selecione pelo menos uma sessão",
+        variant: "destructive"
+      })
+      return
+    }
+
     try {
-      // Usar o agente passado como parâmetro ou o do state
-      const currentAgent = agentData || agent
+      setMassUpdateLoading(true)
+      const sessionIds = Array.from(selectedSessions)
       
-      // 🔒 SEGURANÇA: Validar que o agente tem bot_id ou connection_id
-      if (!currentAgent?.bot_id && !currentAgent?.whatsapp_connection_id) {
-        console.error("❌ SEGURANÇA: Agente sem bot_id ou connection_id!")
-        console.error("🔍 [DEBUG] currentAgent:", currentAgent)
-        toast({
-          title: "Erro de Configuração",
-          description: "Este agente não possui bot_id ou conexão WhatsApp configurada. Não é possível buscar sessões.",
-          variant: "destructive",
+      // Obter os dados completos das sessões selecionadas
+      const selectedSessionsData = filteredSessions.filter(session => selectedSessions.has(session.id))
+      
+      addLog(`🔄 Iniciando processamento assíncrono de ${sessionIds.length} sessões para status: ${massUpdateStatus}`)
+
+      const response = await fetch(`/api/agents/${agentId}/sessions/mass-update-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          sessionIds, 
+          sessions: selectedSessionsData,
+          status: massUpdateStatus 
         })
-        setSessions([])
-        return
+      })
+
+      if (!response.ok) {
+        throw new Error('Erro ao iniciar processamento assíncrono')
       }
 
-      // Construir URL com filtro de bot_id para separar Uazapi de Evolution
-      let url = `/api/bot-sessions`
-      if (currentAgent.bot_id) {
-        url += `?bot_id=${currentAgent.bot_id}`
-        console.log("🔍 Buscando sessões do bot:", currentAgent.bot_id)
-      } else if (currentAgent.whatsapp_connection_id) {
-        url += `?connection_id=${currentAgent.whatsapp_connection_id}`
-        console.log("🔍 Buscando sessões da conexão:", currentAgent.whatsapp_connection_id)
+      const data = await response.json()
+      
+      addLog(`✅ Job criado com sucesso! ID: ${data.jobId}`)
+      addLog(`📊 ${data.data.totalSessions} sessões serão processadas em background`)
+      addLog(`⏱️ Tempo estimado: ${data.data.estimatedTime}`)
+      
+      toast({
+        title: "✅ Processamento Iniciado",
+        description: `${data.data.totalSessions} sessões estão sendo processadas em background. Você pode navegar livremente!`,
+        duration: 5000
+      })
+      
+      // Limpar seleções
+      setSelectedSessions(new Set())
+      setSelectAll(false)
+      
+      // Iniciar polling do status do job
+      if (data.jobId) {
+        pollJobStatus(data.jobId)
       }
       
-      const response = await fetch(url)
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Erro ao buscar sessões")
-      }
-      const data = await response.json()
-      setSessions(data.sessions || [])
-    } catch (error: any) {
-      console.error("❌ Erro ao buscar sessões:", error)
+    } catch (error) {
+      console.error('Erro na operação em massa:', error)
+      addLog(`❌ Erro na operação em massa: ${error}`)
       toast({
         title: "Erro",
-        description: error.message || "Falha ao carregar sessões",
-        variant: "destructive",
+        description: "Não foi possível processar a operação em massa",
+        variant: "destructive"
       })
+    } finally {
+      setMassUpdateLoading(false)
     }
   }
 
-  const handleToggleStatus = async (session: BotSession) => {
-    try {
-      const newStatus = !session.status
-      const response = await fetch(`/api/bot-sessions/${session.sessionId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      })
+  // Função para fazer polling do status do job
+  const pollJobStatus = async (jobId: string) => {
+    const checkStatus = async () => {
+      try {
+        const response = await fetch(`/api/jobs/${jobId}/status`, {
+          method: 'GET',
+          credentials: 'include'
+        })
 
-      if (!response.ok) {
-        throw new Error("Erro ao atualizar sessão")
+        if (!response.ok) {
+          throw new Error('Erro ao consultar status do job')
+        }
+
+        const data = await response.json()
+        const job = data.job
+
+        // Atualizar logs com progresso
+        if (job.status === 'running') {
+          addLog(`🔄 Progresso: ${job.progress}% (${job.processed_items}/${job.total_items})`)
+          
+          // Continuar polling se ainda está rodando
+          setTimeout(checkStatus, 2000) // Verifica a cada 2 segundos
+        } else if (job.status === 'completed') {
+          addLog(`✅ Processamento concluído!`)
+          addLog(`📊 Resultados: ${job.successful_items} sucessos, ${job.failed_items} falhas`)
+          
+          if (data.results) {
+            addLog(`📝 ${data.results.summary}`)
+            
+            // Log erros se houver
+            if (data.results.errors && data.results.errors.length > 0) {
+              data.results.errors.forEach((error: any) => {
+                addLog(`❌ ${error.remoteJid}: ${error.error}`)
+              })
+            }
+          }
+          
+          toast({
+            title: "🎉 Processamento Concluído",
+            description: `${job.successful_items} sucessos, ${job.failed_items} falhas`,
+            variant: job.failed_items > 0 ? "destructive" : "default"
+          })
+          
+          // Recarregar sessões
+          await loadSessions()
+        } else if (job.status === 'failed') {
+          addLog(`❌ Processamento falhou: ${job.error_message}`)
+          
+          toast({
+            title: "❌ Processamento Falhou",
+            description: job.error_message || "Erro desconhecido",
+            variant: "destructive"
+          })
+        }
+        
+      } catch (error) {
+        console.error('Erro ao consultar status do job:', error)
+        addLog(`❌ Erro ao consultar status: ${error}`)
       }
-
-      toast({
-        title: "Sucesso",
-        description: newStatus ? "Bot reativado para este chat" : "Bot pausado para este chat",
-      })
-
-      fetchSessions()
-    } catch (error: any) {
-      console.error("❌ Erro ao atualizar sessão:", error)
-      toast({
-        title: "Erro",
-        description: "Falha ao atualizar sessão",
-        variant: "destructive",
-      })
     }
+
+    // Iniciar verificação
+    setTimeout(checkStatus, 1000) // Primeira verificação após 1 segundo
   }
 
-  const handleDeleteSession = async (sessionId: string) => {
-    try {
-      const response = await fetch(`/api/bot-sessions/${sessionId}`, {
-        method: "DELETE",
-      })
-
-      if (!response.ok) {
-        throw new Error("Erro ao deletar sessão")
-      }
-
-      toast({
-        title: "Sucesso",
-        description: "Sessão deletada com sucesso",
-      })
-
-      fetchSessions()
-    } catch (error: any) {
-      console.error("❌ Erro ao deletar sessão:", error)
-      toast({
-        title: "Erro",
-        description: "Falha ao deletar sessão",
-        variant: "destructive",
-      })
+  const toggleSelectAll = () => {
+    if (selectAll) {
+      setSelectedSessions(new Set())
+    } else {
+      setSelectedSessions(new Set(filteredSessions.slice(0, sessionsDisplayed).map(s => s.id)))
     }
+    setSelectAll(!selectAll)
   }
 
-  const formatPhone = (remoteJid: string) => {
-    // Extrair apenas o número do JID (remover @s.whatsapp.net ou @g.us)
-    const phone = remoteJid.split("@")[0]
-    
-    // Verificar se é grupo
-    if (remoteJid.includes("@g.us")) {
-      return `Grupo: ${phone}`
+  const toggleSelectSession = (sessionId: string) => {
+    const newSelected = new Set(selectedSessions)
+    if (newSelected.has(sessionId)) {
+      newSelected.delete(sessionId)
+    } else {
+      newSelected.add(sessionId)
     }
-    
-    // Formatar telefone brasileiro (se tiver 13 dígitos: +55 XX XXXXX-XXXX)
-    if (phone.length === 13 && phone.startsWith("55")) {
-      return `+${phone.slice(0, 2)} (${phone.slice(2, 4)}) ${phone.slice(4, 9)}-${phone.slice(9)}`
-    }
-    
-    // Formatar telefone brasileiro (se tiver 12 dígitos: +55 XX XXXX-XXXX)
-    if (phone.length === 12 && phone.startsWith("55")) {
-      return `+${phone.slice(0, 2)} (${phone.slice(2, 4)}) ${phone.slice(4, 8)}-${phone.slice(8)}`
-    }
-    
-    return phone
+    setSelectedSessions(newSelected)
+    setSelectAll(newSelected.size === Math.min(sessionsDisplayed, filteredSessions.length))
+  }
+
+  const getStatusBadge = (status: string) => {
+    const colorClass = SESSION_STATUS_COLORS[status as keyof typeof SESSION_STATUS_COLORS] || "bg-gray-100 text-gray-800"
+    return (
+      <Badge className={`${colorClass} capitalize`}>
+        {status}
+      </Badge>
+    )
   }
 
   const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString)
-      const now = new Date()
-      const diffMs = now.getTime() - date.getTime()
-      const diffMins = Math.floor(diffMs / 60000)
-      const diffHours = Math.floor(diffMs / 3600000)
-      const diffDays = Math.floor(diffMs / 86400000)
-
-      if (diffMins < 1) return "agora"
-      if (diffMins < 60) return `há ${diffMins} min`
-      if (diffHours < 24) return `há ${diffHours}h`
-      if (diffDays < 7) return `há ${diffDays}d`
-
-      return date.toLocaleDateString("pt-BR")
-    } catch {
-      return dateString
-    }
+    return new Date(dateString).toLocaleString('pt-BR')
   }
 
-  const filteredSessions = sessions.filter((session) => {
-    const matchesSearch = formatPhone(session.remoteJid)
-      .toLowerCase()
-      .includes(searchFilter.toLowerCase())
+  const showMoreSessions = () => {
+    setSessionsDisplayed(prev => Math.min(prev + sessionsPerPage, filteredSessions.length))
+  }
 
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "active" && session.status) ||
-      (statusFilter === "paused" && !session.status)
+  const showAllSessions = () => {
+    setSessionsDisplayed(filteredSessions.length)
+  }
 
-    return matchesSearch && matchesStatus
-  })
-
-  const activeSessions = sessions.filter((s) => s.status).length
-  const pausedSessions = sessions.filter((s) => !s.status).length
+  const showLessSessions = () => {
+    setSessionsDisplayed(sessionsPerPage)
+  }
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-64 bg-gray-200 rounded"></div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2" />
+          <p>Carregando sessões...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="p-6">
+    <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.back()}
-          className="flex items-center gap-2"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Voltar
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Sessões do Bot</h1>
-          <p className="text-gray-600">
-            Agente: <span className="font-medium">{agent?.name || "Carregando..."}</span>
-          </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push("/admin/agents")}
+            className="flex items-center space-x-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Voltar para Agentes</span>
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Sessões do Agente</h1>
+            <p className="text-gray-600">{agent?.name}</p>
+          </div>
         </div>
-      </div>
-
-      {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-500">Total de Sessões</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{sessions.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-500">Chats Ativos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{activeSessions}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-500">Chats Pausados</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{pausedSessions}</div>
-          </CardContent>
-        </Card>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={loadSessions}
+          disabled={loading}
+          className="flex items-center space-x-2"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <span>Atualizar</span>
+        </Button>
       </div>
 
       {/* Filtros */}
-      <Card className="mb-6">
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Buscar por número..."
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                className="pl-10"
-              />
-            </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Filter className="h-5 w-5" />
+            <span>Filtros</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Input
+              placeholder="Filtrar por nome"
+              value={nameFilter}
+              onChange={(e) => setNameFilter(e.target.value)}
+            />
+            <Input
+              placeholder="Filtrar por número"
+              value={numberFilter}
+              onChange={(e) => setNumberFilter(e.target.value)}
+            />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filtrar por status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os status</SelectItem>
+                <SelectItem value="opened">Opened</SelectItem>
+                <SelectItem value="paused">Paused</SelectItem>
+                <SelectItem value="closed">Closed</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={timeFilter} onValueChange={setTimeFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filtrar por tempo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os tempos</SelectItem>
+                <SelectItem value="5">Últimos 5 minutos</SelectItem>
+                <SelectItem value="10">Últimos 10 minutos</SelectItem>
+                <SelectItem value="30">Últimos 30 minutos</SelectItem>
+                <SelectItem value="60">Últimos 60 minutos</SelectItem>
+                <SelectItem value=">60">Mais de 60 minutos</SelectItem>
+                <SelectItem value=">120">Mais de 2 horas</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
-            <div className="flex gap-2">
+      {/* Ações em massa */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
               <Button
-                variant={statusFilter === "all" ? "default" : "outline"}
-                onClick={() => setStatusFilter("all")}
-                className="flex-1"
+                variant="outline"
+                size="sm"
+                onClick={toggleSelectAll}
+                className="flex items-center space-x-2"
               >
-                Todos
+                {selectAll ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                <span>Selecionar Todas</span>
               </Button>
+              <Select value={massUpdateStatus} onValueChange={(value: "opened" | "paused" | "closed" | "delete") => setMassUpdateStatus(value)}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="opened">Opened</SelectItem>
+                  <SelectItem value="paused">Paused</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                  <SelectItem value="delete">Delete</SelectItem>
+                </SelectContent>
+              </Select>
               <Button
-                variant={statusFilter === "active" ? "default" : "outline"}
-                onClick={() => setStatusFilter("active")}
-                className="flex-1"
+                variant="default"
+                size="sm"
+                onClick={handleMassStatusUpdate}
+                disabled={selectedSessions.size === 0 || massUpdateLoading}
               >
-                Ativos
+                {massUpdateLoading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  "Alterar Status das Selecionadas"
+                )}
               </Button>
-              <Button
-                variant={statusFilter === "paused" ? "default" : "outline"}
-                onClick={() => setStatusFilter("paused")}
-                className="flex-1"
-              >
-                Pausados
-              </Button>
+            </div>
+            <div className="text-sm text-gray-500">
+              {selectedSessions.size} de {filteredSessions.length} sessões selecionadas
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Lista de Sessões */}
+      {/* Contador de sessões */}
+      <div className="text-center">
+        <Badge variant="secondary" className="text-lg py-2 px-4">
+          <Users className="h-4 w-4 mr-2" />
+          Total de Sessões: {filteredSessions.length}
+        </Badge>
+      </div>
+
+      {/* Lista de sessões */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredSessions.slice(0, sessionsDisplayed).map((session) => (
+          <Card key={session.id} className="hover:shadow-lg transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <Checkbox
+                  checked={selectedSessions.has(session.id)}
+                  onCheckedChange={() => toggleSelectSession(session.id)}
+                />
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Ações da Sessão</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="font-medium">{session.pushName}</p>
+                        <p className="text-sm text-gray-600">{session.remoteJid}</p>
+                      </div>
+                      <div className="flex flex-col space-y-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => changeSessionStatus(session.remoteJid, "opened")}
+                        >
+                          Abrir Sessão
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => changeSessionStatus(session.remoteJid, "paused")}
+                        >
+                          Pausar Sessão
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => changeSessionStatus(session.remoteJid, "closed")}
+                        >
+                          Fechar Sessão
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => changeSessionStatus(session.remoteJid, "delete")}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          Deletar Sessão
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              
+              <div className="space-y-2">
+                <h3 className="font-medium text-lg">{session.pushName || "Sem Nome"}</h3>
+                <div className="text-sm text-gray-600 space-y-1">
+                  <p><strong>Número:</strong> {session.remoteJid}</p>
+                  <div className="flex items-center gap-2">
+                    <strong>Status:</strong> {getStatusBadge(session.status)}
+                  </div>
+                  <p><strong>Aguardando usuário:</strong> {session.awaitUser ? "Sim" : "Não"}</p>
+                  <p><strong>Atualizado em:</strong> {formatDate(session.updatedAt)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Mensagem quando não há sessões */}
+      {filteredSessions.length === 0 && (
+        <div className="text-center py-12 text-gray-500">
+          <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+          <p>Nenhuma sessão encontrada</p>
+          <p className="text-sm mt-2">
+            As sessões aparecerão aqui quando o bot responder conversas
+          </p>
+        </div>
+      )}
+
+      {/* Botões de paginação */}
+      {filteredSessions.length > sessionsPerPage && (
+        <div className="flex justify-center space-x-4">
+          <Button
+            variant="outline"
+            onClick={showMoreSessions}
+            disabled={sessionsDisplayed >= filteredSessions.length}
+          >
+            Mostrar Mais
+          </Button>
+          <Button
+            variant="outline"
+            onClick={showAllSessions}
+            disabled={sessionsDisplayed >= filteredSessions.length}
+          >
+            Mostrar Tudo
+          </Button>
+          <Button
+            variant="outline"
+            onClick={showLessSessions}
+            disabled={sessionsDisplayed <= sessionsPerPage}
+          >
+            Mostrar Menos
+          </Button>
+        </div>
+      )}
+
+      {/* Logs */}
       <Card>
         <CardHeader>
-          <CardTitle>Sessões ({filteredSessions.length})</CardTitle>
+          <CardTitle>
+            <Button
+              variant="ghost"
+              onClick={() => setShowLogs(!showLogs)}
+              className="flex items-center justify-between w-full p-0"
+            >
+              <div className="flex items-center space-x-2">
+                <Activity className="h-5 w-5" />
+                <span>Logs de Atividade</span>
+              </div>
+              {showLogs ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {filteredSessions.map((session) => (
-              <div
-                key={session.sessionId}
-                className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
-              >
-                <div className="flex items-center gap-4">
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      session.status ? "bg-green-100" : "bg-orange-100"
-                    }`}
-                  >
-                    <MessageSquare
-                      className={`w-5 h-5 ${
-                        session.status ? "text-green-600" : "text-orange-600"
-                      }`}
-                    />
+        {showLogs && (
+          <CardContent>
+            <div className="bg-gray-50 rounded-lg p-4 max-h-60 overflow-y-auto">
+              {logs.length === 0 ? (
+                <p className="text-gray-500 text-sm">Nenhum log ainda</p>
+              ) : (
+                logs.map((log, index) => (
+                  <div key={index} className="text-sm font-mono mb-1 text-gray-700">
+                    {log}
                   </div>
-                  <div>
-                    <div className="font-medium">{formatPhone(session.remoteJid)}</div>
-                    <div className="text-sm text-gray-600 flex items-center gap-2">
-                      <Clock className="w-3 h-3" />
-                      Última atividade: {formatDate(session.ultimo_status)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Badge variant={session.status ? "default" : "secondary"} className={
-                    session.status ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"
-                  }>
-                    {session.status ? "Ativo" : "Pausado"}
-                  </Badge>
-
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleToggleStatus(session)}
-                    title={session.status ? "Pausar bot" : "Reativar bot"}
-                  >
-                    {session.status ? (
-                      <Pause className="w-4 h-4 text-orange-600" />
-                    ) : (
-                      <Play className="w-4 h-4 text-green-600" />
-                    )}
-                  </Button>
-
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="text-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Deletar sessão?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Tem certeza que deseja deletar esta sessão? O bot voltará a ser ativado
-                          automaticamente caso o usuário envie uma nova mensagem.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleDeleteSession(session.sessionId)}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          Deletar
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </div>
-            ))}
-
-            {filteredSessions.length === 0 && (
-              <div className="text-center py-12 text-gray-500">
-                <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p>Nenhuma sessão encontrada</p>
-                <p className="text-sm mt-2">
-                  As sessões aparecerão aqui quando o bot responder conversas
-                </p>
-              </div>
-            )}
-          </div>
-        </CardContent>
+                ))
+              )}
+            </div>
+          </CardContent>
+        )}
       </Card>
     </div>
   )
