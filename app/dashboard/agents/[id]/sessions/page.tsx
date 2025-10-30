@@ -70,9 +70,9 @@ export default function AgentSessionsPage() {
       const apiType = agentData.agent?.connection?.api_type
       
       if (apiType === 'evolution') {
-        console.log("ℹ️ Agente Evolution - Não busca sessões da tabela bot_sessions")
-        // Evolution API não usa a tabela bot_sessions
-        setSessions([])
+        console.log("ℹ️ Agente Evolution - Buscar sessões da Evolution API")
+        // Buscar sessões da Evolution API
+        await fetchEvolutionSessions()
       } else if (apiType === 'uazapi') {
         // Buscar sessões passando o agente diretamente (não esperar pelo state)
         await fetchSessions(agentData.agent)
@@ -89,6 +89,40 @@ export default function AgentSessionsPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchEvolutionSessions = async () => {
+    try {
+      console.log("🔍 Buscando sessões da Evolution API para agente:", agentId)
+      
+      const response = await fetch(`/api/agents/${agentId}/sessions`)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erro ao buscar sessões da Evolution")
+      }
+      
+      const data = await response.json()
+      console.log("✅ Sessões Evolution recebidas:", data.data)
+      
+      // Mapear formato Evolution para o formato esperado
+      const mappedSessions = (data.data || []).map((session: any) => ({
+        sessionId: session.remoteJid || session.id,
+        remoteJid: session.remoteJid,
+        status: session.status === 'opened' || session.status === true,
+        ultimo_status: session.updatedAt || session.ultimo_status || new Date().toISOString(),
+        criado_em: session.createdAt || session.criado_em || new Date().toISOString(),
+      }))
+      
+      setSessions(mappedSessions)
+    } catch (error: any) {
+      console.error("❌ Erro ao buscar sessões Evolution:", error)
+      toast({
+        title: "Erro",
+        description: error.message || "Falha ao carregar sessões da Evolution API",
+        variant: "destructive",
+      })
+      setSessions([])
     }
   }
 
@@ -438,24 +472,10 @@ export default function AgentSessionsPage() {
             {filteredSessions.length === 0 && (
               <div className="text-center py-12 text-gray-500">
                 <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                {agent?.connection?.api_type === 'evolution' ? (
-                  <>
-                    <p className="font-medium">⚡ Agente Evolution API</p>
-                    <p className="text-sm mt-2">
-                      A funcionalidade de gerenciamento de sessões não está disponível para agentes Evolution.
-                    </p>
-                    <p className="text-sm mt-1 text-blue-600">
-                      As sessões são gerenciadas automaticamente pela Evolution API.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p>Nenhuma sessão encontrada</p>
-                    <p className="text-sm mt-2">
-                      As sessões aparecerão aqui quando o bot responder conversas
-                    </p>
-                  </>
-                )}
+                <p>Nenhuma sessão encontrada</p>
+                <p className="text-sm mt-2">
+                  As sessões aparecerão aqui quando o bot responder conversas
+                </p>
               </div>
             )}
           </div>
