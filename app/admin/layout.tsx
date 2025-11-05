@@ -2,10 +2,10 @@
 
 import type React from "react"
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Users, Bot, MessageSquare, Settings, Home, LogOut, Menu, X, Key, Calendar } from "lucide-react"
+import { Users, Bot, MessageSquare, Settings, Home, LogOut, Menu, X, Key, Calendar, Sparkles, ChevronRight } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
 import { DynamicTitle } from "@/components/dynamic-title"
@@ -20,7 +20,9 @@ export default function AdminLayout({
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [appVersion, setAppVersion] = useState("1.0.0")
+  const [expandedMenu, setExpandedMenu] = useState<string | null>(null)
   const router = useRouter()
+  const pathname = usePathname()
   const { theme } = useTheme()
 
   useEffect(() => {
@@ -51,8 +53,15 @@ export default function AdminLayout({
     { href: "/admin/agents", icon: Bot, label: "Agentes IA" },
     { href: "/admin/whatsapp", icon: MessageSquare, label: "Conexões WhatsApp" },
     { href: "/admin/followup", icon: Calendar, label: "Follow Diário" },
-    { href: "/admin/apikeys", icon: Key, label: "API Keys" },
-    { href: "/admin/settings", icon: Settings, label: "Configurações" },
+    { href: "/admin/apikeys", icon: Key, label: "API Keys Sistema" },
+    { 
+      href: "/admin/settings", 
+      icon: Settings, 
+      label: "Configurações",
+      submenu: [
+        { href: "/admin/settings/apikeysllm", icon: Sparkles, label: "API Keys LLM" }
+      ]
+    },
   ]
 
   return (
@@ -90,15 +99,45 @@ export default function AdminLayout({
               </div>
 
               {menuItems.map((item) => (
-                <Link key={item.href} href={item.href}>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <item.icon className="mr-3 h-4 w-4" />
-                    {item.label}
-                  </Button>
-                </Link>
+                <div 
+                  key={item.href}
+                  onMouseEnter={() => item.submenu && setExpandedMenu(item.href)}
+                  onMouseLeave={() => item.submenu && setExpandedMenu(null)}
+                >
+                  <Link href={item.href}>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      <item.icon className="mr-3 h-4 w-4" />
+                      {item.label}
+                      {item.submenu && (
+                        <ChevronRight className={`ml-auto h-4 w-4 transition-transform ${expandedMenu === item.href || pathname.startsWith(item.href) ? 'rotate-90' : ''}`} />
+                      )}
+                    </Button>
+                  </Link>
+                  
+                  {/* Submenu */}
+                  {item.submenu && (expandedMenu === item.href || pathname.startsWith(item.href)) && (
+                    <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 dark:border-gray-700 pl-2">
+                      {item.submenu.map((subItem) => (
+                        <Link key={subItem.href} href={subItem.href}>
+                          <Button
+                            variant="ghost"
+                            className={`w-full justify-start text-sm ${
+                              pathname === subItem.href
+                                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
+                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                            }`}
+                          >
+                            <subItem.icon className="mr-2 h-3.5 w-3.5" />
+                            {subItem.label}
+                          </Button>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
 

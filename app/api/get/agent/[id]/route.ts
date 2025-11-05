@@ -104,6 +104,56 @@ export async function GET(
       whatsappConnection = connectionData;
     }
 
+    // Resolver llm_api_key se for referência salva
+    let resolvedLlmApiKey = agent.llm_api_key;
+    if (agent.llm_api_key && agent.llm_api_key.startsWith("__SAVED_KEY__")) {
+      const keyId = agent.llm_api_key.replace("__SAVED_KEY__", "");
+      console.log("🔑 Resolvendo chave salva:", keyId);
+      
+      const { data: savedKey, error: keyError } = await supabase
+        .from("llm_api_keys")
+        .select("api_key")
+        .eq("id", keyId)
+        .eq("is_active", true)
+        .single();
+      
+      if (savedKey && !keyError) {
+        resolvedLlmApiKey = savedKey.api_key;
+        console.log("✅ Chave salva resolvida:", `${resolvedLlmApiKey?.slice(0, 7)}...`);
+      } else {
+        console.warn("⚠️ Chave salva não encontrada:", keyId);
+      }
+    }
+
+    // Se não tiver API key (null/vazio) e tiver provedor, buscar chave padrão do sistema no banco
+    // Verificar se é null, undefined ou string vazia
+    const hasNoApiKey = !resolvedLlmApiKey || 
+                        resolvedLlmApiKey === null || 
+                        resolvedLlmApiKey === "" || 
+                        resolvedLlmApiKey.trim() === "";
+    
+    if (hasNoApiKey && agent.model_config) {
+      const provider = agent.model_config.toLowerCase();
+      
+      // Buscar chave padrão do sistema no banco para o provedor
+      const { data: globalKey, error: globalKeyError } = await supabase
+        .from("llm_api_keys")
+        .select("api_key")
+        .eq("provider", provider)
+        .eq("is_default", true)
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .single();
+
+      if (globalKey && !globalKeyError && globalKey.api_key) {
+        resolvedLlmApiKey = globalKey.api_key;
+        console.log(`✅ Usando API key padrão do sistema para o provedor ${provider}`);
+      } else {
+        console.warn(`⚠️ API key padrão do sistema não encontrada para o provedor ${provider}`);
+      }
+    }
+
     const response = {
       success: true,
       default_model: systemDefaultModel,
@@ -125,6 +175,7 @@ export async function GET(
         frequency_penalty: agent.frequency_penalty,
         presence_penalty: agent.presence_penalty,
         model_config: agent.model_config,
+        llm_api_key: resolvedLlmApiKey, // ✅ API Key RESOLVIDA (completa se salva, ou manual)
         transcribe_audio: agent.transcribe_audio,
         understand_images: agent.understand_images,
         voice_response_enabled: agent.voice_response_enabled,

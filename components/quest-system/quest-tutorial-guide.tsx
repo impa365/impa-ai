@@ -136,34 +136,22 @@ export function QuestTutorialGuide() {
   
   // DEBUG: Log quando activeStep muda
   useEffect(() => {
-    console.log('🎯 [TUTORIAL GUIDE] activeMission:', activeMission?.id)
-    console.log('🎯 [TUTORIAL GUIDE] activeStep:', activeStep?.id, activeStep?.title)
-    console.log('🎯 [TUTORIAL GUIDE] isVisible:', isVisible)
   }, [activeMission, activeStep, isVisible])
   
   useEffect(() => {
     if (!activeMission || !activeStep) {
-      console.log('⚠️ [TUTORIAL GUIDE] Não renderizando - sem missão ou step ativo')
-      console.log('⚠️ [TUTORIAL GUIDE] activeMission:', activeMission)
-      console.log('⚠️ [TUTORIAL GUIDE] activeStep:', activeStep)
       setIsVisible(false)
       return
     }
     
-    console.log('✅ [TUTORIAL GUIDE] Preparando para mostrar step:', activeStep.title)
-    console.log('✅ [TUTORIAL GUIDE] Missão:', activeMission.id)
-    console.log('✅ [TUTORIAL GUIDE] Step completo:', activeStep)
     
     // Aguardar um pouco para a página renderizar
     const timer = setTimeout(() => {
-      console.log('⏱️ [TUTORIAL GUIDE] Timer executado, processando target...')
       const target = activeStep.target
       
       if (target?.element) {
-        console.log('🎯 [TUTORIAL GUIDE] Target tem elemento:', target.element)
         const pos = getElementPosition(target.element)
         if (pos) {
-          console.log('✅ [TUTORIAL GUIDE] Elemento encontrado, posição:', pos)
           setElementPos(pos)
           setTooltipPos(getTooltipPosition(pos))
           setIsVisible(true)
@@ -177,7 +165,6 @@ export function QuestTutorialGuide() {
             })
           }
         } else {
-          console.log('⚠️ [TUTORIAL GUIDE] Elemento não encontrado no DOM, mostrando no centro')
           // Se o elemento não existe, mostrar no centro mesmo assim
           setElementPos(null)
           setTooltipPos({
@@ -188,7 +175,6 @@ export function QuestTutorialGuide() {
           setIsVisible(true)
         }
       } else {
-        console.log('📍 [TUTORIAL GUIDE] Sem elemento específico, mostrando no centro')
         // Se não tem elemento específico, mostrar no centro
         setElementPos(null)
         setTooltipPos({
@@ -222,24 +208,20 @@ export function QuestTutorialGuide() {
   const handleNext = async () => {
     if (!activeStep) return
     
-    console.log('➡️ [TUTORIAL GUIDE] Completando step manualmente:', activeStep.id)
     
     try {
       await completeStep(activeStep.id)
-      console.log('✅ [TUTORIAL GUIDE] Step completado com sucesso')
     } catch (error) {
       console.error('❌ [TUTORIAL GUIDE] Erro ao completar passo:', error)
     }
   }
   
   const handleSkip = async () => {
-    console.log('🚫 [TUTORIAL GUIDE] Usuário clicou para fechar/pular tutorial')
     
     if (!activeMission) return
     
     try {
       await abandonMission()
-      console.log('✅ [TUTORIAL GUIDE] Missão abandonada com sucesso')
       setIsVisible(false)
     } catch (error) {
       console.error('❌ [TUTORIAL GUIDE] Erro ao abandonar missão:', error)
@@ -249,22 +231,18 @@ export function QuestTutorialGuide() {
   }
   
   // SEMPRE mostrar se houver missão e step ativo, ignorando isVisible
-  console.log('🖥️ [TUTORIAL GUIDE] Render check - isVisible:', isVisible, 'activeMission:', !!activeMission, 'activeStep:', !!activeStep)
   
   if (!activeMission || !activeStep) {
-    console.log('❌ [TUTORIAL GUIDE] Não renderizando - falta missão ou step')
     return null
   }
   
   // REMOVIDO O CHECK DE isVisible - agora sempre mostra se tiver missão/step
-  console.log('✅ [TUTORIAL GUIDE] RENDERIZANDO TUTORIAL!')
   
   const currentStepIndex = activeMission.steps.findIndex(s => s.id === activeStep.id)
   const totalSteps = activeMission.steps.length
   
   // Usar isVisible OU forçar true se tiver target.element
   const shouldShow = isVisible || (activeStep.target?.element || activeStep.target?.page)
-  console.log('👀 [TUTORIAL GUIDE] shouldShow:', shouldShow, 'isVisible:', isVisible, 'tem target:', !!(activeStep.target?.element || activeStep.target?.page))
   
   return (
     <AnimatePresence>

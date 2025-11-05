@@ -51,7 +51,6 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
       onSuccess: (data) => {
-        console.log('✅ [QUEST PROVIDER] Dados carregados com sucesso:', data)
       },
       onError: (err) => {
         console.error('❌ [QUEST PROVIDER] Erro ao carregar dados:', err)
@@ -60,9 +59,6 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
   )
 
   // DEBUG: Logs do estado
-  console.log('🔄 [QUEST PROVIDER] isLoading:', isLoading)
-  console.log('🔄 [QUEST PROVIDER] error:', error)
-  console.log('🔄 [QUEST PROVIDER] progress:', progress)
 
   // Estado da ARIA
   const [ariaState, setAriaState] = useState<ARIAState>({
@@ -86,12 +82,8 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
    * Atualizar missão ativa baseado no progresso
    */
   useEffect(() => {
-    console.log('🔄 [QUEST HOOK] Recalculando missão/step ativo')
-    console.log('🔄 [QUEST HOOK] Progress:', progress)
-    console.log('🔄 [QUEST HOOK] activeMissionId:', progress?.activeMissionId)
     
     if (!progress || !progress.activeMissionId) {
-      console.log('⚠️ [QUEST HOOK] Sem missão ativa, limpando state')
       setActiveMission(null)
       setActiveStep(null)
       return
@@ -102,12 +94,9 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
       setActiveMission(mission)
       
       const stepIndex = progress.missionProgress.currentStepIndex
-      console.log('📍 [QUEST HOOK] currentStepIndex:', stepIndex)
-      console.log('📍 [QUEST HOOK] Total steps:', mission.steps.length)
       
       if (stepIndex < mission.steps.length) {
         const step = mission.steps[stepIndex]
-        console.log('✅ [QUEST HOOK] Setando activeStep:', step.id, step.title)
         setActiveStep(step)
         
         // Atualizar diálogo da ARIA com o step atual
@@ -119,10 +108,8 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
           hasNewHint: true
         }))
       } else {
-        console.log('⚠️ [QUEST HOOK] stepIndex >= total steps, missão completa?')
       }
     } else {
-      console.log('⚠️ [QUEST HOOK] Missão não encontrada ou sem missionProgress')
     }
   }, [progress])
 
@@ -161,8 +148,6 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
   const completeStep = useCallback(async (stepId: string) => {
     if (!activeMission || !progress) return
 
-    console.log('📝 [QUEST HOOK] Completando step:', stepId)
-    console.log('📝 [QUEST HOOK] Missão ativa:', activeMission.id)
 
     try {
       const response = await fetch('/api/quest-progress/complete-step', {
@@ -177,10 +162,8 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
       if (!response.ok) throw new Error('Failed to complete step')
 
       const updated = await response.json()
-      console.log('✅ [QUEST HOOK] Step completado, atualizando progresso...')
       
       await refreshProgress()
-      console.log('✅ [QUEST HOOK] Progresso atualizado!')
 
       // Mostrar ARIA celebrando
       setAriaState(prev => ({ ...prev, mood: 'celebrating' }))
@@ -216,17 +199,14 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
       const newLevel = getLevelFromXP(updated.totalXP).level
       const leveledUp = newLevel > oldLevel
 
-      console.log('🎁 [COMPLETE MISSION] Badge IDs da missão:', activeMission.rewards.badges)
       
       const badges = activeMission.rewards.badges
         .map(badgeId => {
           const badge = getBadgeById(badgeId)
-          console.log(`🔍 [COMPLETE MISSION] Badge ${badgeId}:`, badge)
           return badge
         })
         .filter(Boolean)
       
-      console.log('🏆 [COMPLETE MISSION] Badges finais:', badges)
 
       // Criar evento de conquista
       const event: AchievementEvent = {
@@ -261,7 +241,6 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
    */
   const abandonMission = useCallback(async () => {
     if (!activeMission) {
-      console.log('⚠️ [QUEST] Não há missão ativa para abandonar')
       return
     }
 
@@ -277,7 +256,6 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (response.status === 400) {
-        console.log('⚠️ [QUEST] Missão já foi abandonada ou não está ativa')
       }
 
       await refreshProgress()

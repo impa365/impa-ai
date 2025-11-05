@@ -34,9 +34,6 @@ function QuestSystemContent() {
     progress
   } = useQuestSystem()
 
-  // DEBUG: Log do progresso no Content
-  console.log('📦 [QUEST CONTENT] Progress recebido:', progress)
-  console.log('📦 [QUEST CONTENT] Preferências:', progress?.preferences)
 
   // Abrir ARIA automaticamente quando há novos diálogos
   useEffect(() => {
@@ -126,24 +123,15 @@ function QuestSystemContent() {
 
   // Não mostrar o sistema de quests em páginas de autenticação
   const isAuthPage = typeof window !== 'undefined' && window.location.pathname.includes('/auth/')
-  console.log('🔍 [QUEST CONTENT] Está em página de auth?', isAuthPage)
-  console.log('🔍 [QUEST CONTENT] URL atual:', typeof window !== 'undefined' ? window.location.pathname : 'SSR')
   if (isAuthPage) {
-    console.log('⚠️ [QUEST CONTENT] Não renderizando - Página de autenticação')
     return null
   }
 
-  // Não mostrar se o usuário desabilitou
-  // IMPORTANTE: undefined ou true = mostrar | false = não mostrar
+  // Não mostrar se o usuário desabilitou (showARIA: false)
   const showARIA = progress?.preferences?.showARIA
-  console.log('🔍 [QUEST CONTENT] showARIA preferência:', showARIA)
-  console.log('🔍 [QUEST CONTENT] Decisão: mostrar?', showARIA !== false)
   if (progress && showARIA === false) {
-    console.log('⚠️ [QUEST CONTENT] Não renderizando - Usuário desabilitou ARIA explicitamente')
     return null
   }
-
-  console.log('✅ [QUEST CONTENT] Renderizando Quest System!')
 
   return (
     <>

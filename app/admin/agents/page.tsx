@@ -52,7 +52,6 @@ export default function AdminAgentsPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      console.log("📡 Buscando dados dos agentes via API...")
 
       // Usar API segura ao invés de Supabase direto
       const response = await publicApi.getAdminAgents()
@@ -61,17 +60,10 @@ export default function AdminAgentsPage() {
         throw new Error(response.error)
       }
 
-      console.log("✅ Dados recebidos:", {
-        agents: response.data?.agents?.length || 0,
-        users: response.data?.users?.length || 0,
-        connections: response.data?.connections?.length || 0,
-      })
-
       setAgents(response.data?.agents || [])
       setUsers(response.data?.users || [])
       setWhatsappConnections(response.data?.connections || [])
     } catch (error) {
-      console.error("❌ Erro ao buscar dados:", error)
       toast({
         title: "Erro",
         description: "Falha ao carregar dados dos agentes",
@@ -111,7 +103,6 @@ export default function AdminAgentsPage() {
   }
 
   const handleEditAgent = (agent: any) => {
-    console.log("🔧 [AdminAgents] Editando agente:", agent)
     setSelectedAgent(agent)
     setShowAgentModal(true)
   }
@@ -135,7 +126,6 @@ export default function AdminAgentsPage() {
       })
       fetchData()
     } catch (error) {
-      console.error("❌ Erro ao excluir agente:", error)
       toast({
         title: "Erro",
         description: "Falha ao excluir agente",
@@ -151,7 +141,6 @@ export default function AdminAgentsPage() {
   const handleToggleStatus = async (agent: any) => {
     try {
       const newStatus = agent.status === "active" ? "inactive" : "active"
-      console.log("🔄 Alterando status do agente via API:", agent.id, "para", newStatus)
 
       const response = await publicApi.updateAgent(agent.id, { status: newStatus })
 
@@ -167,7 +156,6 @@ export default function AdminAgentsPage() {
       // Recarregar dados
       fetchData()
     } catch (error) {
-      console.error("❌ Erro ao alterar status:", error)
       toast({
         title: "Erro",
         description: "Falha ao alterar status do agente",

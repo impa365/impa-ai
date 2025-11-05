@@ -116,6 +116,33 @@ export async function GET(
       }
     }
 
+    // Resolver llm_api_key se for referência salva
+    if (agent.llm_api_key && agent.llm_api_key.startsWith("__SAVED_KEY__")) {
+      const keyId = agent.llm_api_key.replace("__SAVED_KEY__", "");
+      console.log("🔑 [GET AGENT] Resolvendo chave salva:", keyId);
+      
+      const savedKeyResponse = await fetch(
+        `${supabaseUrl}/rest/v1/llm_api_keys?select=api_key&id=eq.${keyId}&is_active=eq.true`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Accept-Profile": "impaai",
+            "Content-Profile": "impaai",
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+        }
+      );
+      
+      if (savedKeyResponse.ok) {
+        const savedKeys = await savedKeyResponse.json();
+        if (savedKeys && savedKeys[0]) {
+          agent.llm_api_key = savedKeys[0].api_key;
+          console.log("✅ [GET AGENT] Chave salva resolvida:", `${agent.llm_api_key?.slice(0, 7)}...`);
+        }
+      }
+    }
+
     console.log("✅ [GET AGENT] Retornando dados do agente");
 
     return NextResponse.json({ agent });
@@ -316,7 +343,7 @@ export async function PUT(
         if (apiType === "evolution" && agent.evolution_bot_id) {
           console.log("🤖 Atualizando bot na Evolution API...")
 
-          // Buscar configurações da Evolution API
+        // Buscar configurações da Evolution API
         const evolutionResponse = await fetch(
           `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true`,
           {
@@ -430,11 +457,11 @@ export async function PUT(
       }
     } catch (syncError) {
       console.error("❌ Erro ao sincronizar com API externa:", syncError);
-      // Não falha a operação, apenas loga o erro
+        // Não falha a operação, apenas loga o erro
+      }
     }
-  }
 
-  return NextResponse.json(agent);
+    return NextResponse.json(agent);
   } catch (error) {
     console.error("❌ Erro geral ao atualizar agente:", error);
     return NextResponse.json(

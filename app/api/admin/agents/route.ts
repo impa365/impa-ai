@@ -204,6 +204,7 @@ export async function POST(request: Request) {
       main_function: agentData.main_function,
       model: agentData.model,
       model_config: agentData.model_config,
+      llm_api_key: agentData.llm_api_key || null,
       temperature: Number(agentData.temperature) || 0.7,
       
       // Status

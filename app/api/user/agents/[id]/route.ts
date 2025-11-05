@@ -35,9 +35,32 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
+    const agent = agents[0]
+
+    // Resolver llm_api_key se for referência salva
+    if (agent.llm_api_key && agent.llm_api_key.startsWith("__SAVED_KEY__")) {
+      const keyId = agent.llm_api_key.replace("__SAVED_KEY__", "");
+      console.log("🔑 Resolvendo chave salva:", keyId);
+      
+      const savedKeyResponse = await fetch(
+        `${supabaseUrl}/rest/v1/llm_api_keys?select=api_key&id=eq.${keyId}&is_active=eq.true`,
+        { headers }
+      );
+      
+      if (savedKeyResponse.ok) {
+        const savedKeys = await savedKeyResponse.json();
+        if (savedKeys && savedKeys[0]) {
+          agent.llm_api_key = savedKeys[0].api_key;
+          console.log("✅ Chave salva resolvida:", `${agent.llm_api_key?.slice(0, 7)}...`);
+        } else {
+          console.warn("⚠️ Chave salva não encontrada:", keyId);
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      agent: agents[0],
+      agent: agent,
     })
   } catch (error: any) {
     console.error("❌ Erro na API user/agents/[id]:", error.message)
@@ -127,6 +150,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       whatsapp_connection_id: agentData.whatsapp_connection_id,
       model: agentData.model,
       model_config: agentData.model_config,
+      llm_api_key: agentData.llm_api_key || null,
       // Campos Evolution API
       trigger_type: agentData.trigger_type || "keyword",
       trigger_operator: agentData.trigger_operator || "equals", 

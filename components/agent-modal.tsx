@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -72,6 +73,7 @@ export interface Agent {
   evolution_bot_id?: string | null
   model?: string | null
   model_config?: string | null // Provedor LLM (openai, anthropic, etc.)
+  llm_api_key?: string | null // API Key customizada do usuário para LLM
   // Campos para sincronização com Evolution API
   trigger_type?: string | null
   trigger_operator?: string | null
@@ -129,6 +131,7 @@ const initialFormData: Agent = {
   evolution_bot_id: null,
   model: null,
   model_config: null,
+  llm_api_key: null,
   // Valores padrão para campos Evolution API
   trigger_type: "keyword",
   trigger_operator: "equals",
@@ -166,11 +169,15 @@ export function AgentModal({
   const [showCalendarApiKey, setShowCalendarApiKey] = useState(false)
   const [showChatnodeApiKey, setShowChatnodeApiKey] = useState(false) // Adicionar esta linha
   const [showOrimonApiKey, setShowOrimonApiKey] = useState(false) // Adicionar esta linha
+  const [showLlmApiKey, setShowLlmApiKey] = useState(false)
   const [evolutionSyncStatus, setEvolutionSyncStatus] = useState<string>("")
   const [systemDefaultModel, setSystemDefaultModel] = useState<string | null>(null)
   const [llmConfig, setLlmConfig] = useState<any>(null)
   const [loadingLlmConfig, setLoadingLlmConfig] = useState(false)
   const [modelSelection, setModelSelection] = useState<"default" | "custom">("default")
+  const [savedLlmKeys, setSavedLlmKeys] = useState<any[]>([])
+  const [llmKeySource, setLlmKeySource] = useState<"saved" | "manual" | "system">("system")
+  const [selectedSavedKeyId, setSelectedSavedKeyId] = useState<string>("")
   const [showCurlModal, setShowCurlModal] = useState(false)
   const [curlInput, setCurlInput] = useState("")
   const [curlDescription, setCurlDescription] = useState("")
@@ -230,25 +237,20 @@ export function AgentModal({
       if (!open) return
 
       try {
-        console.log("🔄 [AgentModal] Carregando modelo padrão do sistema via API...")
         setSystemDefaultModel("carregando...")
 
         // Usar API segura ao invés de Supabase direto
         const response = await publicApi.getSystemDefaultModel()
 
         if (response.error) {
-          console.error("❌ [AgentModal] Erro ao buscar default_model:", response.error)
           setSystemDefaultModel("Erro ao carregar")
         } else if (response.data?.defaultModel) {
           const systemDefaultModel = response.data.defaultModel.toString().trim()
-          console.log("✅ [AgentModal] Default model encontrado:", systemDefaultModel)
           setSystemDefaultModel(systemDefaultModel)
         } else {
-          console.error("❌ [AgentModal] default_model não encontrado")
           setSystemDefaultModel("Não configurado")
         }
       } catch (error) {
-        console.error("❌ [AgentModal] Erro ao carregar modelo padrão:", error)
         setSystemDefaultModel("Erro ao carregar")
       }
     }
@@ -258,7 +260,6 @@ export function AgentModal({
     if (!open) return
 
     try {
-      console.log("🔄 [AgentModal] Carregando configurações LLM via API segura...")
       setLoadingLlmConfig(true)
 
       const response = await fetch("/api/system/llm-config", {
@@ -275,13 +276,11 @@ export function AgentModal({
       const data = await response.json()
 
       if (data.success && data.config) {
-        console.log("✅ [AgentModal] Configurações LLM carregadas:", data.config)
         setLlmConfig(data.config)
       } else {
         throw new Error(data.error || "Erro desconhecido ao carregar configurações LLM")
        }
     } catch (error: any) {
-       console.error("❌ [AgentModal] Erro ao carregar configurações LLM:", error)
       toast({
         title: "Erro ao carregar configurações LLM",
         description: error.message || error.toString(),
@@ -332,19 +331,15 @@ export function AgentModal({
       const usersData = await fetchUsers()
       setUsers(usersData)
     } catch (error) {
-      console.error("Erro ao carregar usuários:", error)
       toast({ title: "Erro", description: "Falha ao carregar lista de usuários", variant: "destructive" })
     }
   }
 
   async function loadN8nConfig() {
     try {
-      // Usar API ao invés de Supabase direto
-      console.log("🔄 [AgentModal] Carregando configuração N8N via API...")
       // Por enquanto, vamos comentar esta funcionalidade até ter a API específica
-      console.warn("⚠️ [AgentModal] Configuração N8N temporariamente desabilitada - usar API específica")
     } catch (err) {
-      console.error("Erro ao carregar configuração N8N:", err?.message || err)
+      // Silencioso
     }
   }
 
@@ -358,7 +353,6 @@ export function AgentModal({
       const connections = await fetchWhatsAppConnections(userId, userIsAdmin)
       setWhatsappConnections(connections)
     } catch (error) {
-      console.error("Erro ao carregar conexões:", error)
       toast({ title: "Erro", description: "Falha ao carregar conexões WhatsApp", variant: "destructive" })
     } finally {
       setLoadingConnections(false)
@@ -372,26 +366,14 @@ export function AgentModal({
   }
 
   useEffect(() => {
-    console.log("🔄 [AgentModal] useEffect - agent changed:", {
-      agentExists: !!agent,
-      agentId: agent?.id,
-      agentName: agent?.name,
-      currentUser: currentUser?.id,
-      selectedUserId,
-      isAdmin,
-    })
-
     if (agent) {
-      console.log("📝 [AgentModal] Dados COMPLETOS do agente recebido:", agent)
 
       // Processar ignore_jids se for string JSON
       let processedIgnoreJids = agent.ignore_jids
       if (typeof agent.ignore_jids === "string") {
         try {
           processedIgnoreJids = JSON.parse(agent.ignore_jids)
-          console.log("✅ [AgentModal] ignore_jids processado de string para array:", processedIgnoreJids)
         } catch (e) {
-          console.warn("⚠️ [AgentModal] Erro ao processar ignore_jids:", e)
           processedIgnoreJids = ["@g.us"]
         }
       }
@@ -416,50 +398,85 @@ export function AgentModal({
         ignore_jids: ensureGroupsProtection(processedIgnoreJids),
       }
 
-      console.log("✅ [AgentModal] Dados processados para o formulário:", {
-        name: agentData.name,
-        identity_description: agentData.identity_description,
-        training_prompt: agentData.training_prompt,
-        voice_response_enabled: agentData.voice_response_enabled,
-        voice_provider: agentData.voice_provider,
-        voice_api_key: agentData.voice_api_key ? "***PRESENTE***" : "AUSENTE",
-        voice_id: agentData.voice_id,
-        calendar_integration: agentData.calendar_integration,
-        calendar_api_key: agentData.calendar_api_key ? "***PRESENTE***" : "AUSENTE",
-        calendar_meeting_id: agentData.calendar_meeting_id,
-        chatnode_integration: agentData.chatnode_integration,
-        orimon_integration: agentData.orimon_integration,
-        model: agentData.model,
-        model_config: agentData.model_config,
-      })
-
       setFormData(agentData)
 
       if (isAdmin && agent.user_id) {
         setSelectedUserId(agent.user_id)
       }
     } else {
-      console.log("🆕 [AgentModal] Criando novo agente")
       setFormData({
         ...initialFormData,
         user_id: selectedUserId || currentUser?.id || "",
         ignore_jids: ["@g.us"], // Garantir proteção padrão
       })
+      // Resetar estado de LLM Key para novo agente
+      setLlmKeySource("system")
+      setSelectedSavedKeyId("")
     }
   }, [agent, currentUser, selectedUserId, isAdmin])
+
+  // useEffect para buscar API keys salvas do usuário
+  useEffect(() => {
+    const fetchSavedLlmKeys = async () => {
+      if (!open) return
+
+      const userId = selectedUserId || currentUser?.id
+      if (!userId) return
+
+      try {
+        const apiPath = isAdmin ? `/api/admin/llm-keys?user_id=${userId}` : "/api/user/llm-keys"
+        const response = await fetch(apiPath)
+        const data = await response.json()
+
+        if (data.success) {
+          setSavedLlmKeys(data.keys || [])
+          // CASO 1: Agente JÁ tem uma chave salva - verificar se ainda existe
+          if (formData.llm_api_key && formData.llm_api_key.startsWith("__SAVED_KEY__")) {
+            const keyId = formData.llm_api_key.replace("__SAVED_KEY__", "")
+            const savedKey = data.keys?.find((k: any) => k.id === keyId)
+            
+            if (savedKey) {
+              setLlmKeySource("saved")
+              setSelectedSavedKeyId(keyId)
+            } else {
+              setLlmKeySource("system")
+              setFormData(prev => ({ ...prev, llm_api_key: null }))
+            }
+          }
+          // CASO 2: Agente tem chave MANUAL (não começa com __SAVED_KEY__)
+          else if (formData.llm_api_key && !formData.llm_api_key.startsWith("__SAVED_KEY__")) {
+            setLlmKeySource("manual")
+          }
+          // CASO 3: Novo agente sem chave - buscar chave padrão
+          else if (!formData.llm_api_key && formData.model_config && data.keys && data.keys.length > 0) {
+            const defaultKey = data.keys.find(
+              (k: any) => k.provider === formData.model_config && k.is_default && k.is_active
+            )
+            if (defaultKey) {
+              setLlmKeySource("saved")
+              setSelectedSavedKeyId(defaultKey.id)
+            }
+          }
+        }
+      } catch (error) {
+        // Silencioso
+      }
+    }
+
+    fetchSavedLlmKeys()
+  }, [open, selectedUserId, currentUser, isAdmin, formData.llm_api_key, formData.model_config])
+
 
   // useEffect para detectar o api_type da conexão quando editando um agente (busca do BACKEND)
   useEffect(() => {
     const fetchConnectionApiType = async () => {
       // Só buscar se estiver editando um agente e ele tiver uma conexão
       if (!agent || !agent.whatsapp_connection_id) {
-        console.log("🔍 [AgentModal] Não está editando ou não tem conexão, resetando api_type")
         setSelectedConnectionApiType(null)
         return
       }
 
       try {
-        console.log("🔄 [AgentModal] Buscando api_type da conexão do BACKEND:", agent.whatsapp_connection_id)
         
         // Buscar dados da conexão via API (BACKEND)
         const response = await fetch(`/api/whatsapp-connections/info/${agent.whatsapp_connection_id}`, {
@@ -477,12 +494,10 @@ export function AgentModal({
         
         if (data.success && data.connection) {
           const apiType = data.connection.api_type || "evolution"
-          console.log("✅ [AgentModal] API Type detectado do BACKEND:", apiType)
           setSelectedConnectionApiType(apiType)
           
           // Se for Uazapi e o agente tiver bot_id, buscar dados do bot
           if (apiType === "uazapi" && agent.bot_id) {
-            console.log("🤖 [AgentModal] Agente Uazapi detectado, buscando dados do bot...")
             try {
               const botResponse = await fetch(`/api/bots/${agent.bot_id}`, {
                 method: "GET",
@@ -494,8 +509,6 @@ export function AgentModal({
               if (botResponse.ok) {
                 const botData = await botResponse.json()
                 if (botData.success && botData.bot) {
-                  console.log("✅ [AgentModal] Dados do bot Uazapi carregados:", botData.bot)
-                  
                   // Converter ignoreJids de string para array
                   let ignoreJidsArray = ["@g.us"]
                   if (botData.bot.ignoreJids) {
@@ -513,18 +526,16 @@ export function AgentModal({
                     bot_ignoreJids: ignoreJidsArray,
                     bot_padrao: Boolean(botData.bot.padrao) || false,
                   })
-                  console.log("✅ [AgentModal] botFormData preenchido com dados do bot")
                 }
               }
             } catch (botError) {
-              console.warn("⚠️ [AgentModal] Erro ao buscar dados do bot:", botError)
+              // Silencioso
             }
           }
         } else {
           throw new Error(data.error || "Erro ao buscar dados da conexão")
         }
       } catch (error: any) {
-        console.error("❌ [AgentModal] Erro ao buscar api_type da conexão:", error)
         // Em caso de erro, assumir evolution por padrão
         setSelectedConnectionApiType("evolution")
       }
@@ -545,10 +556,8 @@ export function AgentModal({
       // Caso contrário, usar "custom"
       if (formData.model === defaultModel) {
         setModelSelection("default")
-        console.log("✅ [AgentModal] Modelo padrão detectado, definindo modelSelection como 'default'")
       } else {
         setModelSelection("custom")
-        console.log("✅ [AgentModal] Modelo personalizado detectado, definindo modelSelection como 'custom'")
       }
     } else if (!agent && open) {
       // Para novo agente, sempre usar modelo padrão
@@ -736,11 +745,8 @@ _______________________________________
     setError(null)
 
     try {
-      console.log("🔄 [AgentModal] Iniciando salvamento via API...")
-
       // Detectar automaticamente se é contexto de admin ou usuário
       const isAdminContext = typeof window !== 'undefined' && window.location.pathname.includes('/admin/')
-      console.log(`🔍 [AgentModal] Contexto detectado: ${isAdminContext ? 'ADMIN' : 'USUÁRIO'}`)
 
       // Garantir que trigger_type tenha um valor válido
       const validTriggerType =
@@ -791,6 +797,7 @@ _______________________________________
         evolution_bot_id: formData.evolution_bot_id,
         model: formData.model ? String(formData.model) : (systemDefaultModel || "gpt-4o-mini"),
       model_config: formData.model_config || "openai",
+        llm_api_key: formData.llm_api_key || null,
         // Campos para sincronização Evolution API
         trigger_type: validTriggerType,
         trigger_operator: validTriggerOperator,
@@ -823,8 +830,6 @@ _______________________________________
       let response
       if (isEditing && agent?.id) {
         // Atualizar agente existente
-        console.log(`🔄 [AgentModal] Atualizando agente via API (${isAdminContext ? 'admin' : 'usuário'}):`, agent.id)
-        
         if (isAdminContext) {
           // Para admin: usar PUT com ID no payload
           response = await fetch(baseApiPath, {
@@ -846,7 +851,6 @@ _______________________________________
         }
       } else {
         // Criar novo agente
-        console.log(`🔄 [AgentModal] Criando novo agente via API (${isAdminContext ? 'admin' : 'usuário'})`)
         response = await fetch(baseApiPath, {
           method: "POST",
           headers: {
@@ -858,12 +862,10 @@ _______________________________________
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error("❌ [AgentModal] Erro na resposta da API:", response.status, errorText)
         throw new Error(`Erro na API: ${response.status}`)
       }
 
       const result = await response.json()
-      console.log("✅ [AgentModal] Agente salvo com sucesso:", result)
 
       toast({
         title: "Sucesso",
@@ -873,7 +875,6 @@ _______________________________________
       if (typeof onSave === "function") onSave()
       else onOpenChange(false)
     } catch (err: any) {
-      console.error("❌ Erro detalhado ao salvar agente:", err)
       setError(err.message || "Ocorreu um erro ao salvar o agente.")
       toast({ title: "Erro", description: err.message || "Falha ao salvar o agente.", variant: "destructive" })
     } finally {
@@ -1238,10 +1239,8 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                     name="model_config"
                     value={formData.model_config || ""}
                     onValueChange={(value) => {
-                      console.log("🔄 [AgentModal] Provedor selecionado:", value)
                       // Ao trocar provedor, automaticamente usar o modelo padrão desse provedor
                       const defaultModelForProvider = llmConfig?.default_models?.[value] || systemDefaultModel || "gpt-4o-mini"
-                      console.log("📋 [AgentModal] Modelo padrão para", value, ":", defaultModelForProvider)
                       setFormData((prev) => ({ 
                         ...prev, 
                         model_config: value,
@@ -1343,16 +1342,13 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                       name="model_selection"
                       value={modelSelection}
                       onValueChange={(value: "default" | "custom") => {
-                        console.log("🎯 [AgentModal] Usuário mudou seleção de modelo para:", value)
                         setModelSelection(value)
                         
                         if (value === "default") {
                           const selectedProvider = formData.model_config || "openai"
                           const defaultModel = llmConfig?.default_models?.[selectedProvider] || systemDefaultModel || "gpt-4o-mini"
-                          console.log("🔧 [AgentModal] Definindo modelo padrão:", defaultModel, "para provedor:", selectedProvider)
                           setFormData((prev) => ({ ...prev, model: String(defaultModel) }))
                         } else {
-                          console.log("🔧 [AgentModal] Usuário escolheu modelo personalizado - mantendo valor atual ou limpando")
                           // Se já tem um valor personalizado, manter. Se não, limpar para o usuário digitar
                           const currentModel = formData.model || ""
                           const selectedProvider = formData.model_config || "openai"
@@ -1411,6 +1407,195 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                       Digite o nome exato do modelo para o provedor {formData.model_config}
                     </p>
                   </div>
+                )}
+
+                {/* Campo de API Key da LLM - Interface Profissional */}
+                {formData.model_config && (
+                  <Card className="border-2 border-blue-100 dark:border-blue-900">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-blue-600" />
+                        Configuração de API Key LLM
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Radio Group para escolher fonte da chave */}
+                      <div>
+                        <Label className="text-sm font-medium mb-3 block">
+                          Como deseja fornecer a chave API?
+                        </Label>
+                        <RadioGroup
+                          value={llmKeySource}
+                          onValueChange={(value: "saved" | "manual" | "system") => {
+                            setLlmKeySource(value)
+                            if (value === "system") {
+                              setFormData((prev) => ({ ...prev, llm_api_key: null }))
+                              setSelectedSavedKeyId("")
+                            } else if (value === "saved" && !selectedSavedKeyId) {
+                              // Selecionar chave padrão se existir
+                              const defaultKey = savedLlmKeys.find(
+                                (k) => k.provider === formData.model_config && k.is_default && k.is_active
+                              )
+                              if (defaultKey) {
+                                setSelectedSavedKeyId(defaultKey.id)
+                              }
+                            }
+                          }}
+                          className="space-y-3"
+                        >
+                          <div className="flex items-center space-x-2 p-3 rounded-lg border-2 border-transparent hover:border-blue-200 dark:hover:border-blue-800 transition-colors cursor-pointer">
+                            <RadioGroupItem value="system" id="system" />
+                            <Label htmlFor="system" className="cursor-pointer flex-1">
+                              <div className="font-medium">Usar chave do sistema</div>
+                              <div className="text-xs text-muted-foreground">
+                                Recomendado - usa a chave padrão configurada no sistema
+                              </div>
+                            </Label>
+                            <Badge variant="secondary">Padrão</Badge>
+                          </div>
+
+                          {savedLlmKeys.filter((k) => k.provider === formData.model_config).length > 0 && (
+                            <div className="flex items-center space-x-2 p-3 rounded-lg border-2 border-transparent hover:border-green-200 dark:hover:border-green-800 transition-colors cursor-pointer">
+                              <RadioGroupItem value="saved" id="saved" />
+                              <Label htmlFor="saved" className="cursor-pointer flex-1">
+                                <div className="font-medium">Usar chave salva</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {savedLlmKeys.filter((k) => k.provider === formData.model_config && k.is_active).length} chave(s) disponível(is)
+                                </div>
+                              </Label>
+                              <Badge className="bg-green-500">Seguro</Badge>
+                            </div>
+                          )}
+
+                          <div className="flex items-center space-x-2 p-3 rounded-lg border-2 border-transparent hover:border-orange-200 dark:hover:border-orange-800 transition-colors cursor-pointer">
+                            <RadioGroupItem value="manual" id="manual" />
+                            <Label htmlFor="manual" className="cursor-pointer flex-1">
+                              <div className="font-medium">Digitar manualmente</div>
+                              <div className="text-xs text-muted-foreground">
+                                Cole sua chave API diretamente
+                              </div>
+                            </Label>
+                            <Badge variant="outline">Manual</Badge>
+                          </div>
+                        </RadioGroup>
+                      </div>
+
+                      {/* Select para chaves salvas */}
+                      {llmKeySource === "saved" && (
+                        <div className="space-y-2 animate-in fade-in duration-300">
+                          <Label htmlFor="saved_key_select">
+                            Selecione uma chave salva <span className="text-red-500">*</span>
+                          </Label>
+                          <Select
+                            value={selectedSavedKeyId}
+                            onValueChange={(value) => {
+                              setSelectedSavedKeyId(value)
+                              // Não salvar a chave no formData por segurança
+                              // O backend vai buscar quando necessário
+                              setFormData((prev) => ({ ...prev, llm_api_key: `__SAVED_KEY__${value}` }))
+                            }}
+                          >
+                            <SelectTrigger className="bg-white dark:bg-gray-800">
+                              <SelectValue placeholder="Escolha uma chave..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {savedLlmKeys
+                                .filter((k) => k.provider === formData.model_config && k.is_active)
+                                .map((key) => (
+                                  <SelectItem key={key.id} value={key.id}>
+                                    <div className="flex items-center justify-between w-full">
+                                      <span className="font-medium">{key.key_name}</span>
+                                      <div className="flex items-center gap-2 ml-4">
+                                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                                          {key.api_key_preview}
+                                        </code>
+                                        {key.is_default && (
+                                          <Badge className="bg-blue-500 text-xs">Padrão</Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" />
+                            Suas chaves ficam criptografadas e seguras
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Input manual */}
+                      {llmKeySource === "manual" && (
+                        <div className="space-y-2 animate-in fade-in duration-300">
+                          <Label htmlFor="llm_api_key_manual">
+                            Cole sua API Key <span className="text-red-500">*</span>
+                          </Label>
+                          <div className="relative">
+                            <Input
+                              id="llm_api_key_manual"
+                              name="llm_api_key"
+                              type={showLlmApiKey ? "text" : "password"}
+                              value={formData.llm_api_key?.startsWith("__SAVED_KEY__") ? "" : formData.llm_api_key || ""}
+                              onChange={handleInputChange}
+                              placeholder={
+                                formData.model_config === "openai"
+                                  ? "sk-..."
+                                  : formData.model_config === "anthropic"
+                                    ? "sk-ant-..."
+                                    : formData.model_config === "google"
+                                      ? "AIza..."
+                                      : "Cole sua API key aqui"
+                              }
+                              className="bg-white dark:bg-gray-800 pr-10"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowLlmApiKey(!showLlmApiKey)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                            >
+                              {showLlmApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          <p className="text-xs text-yellow-600 dark:text-yellow-500 flex items-center gap-1">
+                            ⚠️ A chave será usada apenas para este agente
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Informação sobre chave do sistema */}
+                      {llmKeySource === "system" && (
+                        <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800 animate-in fade-in duration-300">
+                          <p className="text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                            <Sparkles className="w-4 h-4" />
+                            Este agente usará a chave padrão configurada no sistema
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Link para gerenciar chaves */}
+                      {savedLlmKeys.filter((k) => k.provider === formData.model_config).length === 0 && llmKeySource !== "manual" && (
+                        <div className="text-center py-2">
+                          <p className="text-sm text-muted-foreground mb-2">
+                            Nenhuma chave salva para {formData.model_config}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const keysUrl = isAdmin ? "/admin/llm-keys" : "/dashboard/llm-keys"
+                              window.open(keysUrl, "_blank")
+                            }}
+                          >
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Gerenciar Minhas Chaves
+                          </Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 )}
 
                 <div className="space-y-3">
@@ -1496,36 +1681,17 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                     name="whatsapp_connection_id"
                     value={formData.whatsapp_connection_id || ""}
                     onValueChange={(value) => {
-                      console.log("🔗 [AgentModal] Selecionando conexão:", value)
                       handleSelectChange("whatsapp_connection_id", value)
                       
                       // Detectar api_type da conexão selecionada
                       const selectedConn = whatsappConnections.find(conn => conn.id === value)
                       const apiType = selectedConn?.api_type || "evolution"
                       setSelectedConnectionApiType(apiType)
-                      console.log("🔍 [AgentModal] API Type detectado:", apiType)
                     }}
                     disabled={
-                      (() => {
-                        const isDisabled = (!selectedUserId && isAdmin) ||
-                          loadingConnections ||
-                          (!whatsappConnections.length && !!selectedUserId)
-                        
-                        console.log("🔍 [AgentModal] Debug do Select WhatsApp:", {
-                          selectedUserId,
-                          isAdmin,
-                          loadingConnections,
-                          whatsappConnectionsLength: whatsappConnections.length,
-                          isDisabled,
-                          reasons: {
-                            noUserAndAdmin: (!selectedUserId && isAdmin),
-                            loading: loadingConnections,
-                            noConnectionsButHasUser: (!whatsappConnections.length && !!selectedUserId)
-                          }
-                        })
-                        
-                        return isDisabled
-                      })()
+                      (!selectedUserId && isAdmin) ||
+                      loadingConnections ||
+                      (!whatsappConnections.length && !!selectedUserId)
                     }
                   >
                     <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">

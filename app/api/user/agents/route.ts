@@ -215,6 +215,7 @@ export async function POST(request: Request) {
       whatsapp_connection_id: agentData.whatsapp_connection_id,
       model: agentData.model,
       model_config: agentData.model_config,
+      llm_api_key: agentData.llm_api_key || null,
       // Campos Evolution API
       trigger_type: agentData.trigger_type || "keyword",
       trigger_operator: agentData.trigger_operator || "equals",

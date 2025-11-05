@@ -157,19 +157,19 @@ function MissionCard({
           {/* Informações básicas - sempre visível */}
           <div className="space-y-3">
             <div className="flex items-center gap-3 flex-wrap">
-              {mission.estimatedTime && (
+            {mission.estimatedTime && (
                 <div className="flex items-center gap-2 bg-blue-900/30 px-3 py-1.5 rounded-lg border border-blue-500/30">
                   <Clock className="w-4 h-4 text-blue-400" />
                   <span className="text-sm font-medium text-blue-200">{mission.estimatedTime} min</span>
-                </div>
-              )}
-              {mission.difficulty && (
+              </div>
+            )}
+            {mission.difficulty && (
                 <div className="flex items-center gap-2 bg-purple-900/30 px-3 py-1.5 rounded-lg border border-purple-500/30">
                   <Target className="w-4 h-4 text-purple-400" />
                   <span className="text-sm font-medium text-purple-200">
-                    {Array.from({ length: mission.difficulty }).map((_, i) => (
-                      <span key={i}>⭐</span>
-                    ))}
+                {Array.from({ length: mission.difficulty }).map((_, i) => (
+                  <span key={i}>⭐</span>
+                ))}
                   </span>
                 </div>
               )}
@@ -188,7 +188,7 @@ function MissionCard({
                 <p className="text-xs text-purple-300/70 italic">
                   ⬇️ Clique na seta acima para ver mais detalhes
                 </p>
-              </div>
+          </div>
             )}
           </div>
 
@@ -203,72 +203,72 @@ function MissionCard({
                 className="overflow-hidden"
               >
                 <div className="space-y-4 pt-4 border-t border-white/10">
-                  {/* Badges que desbloqueia */}
-                  {mission.rewards.badges.length > 0 && (
+          {/* Badges que desbloqueia */}
+          {mission.rewards.badges.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-sm font-semibold text-purple-200">🏆 Badges que desbloqueia:</p>
                       <div className="flex flex-wrap gap-2">
-                        {mission.rewards.badges.map(badgeId => {
-                          const badge = QUEST_BADGES.find(b => b.id === badgeId)
-                          return badge ? (
+              {mission.rewards.badges.map(badgeId => {
+                const badge = QUEST_BADGES.find(b => b.id === badgeId)
+                return badge ? (
                             <Badge key={badgeId} variant="secondary" className="text-sm bg-yellow-900/30 border border-yellow-500/30 text-yellow-200">
-                              {badge.icon} {badge.name}
-                            </Badge>
-                          ) : null
-                        })}
-                      </div>
+                    {badge.icon} {badge.name}
+                  </Badge>
+                ) : null
+              })}
+            </div>
                     </div>
                   )}
                 </div>
               </motion.div>
-            )}
+          )}
           </AnimatePresence>
 
           {/* Botão de ação - sempre visível */}
           <div className="pt-4">
-            {!isLocked && (
-              <Button
+          {!isLocked && (
+            <Button
                 className={cn(
                   "w-full h-12 text-base font-bold shadow-lg transition-all",
                   isActive && "bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 shadow-cyan-500/50",
                   isCompleted && "bg-green-600 hover:bg-green-700 opacity-75",
                   !isActive && !isCompleted && "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-purple-500/50"
                 )}
-                variant={isActive ? "default" : isCompleted ? "outline" : "default"}
-                disabled={isCompleted || isLocked}
+              variant={isActive ? "default" : isCompleted ? "outline" : "default"}
+              disabled={isCompleted || isLocked}
                 onClick={() => {
                   console.log('🔥 [MISSION CARD] BOTÃO CLICADO!', { isActive, isCompleted, isLocked, missionId: mission.id })
                   onStart()
                 }}
-              >
-                {isActive && (
-                  <>
+            >
+              {isActive && (
+                <>
                     <Play className="w-5 h-5 mr-2" />
-                    Continuar
-                  </>
-                )}
-                {isCompleted && (
-                  <>
+                  Continuar
+                </>
+              )}
+              {isCompleted && (
+                <>
                     <CheckCircle2 className="w-5 h-5 mr-2" />
-                    Completada
-                  </>
-                )}
-                {!isActive && !isCompleted && (
-                  <>
+                  Completada
+                </>
+              )}
+              {!isActive && !isCompleted && (
+                <>
                     <Rocket className="w-5 h-5 mr-2" />
-                    Iniciar Missão
-                  </>
-                )}
-              </Button>
-            )}
+                  Iniciar Missão
+                </>
+              )}
+            </Button>
+          )}
 
-            {isLocked && (
+          {isLocked && (
               <div className="text-center bg-gray-800/50 p-3 rounded-lg border border-gray-600">
                 <p className="text-sm text-gray-300 font-medium">
-                  🔒 Complete missões anteriores para desbloquear
-                </p>
+              🔒 Complete missões anteriores para desbloquear
+            </p>
               </div>
-            )}
+          )}
           </div>
         </CardContent>
       </Card>
@@ -615,7 +615,7 @@ export function QuestPanel({ isOpen, onClose }: QuestPanelProps) {
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent 
-        side="right"
+        side="right" 
         style={{
           width: isPanelMinimized ? '120px' : `${panelWidth}px`,
           maxWidth: isPanelMinimized ? '120px' : `${MAX_WIDTH}px`
@@ -675,8 +675,8 @@ export function QuestPanel({ isOpen, onClose }: QuestPanelProps) {
                 <div className="h-12 w-12 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center shadow-lg">
                   <Rocket className="w-7 h-7 text-white" />
                 </div>
-                Academia de Exploradores IMPA
-              </SheetTitle>
+            Academia de Exploradores IMPA
+          </SheetTitle>
             )}
             
             {isPanelMinimized && (
@@ -705,15 +705,15 @@ export function QuestPanel({ isOpen, onClose }: QuestPanelProps) {
           
           {!isPanelMinimized && (
             <SheetDescription className="text-cyan-200 text-base font-medium mt-2">
-              Complete missões para dominar a plataforma e desbloquear conquistas!
-            </SheetDescription>
+            Complete missões para dominar a plataforma e desbloquear conquistas!
+          </SheetDescription>
           )}
         </SheetHeader>
 
         {/* Conteúdo do Painel - Oculto quando minimizado */}
         {!isPanelMinimized && (
           <>
-            {/* Estatísticas do Jogador */}
+        {/* Estatísticas do Jogador */}
             <div className="mt-6 p-6 bg-gradient-to-br from-purple-900/50 to-blue-900/50 rounded-xl border-2 border-purple-500/50 shadow-xl backdrop-blur-sm">
           <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-yellow-500 flex items-center justify-center">
@@ -817,11 +817,11 @@ export function QuestPanel({ isOpen, onClose }: QuestPanelProps) {
           <TabsContent value="active" className="mt-6">
             {activeMission ? (
               <div className="space-y-5">
-                <MissionCard
-                  mission={activeMission}
-                  isCompleted={false}
-                  isActive={true}
-                  isLocked={false}
+              <MissionCard
+                mission={activeMission}
+                isCompleted={false}
+                isActive={true}
+                isLocked={false}
                   onStart={handleContinueMission}
                 />
                 

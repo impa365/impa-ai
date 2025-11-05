@@ -5,7 +5,7 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Home, Bot, Cog, LogOut, Smartphone } from "lucide-react"
+import { Home, Bot, Cog, LogOut, Smartphone, Sparkles, ChevronRight } from "lucide-react"
 import { getCurrentUser, signOut } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
 import { DynamicTitle } from "@/components/dynamic-title"
@@ -19,6 +19,7 @@ export default function DashboardLayout({
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [appVersion, setAppVersion] = useState("1.0.0")
+  const [expandedMenu, setExpandedMenu] = useState<string | null>(null)
   const router = useRouter()
   const pathname = usePathname()
   const { theme } = useTheme()
@@ -49,7 +50,15 @@ export default function DashboardLayout({
     { icon: Home, label: "Dashboard", href: "/dashboard", active: pathname === "/dashboard" },
     { icon: Bot, label: "Agentes IA", href: "/dashboard/agents", active: pathname === "/dashboard/agents" },
     { icon: Smartphone, label: "WhatsApp", href: "/dashboard/whatsapp", active: pathname === "/dashboard/whatsapp" },
-    { icon: Cog, label: "Configurações", href: "/dashboard/settings", active: pathname === "/dashboard/settings" },
+    { 
+      icon: Cog, 
+      label: "Configurações", 
+      href: "/dashboard/settings", 
+      active: pathname === "/dashboard/settings",
+      submenu: [
+        { icon: Sparkles, label: "API Keys LLM", href: "/dashboard/settings/apikeysllm", active: pathname === "/dashboard/settings/apikeysllm" }
+      ]
+    },
   ]
 
   if (loading) {
@@ -86,7 +95,11 @@ export default function DashboardLayout({
           <nav className="flex-1 p-4">
             <ul className="space-y-2">
               {sidebarItems.map((item, index) => (
-                <li key={index}>
+                <li 
+                  key={index}
+                  onMouseEnter={() => item.submenu && setExpandedMenu(item.href)}
+                  onMouseLeave={() => item.submenu && setExpandedMenu(null)}
+                >
                   <Button
                     variant="ghost"
                     className={`w-full justify-start gap-3 ${
@@ -96,7 +109,34 @@ export default function DashboardLayout({
                   >
                     <item.icon className="w-5 h-5" />
                     {item.label}
+                    {item.submenu && (
+                      <ChevronRight className={`ml-auto h-4 w-4 transition-transform ${
+                        expandedMenu === item.href || pathname.startsWith(item.href) ? 'rotate-90' : ''
+                      }`} />
+                    )}
                   </Button>
+                  
+                  {/* Submenu */}
+                  {item.submenu && (expandedMenu === item.href || pathname.startsWith(item.href)) && (
+                    <ul className="ml-6 mt-1 space-y-1 border-l-2 border-gray-200 pl-3">
+                      {item.submenu.map((subItem: any, subIndex: number) => (
+                        <li key={subIndex}>
+                          <Button
+                            variant="ghost"
+                            className={`w-full justify-start gap-2 text-sm ${
+                              subItem.active
+                                ? 'bg-blue-50 text-blue-600 border border-blue-100'
+                                : 'text-gray-500 hover:bg-gray-50'
+                            }`}
+                            onClick={() => router.push(subItem.href)}
+                          >
+                            <subItem.icon className="w-4 h-4" />
+                            {subItem.label}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ul>
