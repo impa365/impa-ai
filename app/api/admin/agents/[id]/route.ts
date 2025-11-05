@@ -1,11 +1,170 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-export async function PUT(
+export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const agentId = params.id;
+    const { id: agentId } = await params;
+    console.log("📡 [GET AGENT] Iniciando busca do agente:", agentId);
+
+    // Verificar variáveis de ambiente em runtime
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ [GET AGENT] Variáveis de ambiente não configuradas");
+      return NextResponse.json(
+        { error: "Configuração do servidor incompleta" },
+        { status: 500 }
+      );
+    }
+
+    console.log("🔍 [GET AGENT] Buscando agente no banco...");
+
+    // Buscar agente com dados relacionados
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Accept-Profile": "impaai",
+          "Content-Profile": "impaai",
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ [GET AGENT] Erro ao buscar agente no banco:", response.status, errorText);
+      return NextResponse.json(
+        { error: `Erro ao buscar agente: ${response.status}` },
+        { status: response.status }
+      );
+    }
+
+    const agentData = await response.json();
+    const agent = agentData[0];
+
+    if (!agent) {
+      console.error("❌ [GET AGENT] Agente não encontrado:", agentId);
+      return NextResponse.json(
+        { error: "Agente não encontrado" },
+        { status: 404 }
+      );
+    }
+
+    console.log("✅ [GET AGENT] Agente encontrado:", agent.name);
+    console.log("🔍 [GET AGENT] bot_id:", agent.bot_id || "NULL");
+    console.log("🔍 [GET AGENT] whatsapp_connection_id:", agent.whatsapp_connection_id || "NULL");
+
+    // Se tem whatsapp_connection_id, buscar dados da conexão
+    if (agent.whatsapp_connection_id) {
+      console.log("🔍 [GET AGENT] Buscando dados da conexão WhatsApp...");
+      
+      const connectionResponse = await fetch(
+        `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${agent.whatsapp_connection_id}`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Accept-Profile": "impaai",
+            "Content-Profile": "impaai",
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+        }
+      );
+
+      if (connectionResponse.ok) {
+        const connections = await connectionResponse.json();
+        const connection = connections[0];
+        
+        if (connection) {
+          agent.connection = connection;
+          console.log("✅ [GET AGENT] Conexão encontrada:", connection.connection_name);
+        }
+      }
+    }
+
+    // Se tem bot_id, buscar dados do bot Uazapi
+    if (agent.bot_id) {
+      console.log("🤖 [GET AGENT] Buscando dados do bot Uazapi...");
+      
+      const botResponse = await fetch(
+        `${supabaseUrl}/rest/v1/bots?id=eq.${agent.bot_id}`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Accept-Profile": "impaai",
+            "Content-Profile": "impaai",
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+        }
+      );
+
+      if (botResponse.ok) {
+        const bots = await botResponse.json();
+        const bot = bots[0];
+        
+        if (bot) {
+          agent.bot = bot;
+          console.log("✅ [GET AGENT] Bot encontrado:", bot.nome);
+        }
+      }
+    }
+
+    // Resolver llm_api_key se for referência salva
+    if (agent.llm_api_key && agent.llm_api_key.startsWith("__SAVED_KEY__")) {
+      const keyId = agent.llm_api_key.replace("__SAVED_KEY__", "");
+      console.log("🔑 [GET AGENT] Resolvendo chave salva:", keyId);
+      
+      const savedKeyResponse = await fetch(
+        `${supabaseUrl}/rest/v1/llm_api_keys?select=api_key&id=eq.${keyId}&is_active=eq.true`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Accept-Profile": "impaai",
+            "Content-Profile": "impaai",
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+        }
+      );
+      
+      if (savedKeyResponse.ok) {
+        const savedKeys = await savedKeyResponse.json();
+        if (savedKeys && savedKeys[0]) {
+          agent.llm_api_key = savedKeys[0].api_key;
+          console.log("✅ [GET AGENT] Chave salva resolvida:", `${agent.llm_api_key?.slice(0, 7)}...`);
+        }
+      }
+    }
+
+    console.log("✅ [GET AGENT] Retornando dados do agente");
+
+    return NextResponse.json({ agent });
+  } catch (error: any) {
+    console.error("❌ [GET AGENT] Erro geral ao buscar agente:", error);
+    console.error("❌ [GET AGENT] Stack trace:", error.stack);
+    return NextResponse.json(
+      { 
+        error: "Erro interno do servidor",
+        details: error.message 
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: agentId } = await params;
     const body = await request.json();
 
     // Verificar variáveis de ambiente em runtime
@@ -19,7 +178,57 @@ export async function PUT(
       );
     }
 
-    // 1. Atualizar no banco primeiro
+    // 1. Atualizar no banco primeiro - filtrar apenas campos da tabela ai_agents
+    const aiAgentFields = {
+      name: body.name,
+      identity_description: body.identity_description,
+      training_prompt: body.training_prompt,
+      voice_tone: body.voice_tone,
+      main_function: body.main_function,
+      temperature: body.temperature,
+      transcribe_audio: body.transcribe_audio,
+      understand_images: body.understand_images,
+      voice_response_enabled: body.voice_response_enabled,
+      voice_provider: body.voice_provider,
+      voice_api_key: body.voice_api_key,
+      voice_id: body.voice_id,
+      calendar_integration: body.calendar_integration,
+      calendar_api_key: body.calendar_api_key,
+      calendar_meeting_id: body.calendar_meeting_id,
+      chatnode_integration: body.chatnode_integration,
+      chatnode_api_key: body.chatnode_api_key,
+      chatnode_bot_id: body.chatnode_bot_id,
+      orimon_integration: body.orimon_integration,
+      orimon_api_key: body.orimon_api_key,
+      orimon_bot_id: body.orimon_bot_id,
+      description: body.description,
+      status: body.status,
+      is_default: body.is_default,
+      user_id: body.user_id,
+      whatsapp_connection_id: body.whatsapp_connection_id,
+      model: body.model,
+      model_config: body.model_config,
+      // Campos Evolution API
+      trigger_type: body.trigger_type,
+      trigger_operator: body.trigger_operator,
+      trigger_value: body.trigger_value,
+      keyword_finish: body.keyword_finish,
+      debounce_time: body.debounce_time,
+      listening_from_me: body.listening_from_me,
+      stop_bot_from_me: body.stop_bot_from_me,
+      keep_open: body.keep_open,
+      split_messages: body.split_messages,
+      unknown_message: body.unknown_message,
+      delay_message: body.delay_message,
+      expire_time: body.expire_time,
+      ignore_jids: body.ignore_jids,
+    };
+
+    // Remover campos undefined/null
+    const filteredFields = Object.fromEntries(
+      Object.entries(aiAgentFields).filter(([_, value]) => value !== undefined && value !== null)
+    );
+
     const response = await fetch(
       `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
       {
@@ -31,7 +240,7 @@ export async function PUT(
           Authorization: `Bearer ${supabaseKey}`,
           Prefer: "return=representation",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(filteredFields),
       }
     );
 
@@ -50,10 +259,10 @@ export async function PUT(
     const updatedAgent = await response.json();
     const agent = updatedAgent[0] || updatedAgent;
 
-    // 2. Se tem evolution_bot_id, sincronizar com Evolution API
-    if (agent.evolution_bot_id && agent.whatsapp_connection_id) {
+    // 2. Sincronizar com API externa (Evolution ou Uazapi)
+    if (agent.whatsapp_connection_id) {
       try {
-        console.log("🔄 Sincronizando agente atualizado com Evolution API...");
+        console.log("🔄 Sincronizando agente atualizado...");
 
         // Buscar dados da conexão WhatsApp
         const connectionResponse = await fetch(
@@ -79,6 +288,60 @@ export async function PUT(
           console.error("❌ Conexão WhatsApp não encontrada");
           return NextResponse.json(agent);
         }
+
+        const apiType = connection.api_type || "evolution"
+
+        // 2a. Se for Uazapi e tem bot_id, atualizar bot Uazapi
+        if (apiType === "uazapi" && agent.bot_id) {
+          console.log("🤖 [UAZAPI] Atualizando bot Uazapi...")
+          try {
+            const { updateUazapiBotInDatabase } = await import("@/lib/uazapi-bot-helpers")
+
+            // Preparar dados do bot para atualização
+            const botUpdateData: any = {}
+
+            // Atualizar campos básicos do bot
+            if (body.name) botUpdateData.nome = body.name
+
+            // Campos específicos de bot Uazapi (se enviados)
+            if (body.bot_gatilho) botUpdateData.gatilho = body.bot_gatilho
+            if (body.bot_operador) botUpdateData.operador_gatilho = body.bot_operador
+            if (body.bot_value !== undefined) botUpdateData.value_gatilho = body.bot_value
+            if (body.bot_debounce !== undefined) botUpdateData.debounce = Number(body.bot_debounce)
+            if (body.bot_splitMessage !== undefined) botUpdateData.splitMessage = Number(body.bot_splitMessage)
+            if (body.bot_ignoreJids) {
+              // Converter array para string
+              if (Array.isArray(body.bot_ignoreJids)) {
+                botUpdateData.ignoreJids = body.bot_ignoreJids.join(",") + ","
+              } else {
+                botUpdateData.ignoreJids = body.bot_ignoreJids
+              }
+            }
+            if (body.bot_padrao !== undefined) botUpdateData.padrao = Boolean(body.bot_padrao)
+
+            console.log("📝 [UAZAPI] Dados de atualização do bot:", botUpdateData)
+
+            // Atualizar bot no banco
+            const updateResult = await updateUazapiBotInDatabase({
+              botId: agent.bot_id,
+              botData: botUpdateData,
+              supabaseUrl,
+              supabaseKey,
+            })
+
+            if (updateResult.success) {
+              console.log("✅ [UAZAPI] Bot atualizado com sucesso")
+            } else {
+              console.warn("⚠️ [UAZAPI] Erro ao atualizar bot:", updateResult.error)
+            }
+          } catch (uazapiError) {
+            console.warn("⚠️ [UAZAPI] Erro ao atualizar bot Uazapi:", uazapiError)
+          }
+        }
+
+        // 2b. Se for Evolution e tem evolution_bot_id, atualizar Evolution API
+        if (apiType === "evolution" && agent.evolution_bot_id) {
+          console.log("🤖 Atualizando bot na Evolution API...")
 
         // Buscar configurações da Evolution API
         const evolutionResponse = await fetch(
@@ -191,11 +454,9 @@ export async function PUT(
             errorText
           );
         }
-      } catch (evolutionError) {
-        console.error(
-          "❌ Erro na sincronização com Evolution API:",
-          evolutionError
-        );
+      }
+    } catch (syncError) {
+      console.error("❌ Erro ao sincronizar com API externa:", syncError);
         // Não falha a operação, apenas loga o erro
       }
     }
@@ -212,10 +473,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const agentId = params.id;
+    const { id: agentId } = await params;
 
     // Verificar variáveis de ambiente em runtime
     const supabaseUrl = process.env.SUPABASE_URL;

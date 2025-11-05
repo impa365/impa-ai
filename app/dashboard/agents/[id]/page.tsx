@@ -308,6 +308,18 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                   <h3 className="font-medium text-sm">Conexão WhatsApp</h3>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-gray-600">{agent.whatsapp_connections?.connection_name}</span>
+                    {agent.whatsapp_connections?.api_type && (
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs font-bold px-2 ${
+                          agent.whatsapp_connections.api_type === "uazapi" 
+                            ? "bg-purple-100 text-purple-800 border-purple-300" 
+                            : "bg-blue-100 text-blue-800 border-blue-300"
+                        }`}
+                      >
+                        {agent.whatsapp_connections.api_type === "uazapi" ? "🚀 UAZAPI" : "⚡ EVOLUTION"}
+                      </Badge>
+                    )}
                     <Badge
                       variant="outline"
                       className={`text-xs ${

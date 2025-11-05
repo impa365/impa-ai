@@ -48,7 +48,7 @@ export async function GET() {
       login_count: user.login_count || 0,
     }))
 
-    return NextResponse.json({ users: safeUsers })
+    return NextResponse.json({ success: true, users: safeUsers })
   } catch (error: any) {
     console.error("💥 Erro interno ao buscar usuários:", error.message)
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })

@@ -28,7 +28,7 @@ export async function GET(request: Request) {
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    let url = `${supabaseUrl}/rest/v1/whatsapp_connections?select=*,adciona_folow,remover_folow,user_profiles(id,email,full_name)&order=connection_name.asc`
+    let url = `${supabaseUrl}/rest/v1/whatsapp_connections?select=*,adciona_folow,remover_folow,api_type,instance_token,user_profiles(id,email,full_name)&order=connection_name.asc`
 
     // Se não for admin e tiver userId, filtrar por usuário
     if (!isAdmin && userId) {
@@ -68,6 +68,7 @@ export async function GET(request: Request) {
       connection_name: conn.connection_name,
       instance_name: conn.instance_name,
       status: conn.status || "disconnected",
+      api_type: conn.api_type || "evolution", // CRÍTICO: Incluir api_type
       user_id: conn.user_id,
       phone_number: conn.phone_number,
       created_at: conn.created_at,

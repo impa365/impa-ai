@@ -52,7 +52,6 @@ export default function AdminAgentsPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      console.log("📡 Buscando dados dos agentes via API...")
 
       // Usar API segura ao invés de Supabase direto
       const response = await publicApi.getAdminAgents()
@@ -61,17 +60,10 @@ export default function AdminAgentsPage() {
         throw new Error(response.error)
       }
 
-      console.log("✅ Dados recebidos:", {
-        agents: response.data?.agents?.length || 0,
-        users: response.data?.users?.length || 0,
-        connections: response.data?.connections?.length || 0,
-      })
-
       setAgents(response.data?.agents || [])
       setUsers(response.data?.users || [])
       setWhatsappConnections(response.data?.connections || [])
     } catch (error) {
-      console.error("❌ Erro ao buscar dados:", error)
       toast({
         title: "Erro",
         description: "Falha ao carregar dados dos agentes",
@@ -111,7 +103,6 @@ export default function AdminAgentsPage() {
   }
 
   const handleEditAgent = (agent: any) => {
-    console.log("🔧 [AdminAgents] Editando agente:", agent)
     setSelectedAgent(agent)
     setShowAgentModal(true)
   }
@@ -135,7 +126,6 @@ export default function AdminAgentsPage() {
       })
       fetchData()
     } catch (error) {
-      console.error("❌ Erro ao excluir agente:", error)
       toast({
         title: "Erro",
         description: "Falha ao excluir agente",
@@ -151,7 +141,6 @@ export default function AdminAgentsPage() {
   const handleToggleStatus = async (agent: any) => {
     try {
       const newStatus = agent.status === "active" ? "inactive" : "active"
-      console.log("🔄 Alterando status do agente via API:", agent.id, "para", newStatus)
 
       const response = await publicApi.updateAgent(agent.id, { status: newStatus })
 
@@ -167,7 +156,6 @@ export default function AdminAgentsPage() {
       // Recarregar dados
       fetchData()
     } catch (error) {
-      console.error("❌ Erro ao alterar status:", error)
       toast({
         title: "Erro",
         description: "Falha ao alterar status do agente",
@@ -214,7 +202,7 @@ export default function AdminAgentsPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Gerenciar Agentes IA</h1>
           <p className="text-gray-600">Administre todos os agentes do sistema</p>
         </div>
-        <Button onClick={handleCreateAgent} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button onClick={handleCreateAgent} className="bg-blue-600 hover:bg-blue-700 text-white" data-quest-id="new-agent-button">
           <Plus className="w-4 h-4 mr-2" />
           Criar Agente
         </Button>
@@ -335,8 +323,20 @@ export default function AdminAgentsPage() {
                     <div className="text-xs text-gray-500">
                       Proprietário: {agent.user_profiles?.full_name || agent.user_profiles?.email || "N/A"}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      Conexão: {agent.whatsapp_connections?.connection_name || "N/A"}
+                    <div className="text-xs text-gray-500 flex items-center gap-2">
+                      <span>Conexão: {agent.whatsapp_connections?.connection_name || "N/A"}</span>
+                      {agent.whatsapp_connections?.api_type && (
+                        <Badge 
+                          variant="outline" 
+                          className={`text-xs font-bold px-2 ${
+                            agent.whatsapp_connections.api_type === "uazapi" 
+                              ? "bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900 dark:text-purple-200" 
+                              : "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-200"
+                          }`}
+                        >
+                          {agent.whatsapp_connections.api_type === "uazapi" ? "🚀 UAZAPI" : "⚡ EVOLUTION"}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -372,13 +372,14 @@ export default function AdminAgentsPage() {
                     <Button variant="ghost" size="sm" onClick={() => handleEditAgent(agent)}>
                       <Edit className="w-4 h-4" />
                     </Button>
-                    {agent.evolution_bot_id && (
+                    {/* Botão de sessões: Evolution Bot OU Uazapi Bot */}
+                    {(agent.evolution_bot_id || agent.bot_id) && (
                       <Button 
                         variant="ghost" 
                         size="sm" 
                         className="text-blue-600 hover:text-blue-700"
                         onClick={() => router.push(`/admin/agents/${agent.id}/sessions`)}
-                        title="Ver sessões do Evolution Bot"
+                        title={agent.bot_id ? "Ver sessões do Bot Uazapi" : "Ver sessões do Evolution Bot"}
                       >
                         <Users className="w-4 h-4" />
                       </Button>

@@ -19,9 +19,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Sparkles, Eye, EyeOff, Volume2, Users, MessageSquare, Clock } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Bot, Sparkles, Eye, EyeOff, Volume2, Users, MessageSquare, Clock, Search, Filter } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
 import { fetchWhatsAppConnections, fetchUsers } from "@/lib/whatsapp-connections"
@@ -71,6 +73,7 @@ export interface Agent {
   evolution_bot_id?: string | null
   model?: string | null
   model_config?: string | null // Provedor LLM (openai, anthropic, etc.)
+  llm_api_key?: string | null // API Key customizada do usuário para LLM
   // Campos para sincronização com Evolution API
   trigger_type?: string | null
   trigger_operator?: string | null
@@ -128,6 +131,7 @@ const initialFormData: Agent = {
   evolution_bot_id: null,
   model: null,
   model_config: null,
+  llm_api_key: null,
   // Valores padrão para campos Evolution API
   trigger_type: "keyword",
   trigger_operator: "equals",
@@ -165,11 +169,15 @@ export function AgentModal({
   const [showCalendarApiKey, setShowCalendarApiKey] = useState(false)
   const [showChatnodeApiKey, setShowChatnodeApiKey] = useState(false) // Adicionar esta linha
   const [showOrimonApiKey, setShowOrimonApiKey] = useState(false) // Adicionar esta linha
+  const [showLlmApiKey, setShowLlmApiKey] = useState(false)
   const [evolutionSyncStatus, setEvolutionSyncStatus] = useState<string>("")
   const [systemDefaultModel, setSystemDefaultModel] = useState<string | null>(null)
   const [llmConfig, setLlmConfig] = useState<any>(null)
   const [loadingLlmConfig, setLoadingLlmConfig] = useState(false)
   const [modelSelection, setModelSelection] = useState<"default" | "custom">("default")
+  const [savedLlmKeys, setSavedLlmKeys] = useState<any[]>([])
+  const [llmKeySource, setLlmKeySource] = useState<"saved" | "manual" | "system">("system")
+  const [selectedSavedKeyId, setSelectedSavedKeyId] = useState<string>("")
   const [showCurlModal, setShowCurlModal] = useState(false)
   const [curlInput, setCurlInput] = useState("")
   const [curlDescription, setCurlDescription] = useState("")
@@ -178,6 +186,40 @@ export function AgentModal({
   const [tempIgnoreJids, setTempIgnoreJids] = useState<string[]>([])
   const [newIgnoreJid, setNewIgnoreJid] = useState("")
   const [pendingSubmit, setPendingSubmit] = useState(false)
+
+  // Estados para filtros de conexão
+  const [connectionSearch, setConnectionSearch] = useState("")
+  const [connectionApiTypeFilter, setConnectionApiTypeFilter] = useState<string>("all")
+
+  // Função para filtrar conexões
+  const filteredConnections = whatsappConnections.filter((conn) => {
+    // Filtro por busca (nome ou telefone)
+    const matchesSearch = 
+      connectionSearch === "" ||
+      conn.connection_name?.toLowerCase().includes(connectionSearch.toLowerCase()) ||
+      conn.phone_number?.toLowerCase().includes(connectionSearch.toLowerCase())
+
+    // Filtro por tipo de API
+    const matchesApiType =
+      connectionApiTypeFilter === "all" ||
+      (conn.api_type || "evolution") === connectionApiTypeFilter
+
+    return matchesSearch && matchesApiType
+  })
+
+  // Estados para Uazapi
+  const [selectedConnectionApiType, setSelectedConnectionApiType] = useState<string | null>(null)
+  const [botFormData, setBotFormData] = useState({
+    bot_gatilho: "Palavra-chave",
+    bot_operador: "Contém",
+    bot_value: "",
+    bot_debounce: 5,
+    bot_splitMessage: 2,
+    bot_ignoreJids: ["@g.us"], // Array igual ao Evolution
+    bot_padrao: false, // Bot padrão da conexão
+  })
+  const [newBotIgnoreJid, setNewBotIgnoreJid] = useState("")
+  const [showBotIgnoreJidsWarning, setShowBotIgnoreJidsWarning] = useState(false)
 
   const isAdmin = currentUser?.role === "admin"
 
@@ -195,25 +237,20 @@ export function AgentModal({
       if (!open) return
 
       try {
-        console.log("🔄 [AgentModal] Carregando modelo padrão do sistema via API...")
         setSystemDefaultModel("carregando...")
 
         // Usar API segura ao invés de Supabase direto
         const response = await publicApi.getSystemDefaultModel()
 
         if (response.error) {
-          console.error("❌ [AgentModal] Erro ao buscar default_model:", response.error)
           setSystemDefaultModel("Erro ao carregar")
         } else if (response.data?.defaultModel) {
           const systemDefaultModel = response.data.defaultModel.toString().trim()
-          console.log("✅ [AgentModal] Default model encontrado:", systemDefaultModel)
           setSystemDefaultModel(systemDefaultModel)
         } else {
-          console.error("❌ [AgentModal] default_model não encontrado")
           setSystemDefaultModel("Não configurado")
         }
       } catch (error) {
-        console.error("❌ [AgentModal] Erro ao carregar modelo padrão:", error)
         setSystemDefaultModel("Erro ao carregar")
       }
     }
@@ -223,7 +260,6 @@ export function AgentModal({
     if (!open) return
 
     try {
-      console.log("🔄 [AgentModal] Carregando configurações LLM via API segura...")
       setLoadingLlmConfig(true)
 
       const response = await fetch("/api/system/llm-config", {
@@ -240,13 +276,11 @@ export function AgentModal({
       const data = await response.json()
 
       if (data.success && data.config) {
-        console.log("✅ [AgentModal] Configurações LLM carregadas:", data.config)
         setLlmConfig(data.config)
       } else {
         throw new Error(data.error || "Erro desconhecido ao carregar configurações LLM")
        }
     } catch (error: any) {
-       console.error("❌ [AgentModal] Erro ao carregar configurações LLM:", error)
       toast({
         title: "Erro ao carregar configurações LLM",
         description: error.message || error.toString(),
@@ -269,7 +303,12 @@ export function AgentModal({
       if (user.role === "admin") {
         loadUsers()
         if (agent?.user_id) {
+          // Editando agente existente - usar user_id do agente
           setSelectedUserId(agent.user_id)
+        } else {
+          // Criando novo agente - pré-selecionar usuário atual (admin)
+          setSelectedUserId(user.id)
+          loadWhatsAppConnections(user.id, true)
         }
       } else {
         setSelectedUserId(user.id)
@@ -292,19 +331,15 @@ export function AgentModal({
       const usersData = await fetchUsers()
       setUsers(usersData)
     } catch (error) {
-      console.error("Erro ao carregar usuários:", error)
       toast({ title: "Erro", description: "Falha ao carregar lista de usuários", variant: "destructive" })
     }
   }
 
   async function loadN8nConfig() {
     try {
-      // Usar API ao invés de Supabase direto
-      console.log("🔄 [AgentModal] Carregando configuração N8N via API...")
       // Por enquanto, vamos comentar esta funcionalidade até ter a API específica
-      console.warn("⚠️ [AgentModal] Configuração N8N temporariamente desabilitada - usar API específica")
     } catch (err) {
-      console.error("Erro ao carregar configuração N8N:", err?.message || err)
+      // Silencioso
     }
   }
 
@@ -318,7 +353,6 @@ export function AgentModal({
       const connections = await fetchWhatsAppConnections(userId, userIsAdmin)
       setWhatsappConnections(connections)
     } catch (error) {
-      console.error("Erro ao carregar conexões:", error)
       toast({ title: "Erro", description: "Falha ao carregar conexões WhatsApp", variant: "destructive" })
     } finally {
       setLoadingConnections(false)
@@ -332,26 +366,14 @@ export function AgentModal({
   }
 
   useEffect(() => {
-    console.log("🔄 [AgentModal] useEffect - agent changed:", {
-      agentExists: !!agent,
-      agentId: agent?.id,
-      agentName: agent?.name,
-      currentUser: currentUser?.id,
-      selectedUserId,
-      isAdmin,
-    })
-
     if (agent) {
-      console.log("📝 [AgentModal] Dados COMPLETOS do agente recebido:", agent)
 
       // Processar ignore_jids se for string JSON
       let processedIgnoreJids = agent.ignore_jids
       if (typeof agent.ignore_jids === "string") {
         try {
           processedIgnoreJids = JSON.parse(agent.ignore_jids)
-          console.log("✅ [AgentModal] ignore_jids processado de string para array:", processedIgnoreJids)
         } catch (e) {
-          console.warn("⚠️ [AgentModal] Erro ao processar ignore_jids:", e)
           processedIgnoreJids = ["@g.us"]
         }
       }
@@ -376,37 +398,151 @@ export function AgentModal({
         ignore_jids: ensureGroupsProtection(processedIgnoreJids),
       }
 
-      console.log("✅ [AgentModal] Dados processados para o formulário:", {
-        name: agentData.name,
-        identity_description: agentData.identity_description,
-        training_prompt: agentData.training_prompt,
-        voice_response_enabled: agentData.voice_response_enabled,
-        voice_provider: agentData.voice_provider,
-        voice_api_key: agentData.voice_api_key ? "***PRESENTE***" : "AUSENTE",
-        voice_id: agentData.voice_id,
-        calendar_integration: agentData.calendar_integration,
-        calendar_api_key: agentData.calendar_api_key ? "***PRESENTE***" : "AUSENTE",
-        calendar_meeting_id: agentData.calendar_meeting_id,
-        chatnode_integration: agentData.chatnode_integration,
-        orimon_integration: agentData.orimon_integration,
-        model: agentData.model,
-        model_config: agentData.model_config,
-      })
-
       setFormData(agentData)
 
       if (isAdmin && agent.user_id) {
         setSelectedUserId(agent.user_id)
       }
     } else {
-      console.log("🆕 [AgentModal] Criando novo agente")
       setFormData({
         ...initialFormData,
         user_id: selectedUserId || currentUser?.id || "",
         ignore_jids: ["@g.us"], // Garantir proteção padrão
       })
+      // Resetar estado de LLM Key para novo agente
+      setLlmKeySource("system")
+      setSelectedSavedKeyId("")
     }
   }, [agent, currentUser, selectedUserId, isAdmin])
+
+  // useEffect para buscar API keys salvas do usuário
+  useEffect(() => {
+    const fetchSavedLlmKeys = async () => {
+      if (!open) return
+
+      const userId = selectedUserId || currentUser?.id
+      if (!userId) return
+
+      try {
+        const apiPath = isAdmin ? `/api/admin/llm-keys?user_id=${userId}` : "/api/user/llm-keys"
+        const response = await fetch(apiPath)
+        const data = await response.json()
+
+        if (data.success) {
+          setSavedLlmKeys(data.keys || [])
+          // CASO 1: Agente JÁ tem uma chave salva - verificar se ainda existe
+          if (formData.llm_api_key && formData.llm_api_key.startsWith("__SAVED_KEY__")) {
+            const keyId = formData.llm_api_key.replace("__SAVED_KEY__", "")
+            const savedKey = data.keys?.find((k: any) => k.id === keyId)
+            
+            if (savedKey) {
+              setLlmKeySource("saved")
+              setSelectedSavedKeyId(keyId)
+            } else {
+              setLlmKeySource("system")
+              setFormData(prev => ({ ...prev, llm_api_key: null }))
+            }
+          }
+          // CASO 2: Agente tem chave MANUAL (não começa com __SAVED_KEY__)
+          else if (formData.llm_api_key && !formData.llm_api_key.startsWith("__SAVED_KEY__")) {
+            setLlmKeySource("manual")
+          }
+          // CASO 3: Novo agente sem chave - buscar chave padrão
+          else if (!formData.llm_api_key && formData.model_config && data.keys && data.keys.length > 0) {
+            const defaultKey = data.keys.find(
+              (k: any) => k.provider === formData.model_config && k.is_default && k.is_active
+            )
+            if (defaultKey) {
+              setLlmKeySource("saved")
+              setSelectedSavedKeyId(defaultKey.id)
+            }
+          }
+        }
+      } catch (error) {
+        // Silencioso
+      }
+    }
+
+    fetchSavedLlmKeys()
+  }, [open, selectedUserId, currentUser, isAdmin, formData.llm_api_key, formData.model_config])
+
+
+  // useEffect para detectar o api_type da conexão quando editando um agente (busca do BACKEND)
+  useEffect(() => {
+    const fetchConnectionApiType = async () => {
+      // Só buscar se estiver editando um agente e ele tiver uma conexão
+      if (!agent || !agent.whatsapp_connection_id) {
+        setSelectedConnectionApiType(null)
+        return
+      }
+
+      try {
+        
+        // Buscar dados da conexão via API (BACKEND)
+        const response = await fetch(`/api/whatsapp-connections/info/${agent.whatsapp_connection_id}`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error(`Erro HTTP: ${response.status}`)
+        }
+
+        const data = await response.json()
+        
+        if (data.success && data.connection) {
+          const apiType = data.connection.api_type || "evolution"
+          setSelectedConnectionApiType(apiType)
+          
+          // Se for Uazapi e o agente tiver bot_id, buscar dados do bot
+          if (apiType === "uazapi" && agent.bot_id) {
+            try {
+              const botResponse = await fetch(`/api/bots/${agent.bot_id}`, {
+                method: "GET",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+              })
+
+              if (botResponse.ok) {
+                const botData = await botResponse.json()
+                if (botData.success && botData.bot) {
+                  // Converter ignoreJids de string para array
+                  let ignoreJidsArray = ["@g.us"]
+                  if (botData.bot.ignoreJids) {
+                    const jidsString = botData.bot.ignoreJids.replace(/,\s*$/, "") // Remove vírgula final
+                    ignoreJidsArray = jidsString.split(",").map((jid: string) => jid.trim()).filter(Boolean)
+                  }
+
+                  // Preencher botFormData com os dados do bot
+                  setBotFormData({
+                    bot_gatilho: botData.bot.gatilho || "Palavra-chave",
+                    bot_operador: botData.bot.operador_gatilho || "Contém",
+                    bot_value: botData.bot.value_gatilho || "",
+                    bot_debounce: botData.bot.debounce || 5,
+                    bot_splitMessage: botData.bot.splitMessage || 2,
+                    bot_ignoreJids: ignoreJidsArray,
+                    bot_padrao: Boolean(botData.bot.padrao) || false,
+                  })
+                }
+              }
+            } catch (botError) {
+              // Silencioso
+            }
+          }
+        } else {
+          throw new Error(data.error || "Erro ao buscar dados da conexão")
+        }
+      } catch (error: any) {
+        // Em caso de erro, assumir evolution por padrão
+        setSelectedConnectionApiType("evolution")
+      }
+    }
+
+    fetchConnectionApiType()
+  }, [agent, open])
 
   // useEffect específico para sincronizar modelSelection com o modelo do agente APENAS na inicialização
   useEffect(() => {
@@ -420,10 +556,8 @@ export function AgentModal({
       // Caso contrário, usar "custom"
       if (formData.model === defaultModel) {
         setModelSelection("default")
-        console.log("✅ [AgentModal] Modelo padrão detectado, definindo modelSelection como 'default'")
       } else {
         setModelSelection("custom")
-        console.log("✅ [AgentModal] Modelo personalizado detectado, definindo modelSelection como 'custom'")
       }
     } else if (!agent && open) {
       // Para novo agente, sempre usar modelo padrão
@@ -479,6 +613,42 @@ export function AgentModal({
       ignore_jids: currentJids.filter((jid) => jid !== "@g.us"),
     }))
     setShowIgnoreJidsWarning(false)
+  }
+
+  // Funções para manipular bot_ignoreJids (Uazapi)
+  const handleAddBotIgnoreJid = () => {
+    if (!newBotIgnoreJid.trim()) return
+
+    const currentJids = botFormData.bot_ignoreJids || ["@g.us"]
+    if (!currentJids.includes(newBotIgnoreJid.trim())) {
+      setBotFormData((prev) => ({
+        ...prev,
+        bot_ignoreJids: [...currentJids, newBotIgnoreJid.trim()],
+      }))
+    }
+    setNewBotIgnoreJid("")
+  }
+
+  const handleRemoveBotIgnoreJid = (jidToRemove: string) => {
+    if (jidToRemove === "@g.us") {
+      setShowBotIgnoreJidsWarning(true)
+      return
+    }
+
+    const currentJids = botFormData.bot_ignoreJids || ["@g.us"]
+    setBotFormData((prev) => ({
+      ...prev,
+      bot_ignoreJids: currentJids.filter((jid) => jid !== jidToRemove),
+    }))
+  }
+
+  const confirmRemoveBotGroupsJid = () => {
+    const currentJids = botFormData.bot_ignoreJids || ["@g.us"]
+    setBotFormData((prev) => ({
+      ...prev,
+      bot_ignoreJids: currentJids.filter((jid) => jid !== "@g.us"),
+    }))
+    setShowBotIgnoreJidsWarning(false)
   }
 
   const convertCurlToDescription = () => {
@@ -575,11 +745,8 @@ _______________________________________
     setError(null)
 
     try {
-      console.log("🔄 [AgentModal] Iniciando salvamento via API...")
-
       // Detectar automaticamente se é contexto de admin ou usuário
       const isAdminContext = typeof window !== 'undefined' && window.location.pathname.includes('/admin/')
-      console.log(`🔍 [AgentModal] Contexto detectado: ${isAdminContext ? 'ADMIN' : 'USUÁRIO'}`)
 
       // Garantir que trigger_type tenha um valor válido
       const validTriggerType =
@@ -630,6 +797,7 @@ _______________________________________
         evolution_bot_id: formData.evolution_bot_id,
         model: formData.model ? String(formData.model) : (systemDefaultModel || "gpt-4o-mini"),
       model_config: formData.model_config || "openai",
+        llm_api_key: formData.llm_api_key || null,
         // Campos para sincronização Evolution API
         trigger_type: validTriggerType,
         trigger_operator: validTriggerOperator,
@@ -644,6 +812,16 @@ _______________________________________
         delay_message: formData.delay_message,
         expire_time: formData.expire_time,
         ignore_jids: finalIgnoreJids,
+        // Campos para bot Uazapi (apenas se for uazapi)
+        ...(selectedConnectionApiType === "uazapi" && {
+          bot_gatilho: botFormData.bot_gatilho,
+          bot_operador: botFormData.bot_operador,
+          bot_value: botFormData.bot_value,
+          bot_debounce: botFormData.bot_debounce,
+          bot_splitMessage: botFormData.bot_splitMessage,
+          bot_ignoreJids: botFormData.bot_ignoreJids, // Array - será convertido para string no servidor
+          bot_padrao: botFormData.bot_padrao,
+        }),
       }
 
       // Escolher a API correta baseada no contexto
@@ -652,8 +830,6 @@ _______________________________________
       let response
       if (isEditing && agent?.id) {
         // Atualizar agente existente
-        console.log(`🔄 [AgentModal] Atualizando agente via API (${isAdminContext ? 'admin' : 'usuário'}):`, agent.id)
-        
         if (isAdminContext) {
           // Para admin: usar PUT com ID no payload
           response = await fetch(baseApiPath, {
@@ -675,7 +851,6 @@ _______________________________________
         }
       } else {
         // Criar novo agente
-        console.log(`🔄 [AgentModal] Criando novo agente via API (${isAdminContext ? 'admin' : 'usuário'})`)
         response = await fetch(baseApiPath, {
           method: "POST",
           headers: {
@@ -687,12 +862,10 @@ _______________________________________
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error("❌ [AgentModal] Erro na resposta da API:", response.status, errorText)
         throw new Error(`Erro na API: ${response.status}`)
       }
 
       const result = await response.json()
-      console.log("✅ [AgentModal] Agente salvo com sucesso:", result)
 
       toast({
         title: "Sucesso",
@@ -702,7 +875,6 @@ _______________________________________
       if (typeof onSave === "function") onSave()
       else onOpenChange(false)
     } catch (err: any) {
-      console.error("❌ Erro detalhado ao salvar agente:", err)
       setError(err.message || "Ocorreu um erro ao salvar o agente.")
       toast({ title: "Erro", description: err.message || "Falha ao salvar o agente.", variant: "destructive" })
     } finally {
@@ -729,8 +901,20 @@ _______________________________________
       setError("A conexão WhatsApp é obrigatória.")
       return
     }
-    if (!formData.trigger_value?.trim() && formData.trigger_type === "keyword") {
+    // ============================================
+    // VALIDAÇÕES DE UX (Frontend - apenas para melhorar experiência)
+    // As validações REAIS e de SEGURANÇA estão no BACKEND
+    // ============================================
+    
+    // Validação específica para Evolution (NÃO validar para Uazapi)
+    if (selectedConnectionApiType !== "uazapi" && !formData.trigger_value?.trim() && formData.trigger_type === "keyword") {
       setError("A palavra-chave de ativação é obrigatória para bots com ativação por palavra-chave.")
+      return
+    }
+    
+    // Validação de UX para Uazapi (backend valida novamente por segurança)
+    if (selectedConnectionApiType === "uazapi" && botFormData.bot_gatilho === "Palavra-chave" && !botFormData.bot_value?.trim()) {
+      setError("A palavra-chave do bot é obrigatória quando o gatilho é 'Palavra-chave'.")
       return
     }
     if (!formData.training_prompt?.trim()) {
@@ -1055,10 +1239,8 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                     name="model_config"
                     value={formData.model_config || ""}
                     onValueChange={(value) => {
-                      console.log("🔄 [AgentModal] Provedor selecionado:", value)
                       // Ao trocar provedor, automaticamente usar o modelo padrão desse provedor
                       const defaultModelForProvider = llmConfig?.default_models?.[value] || systemDefaultModel || "gpt-4o-mini"
-                      console.log("📋 [AgentModal] Modelo padrão para", value, ":", defaultModelForProvider)
                       setFormData((prev) => ({ 
                         ...prev, 
                         model_config: value,
@@ -1160,16 +1342,13 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                       name="model_selection"
                       value={modelSelection}
                       onValueChange={(value: "default" | "custom") => {
-                        console.log("🎯 [AgentModal] Usuário mudou seleção de modelo para:", value)
                         setModelSelection(value)
                         
                         if (value === "default") {
                           const selectedProvider = formData.model_config || "openai"
                           const defaultModel = llmConfig?.default_models?.[selectedProvider] || systemDefaultModel || "gpt-4o-mini"
-                          console.log("🔧 [AgentModal] Definindo modelo padrão:", defaultModel, "para provedor:", selectedProvider)
                           setFormData((prev) => ({ ...prev, model: String(defaultModel) }))
                         } else {
-                          console.log("🔧 [AgentModal] Usuário escolheu modelo personalizado - mantendo valor atual ou limpando")
                           // Se já tem um valor personalizado, manter. Se não, limpar para o usuário digitar
                           const currentModel = formData.model || ""
                           const selectedProvider = formData.model_config || "openai"
@@ -1230,38 +1409,289 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                   </div>
                 )}
 
-                <div>
+                {/* Campo de API Key da LLM - Interface Profissional */}
+                {formData.model_config && (
+                  <Card className="border-2 border-blue-100 dark:border-blue-900">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-blue-600" />
+                        Configuração de API Key LLM
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Radio Group para escolher fonte da chave */}
+                      <div>
+                        <Label className="text-sm font-medium mb-3 block">
+                          Como deseja fornecer a chave API?
+                        </Label>
+                        <RadioGroup
+                          value={llmKeySource}
+                          onValueChange={(value: "saved" | "manual" | "system") => {
+                            setLlmKeySource(value)
+                            if (value === "system") {
+                              setFormData((prev) => ({ ...prev, llm_api_key: null }))
+                              setSelectedSavedKeyId("")
+                            } else if (value === "saved" && !selectedSavedKeyId) {
+                              // Selecionar chave padrão se existir
+                              const defaultKey = savedLlmKeys.find(
+                                (k) => k.provider === formData.model_config && k.is_default && k.is_active
+                              )
+                              if (defaultKey) {
+                                setSelectedSavedKeyId(defaultKey.id)
+                              }
+                            }
+                          }}
+                          className="space-y-3"
+                        >
+                          <div className="flex items-center space-x-2 p-3 rounded-lg border-2 border-transparent hover:border-blue-200 dark:hover:border-blue-800 transition-colors cursor-pointer">
+                            <RadioGroupItem value="system" id="system" />
+                            <Label htmlFor="system" className="cursor-pointer flex-1">
+                              <div className="font-medium">Usar chave do sistema</div>
+                              <div className="text-xs text-muted-foreground">
+                                Recomendado - usa a chave padrão configurada no sistema
+                              </div>
+                            </Label>
+                            <Badge variant="secondary">Padrão</Badge>
+                          </div>
+
+                          {savedLlmKeys.filter((k) => k.provider === formData.model_config).length > 0 && (
+                            <div className="flex items-center space-x-2 p-3 rounded-lg border-2 border-transparent hover:border-green-200 dark:hover:border-green-800 transition-colors cursor-pointer">
+                              <RadioGroupItem value="saved" id="saved" />
+                              <Label htmlFor="saved" className="cursor-pointer flex-1">
+                                <div className="font-medium">Usar chave salva</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {savedLlmKeys.filter((k) => k.provider === formData.model_config && k.is_active).length} chave(s) disponível(is)
+                                </div>
+                              </Label>
+                              <Badge className="bg-green-500">Seguro</Badge>
+                            </div>
+                          )}
+
+                          <div className="flex items-center space-x-2 p-3 rounded-lg border-2 border-transparent hover:border-orange-200 dark:hover:border-orange-800 transition-colors cursor-pointer">
+                            <RadioGroupItem value="manual" id="manual" />
+                            <Label htmlFor="manual" className="cursor-pointer flex-1">
+                              <div className="font-medium">Digitar manualmente</div>
+                              <div className="text-xs text-muted-foreground">
+                                Cole sua chave API diretamente
+                              </div>
+                            </Label>
+                            <Badge variant="outline">Manual</Badge>
+                          </div>
+                        </RadioGroup>
+                      </div>
+
+                      {/* Select para chaves salvas */}
+                      {llmKeySource === "saved" && (
+                        <div className="space-y-2 animate-in fade-in duration-300">
+                          <Label htmlFor="saved_key_select">
+                            Selecione uma chave salva <span className="text-red-500">*</span>
+                          </Label>
+                          <Select
+                            value={selectedSavedKeyId}
+                            onValueChange={(value) => {
+                              setSelectedSavedKeyId(value)
+                              // Não salvar a chave no formData por segurança
+                              // O backend vai buscar quando necessário
+                              setFormData((prev) => ({ ...prev, llm_api_key: `__SAVED_KEY__${value}` }))
+                            }}
+                          >
+                            <SelectTrigger className="bg-white dark:bg-gray-800">
+                              <SelectValue placeholder="Escolha uma chave..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {savedLlmKeys
+                                .filter((k) => k.provider === formData.model_config && k.is_active)
+                                .map((key) => (
+                                  <SelectItem key={key.id} value={key.id}>
+                                    <div className="flex items-center justify-between w-full">
+                                      <span className="font-medium">{key.key_name}</span>
+                                      <div className="flex items-center gap-2 ml-4">
+                                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                                          {key.api_key_preview}
+                                        </code>
+                                        {key.is_default && (
+                                          <Badge className="bg-blue-500 text-xs">Padrão</Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" />
+                            Suas chaves ficam criptografadas e seguras
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Input manual */}
+                      {llmKeySource === "manual" && (
+                        <div className="space-y-2 animate-in fade-in duration-300">
+                          <Label htmlFor="llm_api_key_manual">
+                            Cole sua API Key <span className="text-red-500">*</span>
+                          </Label>
+                          <div className="relative">
+                            <Input
+                              id="llm_api_key_manual"
+                              name="llm_api_key"
+                              type={showLlmApiKey ? "text" : "password"}
+                              value={formData.llm_api_key?.startsWith("__SAVED_KEY__") ? "" : formData.llm_api_key || ""}
+                              onChange={handleInputChange}
+                              placeholder={
+                                formData.model_config === "openai"
+                                  ? "sk-..."
+                                  : formData.model_config === "anthropic"
+                                    ? "sk-ant-..."
+                                    : formData.model_config === "google"
+                                      ? "AIza..."
+                                      : "Cole sua API key aqui"
+                              }
+                              className="bg-white dark:bg-gray-800 pr-10"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowLlmApiKey(!showLlmApiKey)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                            >
+                              {showLlmApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          <p className="text-xs text-yellow-600 dark:text-yellow-500 flex items-center gap-1">
+                            ⚠️ A chave será usada apenas para este agente
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Informação sobre chave do sistema */}
+                      {llmKeySource === "system" && (
+                        <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800 animate-in fade-in duration-300">
+                          <p className="text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                            <Sparkles className="w-4 h-4" />
+                            Este agente usará a chave padrão configurada no sistema
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Link para gerenciar chaves */}
+                      {savedLlmKeys.filter((k) => k.provider === formData.model_config).length === 0 && llmKeySource !== "manual" && (
+                        <div className="text-center py-2">
+                          <p className="text-sm text-muted-foreground mb-2">
+                            Nenhuma chave salva para {formData.model_config}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const keysUrl = isAdmin ? "/admin/llm-keys" : "/dashboard/llm-keys"
+                              window.open(keysUrl, "_blank")
+                            }}
+                          >
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Gerenciar Minhas Chaves
+                          </Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                <div className="space-y-3">
                   <Label htmlFor="whatsapp_connection_id" className="text-gray-900 dark:text-gray-100">
                     Conexão WhatsApp *
                   </Label>
+
+                  {/* Filtros de Conexão */}
+                  {whatsappConnections.length > 0 && (
+                    <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                      {/* Busca por nome/telefone */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Input
+                          placeholder="Buscar por nome ou telefone..."
+                          value={connectionSearch}
+                          onChange={(e) => setConnectionSearch(e.target.value)}
+                          className="pl-10 bg-white dark:bg-gray-800"
+                        />
+                      </div>
+
+                      {/* Filtro por tipo de API */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Filter className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Tipo:</span>
+                        <div className="flex gap-2 flex-wrap">
+                          <Button
+                            type="button"
+                            variant={connectionApiTypeFilter === "all" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setConnectionApiTypeFilter("all")}
+                            className="h-8"
+                          >
+                            Todas ({whatsappConnections.length})
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={connectionApiTypeFilter === "uazapi" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setConnectionApiTypeFilter("uazapi")}
+                            className="h-8 bg-purple-600 hover:bg-purple-700 text-white border-purple-600"
+                          >
+                            🚀 Uazapi ({whatsappConnections.filter(c => (c.api_type || "evolution") === "uazapi").length})
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={connectionApiTypeFilter === "evolution" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setConnectionApiTypeFilter("evolution")}
+                            className="h-8 bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
+                          >
+                            ⚡ Evolution ({whatsappConnections.filter(c => (c.api_type || "evolution") === "evolution").length})
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Contador de resultados filtrados */}
+                      {(connectionSearch || connectionApiTypeFilter !== "all") && (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500 dark:text-gray-400">
+                            Mostrando {filteredConnections.length} de {whatsappConnections.length} conexões
+                          </span>
+                          {(connectionSearch || connectionApiTypeFilter !== "all") && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setConnectionSearch("")
+                                setConnectionApiTypeFilter("all")
+                              }}
+                              className="h-6 text-xs"
+                            >
+                              Limpar filtros
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <Select
                     name="whatsapp_connection_id"
                     value={formData.whatsapp_connection_id || ""}
                     onValueChange={(value) => {
-                      console.log("🔗 [AgentModal] Selecionando conexão:", value)
                       handleSelectChange("whatsapp_connection_id", value)
+                      
+                      // Detectar api_type da conexão selecionada
+                      const selectedConn = whatsappConnections.find(conn => conn.id === value)
+                      const apiType = selectedConn?.api_type || "evolution"
+                      setSelectedConnectionApiType(apiType)
                     }}
                     disabled={
-                      (() => {
-                        const isDisabled = (!selectedUserId && isAdmin) ||
-                          loadingConnections ||
-                          (!whatsappConnections.length && !!selectedUserId)
-                        
-                        console.log("🔍 [AgentModal] Debug do Select WhatsApp:", {
-                          selectedUserId,
-                          isAdmin,
-                          loadingConnections,
-                          whatsappConnectionsLength: whatsappConnections.length,
-                          isDisabled,
-                          reasons: {
-                            noUserAndAdmin: (!selectedUserId && isAdmin),
-                            loading: loadingConnections,
-                            noConnectionsButHasUser: (!whatsappConnections.length && !!selectedUserId)
-                          }
-                        })
-                        
-                        return isDisabled
-                      })()
+                      (!selectedUserId && isAdmin) ||
+                      loadingConnections ||
+                      (!whatsappConnections.length && !!selectedUserId)
                     }
                   >
                     <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
@@ -1275,13 +1705,29 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                         }
                       />
                     </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                      {whatsappConnections.length > 0 ? (
-                        whatsappConnections.map((conn) => (
-                          <SelectItem key={conn.id} value={conn.id}>
-                            {conn.connection_name} ({conn.phone_number || "Número não disponível"})
-                          </SelectItem>
-                        ))
+                    <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 max-h-[300px]">
+                      {filteredConnections.length > 0 ? (
+                        filteredConnections.map((conn) => {
+                          const apiType = conn.api_type || "evolution"
+                          const apiIcon = apiType === "uazapi" ? "🚀" : "⚡"
+                          const apiColor = apiType === "uazapi" ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                          
+                          return (
+                            <SelectItem key={conn.id} value={conn.id}>
+                              <div className="flex items-center gap-2 py-1">
+                                <Badge variant="outline" className={`text-xs font-bold px-2 ${apiColor}`}>
+                                  {apiIcon} {apiType.toUpperCase()}
+                                </Badge>
+                                <span className="font-medium">{conn.connection_name}</span>
+                                <span className="text-gray-500 dark:text-gray-400">({conn.phone_number || "Número não disponível"})</span>
+                              </div>
+                            </SelectItem>
+                          )
+                        })
+                      ) : whatsappConnections.length > 0 ? (
+                        <SelectItem value="no-results" disabled>
+                          Nenhuma conexão encontrada com os filtros aplicados
+                        </SelectItem>
                       ) : (
                         <SelectItem value="no-connections" disabled>
                           {selectedUserId
@@ -1302,6 +1748,228 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
               </CardContent>
             </Card>
 
+            {/* Card de configurações para Uazapi */}
+            {selectedConnectionApiType === "uazapi" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
+                    <Bot className="w-5 h-5 mr-2" />
+                    Configurações do Bot (Uazapi)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="bot_gatilho" className="text-gray-900 dark:text-gray-100">
+                      Tipo de Gatilho *
+                      {botFormData.bot_padrao && (
+                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
+                          (Desabilitado - Bot Padrão)
+                        </span>
+                      )}
+                    </Label>
+                    <Select
+                      value={botFormData.bot_gatilho}
+                      onValueChange={(value) => {
+                        setBotFormData(prev => ({ ...prev, bot_gatilho: value }))
+                        // Se mudar para "Palavra-chave", limpar o value se estava vazio
+                        if (value !== "Palavra-chave") {
+                          setBotFormData(prev => ({ ...prev, bot_value: "" }))
+                        }
+                      }}
+                      disabled={botFormData.bot_padrao}
+                    >
+                      <SelectTrigger 
+                        className={`bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 ${
+                          botFormData.bot_padrao ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                        disabled={botFormData.bot_padrao}
+                      >
+                        <SelectValue placeholder="Selecione o tipo de gatilho" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                        <SelectItem value="Palavra-chave">Palavra-chave</SelectItem>
+                        <SelectItem value="Todos">Todos</SelectItem>
+                        <SelectItem value="Avançado">Avançado</SelectItem>
+                        <SelectItem value="Nenhum">Nenhum</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                      {botFormData.bot_padrao 
+                        ? "🔒 Bot padrão não usa gatilho - é acionado automaticamente" 
+                        : "Como o bot será ativado (padrão: Todos)"}
+                    </p>
+                  </div>
+
+                  {botFormData.bot_gatilho === "Palavra-chave" && !botFormData.bot_padrao && (
+                    <>
+                      <div>
+                        <Label htmlFor="bot_operador" className="text-gray-900 dark:text-gray-100">
+                          Operador de Comparação *
+                        </Label>
+                        <Select
+                          value={botFormData.bot_operador}
+                          onValueChange={(value) => setBotFormData(prev => ({ ...prev, bot_operador: value }))}
+                        >
+                          <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                            <SelectValue placeholder="Selecione o operador" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                            <SelectItem value="Contém">Contém</SelectItem>
+                            <SelectItem value="Igual">Igual</SelectItem>
+                            <SelectItem value="Começa Com">Começa Com</SelectItem>
+                            <SelectItem value="Termina Com">Termina Com</SelectItem>
+                            <SelectItem value="Regex">Regex</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="bot_value" className="text-gray-900 dark:text-gray-100">
+                          Palavra-chave *
+                        </Label>
+                        <Input
+                          id="bot_value"
+                          name="bot_value"
+                          value={botFormData.bot_value}
+                          onChange={(e) => setBotFormData(prev => ({ ...prev, bot_value: e.target.value }))}
+                          placeholder="Ex: oi|olá|bom dia"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          Use | para separar múltiplas palavras (ex: oi|olá|bom dia)
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  <div>
+                    <Label htmlFor="bot_debounce" className="text-gray-900 dark:text-gray-100">
+                      Debounce (segundos)
+                    </Label>
+                    <Input
+                      id="bot_debounce"
+                      name="bot_debounce"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={botFormData.bot_debounce}
+                      onChange={(e) => setBotFormData(prev => ({ ...prev, bot_debounce: Number(e.target.value) }))}
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                      Tempo de espera antes de processar mensagens (padrão: 5 segundos)
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="bot_splitMessage" className="text-gray-900 dark:text-gray-100">
+                      Split Message (quebras de linha)
+                    </Label>
+                    <Input
+                      id="bot_splitMessage"
+                      name="bot_splitMessage"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={botFormData.bot_splitMessage}
+                      onChange={(e) => setBotFormData(prev => ({ ...prev, bot_splitMessage: Number(e.target.value) }))}
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                      Quantas quebras de linha (\\n) para dividir mensagem em múltiplas (padrão: 2)
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex-1">
+                      <Label htmlFor="bot_padrao" className="text-gray-900 dark:text-gray-100 font-medium">
+                        Bot Padrão da Conexão
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                        Se ativado, este bot será o bot principal da conexão. Usado no n8n quando não há palavra-chave correspondente.
+                        {botFormData.bot_padrao && (
+                          <span className="block mt-1 text-blue-600 dark:text-blue-400 font-medium">
+                            ⚠️ Bots padrão não precisam de gatilho - serão acionados automaticamente.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <Switch
+                      id="bot_padrao"
+                      checked={botFormData.bot_padrao}
+                      onCheckedChange={(checked) => {
+                        setBotFormData(prev => ({ 
+                          ...prev, 
+                          bot_padrao: checked,
+                          // Se ativar bot padrão, setar gatilho para "Nenhum"
+                          bot_gatilho: checked ? "Nenhum" : prev.bot_gatilho,
+                          // Limpar palavra-chave se setar como padrão
+                          bot_value: checked ? "" : prev.bot_value,
+                        }))
+                      }}
+                      className={switchStyles}
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-gray-900 dark:text-gray-100">
+                      JIDs Ignorados (Números/Grupos que não ativam o Bot)
+                    </Label>
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <Input
+                          value={newBotIgnoreJid}
+                          onChange={(e) => setNewBotIgnoreJid(e.target.value)}
+                          placeholder="Ex: @s.whatsapp.net, @g.us, 5511999999999@s.whatsapp.net"
+                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === "Tab") {
+                              e.preventDefault()
+                              handleAddBotIgnoreJid()
+                            }
+                          }}
+                        />
+                        <Button type="button" onClick={handleAddBotIgnoreJid} variant="outline" size="sm">
+                          Adicionar
+                        </Button>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {(botFormData.bot_ignoreJids || ["@g.us"]).map((jid, index) => (
+                          <div
+                            key={index}
+                            className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                              jid === "@g.us"
+                                ? "bg-red-100 text-red-800 border border-red-200"
+                                : "bg-gray-100 text-gray-800 border border-gray-200"
+                            }`}
+                          >
+                            <span>{jid}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveBotIgnoreJid(jid)}
+                              className={`ml-1 hover:bg-red-200 rounded-full w-4 h-4 flex items-center justify-center ${
+                                jid === "@g.us" ? "text-red-600" : "text-gray-600"
+                              }`}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      <p className="text-xs text-muted-foreground text-gray-500 dark:text-gray-400">
+                        <strong>@g.us</strong> (grupos) é obrigatório para evitar spam em grupos do WhatsApp. Você pode
+                        adicionar números específicos ou outros tipos de JIDs para ignorar. Use Enter ou Tab para adicionar.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Card de configurações Evolution - só aparece se NÃO for Uazapi */}
+            {selectedConnectionApiType !== "uazapi" && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
@@ -1440,7 +2108,10 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                 </div>
               </CardContent>
             </Card>
+            )}
 
+            {/* Card de Tempo e Comportamento - também só para Evolution */}
+            {selectedConnectionApiType !== "uazapi" && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
@@ -1630,7 +2301,9 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                 </div>
               </CardContent>
             </Card>
+            )}
 
+            {/* Funcionalidades Extras - comum para Evolution e Uazapi */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
@@ -2003,6 +2676,62 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                     variant="outline"
                     className="bg-green-600 text-white hover:bg-green-700 font-semibold shadow"
                     onClick={() => setShowIgnoreJidsWarning(false)}
+                  >
+                    Cancelar (Recomendado)
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* Modal de Aviso para Remoção de @g.us do Bot Uazapi */}
+          {showBotIgnoreJidsWarning && (
+            <Dialog open={showBotIgnoreJidsWarning} onOpenChange={setShowBotIgnoreJidsWarning}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-red-600 flex items-center">
+                    ⚠️ Atenção: Configuração Importante do Bot
+                  </DialogTitle>
+                  <DialogDescription className="text-gray-600">
+                    Você está tentando remover <strong>@g.us</strong> da lista de JIDs ignorados do bot Uazapi.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-yellow-800 mb-2">Por que isso é importante?</h4>
+                    <ul className="text-sm text-yellow-700 space-y-1">
+                      <li>
+                        • <strong>@g.us</strong> representa todos os grupos do WhatsApp
+                      </li>
+                      <li>• Sem essa proteção, seu bot será ativado em TODOS os grupos</li>
+                      <li>• Isso pode incomodar outros membros dos grupos</li>
+                      <li>• Pode gerar spam e prejudicar a experiência dos usuários</li>
+                      <li>• Sua conta pode ser banida por comportamento inadequado</li>
+                    </ul>
+                  </div>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-sm text-red-700">
+                      <strong>Atenção:</strong> Esta é uma proteção padrão recomendada. Remova apenas se você tiver
+                      certeza absoluta do que está fazendo e compreende os riscos envolvidos.
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter className="flex justify-between">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => {
+                      confirmRemoveBotGroupsJid()
+                      setShowBotIgnoreJidsWarning(false)
+                    }}
+                  >
+                    Remover Mesmo Assim
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="bg-green-600 text-white hover:bg-green-700 font-semibold shadow"
+                    onClick={() => setShowBotIgnoreJidsWarning(false)}
                   >
                     Cancelar (Recomendado)
                   </Button>

@@ -48,6 +48,9 @@ interface Agent {
   id: string
   name: string
   evolution_bot_id: string
+  connection?: {
+    api_type: 'evolution' | 'uazapi'
+  }
 }
 
 const SESSION_STATUS_COLORS = {
@@ -98,11 +101,13 @@ export default function AdminAgentSessionsPage() {
       router.push("/")
       return
     }
+
     // Verificar se é admin
     if (user.role !== "admin") {
       router.push("/dashboard")
       return
     }
+
     loadSessions()
   }, [agentId, router])
 
@@ -116,6 +121,36 @@ export default function AdminAgentSessionsPage() {
       const user = getCurrentUser()
       if (!user) return
 
+      // 🔍 Primeiro buscar dados do agente para verificar o tipo de API
+      const agentResponse = await fetch(`/api/admin/agents/${agentId}`, {
+        method: 'GET',
+        credentials: 'include'
+      })
+
+      if (!agentResponse.ok) {
+        throw new Error('Erro ao buscar dados do agente')
+      }
+
+      const agentData = await agentResponse.json()
+      const agentInfo = agentData.agent
+      setAgent(agentInfo)
+
+      console.log('🔍 [SESSIONS] Tipo de API:', agentInfo?.connection?.api_type)
+
+      // 🚨 VERIFICAR TIPO DE API - Apenas Evolution usa esta página
+      if (agentInfo?.connection?.api_type !== 'evolution') {
+        console.log('⚠️ [SESSIONS] Agente não é Evolution, redirecionando...')
+        toast({
+          title: "Tipo de API Incorreto",
+          description: "Esta página é exclusiva para agentes Evolution. Redirecionando...",
+          variant: "destructive"
+        })
+        // Redirecionar para a página correta de sessões Uazapi
+        router.push(`/admin/agents/${agentId}/sessions/uazapi`)
+        return
+      }
+
+      // ✅ É Evolution, buscar sessões normalmente
       const response = await fetch(`/api/agents/${agentId}/sessions`, {
         method: 'GET',
         credentials: 'include'
@@ -127,7 +162,6 @@ export default function AdminAgentSessionsPage() {
 
       const data = await response.json()
       setSessions(data.data || [])
-      setAgent(data.agent)
       addLog(`Carregadas ${data.data?.length || 0} sessões`)
     } catch (error) {
       console.error('Erro ao carregar sessões:', error)
@@ -240,7 +274,7 @@ export default function AdminAgentSessionsPage() {
       
       addLog(`🔄 Iniciando processamento assíncrono de ${sessionIds.length} sessões para status: ${massUpdateStatus}`)
 
-      const response = await fetch(`/api/agents/${agentId}/sessions/mass-update-async`, {
+      const response = await fetch(`/api/agents/${agentId}/sessions/mass-update-status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -625,6 +659,17 @@ export default function AdminAgentSessionsPage() {
         ))}
       </div>
 
+      {/* Mensagem quando não há sessões */}
+      {filteredSessions.length === 0 && (
+        <div className="text-center py-12 text-gray-500">
+          <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+          <p>Nenhuma sessão encontrada</p>
+          <p className="text-sm mt-2">
+            As sessões aparecerão aqui quando o bot responder conversas
+          </p>
+        </div>
+      )}
+
       {/* Botões de paginação */}
       {filteredSessions.length > sessionsPerPage && (
         <div className="flex justify-center space-x-4">
@@ -687,4 +732,4 @@ export default function AdminAgentSessionsPage() {
       </Card>
     </div>
   )
-} 
+}

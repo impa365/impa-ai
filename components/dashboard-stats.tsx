@@ -64,7 +64,7 @@ export default function DashboardStats() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-quest-id="dashboard-stats">
       {/* Conexões WhatsApp Card */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
         <div className="flex items-center">

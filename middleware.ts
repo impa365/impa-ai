@@ -26,7 +26,7 @@ export async function middleware(req: NextRequest) {
   ];
 
   // Lista de páginas públicas
-  const publicPages = ["/", "/shared/whatsapp", "/auth/login", "/landing", "/demo"];
+  const publicPages = ["/", "/shared/whatsapp", "/auth/login", "/landing", "/demo", "/embed"];
 
   // Lista de rotas que precisam de role admin
   const adminRoutes = ["/admin", "/api/admin"];
@@ -141,7 +141,22 @@ export async function middleware(req: NextRequest) {
     );
   }
 
-  return NextResponse.next();
+  // Configurar headers especiais para rotas de embed
+  const response = NextResponse.next();
+  
+  // Se for uma rota de embed, permitir iframe de qualquer origem
+  if (pathname.startsWith("/embed")) {
+    response.headers.set('X-Frame-Options', 'ALLOWALL');
+    response.headers.set('Content-Security-Policy', 'frame-ancestors *;');
+  }
+  
+  // Se for rota admin ou dashboard, permitir iframe do mesmo domínio
+  if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) {
+    response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+    response.headers.set('Content-Security-Policy', "frame-ancestors 'self' *.impa365.com impa365.com;");
+  }
+
+  return response;
 }
 
 export const config = {

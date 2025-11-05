@@ -236,9 +236,9 @@ export async function POST(
       });
     }
 
-    // Buscar dados da conexão
+    // Buscar dados da conexão INCLUINDO api_type e instance_token
     const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${link.connection_id}&select=*`,
+      `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${link.connection_id}&select=id,instance_name,status,api_type,instance_token,user_id`,
       {
         headers: {
           "Content-Type": "application/json",
@@ -270,7 +270,155 @@ export async function POST(
     }
 
     const connection = connections[0];
+    const apiType = connection.api_type || "evolution";
+    
+    console.log("🔍 [QR-GENERATE] Tipo de API detectado:", apiType);
 
+    // === UAZAPI ===
+    if (apiType === "uazapi") {
+      console.log("🔵 [QR-GENERATE] Gerando QR Code via Uazapi...");
+      
+      // Buscar configuração da Uazapi
+      const uazapiIntegrationResponse = await fetch(
+        `${supabaseUrl}/rest/v1/integrations?type=eq.uazapi&is_active=eq.true&select=config`,
+        { headers }
+      );
+
+      if (!uazapiIntegrationResponse.ok) {
+        return NextResponse.json(
+          { success: false, error: "Configuração da Uazapi não encontrada" },
+          { status: 500, headers: securityHeaders }
+        );
+      }
+
+      const uazapiIntegrations = await uazapiIntegrationResponse.json();
+      if (!uazapiIntegrations || uazapiIntegrations.length === 0) {
+        return NextResponse.json(
+          { success: false, error: "Uazapi não configurada" },
+          { status: 500, headers: securityHeaders }
+        );
+      }
+
+      const uazapiConfig = uazapiIntegrations[0].config;
+      const instanceToken = connection.instance_token;
+
+      if (!instanceToken) {
+        return NextResponse.json(
+          { success: false, error: "Token da instância não encontrado" },
+          { status: 500, headers: securityHeaders }
+        );
+      }
+
+      try {
+        // Conectar à instância Uazapi (gera QR ou paircode)
+        console.log("🔄 [QR-GENERATE-UAZAPI] Conectando instância...");
+        
+        const connectResponse = await fetch(
+          `${uazapiConfig.serverUrl}/instance/connect`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "token": instanceToken,
+            },
+            signal: AbortSignal.timeout(15000),
+          }
+        );
+
+        if (!connectResponse.ok) {
+          const errorText = await connectResponse.text();
+          console.error("❌ [QR-GENERATE-UAZAPI] Erro ao conectar:", errorText);
+          return NextResponse.json(
+            { 
+              success: false, 
+              error: "Erro ao gerar QR Code via Uazapi",
+              code: "UAZAPI_CONNECT_ERROR"
+            },
+            { status: 502, headers: securityHeaders }
+          );
+        }
+
+        const connectData = await connectResponse.json();
+        console.log("✅ [QR-GENERATE-UAZAPI] Resposta recebida");
+
+        // Buscar status atualizado com QR Code
+        const statusResponse = await fetch(
+          `${uazapiConfig.serverUrl}/instance/status`,
+          {
+            method: "GET",
+            headers: {
+              "token": instanceToken,
+            },
+            signal: AbortSignal.timeout(10000),
+          }
+        );
+
+        if (!statusResponse.ok) {
+          return NextResponse.json(
+            { success: false, error: "Erro ao buscar status da instância Uazapi" },
+            { status: 502, headers: securityHeaders }
+          );
+        }
+
+        const statusData = await statusResponse.json();
+        const qrCode = statusData.instance?.qrcode;
+        const pairCode = statusData.instance?.paircode;
+
+        if (!qrCode && !pairCode) {
+          return NextResponse.json(
+            { 
+              success: false, 
+              error: "QR Code não disponível. A instância pode já estar conectada.",
+              code: "QR_NOT_AVAILABLE"
+            },
+            { status: 400, headers: securityHeaders }
+          );
+        }
+
+        // Incrementar uso do link
+        await incrementLinkUsage(
+          link.id, 
+          clientIP, 
+          request.headers.get('user-agent') || 'unknown'
+        );
+
+        console.log("✅ [QR-GENERATE-UAZAPI] QR Code gerado com sucesso!");
+        
+        return NextResponse.json({
+          success: true,
+          data: {
+            qr_code: qrCode,
+            pair_code: pairCode,
+            expires_in: 120, // 2 minutos para QR Code
+            connection: {
+              name: link.whatsapp_connections?.connection_name || "WhatsApp",
+              instance_name: connection.instance_name,
+              status: statusData.instance?.status || "connecting"
+            },
+            api_type: "uazapi"
+          }
+        }, { headers: securityHeaders });
+
+      } catch (error: any) {
+        console.error("💥 [QR-GENERATE-UAZAPI] Erro:", error);
+        
+        if (error.name === "TimeoutError" || error.name === "AbortError") {
+          return NextResponse.json(
+            { success: false, error: "Timeout ao gerar QR Code. Tente novamente." },
+            { status: 408, headers: securityHeaders }
+          );
+        }
+
+        return NextResponse.json(
+          { success: false, error: "Erro ao gerar QR Code via Uazapi" },
+          { status: 500, headers: securityHeaders }
+        );
+      }
+    }
+
+    // === EVOLUTION API (comportamento original) ===
+    console.log("🟢 [QR-GENERATE] Gerando QR Code via Evolution API...");
+    
     // Buscar configuração da Evolution API
     const integrationResponse = await fetch(
       `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,

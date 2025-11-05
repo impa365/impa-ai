@@ -19,10 +19,13 @@ export async function GET() {
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    // Buscar todas as conexões WhatsApp (o frontend filtra depois)
-    const response = await fetch(`${supabaseUrl}/rest/v1/whatsapp_connections?select=*&order=created_at.desc`, {
-      headers,
-    })
+    // Buscar todas as conexões WhatsApp incluindo api_type
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,connection_name,instance_name,status,api_type,user_id,phone_number,created_at,updated_at,settings,adciona_folow,remover_folow&order=created_at.desc`,
+      {
+        headers,
+      }
+    )
 
     if (!response.ok) {
       throw new Error("Erro ao buscar conexões WhatsApp")
@@ -30,9 +33,15 @@ export async function GET() {
 
     const connections = await response.json()
 
+    // Garantir que api_type sempre existe (fallback para "evolution")
+    const safeConnections = connections.map((conn: any) => ({
+      ...conn,
+      api_type: conn.api_type || "evolution",
+    }))
+
     return NextResponse.json({
       success: true,
-      connections: connections || [],
+      connections: safeConnections,
     })
   } catch (error: any) {
     console.error("❌ Erro na API user/whatsapp-connections:", error.message)

@@ -309,9 +309,23 @@ export default function UserAgentsPage() {
 
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-500">WhatsApp:</span>
-                    <span className="text-xs">
-                      {(agent as any).whatsapp_connections?.connection_name || "Não conectado"}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs">
+                        {(agent as any).whatsapp_connections?.connection_name || "Não conectado"}
+                      </span>
+                      {(agent as any).whatsapp_connections?.api_type && (
+                        <Badge 
+                          variant="outline" 
+                          className={`text-xs font-bold px-2 ${
+                            (agent as any).whatsapp_connections.api_type === "uazapi" 
+                              ? "bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900 dark:text-purple-200" 
+                              : "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-200"
+                          }`}
+                        >
+                          {(agent as any).whatsapp_connections.api_type === "uazapi" ? "🚀" : "⚡"}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between text-sm">
@@ -345,12 +359,14 @@ export default function UserAgentsPage() {
                     Ver
                   </Button>
 
-                  {agent.evolution_bot_id && (
+                  {/* Botão de sessões: Evolution Bot OU Uazapi Bot */}
+                  {(agent.evolution_bot_id || agent.bot_id) && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => router.push(`/dashboard/agents/${agent.id}/sessions`)}
                       className="gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                      title={agent.bot_id ? "Ver sessões do Bot Uazapi" : "Ver sessões do Evolution Bot"}
                     >
                       <Users className="h-4 w-4" />
                       Sessões

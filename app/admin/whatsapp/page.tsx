@@ -63,6 +63,7 @@ export default function AdminWhatsAppPage() {
   // Estados para filtros
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [apiTypeFilter, setApiTypeFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
 
   // Estados para o modal de criação
@@ -88,12 +89,18 @@ export default function AdminWhatsAppPage() {
   const [importModalOpen, setImportModalOpen] = useState(false);
 
   // Auto-sync silencioso a cada 30 segundos + eventos
-  const autoSync = useCallback(async (showMessage = false) => {
+  const autoSync = useCallback(async (showMessage = false, force = false) => {
     try {
-      // Sincronizar apenas se a página estiver visível
-      if (document.hidden) return;
+      // Sincronizar apenas se a página estiver visível (exceto se for forçado)
+      if (!force && document.hidden) return;
       
-      await fetch("/api/whatsapp/auto-sync", { method: "POST" });
+      await fetch("/api/whatsapp/auto-sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ force }),
+      });
       // Recarregar conexões silenciosamente
       const data = await fetchWhatsAppConnections(undefined, true);
       setConnections(data);
@@ -184,9 +191,14 @@ export default function AdminWhatsAppPage() {
       const statusMatch =
         statusFilter === "all" || connection.status === statusFilter;
 
-      return searchMatch && statusMatch;
+      // Filtro por tipo de API
+      const apiTypeMatch =
+        apiTypeFilter === "all" || 
+        (connection.api_type || "evolution") === apiTypeFilter;
+
+      return searchMatch && statusMatch && apiTypeMatch;
     });
-  }, [connections, searchTerm, statusFilter]);
+  }, [connections, searchTerm, statusFilter, apiTypeFilter]);
 
   const handleManualSync = async () => {
     if (syncing) return;
@@ -306,9 +318,10 @@ export default function AdminWhatsAppPage() {
   const clearFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
+    setApiTypeFilter("all");
   };
 
-  const hasActiveFilters = searchTerm !== "" || statusFilter !== "all";
+  const hasActiveFilters = searchTerm !== "" || statusFilter !== "all" || apiTypeFilter !== "all";
 
   if (loading) {
     return (
@@ -374,6 +387,7 @@ export default function AdminWhatsAppPage() {
           <Button
             onClick={() => setCreateModalOpen(true)}
             className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+            data-quest-id="new-connection-button"
           >
             <Plus className="w-4 h-4" />
             Nova Conexão
@@ -459,6 +473,22 @@ export default function AdminWhatsAppPage() {
                 </Select>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Tipo de API
+                </label>
+                <Select value={apiTypeFilter} onValueChange={setApiTypeFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todas as APIs" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as APIs</SelectItem>
+                    <SelectItem value="evolution">Evolution API</SelectItem>
+                    <SelectItem value="uazapi">Uazapi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex items-end">
                 {hasActiveFilters && (
                   <Button
@@ -538,6 +568,19 @@ export default function AdminWhatsAppPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* Tag da API */}
+                    <Badge
+                      variant="outline"
+                      className={
+                        connection.api_type === "uazapi"
+                          ? "bg-purple-50 text-purple-700 border-purple-200"
+                          : "bg-green-50 text-green-700 border-green-200"
+                      }
+                    >
+                      {connection.api_type === "uazapi" ? "Uazapi" : "Evolution API"}
+                    </Badge>
+                    
+                    {/* Status Badge */}
                     <Badge
                       variant={
                         connection.status === "connected"
@@ -573,8 +616,13 @@ export default function AdminWhatsAppPage() {
                               setSelectedConnection(connection);
                               setInfoModalOpen(true);
                             }}
-                            title="Ver Informações"
-                            className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                            disabled={connection.api_type === "uazapi"}
+                            title={
+                              connection.api_type === "uazapi"
+                                ? "Em breve para Uazapi"
+                                : "Ver Informações"
+                            }
+                            className="border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <Info className="w-4 h-4" />
                           </Button>
@@ -609,8 +657,13 @@ export default function AdminWhatsAppPage() {
                           setSelectedConnection(connection);
                           setSettingsModalOpen(true);
                         }}
-                        title="Configurações"
-                        className="border-gray-200 text-gray-600 hover:bg-gray-50"
+                        disabled={connection.api_type === "uazapi"}
+                        title={
+                          connection.api_type === "uazapi"
+                            ? "Em breve para Uazapi"
+                            : "Configurações"
+                        }
+                        className="border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
