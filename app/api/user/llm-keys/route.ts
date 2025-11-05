@@ -152,6 +152,29 @@ export async function POST(request: Request) {
       Prefer: "return=representation",
     }
 
+    // Se está marcando como padrão, verificar se já existe outra chave padrão para este provedor
+    if (keyData.is_default) {
+      const checkResponse = await fetch(
+        `${supabaseUrl}/rest/v1/llm_api_keys?select=id,key_name&provider=eq.${keyData.provider}&is_default=eq.true&is_active=eq.true`,
+        { headers }
+      )
+      
+      if (checkResponse.ok) {
+        const existingDefaults = await checkResponse.json()
+        if (existingDefaults && existingDefaults.length > 0) {
+          // Não permitir criar nova chave padrão se já existe uma
+          const existingKey = existingDefaults[0]
+          return NextResponse.json(
+            { 
+              error: `Já existe uma chave padrão para o provedor ${keyData.provider}`,
+              details: `A chave "${existingKey.key_name}" já está configurada como padrão. Desmarque-a ou atualize-a antes de criar uma nova.`
+            },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
     // Preparar dados para inserção - FORÇAR user_id do usuário logado
     const dbData = {
       user_id: currentUser.id, // ⚠️ IMPORTANTE: Sempre usar o ID do usuário autenticado
@@ -257,6 +280,42 @@ export async function PUT(request: Request) {
       "Content-Profile": "impaai",
       apikey: supabaseKey,
       Authorization: `Bearer ${supabaseKey}`,
+    }
+
+    // Buscar a chave atual para obter o provedor
+    const getCurrentResponse = await fetch(
+      `${supabaseUrl}/rest/v1/llm_api_keys?id=eq.${keyId}&user_id=eq.${currentUser.id}&select=provider`,
+      { headers }
+    )
+    
+    let currentProvider = null
+    if (getCurrentResponse.ok) {
+      const [currentKey] = await getCurrentResponse.json()
+      currentProvider = currentKey?.provider
+    }
+
+    // Se está marcando como padrão, verificar se já existe outra chave padrão para este provedor
+    if (keyData.is_default && currentProvider) {
+      const checkResponse = await fetch(
+        `${supabaseUrl}/rest/v1/llm_api_keys?select=id&provider=eq.${currentProvider}&is_default=eq.true&is_active=eq.true&id=neq.${keyId}`,
+        { headers }
+      )
+      
+      if (checkResponse.ok) {
+        const existingDefaults = await checkResponse.json()
+        if (existingDefaults && existingDefaults.length > 0) {
+          // Desmarcar todas as outras chaves padrão do mesmo provedor
+          const defaultIds = existingDefaults.map((k: any) => k.id).join(",")
+          await fetch(
+            `${supabaseUrl}/rest/v1/llm_api_keys?id=in.(${defaultIds})`,
+            {
+              method: "PATCH",
+              headers,
+              body: JSON.stringify({ is_default: false }),
+            }
+          )
+        }
+      }
     }
 
     // Preparar dados para atualização (sem api_key se não fornecida)
