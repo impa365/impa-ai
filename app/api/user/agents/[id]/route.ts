@@ -136,6 +136,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     // Preparar dados para atualização - garantir segurança
     const ignoreJidsArray = Array.isArray(agentData.ignore_jids) ? agentData.ignore_jids : ["@g.us"]
     
+    const calendarProvider = agentData.calendar_provider || "calcom"
+    const calendarVersion =
+      calendarProvider === "calcom"
+        ? agentData.calendar_api_version || "v1"
+        : agentData.calendar_api_version || null
+    const calendarUrl =
+      calendarProvider === "calcom"
+        ? agentData.calendar_api_url ||
+          (calendarVersion === "v2" ? "https://api.cal.com/v2" : "https://api.cal.com/v1")
+        : agentData.calendar_api_url || null
+
     const secureUpdateData = {
       name: agentData.name,
       identity_description: agentData.identity_description,
@@ -173,6 +184,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       voice_api_key: agentData.voice_api_key,
       voice_id: agentData.voice_id,
       calendar_integration: String(Boolean(agentData.calendar_integration)),
+      calendar_provider: calendarProvider,
+      calendar_api_version: calendarVersion,
+      calendar_api_url: calendarUrl,
       calendar_api_key: agentData.calendar_api_key,
       calendar_meeting_id: agentData.calendar_meeting_id,
       chatnode_integration: String(Boolean(agentData.chatnode_integration)),

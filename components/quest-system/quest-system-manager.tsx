@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { getCurrentUser } from '@/lib/auth'
 import { QuestProvider, useQuestSystem } from '@/hooks/use-quest-system'
 import { QuestFAB } from './quest-fab'
 import { ARIADialogue } from './aria-dialogue'
@@ -182,6 +183,31 @@ function QuestSystemContent() {
  * Componente principal exportado (com Provider)
  */
 export function QuestSystemManager() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    const evaluateAuth = () => {
+      const user = getCurrentUser()
+      setIsAuthenticated(!!user)
+    }
+
+    evaluateAuth()
+
+    window.addEventListener('storage', evaluateAuth)
+
+    return () => {
+      window.removeEventListener('storage', evaluateAuth)
+    }
+  }, [])
+
+  if (isAuthenticated === false) {
+    return null
+  }
+
+  if (isAuthenticated === null) {
+    return null
+  }
+
   return (
     <QuestProvider>
       <QuestSystemContent />

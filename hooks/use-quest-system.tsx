@@ -26,7 +26,32 @@ const QuestContext = createContext<QuestSystemContext | null>(null)
 /**
  * Fetcher para SWR
  */
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+
+  if (!res.ok) {
+    let errorPayload: any = null
+    try {
+      errorPayload = await res.json()
+    } catch (error) {
+      // Ignorar falhas de parsing - usaremos mensagem genérica
+    }
+
+    const error = new Error(errorPayload?.error || "Falha ao carregar progresso do tutorial") as Error & {
+      status?: number
+      details?: any
+    }
+
+    error.status = res.status
+    if (errorPayload?.details) {
+      error.details = errorPayload.details
+    }
+
+    throw error
+  }
+
+  return res.json()
+}
 
 /**
  * Hook principal do sistema de quests
