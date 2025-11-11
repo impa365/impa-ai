@@ -30,12 +30,6 @@ interface CronStatusResponse {
   serverTime: string
   lastRuns: CronRun[]
   nextRuns: string[]
-  // 🆕 NOVO: Status do worker
-  workerStatus?: {
-    isRunning: boolean
-    lastRunTime: string | null
-    message: string
-  }
 }
 
 const formatter = new Intl.DateTimeFormat("pt-BR", {
@@ -145,26 +139,6 @@ export function CronMonitor() {
         <Card className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
           <AlertCircle className="h-5 w-5" />
           <div className="text-sm">{error}</div>
-        </Card>
-      )}
-
-      {data?.workerStatus && !data.workerStatus.isRunning && (
-        <Card className="flex items-center gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-red-700 dark:border-red-500/50 dark:bg-red-500/20 dark:text-red-200">
-          <AlertCircle className="h-5 w-5 flex-shrink-0" />
-          <div>
-            <div className="font-semibold">⚠️ Cron Worker Não Está Rodando!</div>
-            <div className="mt-1 text-sm">
-              {data.workerStatus.message}
-              <br />
-              <span className="mt-2 inline-block">
-                💡 <strong>Solução:</strong> Verifique se o Docker está executando o worker. Execute:
-                <br />
-                <code className="mt-1 block bg-red-900/20 p-2 font-mono text-xs">
-                  docker service logs impa-ai | grep "reminder-cron"
-                </code>
-              </span>
-            </div>
-          </div>
         </Card>
       )}
 

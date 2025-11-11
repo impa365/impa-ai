@@ -39,6 +39,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/lib ./lib
 
 # Script de inicialização que mostra as variáveis e inicia a aplicação + worker
 COPY --chown=nextjs:nodejs <<'EOF' /app/start.sh
