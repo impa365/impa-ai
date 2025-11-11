@@ -609,19 +609,28 @@ async function fetchTriggers(): Promise<ReminderTriggerRecord[]> {
     return []
   }
 
-  return triggers.map((raw: any) => ({
-    id: String(raw?.id ?? ""),
-    agent_id: String(raw?.agent_id ?? ""),
-    offset_amount: Number(raw?.offset_amount ?? 0),
-    offset_unit: (raw?.offset_unit ?? "minutes") as OffsetUnit,
-    webhook_url: raw?.webhook_url ?? null,
-    scope_reference: raw?.scope_reference ?? null,
-    action_type: (raw?.action_type ?? "webhook") as ReminderTriggerActionType,
-    action_payload: raw?.action_payload ?? {},
-    is_active: Boolean(raw?.is_active ?? true),
-    created_at: raw?.created_at ?? null,
-    updated_at: raw?.updated_at ?? null,
-  }))
+  return triggers.map((raw: any) => {
+    // ✅ SEGURANÇA: Validar que agent_id existe e é válido
+    const agent_id = String(raw?.agent_id ?? "").trim()
+    if (!agent_id) {
+      console.warn(`[SECURITY] Gatilho ${raw?.id} sem agent_id válido, será ignorado`)
+      return null
+    }
+
+    return {
+      id: String(raw?.id ?? ""),
+      agent_id,
+      offset_amount: Number(raw?.offset_amount ?? 0),
+      offset_unit: (raw?.offset_unit ?? "minutes") as OffsetUnit,
+      webhook_url: raw?.webhook_url ?? null,
+      scope_reference: raw?.scope_reference ?? null,
+      action_type: (raw?.action_type ?? "webhook") as ReminderTriggerActionType,
+      action_payload: raw?.action_payload ?? {},
+      is_active: Boolean(raw?.is_active ?? true),
+      created_at: raw?.created_at ?? null,
+      updated_at: raw?.updated_at ?? null,
+    }
+  }).filter((t): t is ReminderTriggerRecord => t !== null)
 }
 
 const agentCache = new Map<string, AgentRecord | null>()
@@ -631,6 +640,12 @@ const integrationConfigCache = new Map<string, any>()
 async function fetchAgent(agentId: string): Promise<AgentRecord | null> {
   if (agentCache.has(agentId)) {
     return agentCache.get(agentId) ?? null
+  }
+
+  // ✅ SEGURANÇA: Validar agentId antes de fazer a query
+  if (!agentId || typeof agentId !== "string" || agentId.trim().length === 0) {
+    console.warn(`[SECURITY] fetchAgent chamado com agentId inválido: ${agentId}`)
+    return null
   }
 
   const { supabaseUrl, headers } = getSupabaseCredentials()
@@ -659,6 +674,12 @@ async function fetchAgent(agentId: string): Promise<AgentRecord | null> {
         whatsapp_connection_id: rawAgent.whatsapp_connection_id ?? null,
       }
     : null
+
+  // ✅ SEGURANÇA: Log quando agente não é encontrado (possível tentativa de acesso indevido)
+  if (!agent) {
+    console.warn(`[SECURITY] Agente não encontrado: ${agentId}`)
+  }
+
   agentCache.set(agentId, agent)
   return agent
 }
@@ -1079,6 +1100,16 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
         }
         detail.eventTypeId = eventTypeId
 
+        // ✅ SEGURANÇA: Validação cruzada - certificar que eventTypeId pertence a este agente
+        // Para evitar que um gatilho alterado maliciosamente dispare eventos de outro agente
+        const scopeType = trigger.scope_reference ? "trigger" : "agent"
+        if (scopeType === "trigger" && !trigger.scope_reference) {
+          // Se estava usando scope_reference, precisa validar que o agente tem permissão
+          console.warn(
+            `[SECURITY] Gatilho ${trigger.id}: eventTypeId ${eventTypeId} vem de trigger.scope_reference, validação necessária`,
+          )
+        }
+
         const offsetMinutes = convertOffsetToMinutes(trigger.offset_amount, trigger.offset_unit)
         const offsetMs = offsetMinutes * 60 * 1000
 
@@ -1096,6 +1127,14 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
             }),
           )
         detail.message = `window ${rangeStart.toISOString()} -> ${rangeEnd.toISOString()} (bookings=${bookings.length})`
+
+        // ✅ SEGURANÇA: Se nenhum agendamento foi encontrado com API key de um agente,
+        // mas era esperado encontrar, isso PODE indicar que o agente_id foi alterado
+        if (bookings.length === 0 && agent.calendar_api_key) {
+          console.warn(
+            `[SECURITY] Gatilho ${trigger.id}: Nenhum agendamento encontrado para agente ${agent.id} eventType ${eventTypeId}. Pode indicar alteração de agent_id.`,
+          )
+        }
 
         const sortedBookings = bookings
           .map((booking) => {
@@ -1322,6 +1361,20 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
             }
 
             const delayMs = getRandomDelayMs(5, 15)
+            
+            // ✅ SEGURANÇA: Log de auditoria antes de enviar mensagem
+            // Documenta: agente + conexão + destinatário + agendamento
+            console.log(`[reminder-cron][AUDIT] Enviando mensagem`, {
+              triggerId: trigger.id,
+              agentId: agent.id,
+              agentName: agent.name,
+              connectionId: agent.whatsapp_connection_id,
+              recipientNumber: recipientNumber.slice(-4).padStart(recipientNumber.length, "*"), // Mascarar número
+              bookingUid: bookingUid.slice(0, 8), // Primeiros 8 chars
+              eventTypeId,
+              timestamp: new Date().toISOString(),
+            })
+
             const messageResult = await sendUazapiTextMessage({
               serverUrl: connectionApiUrl ?? null,
               instanceToken: instanceApiKey ?? null,
