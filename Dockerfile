@@ -37,8 +37,10 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/scripts ./scripts
 
-# Script de inicialização que mostra as variáveis e inicia a aplicação
+# Script de inicialização que mostra as variáveis e inicia a aplicação + worker
 COPY --chown=nextjs:nodejs <<'EOF' /app/start.sh
 #!/bin/sh
 echo "🔧 Impa AI - Configuração Runtime"
@@ -49,14 +51,36 @@ echo "SUPABASE_URL: ${SUPABASE_URL:-❌ NÃO DEFINIDA}"
 echo "SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:+✅ Definida (${#SUPABASE_ANON_KEY} chars)}${SUPABASE_ANON_KEY:-❌ NÃO DEFINIDA}"
 echo "NEXTAUTH_URL: ${NEXTAUTH_URL:-❌ NÃO DEFINIDA}"
 echo "NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:+✅ Definida}${NEXTAUTH_SECRET:-❌ NÃO DEFINIDA}"
-echo "CUSTOM_KEY: ${CUSTOM_KEY:+✅ Definida}${CUSTOM_KEY:-❌ NÃO DEFINIDA}"
+echo "REMINDER_CRON_SCHEDULE: ${REMINDER_CRON_SCHEDULE:-⏰ (default: * * * * *)}"
+echo "REMINDER_CRON_TIMEZONE: ${REMINDER_CRON_TIMEZONE:-🌍 (default: America/Sao_Paulo)}"
 
 echo ""
-echo "🚀 Iniciando aplicação..."
+echo "🚀 Iniciando aplicação + worker..."
 echo "=================================="
 
-# Iniciar a aplicação
-exec node server.js
+# Função para encerrar ambos os processos
+cleanup() {
+  echo "⏹️  Encerrando processos..."
+  kill $NEXT_PID 2>/dev/null
+  kill $WORKER_PID 2>/dev/null
+  exit 0
+}
+
+trap cleanup SIGTERM SIGINT
+
+# Iniciar o servidor Next.js em background
+node server.js &
+NEXT_PID=$!
+
+# Iniciar o worker do cron em background
+npx tsx scripts/reminder-cron-worker.ts &
+WORKER_PID=$!
+
+echo "✅ Next.js iniciado (PID: $NEXT_PID)"
+echo "✅ Cron Worker iniciado (PID: $WORKER_PID)"
+
+# Aguardar os processos
+wait
 EOF
 
 RUN chmod +x /app/start.sh

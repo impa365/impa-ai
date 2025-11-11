@@ -8,6 +8,7 @@
     "dev:next": "next dev",
     "lint": "next lint",
     "start": "next start",
+    "start:with-worker": "concurrently \"npm:start\" \"npm:reminder:worker\"",
     "reminder:worker": "tsx scripts/reminder-cron-worker.ts",
     "test": "jest",
     "test:watch": "jest --watch",

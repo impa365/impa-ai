@@ -1,0 +1,77 @@
+version: "3.7"
+services:
+
+## --------------------------- IMPA AI --------------------------- ##
+  impa-ai:
+    image: impa365/impa-ai:correcao-bugs
+    
+    networks:
+      - serverBlack
+    
+    environment:
+      # Configuração do Supabase
+      - SUPABASE_URL=https://dadosupa.blackatende.com
+      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.QE8TiHnxIWyYVCC56S14W6YrHWBA1uGrOyCOuc1ZN9Q
+      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogInNlcnZpY2Vfcm9sZSIsCiAgImlzcyI6ICJzdXBhYmFzZSIsCiAgImlhdCI6IDE3MTUwNTA4MDAsCiAgImV4cCI6IDE4NzI4MTcyMDAKfQ.VR8XdJTPlU6Ly-f1Fl9mPb3zCT5c3uFyWMn_lJf5f88
+      
+      # Configuração do NextAuth
+      - NEXTAUTH_URL=https://agentes.blackatende.com
+      - NEXTAUTH_SECRET=dfdghoiuAHSIASDA9859aHNUH
+      
+      # Chaves Personalizadas
+      - CUSTOM_KEY=DJD233@CFKKJID897fSF8F
+
+      # Configuração do Cron de Lembretes
+      - REMINDER_CRON_SCHEDULE=0 * * * *              # A cada hora
+      - REMINDER_CRON_TIMEZONE=America/Sao_Paulo      # Timezone
+      - REMINDER_CRON_SECRET=65dsf5s95ff6s52f5s9sWASWED98
+      - REMINDER_CRON_DRY_RUN=0                       # 0 = desativado (rodando), 1 = ativado (teste)
+      - REMINDER_CRON_RUN_ON_START=1                  # Executar ao iniciar
+      - REMINDER_CRON_TOLERANCE_MINUTES=5             # Tolerância em minutos
+      - REMINDER_CRON_TIMEOUT_MS=10000                # Timeout de 10 segundos
+      - REMINDER_CRON_MAX_LOOKBACK_MINUTES=720        # 12 horas atrás
+
+      # Ambiente
+      - NODE_ENV=production
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/system/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2048M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      labels:
+        - "traefik.enable=true"
+        # Define o roteador HTTP para o impa-ai
+        - "traefik.http.routers.impa_ai_router.rule=Host(`agentes.blackatende.com`)"
+        - "traefik.http.routers.impa_ai_router.entrypoints=websecure"
+        - "traefik.http.routers.impa_ai_router.tls=true"
+        - "traefik.http.routers.impa_ai_router.tls.certresolver=letsencryptresolver"
+        # Define o serviço para o impa-ai
+        - "traefik.http.services.impa_ai_service.loadbalancer.server.port=3000"
+        - "traefik.http.services.impa_ai_service.loadbalancer.passHostHeader=true"
+        # Vincula o roteador ao serviço
+        - "traefik.http.routers.impa_ai_router.service=impa_ai_service"
+        # Especifica a rede Docker que o Traefik deve usar
+        - "traefik.docker.network=serverBlack"
+
+## --------------------------- Networks --------------------------- ##
+networks:
+  serverBlack:
+    external: true
+    name: serverBlack
