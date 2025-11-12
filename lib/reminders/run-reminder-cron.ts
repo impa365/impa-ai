@@ -86,6 +86,8 @@ interface NormalizedBooking {
   hostName?: string | null
   hostEmail?: string | null
   eventUrl?: string | null
+  // ✅ SEGURANÇA: Armazenar eventTypeId do Cal.com para validação
+  calcomEventTypeId?: string | null
   raw: any
 }
 
@@ -590,6 +592,8 @@ function normalizeBooking(raw: any): NormalizedBooking {
     hostName: primaryHost?.name ?? null,
     hostEmail: primaryHost?.email ?? null,
     eventUrl,
+    // ✅ SEGURANÇA: Capturar eventTypeId retornado pelo Cal.com
+    calcomEventTypeId: String(raw?.eventType?.id ?? "").trim() || null,
     raw,
   }
 }
@@ -1126,6 +1130,34 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
               return status === "ACCEPTED" || status === "CONFIRMED" || status === "UPCOMING"
             }),
           )
+        
+        // ✅ SEGURANÇA CRÍTICA: Validação cruzada de eventTypeId
+        // Verificar que CADA agendamento retornado realmente pertence ao eventTypeId solicitado
+        const bookingsWithMismatch = bookings.filter((booking) => {
+          const bookingEventTypeId = booking.calcomEventTypeId
+          return bookingEventTypeId && bookingEventTypeId !== eventTypeId
+        })
+        
+        if (bookingsWithMismatch.length > 0) {
+          console.error(
+            `[SECURITY] 🚨 EVENTO CONFUSION DETECTADO: Gatilho ${trigger.id} esperava eventTypeId="${eventTypeId}" mas recebeu ${bookingsWithMismatch.length} agendamentos com eventTypeId diferente`,
+            {
+              trigger: trigger.id,
+              expectedEventTypeId: eventTypeId,
+              wrongEventTypeIds: bookingsWithMismatch.map((b) => b.calcomEventTypeId),
+              agent: agent.id,
+              bookingUids: bookingsWithMismatch.map((b) => b.uid),
+            },
+          )
+          // Filtrar os agendamentos com mismatch para evitar enviar lembretes errados
+          const validBookings = bookings.filter((booking) => {
+            const bookingEventTypeId = booking.calcomEventTypeId
+            return !bookingEventTypeId || bookingEventTypeId === eventTypeId
+          })
+          bookings.length = 0
+          bookings.push(...validBookings)
+        }
+        
         detail.message = `window ${rangeStart.toISOString()} -> ${rangeEnd.toISOString()} (bookings=${bookings.length})`
 
         // ✅ SEGURANÇA: Se nenhum agendamento foi encontrado com API key de um agente,
@@ -1261,11 +1293,21 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
               videoCallUrl,
             }
 
-            const webhookResult = await sendWebhook(trigger.webhook_url, payload)
-            actionSuccess = webhookResult.success
-            actionStatus = webhookResult.status
-            actionResponse = webhookResult.body
-            actionError = webhookResult.error ?? null
+            try {
+              const webhookResult = await sendWebhook(trigger.webhook_url, payload)
+              actionSuccess = webhookResult.success
+              actionStatus = webhookResult.status
+              actionResponse = webhookResult.body
+              actionError = webhookResult.error ?? null
+            } catch (webhookError: any) {
+              // ✅ BUG FIX: Se sendWebhook() lançar erro, ensure actionSuccess = false
+              actionSuccess = false
+              actionStatus = null
+              actionResponse = null
+              actionError = webhookError?.message ?? "Erro ao enviar webhook"
+              
+              console.error(`[reminder-cron] Erro ao enviar webhook para ${trigger.webhook_url}:`, webhookError?.message)
+            }
           } else {
             const recipientNumber =
               (messageActionConfig?.channel ?? "participant") === "custom"
@@ -1375,29 +1417,39 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
               timestamp: new Date().toISOString(),
             })
 
-            const messageResult = await sendUazapiTextMessage({
-              serverUrl: connectionApiUrl ?? null,
-              instanceToken: instanceApiKey ?? null,
-              payload: {
-                number: recipientNumber,
-                text: renderedText,
-                linkPreview: true,
-                delay: delayMs,
-              },
-            })
+            try {
+              const messageResult = await sendUazapiTextMessage({
+                serverUrl: connectionApiUrl ?? null,
+                instanceToken: instanceApiKey ?? null,
+                payload: {
+                  number: recipientNumber,
+                  text: renderedText,
+                  linkPreview: true,
+                  delay: delayMs,
+                },
+              })
 
-            actionSuccess = messageResult.success
-            actionStatus = messageResult.status
-            actionResponse = {
-              response: messageResult.body,
-              request: {
-                number: recipientNumber,
-                delayMs,
-                templateId: messageActionConfig?.templateId ?? null,
-              },
-              messagePreview: renderedText.slice(0, 500),
+              actionSuccess = messageResult.success
+              actionStatus = messageResult.status
+              actionResponse = {
+                response: messageResult.body,
+                request: {
+                  number: recipientNumber,
+                  delayMs,
+                  templateId: messageActionConfig?.templateId ?? null,
+                },
+                messagePreview: renderedText.slice(0, 500),
+              }
+              actionError = messageResult.error ?? null
+            } catch (whatsappError: any) {
+              // ✅ BUG FIX: Se sendUazapiTextMessage() lançar erro, ensure actionSuccess = false
+              actionSuccess = false
+              actionStatus = null
+              actionResponse = null
+              actionError = whatsappError?.message ?? "Erro ao enviar mensagem WhatsApp"
+              
+              console.error(`[reminder-cron] Erro ao enviar WhatsApp para ${recipientNumber}:`, whatsappError?.message)
             }
-            actionError = messageResult.error ?? null
 
             detail.message = detail.message
               ? `${detail.message} | Mensagem WhatsApp ${actionSuccess ? "processada" : "falhou"} (${recipientNumber})`
