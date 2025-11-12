@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto"
 const DEFAULT_V2_HEADER_VERSION = "2024-08-13"
 const TOLERANCE_MINUTES = Number(process.env.REMINDER_CRON_TOLERANCE_MINUTES ?? "5")
-const REQUEST_TIMEOUT_MS = Number(process.env.REMINDER_CRON_TIMEOUT_MS ?? "10000")
+const REQUEST_TIMEOUT_MS = Number(process.env.REMINDER_CRON_TIMEOUT_MS ?? "20000") // ✅ Aumentado para 20s para aguardar delay da Uazapi
 const MAX_LOOKBACK_MINUTES = Number(process.env.REMINDER_CRON_MAX_LOOKBACK_MINUTES ?? "720")
 const TRIGGER_GRACE_PERIOD_MS =
   Math.max(0, Number(process.env.REMINDER_TRIGGER_GRACE_MINUTES ?? "5")) * 60 * 1000
