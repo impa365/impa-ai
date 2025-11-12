@@ -572,7 +572,16 @@ function normalizeBooking(raw: any): NormalizedBooking {
     raw?.metadata?.videoCallUrl ??
     null
 
-  return {
+  // ✅ SEGURANÇA: Capturar eventTypeId retornado pelo Cal.com
+  // Tentar múltiplas fontes para garantir que capturamos o eventTypeId
+  const eventTypeId = String(
+    raw?.eventType?.id ?? 
+    raw?.eventTypeId ?? 
+    raw?.event_type_id ?? 
+    ""
+  ).trim() || null
+
+  const normalized = {
     id: String(raw?.id ?? raw?.uid ?? randomUUID()),
     uid: raw?.uid ?? null,
     title: raw?.title ?? raw?.eventType?.name ?? null,
@@ -592,10 +601,21 @@ function normalizeBooking(raw: any): NormalizedBooking {
     hostName: primaryHost?.name ?? null,
     hostEmail: primaryHost?.email ?? null,
     eventUrl,
-    // ✅ SEGURANÇA: Capturar eventTypeId retornado pelo Cal.com
-    calcomEventTypeId: String(raw?.eventType?.id ?? "").trim() || null,
+    calcomEventTypeId: eventTypeId,
     raw,
   }
+
+  // Log de debug quando eventTypeId não é capturado
+  if (!eventTypeId && raw) {
+    console.warn(`[normalizeBooking] ⚠️ Agendamento SEM eventTypeId detectado`, {
+      bookingUid: raw?.uid ?? raw?.id,
+      title: raw?.title,
+      hasEventType: !!raw?.eventType,
+      eventTypeStructure: raw?.eventType ? Object.keys(raw.eventType) : [],
+    })
+  }
+
+  return normalized
 }
 
 async function fetchTriggers(): Promise<ReminderTriggerRecord[]> {
@@ -770,6 +790,14 @@ async function fetchCalcomBookings(
     url.searchParams.set("startTime<=", rangeEnd.toISOString())
     url.searchParams.set("limit", "100")
 
+    console.log(`[fetchCalcomBookings] 📞 Chamando Cal.com v2 API`, {
+      agentId: agent.id,
+      eventTypeId,
+      url: url.toString(),
+      rangeStart: rangeStart.toISOString(),
+      rangeEnd: rangeEnd.toISOString(),
+    })
+
     const response = await fetch(url.toString(), { headers, cache: "no-store" })
     if (!response.ok) {
       const text = await response.text()
@@ -779,8 +807,12 @@ async function fetchCalcomBookings(
 
     const data = await response.json()
     const records = Array.isArray(data?.data) ? data.data : []
+    console.log(`[fetchCalcomBookings] 📥 Cal.com v2 retornou ${records.length} agendamentos`)
+    
     for (const record of records) {
-      bookings.push(normalizeBooking(record))
+      const normalized = normalizeBooking(record)
+      console.log(`[fetchCalcomBookings] 📋 Agendamento: uid=${normalized.uid}, title="${normalized.title}", eventTypeId=${normalized.calcomEventTypeId}`)
+      bookings.push(normalized)
     }
   } else {
     const url = new URL(`${baseUrl}/bookings`)
@@ -791,6 +823,14 @@ async function fetchCalcomBookings(
     url.searchParams.set("startTimeMax", rangeEnd.toISOString())
     url.searchParams.set("limit", "100")
 
+    console.log(`[fetchCalcomBookings] 📞 Chamando Cal.com v1 API`, {
+      agentId: agent.id,
+      eventTypeId,
+      endpoint: `${baseUrl}/bookings`,
+      rangeStart: rangeStart.toISOString(),
+      rangeEnd: rangeEnd.toISOString(),
+    })
+
     const response = await fetch(url.toString(), { headers, cache: "no-store" })
     if (!response.ok) {
       const text = await response.text()
@@ -800,8 +840,12 @@ async function fetchCalcomBookings(
 
     const data = await response.json()
     const records = Array.isArray(data?.bookings) ? data.bookings : []
+    console.log(`[fetchCalcomBookings] 📥 Cal.com v1 retornou ${records.length} agendamentos`)
+    
     for (const record of records) {
-      bookings.push(normalizeBooking(record))
+      const normalized = normalizeBooking(record)
+      console.log(`[fetchCalcomBookings] 📋 Agendamento: uid=${normalized.uid}, title="${normalized.title}", eventTypeId=${normalized.calcomEventTypeId}`)
+      bookings.push(normalized)
     }
   }
 
@@ -1178,6 +1222,14 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
         
         // ✅ SEGURANÇA CRÍTICA: Validação cruzada de eventTypeId
         // Verificar que CADA agendamento retornado realmente pertence ao eventTypeId solicitado
+        console.log(`[SECURITY-CHECK] Validando ${bookings.length} agendamentos para eventTypeId="${eventTypeId}"`, {
+          triggerId: trigger.id,
+          agentId: agent.id,
+          expectedEventTypeId: eventTypeId,
+          bookingsWithEventTypeId: bookings.filter(b => b.calcomEventTypeId).length,
+          bookingsWithoutEventTypeId: bookings.filter(b => !b.calcomEventTypeId).length,
+        })
+        
         const bookingsWithMismatch = bookings.filter((booking) => {
           const bookingEventTypeId = booking.calcomEventTypeId
           return bookingEventTypeId && bookingEventTypeId !== eventTypeId
@@ -1192,15 +1244,19 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
               wrongEventTypeIds: bookingsWithMismatch.map((b) => b.calcomEventTypeId),
               agent: agent.id,
               bookingUids: bookingsWithMismatch.map((b) => b.uid),
+              bookingTitles: bookingsWithMismatch.map((b) => b.title),
             },
           )
-          // Filtrar os agendamentos com mismatch para evitar enviar lembretes errados
+          // Filtrar os agendamentos com mismatch para eviar lembretes errados
           const validBookings = bookings.filter((booking) => {
             const bookingEventTypeId = booking.calcomEventTypeId
             return !bookingEventTypeId || bookingEventTypeId === eventTypeId
           })
+          console.log(`[SECURITY] ✅ Filtrados ${bookingsWithMismatch.length} agendamentos incorretos. Restam ${validBookings.length} válidos.`)
           bookings.length = 0
           bookings.push(...validBookings)
+        } else {
+          console.log(`[SECURITY-CHECK] ✅ Todos os ${bookings.length} agendamentos são do eventTypeId correto (ou não têm eventTypeId)`)
         }
         
         detail.message = `window ${rangeStart.toISOString()} -> ${rangeEnd.toISOString()} (bookings=${bookings.length})`
