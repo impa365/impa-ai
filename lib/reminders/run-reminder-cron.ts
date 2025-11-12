@@ -613,28 +613,30 @@ async function fetchTriggers(): Promise<ReminderTriggerRecord[]> {
     return []
   }
 
-  return triggers.map((raw: any) => {
-    // ✅ SEGURANÇA: Validar que agent_id existe e é válido
-    const agent_id = String(raw?.agent_id ?? "").trim()
-    if (!agent_id) {
-      console.warn(`[SECURITY] Gatilho ${raw?.id} sem agent_id válido, será ignorado`)
-      return null
-    }
+  return triggers
+    .map((raw: any) => {
+      // ✅ SEGURANÇA: Validar que agent_id existe e é válido
+      const agent_id = String(raw?.agent_id ?? "").trim()
+      if (!agent_id) {
+        console.warn(`[SECURITY] Gatilho ${raw?.id} sem agent_id válido, será ignorado`)
+        return null
+      }
 
-    return {
-      id: String(raw?.id ?? ""),
-      agent_id,
-      offset_amount: Number(raw?.offset_amount ?? 0),
-      offset_unit: (raw?.offset_unit ?? "minutes") as OffsetUnit,
-      webhook_url: raw?.webhook_url ?? null,
-      scope_reference: raw?.scope_reference ?? null,
-      action_type: (raw?.action_type ?? "webhook") as ReminderTriggerActionType,
-      action_payload: raw?.action_payload ?? {},
-      is_active: Boolean(raw?.is_active ?? true),
-      created_at: raw?.created_at ?? null,
-      updated_at: raw?.updated_at ?? null,
-    }
-  }).filter((t): t is ReminderTriggerRecord => t !== null)
+      return {
+        id: String(raw?.id ?? ""),
+        agent_id,
+        offset_amount: Number(raw?.offset_amount ?? 0),
+        offset_unit: (raw?.offset_unit ?? "minutes") as OffsetUnit,
+        webhook_url: raw?.webhook_url ?? null,
+        scope_reference: raw?.scope_reference ?? null,
+        action_type: (raw?.action_type ?? "webhook") as ReminderTriggerActionType,
+        action_payload: raw?.action_payload ?? {},
+        is_active: Boolean(raw?.is_active ?? true),
+        created_at: raw?.created_at ?? null,
+        updated_at: raw?.updated_at ?? null,
+      } as ReminderTriggerRecord
+    })
+    .filter((t: ReminderTriggerRecord | null): t is ReminderTriggerRecord => t !== null)
 }
 
 const agentCache = new Map<string, AgentRecord | null>()
@@ -922,6 +924,10 @@ async function sendUazapiTextMessage(options: {
   const { serverUrl, instanceToken, payload } = options
 
   if (!serverUrl || !instanceToken) {
+    console.error("[sendUazapiTextMessage] ❌ Configuração ausente", { 
+      hasServerUrl: !!serverUrl, 
+      hasToken: !!instanceToken 
+    })
     return {
       success: false,
       status: null,
@@ -931,6 +937,10 @@ async function sendUazapiTextMessage(options: {
   }
 
   if (!payload.number || !payload.text) {
+    console.error("[sendUazapiTextMessage] ❌ Payload inválido", { 
+      hasNumber: !!payload.number, 
+      hasText: !!payload.text 
+    })
     return {
       success: false,
       status: null,
@@ -944,7 +954,16 @@ async function sendUazapiTextMessage(options: {
 
   try {
     const baseUrl = serverUrl.replace(/\/+$/, "")
-    const response = await fetch(`${baseUrl}/send/text`, {
+    const endpoint = `${baseUrl}/send/text`
+    
+    console.log("[sendUazapiTextMessage] 📤 Enviando requisição", {
+      endpoint,
+      number: payload.number.slice(-4).padStart(payload.number.length, "*"),
+      textLength: payload.text.length,
+      delay: payload.delay,
+    })
+    
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -967,18 +986,44 @@ async function sendUazapiTextMessage(options: {
       }
     }
 
+    // ✅ BUG FIX: Verificar se a API Uazapi retornou sucesso mesmo com status HTTP diferente
+    // Algumas APIs retornam 200 com {"success": true} ou {"status": "queued"}
+    const isSuccessResponse = response.ok || 
+      (parsedBody && (
+        parsedBody.success === true || 
+        parsedBody.status === "queued" || 
+        parsedBody.status === "sent" ||
+        parsedBody.state === "queued" ||
+        parsedBody.state === "sent"
+      ))
+
+    console.log("[sendUazapiTextMessage] 📥 Resposta recebida", {
+      status: response.status,
+      ok: response.ok,
+      isSuccessResponse,
+      body: parsedBody,
+    })
+
     return {
-      success: response.ok,
+      success: isSuccessResponse,
       status: response.status,
       body: parsedBody,
-      error: response.ok ? null : `Uazapi respondeu com status ${response.status}`,
+      error: isSuccessResponse ? null : `Uazapi respondeu com status ${response.status}`,
     }
   } catch (error: any) {
+    console.error("[sendUazapiTextMessage] 💥 Exceção ao enviar", {
+      error: error?.message,
+      name: error?.name,
+      isAbortError: error?.name === "AbortError",
+    })
+    
     return {
       success: false,
       status: null,
       body: null,
-      error: error?.message ?? "Erro desconhecido ao enviar mensagem via Uazapi",
+      error: error?.name === "AbortError" 
+        ? `Timeout após ${REQUEST_TIMEOUT_MS}ms` 
+        : error?.message ?? "Erro desconhecido ao enviar mensagem via Uazapi",
     }
   } finally {
     clearTimeout(timeout)
@@ -1441,19 +1486,47 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
                 messagePreview: renderedText.slice(0, 500),
               }
               actionError = messageResult.error ?? null
+              
+              // ✅ BUG FIX: Log detalhado do resultado do envio
+              if (actionSuccess) {
+                console.log(`[reminder-cron] ✅ Mensagem enviada com sucesso para ${recipientNumber.slice(-4).padStart(recipientNumber.length, "*")}`, {
+                  bookingUid: bookingUid.slice(0, 8),
+                  status: actionStatus,
+                })
+              } else {
+                console.error(`[reminder-cron] ❌ Falha ao enviar mensagem para ${recipientNumber.slice(-4).padStart(recipientNumber.length, "*")}`, {
+                  bookingUid: bookingUid.slice(0, 8),
+                  status: actionStatus,
+                  error: actionError,
+                })
+              }
             } catch (whatsappError: any) {
               // ✅ BUG FIX: Se sendUazapiTextMessage() lançar erro, ensure actionSuccess = false
               actionSuccess = false
               actionStatus = null
-              actionResponse = null
+              actionResponse = {
+                request: {
+                  number: recipientNumber,
+                  delayMs,
+                  templateId: messageActionConfig?.templateId ?? null,
+                },
+                error: whatsappError?.message ?? "Erro ao enviar mensagem WhatsApp",
+              }
               actionError = whatsappError?.message ?? "Erro ao enviar mensagem WhatsApp"
               
-              console.error(`[reminder-cron] Erro ao enviar WhatsApp para ${recipientNumber}:`, whatsappError?.message)
+              console.error(`[reminder-cron] 💥 Exceção ao enviar WhatsApp para ${recipientNumber.slice(-4).padStart(recipientNumber.length, "*")}:`, {
+                bookingUid: bookingUid.slice(0, 8),
+                error: whatsappError?.message,
+                stack: whatsappError?.stack,
+              })
             }
 
+            // ✅ BUG FIX: A mensagem de detalhe deve refletir o resultado REAL do envio
+            const statusText = actionSuccess ? "enviada" : "falhou"
+            const maskedNumber = recipientNumber.slice(-4).padStart(recipientNumber.length, "*")
             detail.message = detail.message
-              ? `${detail.message} | Mensagem WhatsApp ${actionSuccess ? "processada" : "falhou"} (${recipientNumber})`
-              : `Mensagem WhatsApp ${actionSuccess ? "processada" : "falhou"} (${recipientNumber})`
+              ? `${detail.message} | Mensagem WhatsApp ${statusText} (${maskedNumber})`
+              : `Mensagem WhatsApp ${statusText} (${maskedNumber})`
           }
 
           await insertReminderLog({
