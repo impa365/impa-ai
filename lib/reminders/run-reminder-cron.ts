@@ -5,6 +5,8 @@ const REQUEST_TIMEOUT_MS = Number(process.env.REMINDER_CRON_TIMEOUT_MS ?? "20000
 const MAX_LOOKBACK_MINUTES = Number(process.env.REMINDER_CRON_MAX_LOOKBACK_MINUTES ?? "720")
 const TRIGGER_GRACE_PERIOD_MS =
   Math.max(0, Number(process.env.REMINDER_TRIGGER_GRACE_MINUTES ?? "5")) * 60 * 1000
+// ✅ NOVO: Permite desabilitar período de carência em edições de gatilho
+const GRACE_PERIOD_ON_UPDATE = process.env.REMINDER_TRIGGER_GRACE_ON_UPDATE !== "false"
 
 function getRandomDelayMs(minSeconds = 5, maxSeconds = 15): number {
   const min = Math.max(0, Math.floor(minSeconds))
@@ -1132,14 +1134,38 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
 
       const triggerCreatedAtMs = trigger.created_at ? new Date(trigger.created_at).getTime() : Number.NaN
       const triggerUpdatedAtMs = trigger.updated_at ? new Date(trigger.updated_at).getTime() : Number.NaN
-      const activationTimestamp = Math.max(
-        Number.isFinite(triggerCreatedAtMs) ? triggerCreatedAtMs : Number.NEGATIVE_INFINITY,
-        Number.isFinite(triggerUpdatedAtMs) ? triggerUpdatedAtMs : Number.NEGATIVE_INFINITY,
-      )
+      
+      // ✅ Se GRACE_PERIOD_ON_UPDATE=false, usa apenas created_at (ignora updated_at)
+      const activationTimestamp = GRACE_PERIOD_ON_UPDATE
+        ? Math.max(
+            Number.isFinite(triggerCreatedAtMs) ? triggerCreatedAtMs : Number.NEGATIVE_INFINITY,
+            Number.isFinite(triggerUpdatedAtMs) ? triggerUpdatedAtMs : Number.NEGATIVE_INFINITY,
+          )
+        : Number.isFinite(triggerCreatedAtMs) ? triggerCreatedAtMs : Number.NEGATIVE_INFINITY
+      
       const graceCutoffMs =
         Number.isFinite(activationTimestamp) && activationTimestamp !== Number.NEGATIVE_INFINITY
           ? activationTimestamp + TRIGGER_GRACE_PERIOD_MS
           : null
+
+      // ✅ Log detalhado do período de carência
+      if (graceCutoffMs !== null) {
+        const gracePeriodMinutes = TRIGGER_GRACE_PERIOD_MS / 60000
+        const graceCutoffDate = new Date(graceCutoffMs)
+        const graceCutoffIsPast = graceCutoffMs < now
+        
+        console.log(`[GRACE-PERIOD] Gatilho ${trigger.id}:`, {
+          createdAt: trigger.created_at,
+          updatedAt: trigger.updated_at,
+          gracePeriodMinutes,
+          graceCutoffDate: graceCutoffDate.toISOString(),
+          graceCutoffIsPast,
+          willSkipBookingsBefore: graceCutoffDate.toISOString(),
+          triggersActiveAfter: graceCutoffDate.toISOString(),
+          graceOnUpdateEnabled: GRACE_PERIOD_ON_UPDATE,
+          usingTimestamp: GRACE_PERIOD_ON_UPDATE ? 'max(created_at, updated_at)' : 'created_at only',
+        })
+      }
 
       try {
         const agent = await fetchAgent(trigger.agent_id)
