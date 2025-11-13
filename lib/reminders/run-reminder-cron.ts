@@ -1076,6 +1076,131 @@ async function sendUazapiTextMessage(options: {
   }
 }
 
+async function sendEvolutionApiTextMessage(options: {
+  serverUrl: string | null
+  apiKey: string | null
+  instanceName: string | null
+  payload: {
+    number: string
+    text: string
+    linkPreview?: boolean
+    delay?: number
+  }
+}) {
+  const { serverUrl, apiKey, instanceName, payload } = options
+
+  if (!serverUrl || !apiKey || !instanceName) {
+    console.error("[sendEvolutionApiTextMessage] ❌ Configuração ausente", { 
+      hasServerUrl: !!serverUrl, 
+      hasApiKey: !!apiKey,
+      hasInstanceName: !!instanceName,
+    })
+    return {
+      success: false,
+      status: null,
+      body: null,
+      error: "Configuração da Evolution API ausente (serverUrl, apiKey ou instanceName)",
+    }
+  }
+
+  if (!payload.number || !payload.text) {
+    console.error("[sendEvolutionApiTextMessage] ❌ Payload inválido", { 
+      hasNumber: !!payload.number, 
+      hasText: !!payload.text 
+    })
+    return {
+      success: false,
+      status: null,
+      body: null,
+      error: "Número ou mensagem vazios",
+    }
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  try {
+    const baseUrl = serverUrl.replace(/\/+$/, "")
+    const endpoint = `${baseUrl}/message/sendText/${instanceName}`
+    
+    console.log("[sendEvolutionApiTextMessage] 📤 Enviando requisição", {
+      endpoint,
+      number: payload.number.slice(-4).padStart(payload.number.length, "*"),
+      textLength: payload.text.length,
+      delay: payload.delay,
+    })
+    
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": apiKey,
+      },
+      body: JSON.stringify({
+        number: payload.number,
+        textMessage: {
+          text: payload.text,
+        },
+        options: {
+          delay: payload.delay,
+          linkPreview: payload.linkPreview ?? true,
+        },
+      }),
+      signal: controller.signal,
+    })
+
+    const text = await response.text()
+    let parsedBody: any = null
+    if (text) {
+      try {
+        parsedBody = JSON.parse(text)
+      } catch (error) {
+        parsedBody = text.slice(0, 2000)
+      }
+    }
+
+    // ✅ Verificar se a API Evolution retornou sucesso
+    // API Evolution retorna status 201 Created ou 200 OK com {status: "success"} ou similar
+    const isSuccessResponse = (response.status === 201 || response.ok) && 
+      (!parsedBody || 
+       parsedBody.status === "success" || 
+       parsedBody.status === "PENDING" ||
+       parsedBody.key?.id || // Tem ID da mensagem
+       !parsedBody.error)
+
+    console.log("[sendEvolutionApiTextMessage] 📥 Resposta recebida", {
+      status: response.status,
+      ok: response.ok,
+      isSuccessResponse,
+      body: parsedBody,
+    })
+
+    return {
+      success: isSuccessResponse,
+      status: response.status,
+      body: parsedBody,
+      error: isSuccessResponse ? null : `Evolution API respondeu com status ${response.status}`,
+    }
+  } catch (error: any) {
+    console.error("[sendEvolutionApiTextMessage] 💥 Exceção ao enviar", {
+      error: error?.message,
+      name: error?.name,
+      isAbortError: error?.name === "AbortError",
+    })
+    
+    return {
+      success: false,
+      status: null,
+      body: null,
+      error: error?.name === "AbortError" 
+        ? `Timeout após ${REQUEST_TIMEOUT_MS}ms` 
+        : error?.message ?? "Erro desconhecido ao enviar mensagem via Evolution API",
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } = {}): Promise<CronSummary> {
   const startedAt = new Date()
   const runId = await insertCronRun({ startedAt: startedAt.toISOString(), dryRun })
@@ -1192,13 +1317,19 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
             summary.details.push(detail)
             continue
           }
-          if (connectionApiLabel !== "uazapi") {
-            detail.message = "Gatilho WhatsApp suporta apenas conexões Uazapi no momento"
+          // ✅ Suporta Uazapi E Evolution API
+          if (connectionApiLabel !== "uazapi" && connectionApiLabel !== "evo") {
+            detail.message = "Gatilho WhatsApp suporta apenas conexões Uazapi e Evolution API"
             summary.details.push(detail)
             continue
           }
           if (!connectionApiUrl || !instanceApiKey) {
-            detail.message = "Conexão Uazapi sem serverUrl ou token"
+            detail.message = `Conexão ${connectionApiLabel} sem serverUrl ou token`
+            summary.details.push(detail)
+            continue
+          }
+          if (connectionApiLabel === "evo" && !instanceName) {
+            detail.message = "Conexão Evolution API sem instanceName"
             summary.details.push(detail)
             continue
           }
@@ -1533,11 +1664,12 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
             
             // ✅ SEGURANÇA: Log de auditoria antes de enviar mensagem
             // Documenta: agente + conexão + destinatário + agendamento
-            console.log(`[reminder-cron][AUDIT] Enviando mensagem`, {
+            console.log(`[reminder-cron][AUDIT] Enviando mensagem via ${connectionApiLabel}`, {
               triggerId: trigger.id,
               agentId: agent.id,
               agentName: agent.name,
               connectionId: agent.whatsapp_connection_id,
+              connectionType: connectionApiLabel,
               recipientNumber: recipientNumber.slice(-4).padStart(recipientNumber.length, "*"), // Mascarar número
               bookingUid: bookingUid.slice(0, 8), // Primeiros 8 chars
               eventTypeId,
@@ -1545,16 +1677,34 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
             })
 
             try {
-              const messageResult = await sendUazapiTextMessage({
-                serverUrl: connectionApiUrl ?? null,
-                instanceToken: instanceApiKey ?? null,
-                payload: {
-                  number: recipientNumber,
-                  text: renderedText,
-                  linkPreview: true,
-                  delay: delayMs,
-                },
-              })
+              let messageResult: { success: boolean; status: number | null; body: any; error: string | null }
+              
+              // ✅ Escolher API baseado no tipo de conexão
+              if (connectionApiLabel === "evo") {
+                messageResult = await sendEvolutionApiTextMessage({
+                  serverUrl: connectionApiUrl ?? null,
+                  apiKey: instanceApiKey ?? null,
+                  instanceName: instanceName ?? null,
+                  payload: {
+                    number: recipientNumber,
+                    text: renderedText,
+                    linkPreview: true,
+                    delay: delayMs,
+                  },
+                })
+              } else {
+                // Uazapi (padrão)
+                messageResult = await sendUazapiTextMessage({
+                  serverUrl: connectionApiUrl ?? null,
+                  instanceToken: instanceApiKey ?? null,
+                  payload: {
+                    number: recipientNumber,
+                    text: renderedText,
+                    linkPreview: true,
+                    delay: delayMs,
+                  },
+                })
+              }
 
               actionSuccess = messageResult.success
               actionStatus = messageResult.status
@@ -1564,6 +1714,7 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
                   number: recipientNumber,
                   delayMs,
                   templateId: messageActionConfig?.templateId ?? null,
+                  api: connectionApiLabel,
                 },
                 messagePreview: renderedText.slice(0, 500),
               }
@@ -1571,19 +1722,21 @@ export async function runReminderCron({ dryRun = false }: { dryRun?: boolean } =
               
               // ✅ BUG FIX: Log detalhado do resultado do envio
               if (actionSuccess) {
-                console.log(`[reminder-cron] ✅ Mensagem enviada com sucesso para ${recipientNumber.slice(-4).padStart(recipientNumber.length, "*")}`, {
+                console.log(`[reminder-cron] ✅ Mensagem ${connectionApiLabel} enviada com sucesso para ${recipientNumber.slice(-4).padStart(recipientNumber.length, "*")}`, {
                   bookingUid: bookingUid.slice(0, 8),
                   status: actionStatus,
+                  api: connectionApiLabel,
                 })
               } else {
-                console.error(`[reminder-cron] ❌ Falha ao enviar mensagem para ${recipientNumber.slice(-4).padStart(recipientNumber.length, "*")}`, {
+                console.error(`[reminder-cron] ❌ Falha ao enviar mensagem ${connectionApiLabel} para ${recipientNumber.slice(-4).padStart(recipientNumber.length, "*")}`, {
                   bookingUid: bookingUid.slice(0, 8),
                   status: actionStatus,
                   error: actionError,
+                  api: connectionApiLabel,
                 })
               }
             } catch (whatsappError: any) {
-              // ✅ BUG FIX: Se sendUazapiTextMessage() lançar erro, ensure actionSuccess = false
+              // ✅ BUG FIX: Se a função de envio lançar erro, ensure actionSuccess = false
               actionSuccess = false
               actionStatus = null
               actionResponse = {
