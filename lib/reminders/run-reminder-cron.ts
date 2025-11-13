@@ -1134,7 +1134,7 @@ async function sendEvolutionApiTextMessage(options: {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "apikey": apiKey,
+        "apikey": apiKey, // ✅ API key da INSTÂNCIA, não global
       },
       body: JSON.stringify({
         number: payload.number,

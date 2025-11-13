@@ -1035,7 +1035,7 @@ export function ReminderTriggersView({ scope = "user" }: ReminderTriggersViewPro
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="webhook">Webhook (HTTP POST)</SelectItem>
-                                <SelectItem value="whatsapp_message">Mensagem WhatsApp (Uazapi)</SelectItem>
+                                <SelectItem value="whatsapp_message">Mensagem WhatsApp</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -1235,7 +1235,7 @@ export function ReminderTriggersView({ scope = "user" }: ReminderTriggersViewPro
                             <dd className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                               {formData.actionType === "webhook"
                                 ? "Webhook (HTTP POST)"
-                                : "Mensagem WhatsApp (Uazapi)"}
+                                : "Mensagem WhatsApp"}
                             </dd>
                           </div>
                           <div className="rounded-2xl border border-slate-200/80 bg-slate-100/80 px-4 py-3 shadow-sm dark:border-slate-700/60 dark:bg-slate-800/60">
