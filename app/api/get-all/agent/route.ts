@@ -81,6 +81,9 @@ export async function GET(request: NextRequest) {
         total_messages,
         performance_score,
         type,
+        calendar_provider,
+        calendar_api_version,
+        calendar_api_url,
         calendar_api_key
       `
       )
@@ -123,6 +126,9 @@ export async function GET(request: NextRequest) {
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
         status: agent.status,
+        calendar_provider: agent.calendar_provider,
+        calendar_api_version: agent.calendar_api_version,
+        calendar_api_url: agent.calendar_api_url,
         calendar_api_key: agent.calendar_api_key,
         created_at: agent.created_at,
         updated_at: agent.updated_at,

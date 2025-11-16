@@ -134,9 +134,21 @@ export function WhatsAppSharedLinksModal({ isOpen, onClose, connections, preSele
         ...prev,
         connection_id: preSelectedConnection.id
       }));
-      setActiveTab("create");
+      
+      // Verificar se já existe link para esta conexão após links serem carregados
+      if (sharedLinks.length > 0) {
+        const hasLinksForConnection = sharedLinks.some(
+          link => link.connection_id === preSelectedConnection.id && link.connection
+        );
+        
+        // Se já tem links, abrir na aba "list", senão "create"
+        setActiveTab(hasLinksForConnection ? "list" : "create");
+      } else {
+        // Se ainda não carregou links, definir como "create" por padrão
+        setActiveTab("create");
+      }
     }
-  }, [preSelectedConnection, isOpen]);
+  }, [preSelectedConnection, isOpen, sharedLinks]);
 
   const loadSharedLinks = async () => {
     try {
@@ -145,13 +157,27 @@ export function WhatsAppSharedLinksModal({ isOpen, onClose, connections, preSele
       const data = await response.json();
 
       if (data.success) {
-        setSharedLinks(data.data || []);
+        const loadedLinks = data.data || [];
+        setSharedLinks(loadedLinks);
+        
+        // Se há conexão pré-selecionada, verificar se tem links para ela
+        if (preSelectedConnection) {
+          const hasLinksForConnection = loadedLinks.some(
+            link => link.connection_id === preSelectedConnection.id && link.connection
+          );
+          
+          // Se já tem links, abrir na aba "list", senão "create"
+          setActiveTab(hasLinksForConnection ? "list" : "create");
+        }
+        
+        return loadedLinks;
       } else {
         toast({
           title: "Erro",
           description: data.error || "Erro ao carregar links",
           variant: "destructive",
         });
+        return [];
       }
     } catch (error) {
       console.error("Erro ao carregar links:", error);
@@ -160,6 +186,7 @@ export function WhatsAppSharedLinksModal({ isOpen, onClose, connections, preSele
         description: "Erro ao carregar links compartilhados",
         variant: "destructive",
       });
+      return [];
     } finally {
       setLoading(false);
     }
@@ -396,7 +423,15 @@ export function WhatsAppSharedLinksModal({ isOpen, onClose, connections, preSele
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="list">
               <ExternalLink className="w-4 h-4 mr-2" />
-              Links Ativos ({sharedLinks.length})
+              Links Ativos ({(() => {
+                // Filtrar links pela conexão pré-selecionada (se houver)
+                const filteredLinks = preSelectedConnection
+                  ? sharedLinks.filter(link => 
+                      link.connection_id === preSelectedConnection.id && link.connection
+                    )
+                  : sharedLinks.filter(link => link.connection);
+                return filteredLinks.length;
+              })()})
             </TabsTrigger>
             <TabsTrigger value="create">
               <Plus className="w-4 h-4 mr-2" />
@@ -415,7 +450,15 @@ export function WhatsAppSharedLinksModal({ isOpen, onClose, connections, preSele
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 <span className="ml-2">Carregando links...</span>
               </div>
-            ) : sharedLinks.length === 0 ? (
+            ) : (() => {
+              // Filtrar links pela conexão pré-selecionada (se houver)
+              const filteredLinks = preSelectedConnection
+                ? sharedLinks.filter(link => 
+                    link.connection_id === preSelectedConnection.id && link.connection
+                  )
+                : sharedLinks.filter(link => link.connection);
+              
+              return filteredLinks.length === 0 ? (
               <Card>
                 <CardContent className="text-center py-8">
                   <Share2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -445,9 +488,7 @@ export function WhatsAppSharedLinksModal({ isOpen, onClose, connections, preSele
                   </Alert>
                 )}
                 
-                {sharedLinks
-                  .filter(link => link.connection) // Filtrar apenas links com conexão válida
-                  .map((link) => (
+                {filteredLinks.map((link) => (
                   <Card key={link.id}>
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
@@ -601,7 +642,8 @@ export function WhatsAppSharedLinksModal({ isOpen, onClose, connections, preSele
                   </Card>
                 ))}
               </div>
-            )}
+            );
+            })()}
           </TabsContent>
 
           {/* Criar Novo Link */}

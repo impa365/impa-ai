@@ -186,6 +186,17 @@ export async function POST(request: Request) {
       ? agentData.ignore_jids
       : ["@g.us"];
 
+    const calendarProvider = agentData.calendar_provider || "calcom";
+    const calendarVersion =
+      calendarProvider === "calcom"
+        ? agentData.calendar_api_version || "v1"
+        : agentData.calendar_api_version || null;
+    const calendarUrl =
+      calendarProvider === "calcom"
+        ? agentData.calendar_api_url ||
+          (calendarVersion === "v2" ? "https://api.cal.com/v2" : "https://api.cal.com/v1")
+        : agentData.calendar_api_url || null;
+
     // ============================================
     // IMPORTANTE: Incluir APENAS campos da tabela ai_agents
     // NÃO incluir campos bot_* que são para a tabela bots
@@ -235,6 +246,9 @@ export async function POST(request: Request) {
       voice_api_key: agentData.voice_api_key,
       voice_id: agentData.voice_id,
       calendar_integration: Boolean(agentData.calendar_integration),
+      calendar_provider: calendarProvider,
+      calendar_api_version: calendarVersion,
+      calendar_api_url: calendarUrl,
       calendar_api_key: agentData.calendar_api_key,
       calendar_meeting_id: agentData.calendar_meeting_id,
       chatnode_integration: Boolean(agentData.chatnode_integration),

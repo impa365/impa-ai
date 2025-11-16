@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Users, Bot, MessageSquare, Settings, Home, LogOut, Menu, X, Key, Calendar, Sparkles, ChevronRight } from "lucide-react"
+import { Users, Bot, MessageSquare, Settings, Home, LogOut, Menu, X, Key, Calendar, Sparkles, ChevronRight, Zap, Clock4 } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
 import { DynamicTitle } from "@/components/dynamic-title"
@@ -53,14 +53,24 @@ export default function AdminLayout({
     { href: "/admin/agents", icon: Bot, label: "Agentes IA" },
     { href: "/admin/whatsapp", icon: MessageSquare, label: "Conexões WhatsApp" },
     { href: "/admin/followup", icon: Calendar, label: "Follow Diário" },
+    {
+      href: "/admin/reminders",
+      icon: Calendar,
+      label: "Agendamentos",
+      submenu: [
+        { href: "/admin/reminders", icon: Calendar, label: "Lista de agendamentos" },
+        { href: "/admin/triggers", icon: Zap, label: "Gatilhos" },
+      ],
+    },
     { href: "/admin/apikeys", icon: Key, label: "API Keys Sistema" },
     { 
       href: "/admin/settings", 
       icon: Settings, 
       label: "Configurações",
       submenu: [
-        { href: "/admin/settings/apikeysllm", icon: Sparkles, label: "API Keys LLM" }
-      ]
+        { href: "/admin/settings/cron", icon: Clock4, label: "Monitor do cron" },
+        { href: "/admin/settings/apikeysllm", icon: Sparkles, label: "API Keys LLM" },
+      ],
     },
   ]
 
@@ -163,20 +173,15 @@ export default function AdminLayout({
 
         {/* Main content */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Header */}
-          <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between h-16 px-4">
-              <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
+          <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900">
+            <div className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-gray-200 bg-gray-100/90 px-4 py-3 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90 lg:hidden">
+              <Button variant="outline" size="sm" onClick={() => setSidebarOpen(true)} className="gap-2">
                 <Menu className="h-4 w-4" />
+                Menu
               </Button>
-              <div className="flex items-center space-x-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Painel de Administração</h2>
-              </div>
             </div>
-          </header>
-
-          {/* Page content */}
-          <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900">{children}</main>
+            {children}
+          </main>
         </div>
       </div>
     </>

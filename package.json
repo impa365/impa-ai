@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev",
+    "dev": "concurrently \"npm:dev:next\" \"npm:reminder:worker\"",
+    "dev:next": "next dev",
     "lint": "next lint",
     "start": "next start",
+    "reminder:worker": "tsx scripts/reminder-cron-worker.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
@@ -51,7 +53,9 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
+    "cron-parser": "^5.4.0",
     "date-fns": "4.1.0",
+    "dotenv": "^17.2.3",
     "embla-carousel-react": "latest",
     "framer-motion": "^12.23.24",
     "immer": "latest",
@@ -61,6 +65,7 @@
     "lucide-react": "^0.454.0",
     "next": "15.2.4",
     "next-themes": "latest",
+    "node-cron": "^4.2.1",
     "react": "^19",
     "react-confetti": "^6.4.0",
     "react-day-picker": "latest",
@@ -86,11 +91,14 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
     "jest": "^29.5.0",
     "jest-environment-jsdom": "^29.5.0",
     "postcss": "^8.5",
     "tailwindcss": "^3.4.17",
     "ts-jest": "^29.1.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }

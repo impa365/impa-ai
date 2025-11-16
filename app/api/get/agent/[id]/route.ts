@@ -154,6 +154,17 @@ export async function GET(
       }
     }
 
+    const calendarProvider = agent.calendar_provider || "calcom";
+    const calendarVersion =
+      calendarProvider === "calcom"
+        ? agent.calendar_api_version || "v1"
+        : agent.calendar_api_version;
+    const calendarUrl =
+      calendarProvider === "calcom"
+        ? agent.calendar_api_url ||
+          (calendarVersion === "v2" ? "https://api.cal.com/v2" : "https://api.cal.com/v1")
+        : agent.calendar_api_url;
+
     const response = {
       success: true,
       default_model: systemDefaultModel,
@@ -180,6 +191,9 @@ export async function GET(
         understand_images: agent.understand_images,
         voice_response_enabled: agent.voice_response_enabled,
         calendar_integration: agent.calendar_integration,
+        calendar_provider: calendarProvider,
+        calendar_api_version: calendarVersion,
+        calendar_api_url: calendarUrl,
         calendar_api_key: agent.calendar_api_key,
         calendar_meeting_id: agent.calendar_meeting_id,
         chatnode_integration: agent.chatnode_integration,

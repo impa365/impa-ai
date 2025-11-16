@@ -33,6 +33,16 @@ import { publicApi } from "@/lib/api-client"
 const switchStyles =
   "data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 border-2 border-gray-300 data-[state=checked]:border-blue-600"
 
+const CALCOM_DEFAULT_API_URLS = {
+  v1: "https://api.cal.com/v1",
+  v2: "https://api.cal.com/v2",
+} as const
+
+const getCalcomDefaultUrl = (version?: string | null) => {
+  if (version === "v2") return CALCOM_DEFAULT_API_URLS.v2
+  return CALCOM_DEFAULT_API_URLS.v1
+}
+
 interface AgentModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -57,6 +67,9 @@ export interface Agent {
   voice_api_key?: string | null
   voice_id?: string | null
   calendar_integration?: boolean | null
+  calendar_provider?: string | null
+  calendar_api_version?: string | null
+  calendar_api_url?: string | null
   calendar_api_key?: string | null
   calendar_meeting_id?: string | null
   chatnode_integration?: boolean | null
@@ -115,6 +128,9 @@ const initialFormData: Agent = {
   voice_api_key: null,
   voice_id: null,
   calendar_integration: false,
+  calendar_provider: "calcom",
+  calendar_api_version: "v1",
+  calendar_api_url: CALCOM_DEFAULT_API_URLS.v1,
   calendar_api_key: null,
   calendar_meeting_id: null,
   chatnode_integration: false,
@@ -378,6 +394,17 @@ export function AgentModal({
         }
       }
 
+      // Normalizar configurações de calendário
+      const resolvedCalendarProvider = agent.calendar_provider || "calcom"
+      const resolvedCalendarVersion =
+        resolvedCalendarProvider === "calcom"
+          ? agent.calendar_api_version || "v1"
+          : agent.calendar_api_version
+      const resolvedCalendarUrl =
+        resolvedCalendarProvider === "calcom"
+          ? agent.calendar_api_url || getCalcomDefaultUrl(resolvedCalendarVersion)
+          : agent.calendar_api_url || null
+
       // Carregar dados do agente existente
       const agentData = {
         ...agent, // Usar todos os dados do agente primeiro
@@ -396,6 +423,12 @@ export function AgentModal({
         split_messages: Boolean(agent.split_messages),
         // Garantir que @g.us esteja sempre presente
         ignore_jids: ensureGroupsProtection(processedIgnoreJids),
+        calendar_provider: resolvedCalendarProvider,
+        calendar_api_version: resolvedCalendarProvider === "calcom" ? resolvedCalendarVersion || "v1" : resolvedCalendarVersion,
+        calendar_api_url:
+          resolvedCalendarProvider === "calcom"
+            ? resolvedCalendarUrl || getCalcomDefaultUrl(resolvedCalendarVersion)
+            : resolvedCalendarUrl,
       }
 
       setFormData(agentData)
@@ -573,6 +606,57 @@ export function AgentModal({
 
   const handleSelectChange = (name: string, value: string | number) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleCalendarProviderChange = (value: string) => {
+    setFormData((prev) => {
+      if (value === "calcom") {
+        const version = prev.calendar_api_version || "v1"
+        const shouldPreserveUrl =
+          prev.calendar_provider === "calcom" &&
+          prev.calendar_api_url &&
+          prev.calendar_api_url.trim().length > 0 &&
+          prev.calendar_api_url !== getCalcomDefaultUrl(prev.calendar_api_version)
+
+        return {
+          ...prev,
+          calendar_provider: value,
+          calendar_api_version: version,
+          calendar_api_url: shouldPreserveUrl ? prev.calendar_api_url : getCalcomDefaultUrl(version),
+        }
+      }
+
+      return {
+        ...prev,
+        calendar_provider: value,
+        calendar_api_version: null,
+        calendar_api_url: null,
+      }
+    })
+  }
+
+  const handleCalendarVersionChange = (value: string) => {
+    setFormData((prev) => {
+      if (prev.calendar_provider !== "calcom") {
+        return {
+          ...prev,
+          calendar_api_version: value,
+        }
+      }
+
+      const previousVersion = prev.calendar_api_version || "v1"
+      const previousDefault = getCalcomDefaultUrl(previousVersion)
+      const shouldUpdateUrl =
+        !prev.calendar_api_url ||
+        prev.calendar_api_url === previousDefault ||
+        prev.calendar_api_url === getCalcomDefaultUrl(prev.calendar_api_version)
+
+      return {
+        ...prev,
+        calendar_api_version: value,
+        calendar_api_url: shouldUpdateUrl ? getCalcomDefaultUrl(value) : prev.calendar_api_url,
+      }
+    })
   }
 
   const handleSliderChange = (name: string, value: number[]) => {
@@ -766,6 +850,16 @@ _______________________________________
       // Garantir que @g.us esteja sempre presente antes de salvar
       const finalIgnoreJids = ensureGroupsProtection(formData.ignore_jids)
 
+      const calendarProvider = formData.calendar_provider || "calcom"
+      const calendarVersion =
+        calendarProvider === "calcom"
+          ? formData.calendar_api_version || "v1"
+          : formData.calendar_api_version || null
+      const calendarUrl =
+        calendarProvider === "calcom"
+          ? formData.calendar_api_url || getCalcomDefaultUrl(calendarVersion)
+          : formData.calendar_api_url || null
+
       // Payload completo para a API
       const agentPayload = {
         name: formData.name,
@@ -781,6 +875,9 @@ _______________________________________
         voice_api_key: formData.voice_api_key,
         voice_id: formData.voice_id,
         calendar_integration: formData.calendar_integration,
+        calendar_provider: calendarProvider,
+        calendar_api_version: calendarVersion,
+        calendar_api_url: calendarUrl,
         calendar_api_key: formData.calendar_api_key,
         calendar_meeting_id: formData.calendar_meeting_id,
         chatnode_integration: formData.chatnode_integration,
@@ -2448,12 +2545,117 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                       id="calendar_integration"
                       name="calendar_integration"
                       checked={formData.calendar_integration || false}
-                      onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, calendar_integration: checked }))}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => {
+                          if (!checked) {
+                            return { ...prev, calendar_integration: checked }
+                          }
+
+                          const provider = prev.calendar_provider || "calcom"
+                          const version =
+                            provider === "calcom" ? prev.calendar_api_version || "v1" : prev.calendar_api_version
+                          const existingUrl =
+                            provider === "calcom"
+                              ? prev.calendar_api_url && prev.calendar_api_url.trim().length > 0
+                                ? prev.calendar_api_url
+                                : getCalcomDefaultUrl(version)
+                              : prev.calendar_api_url || null
+
+                          return {
+                            ...prev,
+                            calendar_integration: checked,
+                            calendar_provider: provider,
+                            calendar_api_version: provider === "calcom" ? version : prev.calendar_api_version,
+                            calendar_api_url: existingUrl,
+                          }
+                        })
+                      }
                       className={switchStyles}
                     />
                   </div>
                   {formData.calendar_integration && (
                     <div className="space-y-3 pl-4 border-l-2 border-green-200 bg-green-50 p-4 rounded dark:bg-gray-700 dark:border-green-700">
+                      <div>
+                        <Label htmlFor="calendar_provider" className="text-gray-900 dark:text-gray-100">
+                          Provedor de Calendário
+                        </Label>
+                        <Select
+                          value={formData.calendar_provider || "calcom"}
+                          onValueChange={handleCalendarProviderChange}
+                        >
+                          <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                            <SelectValue placeholder="Selecione o provedor" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                            <SelectItem value="calcom">Cal.com</SelectItem>
+                            <SelectItem value="coming_soon">Em breve</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                          Escolha qual provedor de calendário será utilizado para os agendamentos.
+                        </p>
+                      </div>
+
+                      {formData.calendar_provider === "coming_soon" && (
+                        <div className="rounded-md border border-dashed border-yellow-400 bg-yellow-50 p-3 text-xs text-yellow-700 dark:bg-gray-800 dark:border-yellow-700 dark:text-yellow-300">
+                          Novas integrações de calendário estarão disponíveis em breve.
+                        </div>
+                      )}
+
+                      {formData.calendar_provider === "calcom" && (
+                        <>
+                          <div>
+                            <Label htmlFor="calendar_api_version" className="text-gray-900 dark:text-gray-100">
+                              Versão da API
+                            </Label>
+                            <Select
+                              value={formData.calendar_api_version || "v1"}
+                              onValueChange={handleCalendarVersionChange}
+                            >
+                              <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                                <SelectValue placeholder="Selecione a versão" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                                <SelectItem value="v1">v1 (https://api.cal.com/v1)</SelectItem>
+                                <SelectItem value="v2">v2 (https://api.cal.com/v2)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div>
+                            <Label htmlFor="calendar_api_url" className="text-gray-900 dark:text-gray-100">
+                              URL da API do Calendário
+                            </Label>
+                            <Input
+                              id="calendar_api_url"
+                              name="calendar_api_url"
+                              value={formData.calendar_api_url || ""}
+                              onChange={handleInputChange}
+                              placeholder={getCalcomDefaultUrl(formData.calendar_api_version)}
+                              className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                              Personalize a URL caso utilize um proxy ou ambiente dedicado do provedor.
+                            </p>
+                          </div>
+
+                          <div>
+                            <Label htmlFor="calendar_meeting_id" className="text-gray-900 dark:text-gray-100">
+                              ID da Reunião/Calendário
+                            </Label>
+                            <Input
+                              id="calendar_meeting_id"
+                              name="calendar_meeting_id"
+                              value={formData.calendar_meeting_id || ""}
+                              onChange={handleInputChange}
+                              placeholder="ID da reunião ou calendário"
+                              className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                              Informe o identificador da reunião ou calendário onde os agendamentos serão criados.
+                            </p>
+                          </div>
+
                       <div>
                         <Label htmlFor="calendar_api_key" className="text-gray-900 dark:text-gray-100">
                           Chave API do Calendário
@@ -2479,22 +2681,8 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                           </Button>
                         </div>
                       </div>
-                      <div>
-                        <Label htmlFor="calendar_meeting_id" className="text-gray-900 dark:text-gray-100">
-                          ID da Reunião/Calendário
-                        </Label>
-                        <Input
-                          id="calendar_meeting_id"
-                          name="calendar_meeting_id"
-                          value={formData.calendar_meeting_id || ""}
-                          onChange={handleInputChange}
-                          placeholder="ID da reunião ou calendário"
-                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
-                          ID específico da reunião ou calendário para agendamentos
-                        </p>
-                      </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

@@ -179,6 +179,17 @@ export async function PUT(
     }
 
     // 1. Atualizar no banco primeiro - filtrar apenas campos da tabela ai_agents
+    const calendarProvider = body.calendar_provider || "calcom";
+    const calendarVersion =
+      calendarProvider === "calcom"
+        ? body.calendar_api_version || "v1"
+        : body.calendar_api_version || null;
+    const calendarUrl =
+      calendarProvider === "calcom"
+        ? body.calendar_api_url ||
+          (calendarVersion === "v2" ? "https://api.cal.com/v2" : "https://api.cal.com/v1")
+        : body.calendar_api_url || null;
+
     const aiAgentFields = {
       name: body.name,
       identity_description: body.identity_description,
@@ -193,6 +204,9 @@ export async function PUT(
       voice_api_key: body.voice_api_key,
       voice_id: body.voice_id,
       calendar_integration: body.calendar_integration,
+      calendar_provider: calendarProvider,
+      calendar_api_version: calendarVersion,
+      calendar_api_url: calendarUrl,
       calendar_api_key: body.calendar_api_key,
       calendar_meeting_id: body.calendar_meeting_id,
       chatnode_integration: body.chatnode_integration,
