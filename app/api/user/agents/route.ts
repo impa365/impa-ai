@@ -354,6 +354,29 @@ export async function POST(request: Request) {
 
         console.log("✅ [UAZAPI] N8N Session encontrado")
 
+        // Buscar API key ativa do usuário para incluir no url_api
+        console.log("🔍 [UAZAPI] Buscando API key ativa do usuário...")
+        let userApiKey = null
+        try {
+          const apiKeyResponse = await fetch(
+            `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${currentUser.id}&is_active=eq.true&order=created_at.desc&limit=1`,
+            { headers }
+          )
+          if (apiKeyResponse.ok) {
+            const apiKeys = await apiKeyResponse.json()
+            if (apiKeys && apiKeys.length > 0) {
+              userApiKey = apiKeys[0].api_key
+              console.log("✅ [UAZAPI] API key do usuário encontrada")
+            } else {
+              console.warn("⚠️ [UAZAPI] Nenhuma API key ativa encontrada para o usuário")
+              throw new Error("É necessário criar uma API key antes de criar um agente. Vá para 'Configurações > API Keys' e crie uma chave de API ativa.")
+            }
+          }
+        } catch (apiKeyError: any) {
+          console.error("❌ [UAZAPI] Erro com API key do usuário:", apiKeyError.message)
+          throw apiKeyError
+        }
+
         // ============================================
         // VALIDAÇÕES DE SEGURANÇA (BACKEND)
         // ============================================
@@ -409,11 +432,25 @@ export async function POST(request: Request) {
         }
         console.log("🔍 [UAZAPI] ignoreJids convertido:", ignoreJidsString)
         
+        // Construir URL com agentId, panelUrl e apiKey
+        let botUrlApi
+        if (n8nWebhookUrl) {
+          botUrlApi = `${n8nWebhookUrl}?agentId=${agentId}`
+          if (userApiKey) {
+            botUrlApi += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`
+          }
+        } else {
+          botUrlApi = `${baseUrl}/api/agents/webhook?agentId=${agentId}`
+          if (userApiKey) {
+            botUrlApi += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`
+          }
+        }
+        
+        console.log("📌 [UAZAPI] URL API construída:", botUrlApi)
+        
         const botPayload = {
           nome: agentData.name,
-          url_api: n8nWebhookUrl
-            ? `${n8nWebhookUrl}?agentId=${agentId}`
-            : `${baseUrl}/api/agents/webhook?agentId=${agentId}`,
+          url_api: botUrlApi,
           apikey: n8nIntegrations?.[0]?.api_key || null,
           gatilho: agentData.bot_gatilho || "Palavra-chave",
           operador_gatilho: agentData.bot_operador || "Contém",
@@ -580,14 +617,50 @@ export async function POST(request: Request) {
 
           console.log("🔗 URL da Evolution API:", evolutionApiUrl)
 
+          // Buscar API key ativa do usuário para incluir no webhook
+          console.log("🔍 Buscando API key ativa do usuário...")
+          let userApiKey = null
+          try {
+            const apiKeyResponse = await fetch(
+              `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${agentData.user_id}&is_active=eq.true&order=created_at.desc&limit=1`,
+              { headers }
+            )
+            if (apiKeyResponse.ok) {
+              const apiKeys = await apiKeyResponse.json()
+              if (apiKeys && apiKeys.length > 0) {
+                userApiKey = apiKeys[0].api_key
+                console.log("✅ API key do usuário encontrada")
+              } else {
+                console.warn("⚠️ Nenhuma API key ativa encontrada para o usuário")
+                throw new Error("É necessário criar uma API key antes de criar um agente. Vá para 'Configurações > API Keys' e crie uma chave de API ativa.")
+              }
+            }
+          } catch (apiKeyError: any) {
+            console.error("❌ Erro com API key do usuário:", apiKeyError.message)
+            throw apiKeyError
+          }
+
+          // Construir URL do webhook com agentId, panelUrl e apiKey
+          let webhookUrl
+          if (n8nWebhookUrl) {
+            webhookUrl = `${n8nWebhookUrl}?agentId=${agentId}`
+            if (userApiKey) {
+              webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`
+            }
+          } else {
+            webhookUrl = `${baseUrl}/api/agents/webhook?agentId=${agentId}`
+            if (userApiKey) {
+              webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`
+            }
+          }
+
+          console.log("📌 Webhook URL construída:", webhookUrl)
+
           // Preparar dados para Evolution API no formato correto
           const evolutionBotData = {
             enabled: true,
             description: agentData.name,
-            // Usar o ID real do agente no webhook
-            apiUrl: n8nWebhookUrl
-              ? `${n8nWebhookUrl}?agentId=${agentId}`
-              : `${baseUrl}/api/agents/webhook?agentId=${agentId}`,
+            apiUrl: webhookUrl,
             apiKey:
               n8nWebhookUrl && n8nIntegrations?.[0]?.api_key
                 ? n8nIntegrations[0].api_key

@@ -45,6 +45,8 @@ export default function AdminSettingsPage() {
     uazapiApiKey: "",
     n8nSessionWebhookUrl: "",
     n8nSessionApiKey: "",
+    n8nApiUrl: "",
+    n8nApiApiKey: "",
   })
 
   // Estados para upload de arquivos
@@ -327,6 +329,13 @@ export default function AdminSettingsPage() {
         if (!integrationForm.n8nSessionWebhookUrl.trim()) {
           throw new Error("URL do Webhook do Session é obrigatória")
         }
+      } else if (type === "n8n_api") {
+        if (!integrationForm.n8nApiUrl.trim()) {
+          throw new Error("URL do n8n é obrigatória")
+        }
+        if (!integrationForm.n8nApiApiKey.trim()) {
+          throw new Error("API Key do n8n é obrigatória")
+        }
       }
 
       // Preparar dados de configuração
@@ -351,6 +360,11 @@ export default function AdminSettingsPage() {
           webhookUrl: integrationForm.n8nSessionWebhookUrl.trim(),
           apiKey: integrationForm.n8nSessionApiKey?.trim() || null,
         }
+      } else if (type === "n8n_api") {
+        config = {
+          n8n_url: integrationForm.n8nApiUrl.trim(),
+          n8n_apikey: integrationForm.n8nApiApiKey.trim(),
+        }
       }
 
       const response = await fetch("/api/integrations", {
@@ -360,7 +374,7 @@ export default function AdminSettingsPage() {
         },
         body: JSON.stringify({
           type,
-          name: type === "evolution_api" ? "Evolution API" : type === "n8n" ? "n8n" : type === "uazapi" ? "Uazapi" : "n8n_session",
+          name: type === "evolution_api" ? "Evolution API" : type === "n8n" ? "n8n" : type === "uazapi" ? "Uazapi" : type === "n8n_session" ? "n8n Session" : "N8N API",
           config,
         }),
       })
@@ -387,6 +401,8 @@ export default function AdminSettingsPage() {
           uazapiApiKey: "",
           n8nSessionWebhookUrl: "",
           n8nSessionApiKey: "",
+          n8nApiUrl: "",
+          n8nApiApiKey: "",
         })
 
         toast({
@@ -1065,6 +1081,8 @@ export default function AdminSettingsPage() {
         uazapiApiKey: "",
         n8nSessionWebhookUrl: "",
         n8nSessionApiKey: "",
+        n8nApiUrl: "",
+        n8nApiApiKey: "",
       })
 
       // Depois preencher com dados existentes (SEM LOGS)
@@ -1091,6 +1109,12 @@ export default function AdminSettingsPage() {
           ...prev,
           n8nSessionWebhookUrl: config.webhookUrl || "",
           n8nSessionApiKey: config.apiKey || "",
+        }))
+      } else if (type === "n8n_api") {
+        setIntegrationForm((prev) => ({
+          ...prev,
+          n8nApiUrl: config.n8n_url || "",
+          n8nApiApiKey: config.n8n_apikey || "",
         }))
       }
 
@@ -1187,6 +1211,25 @@ export default function AdminSettingsPage() {
                 variant={getIntegrationConfig("n8n_session").webhookUrl ? undefined : "outline"}
               >
                 {getIntegrationConfig("n8n_session").webhookUrl ? "Configurado" : "Configurar"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <Image src="/images/n8n-logo.png" alt="n8n API" width={40} height={40} className="rounded" />
+              </div>
+              <h4 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">N8N API</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Gerenciar workflows via API</p>
+              <Button
+                onClick={() => openIntegrationModal("n8n_api", "N8N API")}
+                className={
+                  getIntegrationConfig("n8n_api").n8n_url ? "w-full bg-green-600 text-white hover:bg-green-700" : "w-full"
+                }
+                variant={getIntegrationConfig("n8n_api").n8n_url ? undefined : "outline"}
+              >
+                {getIntegrationConfig("n8n_api").n8n_url ? "Configurado" : "Configurar"}
               </Button>
             </CardContent>
           </Card>
@@ -1338,6 +1381,44 @@ export default function AdminSettingsPage() {
                       placeholder="API Key (se configurado no webhook)"
                       className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
                     />
+                  </div>
+                </>
+              )}
+
+              {selectedIntegration?.type === "n8n_api" && (
+                <>
+                  <div>
+                    <Label htmlFor="n8nApiUrl" className="text-gray-900 dark:text-gray-100">
+                      URL do n8n *
+                    </Label>
+                    <Input
+                      id="n8nApiUrl"
+                      value={integrationForm.n8nApiUrl}
+                      onChange={(e) => setIntegrationForm({ ...integrationForm, n8nApiUrl: e.target.value })}
+                      placeholder="https://n8n.exemplo.com"
+                      required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      URL base da sua instância n8n (ex: https://n8n.exemplo.com)
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="n8nApiApiKey" className="text-gray-900 dark:text-gray-100">
+                      API Key do n8n *
+                    </Label>
+                    <Input
+                      id="n8nApiApiKey"
+                      type="password"
+                      value={integrationForm.n8nApiApiKey}
+                      onChange={(e) => setIntegrationForm({ ...integrationForm, n8nApiApiKey: e.target.value })}
+                      placeholder="Sua API Key do n8n"
+                      required
+                      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      API Key gerada em Settings → API no seu n8n
+                    </p>
                   </div>
                 </>
               )}

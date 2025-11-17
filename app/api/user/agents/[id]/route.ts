@@ -317,14 +317,48 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
               console.log("⚠️ N8N não configurado para atualização")
             }
 
+            // Buscar API key ativa do usuário para incluir no webhook
+            console.log("🔍 Buscando API key ativa do usuário...")
+            let userApiKey = null
+            try {
+              const apiKeyResponse = await fetch(
+                `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${agentData.user_id}&is_active=eq.true&order=created_at.desc&limit=1`,
+                { headers }
+              )
+              if (apiKeyResponse.ok) {
+                const apiKeys = await apiKeyResponse.json()
+                if (apiKeys && apiKeys.length > 0) {
+                  userApiKey = apiKeys[0].api_key
+                  console.log("✅ API key do usuário encontrada")
+                } else {
+                  console.warn("⚠️ Nenhuma API key ativa encontrada para o usuário")
+                }
+              }
+            } catch (apiKeyError) {
+              console.warn("⚠️ Erro ao buscar API key do usuário:", apiKeyError)
+            }
+
+            // Construir URL do webhook com agentId, panelUrl e apiKey
+            let webhookUrl
+            if (n8nWebhookUrl) {
+              webhookUrl = `${n8nWebhookUrl}?agentId=${agentId}`
+              if (userApiKey) {
+                webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`
+              }
+            } else {
+              webhookUrl = `${baseUrl}/api/agents/webhook?agentId=${agentId}`
+              if (userApiKey) {
+                webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`
+              }
+            }
+
+            console.log("📌 Webhook URL construída:", webhookUrl)
+
             // Preparar dados para Evolution API (EXATAMENTE igual ao admin)
             const evolutionBotData = {
               enabled: true,
               description: agentData.name,
-              // Usar o ID real do agente no webhook (igual ao admin)
-              apiUrl: n8nWebhookUrl
-                ? `${n8nWebhookUrl}?agentId=${agentId}`
-                : `${baseUrl}/api/agents/webhook?agentId=${agentId}`,
+              apiUrl: webhookUrl,
               apiKey:
                 n8nWebhookUrl && n8nIntegrations?.[0]?.api_key
                   ? n8nIntegrations[0].api_key
