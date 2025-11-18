@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       );
     }
     const regSettingResp = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?select=setting_value&setting_key=eq.public_registration_enabled`,
+      `${supabaseUrl}/rest/v1/system_settings?select=setting_value&setting_key=eq.allow_public_registration`,
       {
         headers: {
           apikey: supabaseKey,
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
         },
       }
     );
-    let regEnabled = true;
+    let regEnabled = false;
     if (regSettingResp.ok) {
       const regSettings = await regSettingResp.json();
       if (regSettings && regSettings.length > 0) {
