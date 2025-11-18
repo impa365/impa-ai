@@ -35,11 +35,11 @@ export async function POST(request: NextRequest) {
     }
     if (!regEnabled) {
       // Pegadinha/piada
+      const customMsg = "Infelizmente, você não pode se cadastrar agora. Tente novamente quando Saturno estiver em Capricórnio ou peça permissão para o administrador. 😜";
       return NextResponse.json(
         {
-          error: "Cadastro público desativado",
-          message:
-            "Infelizmente, você não pode se cadastrar agora. Tente novamente quando Saturno estiver em Capricórnio ou peça permissão para o administrador. 😜",
+          error: customMsg,
+          message: customMsg,
           joke: "Por que o programador não pode se cadastrar? Porque o cadastro está em modo ninja! 🥷",
         },
         { status: 403 }
