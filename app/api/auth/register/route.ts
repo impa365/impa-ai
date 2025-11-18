@@ -5,6 +5,47 @@ export async function POST(request: NextRequest) {
   try {
     console.log("📝 Iniciando processo de registro...");
 
+    // Verificar se cadastro público está habilitado
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ Configuração do Supabase não encontrada");
+      return NextResponse.json(
+        { error: "Erro de configuração do servidor" },
+        { status: 500 }
+      );
+    }
+    const regSettingResp = await fetch(
+      `${supabaseUrl}/rest/v1/system_settings?select=setting_value&setting_key=eq.public_registration_enabled`,
+      {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    let regEnabled = true;
+    if (regSettingResp.ok) {
+      const regSettings = await regSettingResp.json();
+      if (regSettings && regSettings.length > 0) {
+        regEnabled =
+          String(regSettings[0].setting_value).toLowerCase() === "true";
+      }
+    }
+    if (!regEnabled) {
+      // Pegadinha/piada
+      return NextResponse.json(
+        {
+          error: "Cadastro público desativado",
+          message:
+            "Infelizmente, você não pode se cadastrar agora. Tente novamente quando Saturno estiver em Capricórnio ou peça permissão para o administrador. 😜",
+          joke: "Por que o programador não pode se cadastrar? Porque o cadastro está em modo ninja! 🥷",
+        },
+        { status: 403 }
+      );
+    }
+
     const { email, password, full_name } = await request.json();
 
     if (!email || !password || !full_name) {
@@ -18,16 +59,16 @@ export async function POST(request: NextRequest) {
     console.log("📧 Tentando registrar email:", email);
 
     // Usar fetch direto para o Supabase REST API
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY; // Usar anon key para criar usuário
+    // const supabaseUrl = process.env.SUPABASE_URL;
+    // const supabaseKey = process.env.SUPABASE_ANON_KEY; // Usar anon key para criar usuário
 
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ Configuração do Supabase não encontrada");
-      return NextResponse.json(
-        { error: "Erro de configuração do servidor" },
-        { status: 500 }
-      );
-    }
+    // if (!supabaseUrl || !supabaseKey) {
+    //   console.error("❌ Configuração do Supabase não encontrada");
+    //   return NextResponse.json(
+    //     { error: "Erro de configuração do servidor" },
+    //     { status: 500 }
+    //   );
+    // }
 
     // Verificar se usuário já existe
     const checkResponse = await fetch(
@@ -81,32 +122,37 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch (e) {
-      console.warn("Não foi possível buscar limites padrão do banco, usando fallback 1.");
+      console.warn(
+        "Não foi possível buscar limites padrão do banco, usando fallback 1."
+      );
     }
 
     // Criar usuário via REST API
-    const createResponse = await fetch(`${supabaseUrl}/rest/v1/user_profiles`, {
-      method: "POST",
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-      body: JSON.stringify({
-        email,
-        full_name,
-        password: passwordHash, // Corrigido: usar 'password' ao invés de 'password_hash'
-        role: "user",
-        status: "active",
-        agents_limit: defaultAgentsLimit,
-        connections_limit: defaultConnectionsLimit,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }),
-    });
+    const createResponse = await fetch(
+      `${supabaseUrl}/rest/v1/user_profiles`,
+      {
+        method: "POST",
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+          "Accept-Profile": "impaai",
+          "Content-Profile": "impaai",
+        },
+        body: JSON.stringify({
+          email,
+          full_name,
+          password: passwordHash, // Corrigido: usar 'password' ao invés de 'password_hash'
+          role: "user",
+          status: "active",
+          agents_limit: defaultAgentsLimit,
+          connections_limit: defaultConnectionsLimit,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }),
+      }
+    );
 
     if (!createResponse.ok) {
       const errorData = await createResponse.json();

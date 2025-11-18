@@ -89,6 +89,68 @@ export async function GET(
       );
     }
 
+    // Verificar disponibilidade do agente
+    const availabilityMode = agent.availability_mode || 'always';
+    
+    if (availabilityMode === 'disabled') {
+      console.warn(`🚫 Agente ${agentId} está desativado (availability_mode=disabled)`);
+      return NextResponse.json(
+        { 
+          error: "Agente não disponível",
+          message: "Este agente está temporariamente desativado",
+          availability: {
+            mode: 'disabled',
+            is_available: false
+          }
+        },
+        { status: 403 }
+      );
+    }
+    
+    if (availabilityMode === 'schedule') {
+      // Usar função PostgreSQL para verificar disponibilidade
+      const { data: availabilityCheck, error: availError } = await supabase
+        .rpc('is_agent_available', { 
+          p_agent_id: agentId,
+          p_check_time: new Date().toISOString()
+        });
+      
+      if (availError) {
+        console.error('❌ Erro ao verificar disponibilidade:', availError);
+        // Em caso de erro, permitir acesso por segurança
+      } else if (availabilityCheck === false) {
+        // Buscar próximo horário disponível
+        const { data: nextSchedule } = await supabase
+          .from('agent_availability_schedules')
+          .select('day_of_week, start_time, timezone')
+          .eq('agent_id', agentId)
+          .eq('is_active', true)
+          .order('day_of_week', { ascending: true })
+          .order('start_time', { ascending: true })
+          .limit(1)
+          .single();
+        
+        const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+        const nextAvailability = nextSchedule 
+          ? `${dayNames[nextSchedule.day_of_week]} às ${nextSchedule.start_time} (${nextSchedule.timezone})`
+          : 'Consulte o administrador';
+        
+        console.warn(`🕐 Agente ${agentId} fora do horário de atendimento`);
+        return NextResponse.json(
+          { 
+            error: "Agente fora do horário de atendimento",
+            message: "Este agente está disponível apenas em horários específicos",
+            availability: {
+              mode: 'schedule',
+              is_available: false,
+              next_available: nextAvailability
+            }
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     // Buscar conexão WhatsApp se existir
     let whatsappConnection = null;
     if (agent.whatsapp_connection_id) {
