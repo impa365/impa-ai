@@ -133,7 +133,8 @@ export default function OnboardingTutorial() {
     const tutorialCompleted = localStorage.getItem("tutorial_completed")
     const currentUser = getCurrentUser()
 
-    if (!tutorialCompleted && currentUser) {
+    // Apenas mostrar para admins
+    if (!tutorialCompleted && currentUser && currentUser.role === "admin") {
       setIsVisible(true)
     } else {
       setIsCompleted(true)

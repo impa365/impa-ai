@@ -1,15 +1,24 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getCurrentServerUser } from "@/lib/auth-server"
+import { NextResponse } from "next/server"
+import { cookies } from "next/headers"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // Verificar autenticação
-    const user = await getCurrentServerUser(request)
-    if (!user) {
+    // Buscar usuário atual do cookie
+    const cookieStore = await cookies()
+    const userCookie = cookieStore.get("impaai_user")
+
+    if (!userCookie) {
       return NextResponse.json({ success: false, error: "Usuário não autenticado" }, { status: 401 })
     }
 
-    console.log("🔍 Buscando conexões WhatsApp para usuário:", user.email)
+    let user
+    try {
+      user = JSON.parse(userCookie.value)
+    } catch (error) {
+      return NextResponse.json({ success: false, error: "Usuário não autenticado" }, { status: 401 })
+    }
+
+    console.log("🔍 Buscando conexões WhatsApp para usuário:", user.email, "ID:", user.id)
 
     // Configuração do Supabase (apenas no servidor)
     const supabaseUrl = process.env.SUPABASE_URL
@@ -28,14 +37,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Buscar conexões do usuário (incluindo api_type)
-    const connectionsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,connection_name,instance_name,phone_number,status,api_type,created_at,updated_at,last_sync,messages_sent,messages_received&user_id=eq.${user.id}&order=created_at.desc`,
-      { headers },
-    )
+    const connectionsUrl = `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,connection_name,instance_name,phone_number,status,api_type,created_at,updated_at,last_seen_at,messages_sent,messages_received&user_id=eq.${user.id}&order=created_at.desc`
+    console.log("📡 URL da requisição:", connectionsUrl)
+    
+    const connectionsResponse = await fetch(connectionsUrl, { headers })
 
     if (!connectionsResponse.ok) {
-      console.error("❌ Erro ao buscar conexões:", connectionsResponse.statusText)
-      return NextResponse.json({ success: false, error: "Erro ao buscar conexões" }, { status: 500 })
+      const errorText = await connectionsResponse.text()
+      console.error("❌ Erro ao buscar conexões:", connectionsResponse.status, connectionsResponse.statusText)
+      console.error("❌ Detalhes do erro:", errorText)
+      return NextResponse.json({ success: false, error: `Erro ao buscar conexões: ${connectionsResponse.statusText}` }, { status: 500 })
     }
 
     const connections = await connectionsResponse.json()
@@ -81,7 +92,7 @@ export async function GET(request: NextRequest) {
           api_type: conn.api_type || "evolution", // CRÍTICO: Incluir api_type
           created_at: conn.created_at,
           updated_at: conn.updated_at,
-          last_sync: conn.last_sync,
+          last_seen_at: conn.last_seen_at,
           messages_sent: conn.messages_sent || 0,
           messages_received: conn.messages_received || 0,
           // NÃO incluir: instance_token, instance_id, webhook_url, settings

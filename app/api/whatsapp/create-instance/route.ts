@@ -85,6 +85,88 @@ export async function POST(request: NextRequest) {
       Authorization: `Bearer ${supabaseKey}`,
     }
 
+    // ==================== VALIDAÇÃO DE LIMITE ====================
+    console.log("🔍 Verificando limite de conexões do usuário...")
+
+    // 1. Buscar perfil do usuário e limites
+    const userProfileResponse = await fetch(
+      `${supabaseUrl}/rest/v1/user_profiles?select=connections_limit,role&id=eq.${userId}`,
+      { headers }
+    )
+
+    if (!userProfileResponse.ok) {
+      return NextResponse.json(
+        { success: false, error: "Erro ao verificar limites do usuário" },
+        { status: 500 }
+      )
+    }
+
+    const userProfiles = await userProfileResponse.json()
+    if (!userProfiles || userProfiles.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "Usuário não encontrado" },
+        { status: 404 }
+      )
+    }
+
+    const userProfile = userProfiles[0]
+    const userLimit = userProfile.role === "admin" ? 999 : (userProfile.connections_limit || 1)
+
+    console.log(`📊 Limite do usuário: ${userLimit}`)
+
+    // 2. Buscar conexões atuais do usuário
+    const existingConnectionsResponse = await fetch(
+      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,created_at&user_id=eq.${userId}&order=created_at.desc`,
+      { headers }
+    )
+
+    if (!existingConnectionsResponse.ok) {
+      return NextResponse.json(
+        { success: false, error: "Erro ao verificar conexões existentes" },
+        { status: 500 }
+      )
+    }
+
+    const existingConnections = await existingConnectionsResponse.json()
+    const currentCount = existingConnections.length
+
+    console.log(`📊 Conexões atuais: ${currentCount} / ${userLimit}`)
+
+    // 3. Verificar se já atingiu o limite
+    if (currentCount >= userLimit) {
+      console.log("❌ Limite de conexões atingido!")
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Você atingiu o limite de ${userLimit} conexão${userLimit > 1 ? "ões" : ""}. Exclua uma conexão existente antes de criar uma nova.`,
+          currentCount,
+          limit: userLimit
+        },
+        { status: 403 }
+      )
+    }
+
+    // 4. Se houver conexões excedentes (caso já criadas), bloquear as mais recentes
+    if (currentCount > userLimit) {
+      console.log(`⚠️ Detectadas ${currentCount - userLimit} conexões excedentes. Bloqueando...`)
+      
+      // Pegar apenas as conexões excedentes (mais recentes)
+      const connectionsToBlock = existingConnections.slice(0, currentCount - userLimit)
+      
+      for (const conn of connectionsToBlock) {
+        await fetch(
+          `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${conn.id}`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({ status: "blocked_limit_exceeded" })
+          }
+        )
+      }
+
+      console.log(`✅ ${connectionsToBlock.length} conexões bloqueadas por excederem o limite`)
+    }
+
     // Buscar nome da plataforma
     const themeResponse = await fetch(
       `${supabaseUrl}/rest/v1/global_theme_config?select=system_name&order=created_at.desc&limit=1`,

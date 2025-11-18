@@ -5,6 +5,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   try {
     const { id: agentId } = await params
+    
+    // Buscar usuário atual do cookie
+    const { cookies } = await import("next/headers")
+    const cookieStore = await cookies()
+    const userCookie = cookieStore.get("impaai_user")
+
+    if (!userCookie) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    }
+
+    let currentUser
+    try {
+      currentUser = JSON.parse(userCookie.value)
+    } catch (error) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    }
+
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
@@ -20,9 +37,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    // Buscar agente com conexão WhatsApp
+    // Buscar agente com conexão WhatsApp - FILTRAR POR USER_ID
     const agentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!inner(id,connection_name,phone_number,instance_name,api_type)&id=eq.${agentId}`,
+      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections(id,connection_name,phone_number,instance_name,api_type)&id=eq.${agentId}&user_id=eq.${currentUser.id}`,
       { headers },
     )
 
@@ -32,7 +49,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const agents = await agentResponse.json()
     if (!agents || agents.length === 0) {
-      return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
+      return NextResponse.json({ error: "Agente não encontrado ou não pertence ao usuário" }, { status: 404 })
     }
 
     const agent = agents[0]

@@ -19,9 +19,25 @@ export async function GET() {
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    // Buscar todas as conexões WhatsApp incluindo api_type
+    // Buscar usuário atual do cookie
+    const { cookies } = await import("next/headers")
+    const cookieStore = await cookies()
+    const userCookie = cookieStore.get("impaai_user")
+
+    if (!userCookie) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    }
+
+    let currentUser
+    try {
+      currentUser = JSON.parse(userCookie.value)
+    } catch (error) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    }
+
+    // Buscar apenas conexões do usuário logado
     const response = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,connection_name,instance_name,status,api_type,user_id,phone_number,created_at,updated_at,settings,adciona_folow,remover_folow&order=created_at.desc`,
+      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,connection_name,instance_name,status,api_type,user_id,phone_number,created_at,updated_at,settings,adciona_folow,remover_folow&user_id=eq.${currentUser.id}&order=created_at.desc`,
       {
         headers,
       }
