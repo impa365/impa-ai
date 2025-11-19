@@ -5,7 +5,11 @@
 
 import { cookies } from "next/headers"
 import { type NextRequest } from "next/server"
-import { verifyAccessToken, extractTokenFromHeader, logJWTOperation } from "@/lib/jwt"
+import { 
+  decodeJWT, 
+  isTokenExpired, 
+  extractTokenFromHeader 
+} from "@/lib/jwt-edge"
 
 export interface AuthenticatedUser {
   id: string
@@ -27,10 +31,10 @@ export async function getAuthenticatedUser(request?: NextRequest): Promise<Authe
       const authHeader = request.headers.get("authorization")
       const token = extractTokenFromHeader(authHeader)
 
-      if (token) {
-        try {
-          const jwtPayload = verifyAccessToken(token)
-          logJWTOperation("AUTH", jwtPayload.email, true, "Header Authorization")
+      if (token && !isTokenExpired(token)) {
+        const jwtPayload = decodeJWT(token)
+        if (jwtPayload) {
+          console.log("✅ [JWT-AUTH] Autenticado via header:", jwtPayload.email)
 
           return {
             id: jwtPayload.id,
@@ -38,10 +42,9 @@ export async function getAuthenticatedUser(request?: NextRequest): Promise<Authe
             full_name: jwtPayload.full_name,
             role: jwtPayload.role,
           }
-        } catch (jwtError) {
-          console.log("❌ JWT inválido no header:", (jwtError as Error).message)
-          logJWTOperation("AUTH", "unknown", false, `Header: ${(jwtError as Error).message}`)
         }
+      } else if (token && isTokenExpired(token)) {
+        console.log("❌ [JWT-AUTH] Token expirado no header")
       }
     }
 
@@ -49,10 +52,10 @@ export async function getAuthenticatedUser(request?: NextRequest): Promise<Authe
     const cookieStore = await cookies()
     const jwtCookie = cookieStore.get("impaai_access_token")
 
-    if (jwtCookie) {
-      try {
-        const jwtPayload = verifyAccessToken(jwtCookie.value)
-        logJWTOperation("AUTH", jwtPayload.email, true, "Cookie JWT")
+    if (jwtCookie && !isTokenExpired(jwtCookie.value)) {
+      const jwtPayload = decodeJWT(jwtCookie.value)
+      if (jwtPayload) {
+        console.log("✅ [JWT-AUTH] Autenticado via cookie:", jwtPayload.email)
 
         return {
           id: jwtPayload.id,
@@ -60,10 +63,9 @@ export async function getAuthenticatedUser(request?: NextRequest): Promise<Authe
           full_name: jwtPayload.full_name,
           role: jwtPayload.role,
         }
-      } catch (jwtError) {
-        console.log("❌ JWT inválido no cookie:", (jwtError as Error).message)
-        logJWTOperation("AUTH", "unknown", false, `Cookie: ${(jwtError as Error).message}`)
       }
+    } else if (jwtCookie && isTokenExpired(jwtCookie.value)) {
+      console.log("❌ [JWT-AUTH] Token expirado no cookie")
     }
 
     // ⚠️ FALLBACK TEMPORÁRIO: Cookie JSON simples (SOMENTE PARA COMPATIBILIDADE)
