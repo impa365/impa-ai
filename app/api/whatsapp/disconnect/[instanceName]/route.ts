@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { disconnectUazapiInstanceServer } from "@/lib/uazapi-server";
 import { requireAuth, hasPermission } from "@/lib/auth-utils";
+import { logAccessDenied } from "@/lib/security-audit";
 
 export async function DELETE(
   request: NextRequest,
@@ -23,6 +24,7 @@ export async function DELETE(
       user = await requireAuth(request);
     } catch (authError) {
       console.error("❌ [DISCONNECT] Não autorizado:", (authError as Error).message);
+      logAccessDenied(undefined, undefined, `/api/whatsapp/disconnect/${instanceName}`, request, 'Token JWT inválido ou ausente')
       return NextResponse.json(
         { success: false, error: "Não autorizado" },
         { status: 401 }
@@ -77,6 +79,7 @@ export async function DELETE(
     // 🔒 SEGURANÇA: Validar propriedade da conexão
     if (!hasPermission(user.id, connection.user_id, user.role)) {
       console.error("❌ [DISCONNECT] Acesso negado: usuário não é dono nem admin");
+      logAccessDenied(user.id, user.email, `/api/whatsapp/disconnect/${instanceName}`, request, 'Usuário não é dono da conexão')
       return NextResponse.json(
         { success: false, error: "Você não tem permissão para desconectar esta instância" },
         { status: 403 }

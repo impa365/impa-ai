@@ -73,19 +73,8 @@ export async function getCurrentServerUser(
       }
     }
 
-    // PRIORIDADE 3: Fallback para cookie tradicional (compatibilidade)
-    const userCookie = cookieStore.get("impaai_user");
-    if (userCookie) {
-      try {
-        const user = JSON.parse(userCookie.value);
-        console.log("✅ Usuário encontrado no cookie tradicional:", user.email);
-        return user as ServerUser;
-      } catch (error) {
-        console.error("❌ Erro ao parsear cookie do usuário:", error);
-      }
-    }
-
-    console.log("❌ Usuário não encontrado em JWT ou cookies");
+    // ❌ SEM FALLBACK - JWT obrigatório
+    console.log("❌ [JWT-AUTH] Nenhum JWT válido encontrado");
     return null;
   } catch (error) {
     console.error("💥 Erro ao buscar usuário atual:", error);

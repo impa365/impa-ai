@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createUazapiInstanceServer } from "@/lib/uazapi-server"
+import { checkRateLimit, getRequestIdentifier, RATE_LIMITS } from "@/lib/rate-limit"
+import { logResourceCreated, logRateLimitExceeded } from "@/lib/security-audit"
 
 // Função para gerar token único
 function generateInstanceToken(): string {
@@ -66,6 +68,17 @@ export async function POST(request: NextRequest) {
           error: "Nome da conexão e ID do usuário são obrigatórios",
         },
         { status: 400 }
+      )
+    }
+
+    // 🔒 RATE LIMITING - Operação de escrita
+    const rateLimit = checkRateLimit(getRequestIdentifier(request, userId), RATE_LIMITS.WRITE)
+    if (!rateLimit.allowed) {
+      console.warn(`⚠️ [RATE-LIMIT] User ${userId} bloqueado ao criar instância`)
+      logRateLimitExceeded(userId, undefined, '/api/whatsapp/create-instance', request)
+      return NextResponse.json(
+        { success: false, error: `Muitas requisições. Aguarde ${rateLimit.retryAfter}s` },
+        { status: 429 }
       )
     }
 
@@ -379,11 +392,15 @@ export async function POST(request: NextRequest) {
     }
 
     const savedConnection = await saveResponse.json()
+    const connection = Array.isArray(savedConnection) ? savedConnection[0] : savedConnection
+
+    // Log de auditoria - criação de conexão
+    logResourceCreated(userId, connectionName, 'connection', connection.id, request)
 
     return NextResponse.json({
       success: true,
       data: {
-        connection: Array.isArray(savedConnection) ? savedConnection[0] : savedConnection,
+        connection,
         apiResponse: Array.isArray(apiResponse) ? apiResponse[0] : apiResponse,
         apiType,
       },

@@ -68,26 +68,8 @@ export async function getAuthenticatedUser(request?: NextRequest): Promise<Authe
       console.log("❌ [JWT-AUTH] Token expirado no cookie")
     }
 
-    // ⚠️ FALLBACK TEMPORÁRIO: Cookie JSON simples (SOMENTE PARA COMPATIBILIDADE)
-    // TODO: Remover após migração completa para JWT
-    const userCookie = cookieStore.get("impaai_user")
-    if (userCookie) {
-      try {
-        const user = JSON.parse(userCookie.value)
-        console.warn("⚠️ Usando fallback de cookie JSON (não seguro) - migrar para JWT")
-        
-        return {
-          id: user.id,
-          email: user.email,
-          full_name: user.full_name,
-          role: user.role,
-        }
-      } catch (error) {
-        console.error("❌ Erro ao parsear cookie do usuário:", error)
-      }
-    }
-
-    console.log("❌ Nenhuma autenticação válida encontrada")
+    // ❌ SEM FALLBACK - JWT obrigatório
+    console.log("❌ [JWT-AUTH] Nenhum JWT válido encontrado - autenticação negada")
     return null
   } catch (error) {
     console.error("💥 Erro ao autenticar usuário:", error)

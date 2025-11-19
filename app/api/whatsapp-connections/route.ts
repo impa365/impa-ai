@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
+import { checkRateLimit, getRequestIdentifier, RATE_LIMITS } from "@/lib/rate-limit"
+import { logAccessDenied, logRateLimitExceeded } from "@/lib/security-audit"
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,9 +11,21 @@ export async function GET(request: NextRequest) {
       user = await requireAuth(request)
     } catch (authError) {
       console.error("❌ Não autorizado:", (authError as Error).message)
+      logAccessDenied(undefined, undefined, '/api/whatsapp-connections', request, 'Token JWT inválido ou ausente')
       return NextResponse.json(
         { success: false, error: "Não autorizado" },
         { status: 401 }
+      )
+    }
+
+    // 🔒 RATE LIMITING
+    const rateLimit = checkRateLimit(getRequestIdentifier(request, user.id), RATE_LIMITS.READ)
+    if (!rateLimit.allowed) {
+      console.warn(`⚠️ [RATE-LIMIT] ${user.email} bloqueado por ${rateLimit.retryAfter}s`)
+      logRateLimitExceeded(user.id, user.email, '/api/whatsapp-connections', request)
+      return NextResponse.json(
+        { success: false, error: `Muitas requisições. Aguarde ${rateLimit.retryAfter}s` },
+        { status: 429 }
       )
     }
 

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getCurrentServerUser } from "@/lib/auth-server";
 import { deleteUazapiInstanceServer } from "@/lib/uazapi-server";
+import { logResourceDeleted, logAccessDenied } from "@/lib/security-audit";
 
 export async function DELETE(
   request: NextRequest,
@@ -23,6 +24,7 @@ export async function DELETE(
     const user = await getCurrentServerUser(request);
     if (!user) {
       console.error("❌ Usuário não autenticado");
+      logAccessDenied(undefined, undefined, `/api/whatsapp/delete-instance/${instanceName}`, request, 'Token JWT inválido ou ausente')
       return NextResponse.json(
         { success: false, error: "Usuário não autenticado" },
         { status: 401 }
@@ -223,6 +225,9 @@ export async function DELETE(
         { status: 500 }
       );
     }
+
+    // Log de auditoria - deleção bem-sucedida
+    logResourceDeleted(user.id, user.email, 'connection', connection.id, request)
 
     return NextResponse.json({
       success: true,
