@@ -4,11 +4,12 @@ export interface UserProfile {
   id: string
   email: string
   full_name: string
-  role: "admin" | "user"
+  role: "super_admin" | "admin" | "user"
   status: "active" | "inactive"
   created_at: string
   updated_at: string
   last_login_at?: string
+  company_id?: string
 }
 
 export interface LoginCredentials {

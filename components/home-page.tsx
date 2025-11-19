@@ -22,7 +22,10 @@ export default function HomePage() {
           setUser(parsedUser)
 
           // Redirecionar baseado no role
-          if (parsedUser.role === "admin") {
+          if (parsedUser.role === "super_admin") {
+            router.push("/super-admin")
+            return
+          } else if (parsedUser.role === "admin") {
             router.push("/admin")
             return
           } else {

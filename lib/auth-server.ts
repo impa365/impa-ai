@@ -10,7 +10,7 @@ export interface ServerUser {
   id: string;
   email: string;
   full_name: string;
-  role: "admin" | "user";
+  role: "super_admin" | "admin" | "user";
   status: "active" | "inactive";
   created_at: string;
   updated_at: string;

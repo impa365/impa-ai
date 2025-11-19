@@ -31,6 +31,9 @@ export async function middleware(req: NextRequest) {
   // Lista de rotas que precisam de role admin
   const adminRoutes = ["/admin", "/api/admin"];
 
+  // Lista de rotas que precisam de role super_admin
+  const superAdminRoutes = ["/super-admin", "/api/super-admin"];
+
   // Lista de rotas que precisam de autenticação (user ou admin)
   const authRoutes = [
     "/dashboard",
@@ -55,8 +58,9 @@ export async function middleware(req: NextRequest) {
     // Verificar se precisa de autenticação
     const needsAuth = authRoutes.some((route) => pathname.startsWith(route));
     const needsAdmin = adminRoutes.some((route) => pathname.startsWith(route));
+    const needsSuperAdmin = superAdminRoutes.some((route) => pathname.startsWith(route));
 
-    if (needsAuth || needsAdmin) {
+    if (needsAuth || needsAdmin || needsSuperAdmin) {
       let user = await getCurrentServerUser(req);
       let authMethod = "jwt";
 
@@ -79,8 +83,19 @@ export async function middleware(req: NextRequest) {
         );
       }
 
-      // Verificar se precisa de role admin
-      if (needsAdmin && user.role !== "admin") {
+      // Verificar se precisa de role super_admin
+      if (needsSuperAdmin && user.role !== "super_admin") {
+        console.log(
+          `🚫 Acesso negado à API ${pathname} - Usuário ${user.email} não é super_admin`
+        );
+        return NextResponse.json(
+          { error: "Acesso negado - Apenas super administradores" },
+          { status: 403 }
+        );
+      }
+
+      // Verificar se precisa de role admin (super_admin também tem acesso)
+      if (needsAdmin && user.role !== "admin" && user.role !== "super_admin") {
         console.log(
           `🚫 Acesso negado à API ${pathname} - Usuário ${user.email} não é admin`
         );
@@ -108,8 +123,11 @@ export async function middleware(req: NextRequest) {
   const needsPageAdmin = adminRoutes.some((route) =>
     pathname.startsWith(route)
   );
+  const needsPageSuperAdmin = superAdminRoutes.some((route) =>
+    pathname.startsWith(route)
+  );
 
-  if (needsPageAuth || needsPageAdmin) {
+  if (needsPageAuth || needsPageAdmin || needsPageSuperAdmin) {
     const user = await getCurrentServerUser(req);
 
     if (!user) {
@@ -121,12 +139,26 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    // Verificar se precisa de role admin
-    if (needsPageAdmin && user.role !== "admin") {
+    // Verificar se precisa de role super_admin
+    if (needsPageSuperAdmin && user.role !== "super_admin") {
+      console.log(
+        `🚫 Redirecionando página ${pathname} - Usuário ${user.email} não é super_admin`
+      );
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+
+    // Verificar se precisa de role admin (super_admin também tem acesso)
+    if (needsPageAdmin && user.role !== "admin" && user.role !== "super_admin") {
       console.log(
         `🚫 Redirecionando página ${pathname} - Usuário ${user.email} não é admin`
       );
       return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+
+    // Redirecionar super_admin para painel super admin se acessar dashboard comum
+    if (pathname.startsWith("/dashboard") && user.role === "super_admin") {
+      console.log(`🔄 Redirecionando super_admin ${user.email} para painel super admin`);
+      return NextResponse.redirect(new URL("/super-admin", req.url));
     }
 
     // Redirecionar admin para dashboard admin se acessar dashboard comum

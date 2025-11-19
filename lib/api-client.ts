@@ -172,6 +172,95 @@ class PublicApiClient {
   async getSystemSettings(): Promise<ApiResponse<{ settings: any }>> {
     return this.makeRequest("/api/system/settings")
   }
+
+  // ========================
+  // Super Admin APIs
+  // ========================
+
+  // Dashboard do Super Admin
+  async getSuperAdminDashboard(): Promise<ApiResponse<any>> {
+    return this.makeRequest("/api/super-admin/dashboard")
+  }
+
+  // Companies
+  async getCompanies(): Promise<ApiResponse<{ companies: any[] }>> {
+    return this.makeRequest("/api/super-admin/companies")
+  }
+
+  async createCompany(companyData: any): Promise<ApiResponse<{ company: any }>> {
+    return this.makeRequest("/api/super-admin/companies", {
+      method: "POST",
+      body: JSON.stringify(companyData),
+    })
+  }
+
+  async updateCompany(companyId: string, companyData: any): Promise<ApiResponse<{ company: any }>> {
+    return this.makeRequest(`/api/super-admin/companies/${companyId}`, {
+      method: "PUT",
+      body: JSON.stringify(companyData),
+    })
+  }
+
+  async deleteCompany(companyId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.makeRequest(`/api/super-admin/companies/${companyId}`, {
+      method: "DELETE",
+    })
+  }
+
+  // Company Users
+  async getCompanyUsers(companyId: string): Promise<ApiResponse<{ users: any[] }>> {
+    return this.makeRequest(`/api/super-admin/companies/${companyId}/users`)
+  }
+
+  async createCompanyUser(userData: any): Promise<ApiResponse<{ user: any }>> {
+    return this.makeRequest(`/api/super-admin/companies/${userData.company_id}/users`, {
+      method: "POST",
+      body: JSON.stringify(userData),
+    })
+  }
+
+  async updateCompanyUser(userId: string, userData: any): Promise<ApiResponse<{ user: any }>> {
+    return this.makeRequest(`/api/super-admin/companies/${userData.company_id}/users`, {
+      method: "PUT",
+      body: JSON.stringify({ id: userId, ...userData }),
+    })
+  }
+
+  async deleteCompanyUser(userId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.makeRequest(`/api/super-admin/users/${userId}`, {
+      method: "DELETE",
+    })
+  }
+
+  // All Users (Super Admin)
+  async getAllUsers(): Promise<ApiResponse<{ users: any[] }>> {
+    return this.makeRequest("/api/super-admin/users")
+  }
+
+  // Servers
+  async getServers(): Promise<ApiResponse<{ servers: any[] }>> {
+    return this.makeRequest("/api/super-admin/servers")
+  }
+
+  async createServer(serverData: any): Promise<ApiResponse<{ server: any }>> {
+    return this.makeRequest("/api/super-admin/servers", {
+      method: "POST",
+      body: JSON.stringify(serverData),
+    })
+  }
+
+  async updateServer(serverId: string, serverData: any): Promise<ApiResponse<{ server: any }>> {
+    return this.makeRequest(`/api/super-admin/servers/${serverId}`, {
+      method: "PUT",
+      body: JSON.stringify(serverData),
+    })
+  }
+
+  async deleteServer(serverId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.makeRequest(`/api/super-admin/servers/${serverId}`, {
+      method: "DELETE",
+    })
+  }
 }
 
 // Instância única do cliente de API

@@ -143,7 +143,9 @@ export default function HomePage() {
         
         if (user) {
           // Usuário logado - redirecionar sempre
-          if (user.role === "admin") {
+          if (user.role === "super_admin") {
+            router.push("/super-admin");
+          } else if (user.role === "admin") {
             router.push("/admin");
           } else {
             router.push("/dashboard");

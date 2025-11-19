@@ -78,7 +78,9 @@ function LoginForm() {
         localStorage.setItem("isAuthenticated", "true")
 
         // Redirecionar baseado no role do usuário
-        if (data.user.role === "admin") {
+        if (data.user.role === "super_admin") {
+          router.push("/super-admin")
+        } else if (data.user.role === "admin") {
           router.push("/admin")
         } else {
           router.push("/dashboard")

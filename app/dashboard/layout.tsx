@@ -30,6 +30,10 @@ export default function DashboardLayout({
       router.push("/")
       return
     }
+    if (currentUser.role === "super_admin") {
+      router.push("/super-admin")
+      return
+    }
     if (currentUser.role === "admin") {
       router.push("/admin")
       return
