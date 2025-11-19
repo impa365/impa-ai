@@ -1,10 +1,10 @@
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 import {
-  verifyAccessToken,
+  decodeJWT,
+  isTokenExpired,
   extractTokenFromHeader,
-  logJWTOperation,
-} from "@/lib/jwt";
+} from "@/lib/jwt-edge";
 
 export interface ServerUser {
   id: string;
@@ -26,18 +26,12 @@ export async function getCurrentServerUser(
       const authHeader = request.headers.get("authorization");
       const token = extractTokenFromHeader(authHeader);
 
-      if (token) {
-        try {
-          const jwtPayload = verifyAccessToken(token);
+      if (token && !isTokenExpired(token)) {
+        const jwtPayload = decodeJWT(token);
+        if (jwtPayload) {
           console.log(
             "✅ Usuário autenticado via JWT (header):",
             jwtPayload.email
-          );
-          logJWTOperation(
-            "VERIFY",
-            jwtPayload.email,
-            true,
-            "Header Authorization"
           );
 
           return {
@@ -50,17 +44,6 @@ export async function getCurrentServerUser(
             updated_at: "",
             last_login_at: new Date(jwtPayload.iat! * 1000).toISOString(),
           } as ServerUser;
-        } catch (jwtError) {
-          console.log(
-            "❌ JWT inválido no header:",
-            (jwtError as Error).message
-          );
-          logJWTOperation(
-            "VERIFY",
-            "unknown",
-            false,
-            `Header: ${(jwtError as Error).message}`
-          );
         }
       }
     }
@@ -69,14 +52,13 @@ export async function getCurrentServerUser(
     const cookieStore = await cookies();
     const jwtCookie = cookieStore.get("impaai_access_token");
 
-    if (jwtCookie) {
-      try {
-        const jwtPayload = verifyAccessToken(jwtCookie.value);
+    if (jwtCookie && !isTokenExpired(jwtCookie.value)) {
+      const jwtPayload = decodeJWT(jwtCookie.value);
+      if (jwtPayload) {
         console.log(
           "✅ Usuário autenticado via JWT (cookie):",
           jwtPayload.email
         );
-        logJWTOperation("VERIFY", jwtPayload.email, true, "Cookie JWT");
 
         return {
           id: jwtPayload.id,
@@ -88,14 +70,6 @@ export async function getCurrentServerUser(
           updated_at: "",
           last_login_at: new Date(jwtPayload.iat! * 1000).toISOString(),
         } as ServerUser;
-      } catch (jwtError) {
-        console.log("❌ JWT inválido no cookie:", (jwtError as Error).message);
-        logJWTOperation(
-          "VERIFY",
-          "unknown",
-          false,
-          `Cookie: ${(jwtError as Error).message}`
-        );
       }
     }
 
