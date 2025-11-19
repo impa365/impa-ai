@@ -2,9 +2,35 @@ import { type NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { generateTokenPair, logJWTOperation } from "@/lib/jwt";
+import { checkRateLimit, getRequestIdentifier, RATE_LIMITS } from "@/lib/rate-limit";
+import { logLoginAttempt, logRateLimitExceeded } from "@/lib/security-audit";
 
 export async function POST(request: NextRequest) {
   try {
+    // 🔒 RATE LIMITING - Prevenir força bruta
+    const identifier = getRequestIdentifier(request)
+    const rateLimit = checkRateLimit(identifier, RATE_LIMITS.AUTH)
+    
+    if (!rateLimit.allowed) {
+      console.warn(`⚠️ [RATE-LIMIT] Bloqueado: ${identifier} - Tente novamente em ${rateLimit.retryAfter}s`)
+      logRateLimitExceeded(undefined, email || 'desconhecido', '/api/auth/login', request)
+      return NextResponse.json(
+        { 
+          error: `Muitas tentativas de login. Tente novamente em ${rateLimit.retryAfter} segundos.`,
+          retryAfter: rateLimit.retryAfter
+        },
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': rateLimit.retryAfter!.toString(),
+            'X-RateLimit-Limit': RATE_LIMITS.AUTH.maxRequests.toString(),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
+          }
+        }
+      );
+    }
+
     const { email, password } = await request.json();
 
     console.log("🔐 Tentativa de login para:", email);
@@ -55,6 +81,7 @@ export async function POST(request: NextRequest) {
 
     if (!users || users.length === 0) {
       console.log("❌ Usuário não encontrado:", email);
+      logLoginAttempt(email, false, request, 'Usuário não encontrado')
       return NextResponse.json(
         { error: "Credenciais inválidas" },
         { status: 401 }
@@ -64,13 +91,11 @@ export async function POST(request: NextRequest) {
     const user = users[0];
 
     // Verificar senha usando bcrypt
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
+    const passwordMatch = await bcrypt.compare(password, user.password)
+    if (!passwordMatch) {
       console.log("❌ Senha incorreta para:", email);
-      return NextResponse.json(
-        { error: "Credenciais inválidas" },
-        { status: 401 }
-      );
+      logLoginAttempt(email, false, request, 'Senha incorreta')
+      return NextResponse.json({ success: false, error: 'Credenciais inválidas' }, { status: 401 })
     }
 
     // Verificar se usuário está ativo
@@ -121,6 +146,7 @@ export async function POST(request: NextRequest) {
 
       // Log de auditoria JWT
       logJWTOperation("LOGIN", user.email, true, `Role: ${user.role}`);
+      logLoginAttempt(user.email, true, request);
 
       // Definir cookies - tanto JWT quanto dados do usuário para compatibilidade
       const cookieStore = await cookies();

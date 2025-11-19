@@ -5,6 +5,7 @@ import "./globals.css"
 import { ThemeProvider, defaultTheme } from "@/components/theme-provider"
 import SystemHealthMonitor from "@/components/system-health-monitor"
 import { QuestSystemManager } from "@/components/quest-system/quest-system-manager"
+import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -27,6 +28,7 @@ export default function RootLayout({
           {children}
           <SystemHealthMonitor />
           <QuestSystemManager />
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

@@ -70,6 +70,7 @@ export default function AdminLayout({
       submenu: [
         { href: "/admin/settings/cron", icon: Clock4, label: "Monitor do cron" },
         { href: "/admin/settings/apikeysllm", icon: Sparkles, label: "API Keys LLM" },
+        { href: "/admin/n8n-workflows", icon: Zap, label: "N8N Workflows" },
       ],
     },
   ]

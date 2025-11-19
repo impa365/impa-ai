@@ -37,7 +37,14 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || "Erro ao buscar agente")
+        
+        // Mensagem específica para 404
+        if (response.status === 404) {
+          setError("Agente não encontrado ou você não tem permissão para acessá-lo")
+        } else {
+          setError(errorData.error || "Erro ao buscar agente")
+        }
+        return
       }
 
       const data = await response.json()
@@ -178,13 +185,43 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   if (error) {
     return (
       <div className="p-6">
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-        <Button className="mt-4" onClick={() => router.push("/dashboard/agents")}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Voltar para Agentes
-        </Button>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+          <div className="relative mb-6">
+            <div className="w-32 h-32 rounded-full bg-red-100 flex items-center justify-center">
+              <svg 
+                className="w-16 h-16 text-red-600" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth={2} 
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" 
+                />
+              </svg>
+            </div>
+            <div className="absolute -top-1 -right-1 w-10 h-10 bg-red-600 rounded-full flex items-center justify-center animate-pulse">
+              <span className="text-white text-2xl font-bold">!</span>
+            </div>
+          </div>
+          
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Acesso Negado</h2>
+          <p className="text-lg text-gray-700 mb-1">{error}</p>
+          <p className="text-sm text-gray-500 mb-8 max-w-md">
+            Este agente pode ter sido excluído ou pertencer a outro usuário. Você só pode acessar agentes criados por você.
+          </p>
+          
+          <Button 
+            size="lg"
+            onClick={() => router.push("/dashboard/agents")}
+            className="gap-2"
+          >
+            <ArrowLeft className="h-5 w-5" />
+            Voltar para Meus Agentes
+          </Button>
+        </div>
       </div>
     )
   }

@@ -1,10 +1,28 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { requireAuth } from "@/lib/auth-utils"
+import { logAccessDenied } from "@/lib/security-audit"
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   console.log("📡 API: GET /api/user/agents/[id] chamada")
 
   try {
     const { id: agentId } = await params
+    
+    // 🔒 SEGURANÇA: Autenticar usuário via JWT
+    let currentUser
+    try {
+      currentUser = await requireAuth(request)
+    } catch (authError) {
+      console.error("❌ Não autorizado:", (authError as Error).message)
+      logAccessDenied(undefined, undefined, `/api/user/agents/${agentId}`, request, 'Token JWT inválido ou ausente')
+      return NextResponse.json(
+        { error: "Não autorizado - Usuário não autenticado" },
+        { status: 401 }
+      )
+    }
+
+    console.log("✅ Usuário autenticado:", currentUser.email)
+
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
@@ -20,9 +38,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    // Buscar agente com conexão WhatsApp
+    // Buscar agente com conexão WhatsApp - FILTRAR POR USER_ID
     const agentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!inner(id,connection_name,phone_number,instance_name,api_type)&id=eq.${agentId}`,
+      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections(id,connection_name,phone_number,instance_name,api_type)&id=eq.${agentId}&user_id=eq.${currentUser.id}`,
       { headers },
     )
 
@@ -32,7 +50,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const agents = await agentResponse.json()
     if (!agents || agents.length === 0) {
-      return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
+      return NextResponse.json({ error: "Agente não encontrado ou não pertence ao usuário" }, { status: 404 })
     }
 
     const agent = agents[0]
@@ -74,27 +92,25 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   console.log("📡 API: PUT /api/user/agents/[id] chamada")
 
   try {
     const { id: agentId } = await params
     
-    // Buscar usuário atual do cookie
-    const { cookies } = await import("next/headers")
-    const cookieStore = await cookies()
-    const userCookie = cookieStore.get("impaai_user")
-
-    if (!userCookie) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
+    // 🔒 SEGURANÇA: Autenticar usuário via JWT
     let currentUser
     try {
-      currentUser = JSON.parse(userCookie.value)
-    } catch (error) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+      currentUser = await requireAuth(request)
+    } catch (authError) {
+      console.error("❌ Não autorizado:", (authError as Error).message)
+      logAccessDenied(undefined, undefined, `/api/user/agents/${agentId} (PUT)`, request, 'Token JWT inválido ou ausente')
+      return NextResponse.json(
+        { error: "Não autorizado - Usuário não autenticado" },
+        { status: 401 }
+      )
     }
+
     const agentData = await request.json()
 
     console.log("🔄 Atualizando agente:", agentId, "para usuário:", currentUser.id)
@@ -317,14 +333,48 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
               console.log("⚠️ N8N não configurado para atualização")
             }
 
+            // Buscar API key ativa do usuário para incluir no webhook
+            console.log("🔍 Buscando API key ativa do usuário...")
+            let userApiKey = null
+            try {
+              const apiKeyResponse = await fetch(
+                `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${agentData.user_id}&is_active=eq.true&order=created_at.desc&limit=1`,
+                { headers }
+              )
+              if (apiKeyResponse.ok) {
+                const apiKeys = await apiKeyResponse.json()
+                if (apiKeys && apiKeys.length > 0) {
+                  userApiKey = apiKeys[0].api_key
+                  console.log("✅ API key do usuário encontrada")
+                } else {
+                  console.warn("⚠️ Nenhuma API key ativa encontrada para o usuário")
+                }
+              }
+            } catch (apiKeyError) {
+              console.warn("⚠️ Erro ao buscar API key do usuário:", apiKeyError)
+            }
+
+            // Construir URL do webhook com agentId, panelUrl e apiKey
+            let webhookUrl
+            if (n8nWebhookUrl) {
+              webhookUrl = `${n8nWebhookUrl}?agentId=${agentId}`
+              if (userApiKey) {
+                webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`
+              }
+            } else {
+              webhookUrl = `${baseUrl}/api/agents/webhook?agentId=${agentId}`
+              if (userApiKey) {
+                webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`
+              }
+            }
+
+            console.log("📌 Webhook URL construída:", webhookUrl)
+
             // Preparar dados para Evolution API (EXATAMENTE igual ao admin)
             const evolutionBotData = {
               enabled: true,
               description: agentData.name,
-              // Usar o ID real do agente no webhook (igual ao admin)
-              apiUrl: n8nWebhookUrl
-                ? `${n8nWebhookUrl}?agentId=${agentId}`
-                : `${baseUrl}/api/agents/webhook?agentId=${agentId}`,
+              apiUrl: webhookUrl,
               apiKey:
                 n8nWebhookUrl && n8nIntegrations?.[0]?.api_key
                   ? n8nIntegrations[0].api_key
@@ -388,27 +438,25 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   console.log("📡 API: DELETE /api/user/agents/[id] chamada")
 
   try {
     const { id: agentId } = await params
     
-    // Buscar usuário atual do cookie
-    const { cookies } = await import("next/headers")
-    const cookieStore = await cookies()
-    const userCookie = cookieStore.get("impaai_user")
-
-    if (!userCookie) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
+    // 🔒 SEGURANÇA: Autenticar usuário via JWT
     let currentUser
     try {
-      currentUser = JSON.parse(userCookie.value)
-    } catch (error) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+      currentUser = await requireAuth(request)
+    } catch (authError) {
+      console.error("❌ Não autorizado:", (authError as Error).message)
+      logAccessDenied(undefined, undefined, `/api/user/agents/${agentId} (DELETE)`, request, 'Token JWT inválido ou ausente')
+      return NextResponse.json(
+        { error: "Não autorizado - Usuário não autenticado" },
+        { status: 401 }
+      )
     }
+
     console.log("🗑️ Deletando agente:", agentId, "para usuário:", currentUser.id)
 
     const supabaseUrl = process.env.SUPABASE_URL

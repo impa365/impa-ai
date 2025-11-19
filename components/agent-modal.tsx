@@ -101,8 +101,18 @@ export interface Agent {
   delay_message?: number | null
   expire_time?: number | null
   ignore_jids?: string[] | null
+  availability_mode?: 'always' | 'schedule' | 'disabled' | null
   created_at?: string
   updated_at?: string
+}
+
+interface AvailabilitySchedule {
+  id?: string
+  day_of_week: number
+  start_time: string
+  end_time: string
+  timezone: string
+  is_active: boolean
 }
 
 interface User {
@@ -162,6 +172,7 @@ const initialFormData: Agent = {
   delay_message: 1000,
   expire_time: 0,
   ignore_jids: ["@g.us"],
+  availability_mode: 'always',
 }
 
 export function AgentModal({
@@ -199,6 +210,9 @@ export function AgentModal({
   const [curlDescription, setCurlDescription] = useState("")
   const [showIgnoreJidsWarning, setShowIgnoreJidsWarning] = useState(false)
   const [showGroupsProtectionWarning, setShowGroupsProtectionWarning] = useState(false)
+  const [availabilitySchedules, setAvailabilitySchedules] = useState<AvailabilitySchedule[]>([])
+  const [selectedTimezone, setSelectedTimezone] = useState<string>('America/Sao_Paulo')
+  const [timezoneSearchFilter, setTimezoneSearchFilter] = useState<string>('')
   const [tempIgnoreJids, setTempIgnoreJids] = useState<string[]>([])
   const [newIgnoreJid, setNewIgnoreJid] = useState("")
   const [pendingSubmit, setPendingSubmit] = useState(false)
@@ -447,6 +461,33 @@ export function AgentModal({
       setSelectedSavedKeyId("")
     }
   }, [agent, currentUser, selectedUserId, isAdmin])
+
+  // useEffect para carregar schedules de disponibilidade
+  useEffect(() => {
+    const fetchAvailabilitySchedules = async () => {
+      if (!agent?.id || !open) return
+
+      try {
+        const apiPath = isAdmin 
+          ? `/api/admin/agents/${agent.id}/availability` 
+          : `/api/user/agents/${agent.id}/availability`
+        
+        const response = await fetch(apiPath)
+        const data = await response.json()
+
+        if (data.success && data.schedules) {
+          setAvailabilitySchedules(data.schedules)
+          if (data.schedules.length > 0) {
+            setSelectedTimezone(data.schedules[0].timezone || 'America/Sao_Paulo')
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao carregar horários:', error)
+      }
+    }
+
+    fetchAvailabilitySchedules()
+  }, [agent?.id, open, isAdmin])
 
   // useEffect para buscar API keys salvas do usuário
   useEffect(() => {
@@ -909,6 +950,7 @@ _______________________________________
         delay_message: formData.delay_message,
         expire_time: formData.expire_time,
         ignore_jids: finalIgnoreJids,
+        availability_mode: formData.availability_mode || 'always',
         // Campos para bot Uazapi (apenas se for uazapi)
         ...(selectedConnectionApiType === "uazapi" && {
           bot_gatilho: botFormData.bot_gatilho,
@@ -963,6 +1005,27 @@ _______________________________________
       }
 
       const result = await response.json()
+
+      // Salvar horários de disponibilidade se modo for 'schedule'
+      if (formData.availability_mode === 'schedule' && availabilitySchedules.length > 0) {
+        try {
+          const agentId = isEditing ? agent?.id : result.agent?.id || result.id
+          const scheduleApiPath = isAdminContext 
+            ? `/api/admin/agents/${agentId}/availability` 
+            : `/api/user/agents/${agentId}/availability`
+
+          await fetch(scheduleApiPath, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ schedules: availabilitySchedules }),
+          })
+        } catch (scheduleError) {
+          console.error('Erro ao salvar horários:', scheduleError)
+          // Não interromper o fluxo se falhar ao salvar schedules
+        }
+      }
 
       toast({
         title: "Sucesso",
@@ -2399,6 +2462,391 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
               </CardContent>
             </Card>
             )}
+
+            {/* Horários de Disponibilidade */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-lg text-gray-900 dark:text-gray-100">
+                  <Clock className="w-5 h-5 mr-2" />
+                  Horários de Disponibilidade
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <Label className="text-gray-900 dark:text-gray-100">Modo de Disponibilidade</Label>
+                  <RadioGroup
+                    value={formData.availability_mode || 'always'}
+                    onValueChange={(value) => setFormData((prev) => ({ ...prev, availability_mode: value as 'always' | 'schedule' | 'disabled' }))}
+                    className="space-y-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="always" id="always" />
+                      <Label htmlFor="always" className="font-normal cursor-pointer">
+                        <div>
+                          <div className="font-medium">Sempre Ativo (24h)</div>
+                          <div className="text-xs text-muted-foreground">O agente estará disponível 24 horas por dia</div>
+                        </div>
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="schedule" id="schedule" />
+                      <Label htmlFor="schedule" className="font-normal cursor-pointer">
+                        <div>
+                          <div className="font-medium">Horários Específicos</div>
+                          <div className="text-xs text-muted-foreground">Definir dias e horários de funcionamento</div>
+                        </div>
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="disabled" id="disabled" />
+                      <Label htmlFor="disabled" className="font-normal cursor-pointer">
+                        <div>
+                          <div className="font-medium">Desativado</div>
+                          <div className="text-xs text-muted-foreground">O agente não estará acessível via API</div>
+                        </div>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                {formData.availability_mode === 'schedule' && (
+                  <div className="space-y-4 pl-4 border-l-2 border-blue-200 bg-blue-50 p-4 rounded dark:bg-gray-700 dark:border-blue-700">
+                    <div>
+                      <Label htmlFor="timezone" className="text-gray-900 dark:text-gray-100">Fuso Horário</Label>
+                      <Select
+                        value={selectedTimezone}
+                        onValueChange={setSelectedTimezone}
+                      >
+                        <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                          <SelectValue placeholder="Selecione o fuso horário" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 max-h-[400px]">
+                          <div className="sticky top-0 bg-white dark:bg-gray-800 p-2 border-b border-gray-200 dark:border-gray-700 z-10">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+                              <Input
+                                placeholder="Buscar fuso horário..."
+                                value={timezoneSearchFilter}
+                                onChange={(e) => setTimezoneSearchFilter(e.target.value)}
+                                className="pl-8 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                              />
+                            </div>
+                          </div>
+                          <div className="overflow-y-auto max-h-[300px]">
+                          {/* América do Sul */}
+                          {('São Paulo'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Brasil'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Sao_Paulo">🇧🇷 São Paulo (UTC-3)</SelectItem>
+                          )}
+                          {('Cuiabá'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Brasil'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Cuiaba">🇧🇷 Cuiabá (UTC-4)</SelectItem>
+                          )}
+                          {('Buenos Aires'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Argentina'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Argentina/Buenos_Aires">🇦🇷 Buenos Aires (UTC-3)</SelectItem>
+                          )}
+                          {('Santiago'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Chile'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Santiago">🇨🇱 Santiago (UTC-3)</SelectItem>
+                          )}
+                          {('Bogotá'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Colômbia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Bogota">🇨🇴 Bogotá (UTC-5)</SelectItem>
+                          )}
+                          {('Lima'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Peru'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Lima">🇵🇪 Lima (UTC-5)</SelectItem>
+                          )}
+                          {('Caracas'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Venezuela'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Caracas">🇻🇪 Caracas (UTC-4)</SelectItem>
+                          )}
+                          
+                          {/* América do Norte */}
+                          {('Nova York'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'New York'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'USA'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/New_York">🇺🇸 Nova York (UTC-5)</SelectItem>
+                          )}
+                          {('Chicago'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'USA'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Chicago">🇺🇸 Chicago (UTC-6)</SelectItem>
+                          )}
+                          {('Denver'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'USA'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Denver">🇺🇸 Denver (UTC-7)</SelectItem>
+                          )}
+                          {('Los Angeles'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'USA'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Los_Angeles">🇺🇸 Los Angeles (UTC-8)</SelectItem>
+                          )}
+                          {('Phoenix'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'USA'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Phoenix">🇺🇸 Phoenix (UTC-7)</SelectItem>
+                          )}
+                          {('Anchorage'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'USA'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Anchorage">🇺🇸 Anchorage (UTC-9)</SelectItem>
+                          )}
+                          {('Honolulu'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Hawaii'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'USA'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Honolulu">🇺🇸 Honolulu (UTC-10)</SelectItem>
+                          )}
+                          {('Toronto'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Canadá'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Canada'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Toronto">🇨🇦 Toronto (UTC-5)</SelectItem>
+                          )}
+                          {('Vancouver'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Canadá'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Canada'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Vancouver">🇨🇦 Vancouver (UTC-8)</SelectItem>
+                          )}
+                          {('México'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Mexico'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="America/Mexico_City">🇲🇽 Cidade do México (UTC-6)</SelectItem>
+                          )}
+                          
+                          {/* Europa */}
+                          {('Londres'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'London'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/London">🇬🇧 Londres (UTC+0)</SelectItem>
+                          )}
+                          {('Dublin'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Irlanda'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Dublin">🇮🇪 Dublin (UTC+0)</SelectItem>
+                          )}
+                          {('Lisboa'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Portugal'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Lisbon">🇵🇹 Lisboa (UTC+0)</SelectItem>
+                          )}
+                          {('Paris'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'França'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Paris">🇫🇷 Paris (UTC+1)</SelectItem>
+                          )}
+                          {('Madrid'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Espanha'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Madrid">🇪🇸 Madrid (UTC+1)</SelectItem>
+                          )}
+                          {('Roma'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Itália'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Rome">🇮🇹 Roma (UTC+1)</SelectItem>
+                          )}
+                          {('Berlim'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Berlin'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Alemanha'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Berlin">🇩🇪 Berlim (UTC+1)</SelectItem>
+                          )}
+                          {('Amsterdã'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Amsterdam'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Holanda'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Amsterdam">🇳🇱 Amsterdã (UTC+1)</SelectItem>
+                          )}
+                          {('Bruxelas'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Brussels'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Bélgica'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Brussels">🇧🇪 Bruxelas (UTC+1)</SelectItem>
+                          )}
+                          {('Zurique'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Zurich'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Suíça'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Zurich">🇨🇭 Zurique (UTC+1)</SelectItem>
+                          )}
+                          {('Viena'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Vienna'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Áustria'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Vienna">🇦🇹 Viena (UTC+1)</SelectItem>
+                          )}
+                          {('Praga'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Prague'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Prague">🇨🇿 Praga (UTC+1)</SelectItem>
+                          )}
+                          {('Varsóvia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Warsaw'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Polônia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Warsaw">🇵🇱 Varsóvia (UTC+1)</SelectItem>
+                          )}
+                          {('Atenas'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Athens'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Grécia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Athens">🇬🇷 Atenas (UTC+2)</SelectItem>
+                          )}
+                          {('Istambul'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Istanbul'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Turquia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Istanbul">🇹🇷 Istambul (UTC+3)</SelectItem>
+                          )}
+                          {('Moscou'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Moscow'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Rússia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Europe/Moscow">🇷🇺 Moscou (UTC+3)</SelectItem>
+                          )}
+                          
+                          {/* África */}
+                          {('Cairo'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Egito'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Africa/Cairo">🇪🇬 Cairo (UTC+2)</SelectItem>
+                          )}
+                          {('Joanesburgo'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Johannesburg'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'África do Sul'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Africa/Johannesburg">🇿🇦 Joanesburgo (UTC+2)</SelectItem>
+                          )}
+                          {('Lagos'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Nigéria'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Africa/Lagos">🇳🇬 Lagos (UTC+1)</SelectItem>
+                          )}
+                          {('Nairobi'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Quênia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Africa/Nairobi">🇰🇪 Nairobi (UTC+3)</SelectItem>
+                          )}
+                          
+                          {/* Ásia */}
+                          {('Dubai'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Emirados'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Dubai">🇦🇪 Dubai (UTC+4)</SelectItem>
+                          )}
+                          {('Karachi'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Paquistão'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Karachi">🇵🇰 Karachi (UTC+5)</SelectItem>
+                          )}
+                          {('Índia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'India'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Kolkata'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Kolkata">🇮🇳 Índia (UTC+5:30)</SelectItem>
+                          )}
+                          {('Dhaka'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Bangladesh'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Dhaka">🇧🇩 Dhaka (UTC+6)</SelectItem>
+                          )}
+                          {('Bangkok'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Tailândia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Bangkok">🇹🇭 Bangkok (UTC+7)</SelectItem>
+                          )}
+                          {('Singapura'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Singapore'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Singapore">🇸🇬 Singapura (UTC+8)</SelectItem>
+                          )}
+                          {('Hong Kong'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Hong_Kong">🇭🇰 Hong Kong (UTC+8)</SelectItem>
+                          )}
+                          {('Xangai'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Shanghai'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'China'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Shanghai">🇨🇳 Xangai (UTC+8)</SelectItem>
+                          )}
+                          {('Tóquio'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Tokyo'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Japão'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Tokyo">🇯🇵 Tóquio (UTC+9)</SelectItem>
+                          )}
+                          {('Seul'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Seoul'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Coreia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Seoul">🇰🇷 Seul (UTC+9)</SelectItem>
+                          )}
+                          {('Jacarta'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Jakarta'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Indonésia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Jakarta">🇮🇩 Jacarta (UTC+7)</SelectItem>
+                          )}
+                          {('Manila'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Filipinas'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Manila">🇵🇭 Manila (UTC+8)</SelectItem>
+                          )}
+                          {('Taipei'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Taiwan'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Taipei">🇹🇼 Taipei (UTC+8)</SelectItem>
+                          )}
+                          
+                          {/* Oceania */}
+                          {('Sydney'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Austrália'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Australia/Sydney">🇦🇺 Sydney (UTC+10)</SelectItem>
+                          )}
+                          {('Melbourne'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Austrália'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Australia/Melbourne">🇦🇺 Melbourne (UTC+10)</SelectItem>
+                          )}
+                          {('Brisbane'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Austrália'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Australia/Brisbane">🇦🇺 Brisbane (UTC+10)</SelectItem>
+                          )}
+                          {('Perth'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Austrália'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Australia/Perth">🇦🇺 Perth (UTC+8)</SelectItem>
+                          )}
+                          {('Auckland'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Nova Zelândia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Pacific/Auckland">🇳🇿 Auckland (UTC+12)</SelectItem>
+                          )}
+                          
+                          {/* Oriente Médio */}
+                          {('Jerusalém'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Jerusalem'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Israel'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Jerusalem">🇮🇱 Jerusalém (UTC+2)</SelectItem>
+                          )}
+                          {('Riad'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Riyadh'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Arábia'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Riyadh">🇸🇦 Riad (UTC+3)</SelectItem>
+                          )}
+                          {('Teerã'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Tehran'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Irã'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="Asia/Tehran">🇮🇷 Teerã (UTC+3:30)</SelectItem>
+                          )}
+                          
+                          {/* UTC Universal */}
+                          {('UTC'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || 'Universal'.toLowerCase().includes(timezoneSearchFilter.toLowerCase()) || timezoneSearchFilter === '') && (
+                            <SelectItem value="UTC">🌍 UTC (Universal)</SelectItem>
+                          )}
+                          </div>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1 text-gray-500 dark:text-gray-400">
+                        Todos os horários serão baseados neste fuso horário
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-gray-900 dark:text-gray-100">Horários da Semana</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const newSchedule: AvailabilitySchedule = {
+                              day_of_week: 1,
+                              start_time: '09:00',
+                              end_time: '18:00',
+                              timezone: selectedTimezone,
+                              is_active: true,
+                            }
+                            setAvailabilitySchedules([...availabilitySchedules, newSchedule])
+                          }}
+                        >
+                          + Adicionar Horário
+                        </Button>
+                      </div>
+
+                      {availabilitySchedules.length === 0 && (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Clock className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">Nenhum horário configurado</p>
+                          <p className="text-xs">Clique em "Adicionar Horário" para definir quando o agente estará disponível</p>
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        {availabilitySchedules.map((schedule, index) => (
+                          <div key={index} className="flex items-center gap-2 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600">
+                            <div className="flex-1 grid grid-cols-3 gap-2">
+                              <Select
+                                value={schedule.day_of_week.toString()}
+                                onValueChange={(value) => {
+                                  const updated = [...availabilitySchedules]
+                                  updated[index].day_of_week = parseInt(value)
+                                  setAvailabilitySchedules(updated)
+                                }}
+                              >
+                                <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                                  <SelectItem value="0">Domingo</SelectItem>
+                                  <SelectItem value="1">Segunda</SelectItem>
+                                  <SelectItem value="2">Terça</SelectItem>
+                                  <SelectItem value="3">Quarta</SelectItem>
+                                  <SelectItem value="4">Quinta</SelectItem>
+                                  <SelectItem value="5">Sexta</SelectItem>
+                                  <SelectItem value="6">Sábado</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                type="time"
+                                value={schedule.start_time}
+                                onChange={(e) => {
+                                  const updated = [...availabilitySchedules]
+                                  updated[index].start_time = e.target.value
+                                  setAvailabilitySchedules(updated)
+                                }}
+                                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                              />
+                              <Input
+                                type="time"
+                                value={schedule.end_time}
+                                onChange={(e) => {
+                                  const updated = [...availabilitySchedules]
+                                  updated[index].end_time = e.target.value
+                                  setAvailabilitySchedules(updated)
+                                }}
+                                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const updated = availabilitySchedules.filter((_, i) => i !== index)
+                                setAvailabilitySchedules(updated)
+                              }}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            >
+                              ✕
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {availabilitySchedules.length > 0 && (
+                      <Alert>
+                        <AlertDescription className="text-xs">
+                          <strong>Dica:</strong> Você pode adicionar múltiplos horários por dia. Por exemplo: 09:00-12:00 e 14:00-18:00 para ter pausa de almoço.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                )}
+
+                {formData.availability_mode === 'disabled' && (
+                  <Alert className="bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800">
+                    <AlertDescription className="text-red-800 dark:text-red-200">
+                      ⚠️ Com esta opção, o agente não poderá ser acessado via API GET /agent/id
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Funcionalidades Extras - comum para Evolution e Uazapi */}
             <Card>

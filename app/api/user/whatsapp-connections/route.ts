@@ -1,9 +1,21 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { requireAuth } from "@/lib/auth-utils"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   console.log("📡 API: GET /api/user/whatsapp-connections chamada")
 
   try {
+    // 🔒 SEGURANÇA: Autenticar usuário via JWT
+    let currentUser
+    try {
+      currentUser = await requireAuth(request)
+    } catch (authError) {
+      console.error("❌ Não autorizado:", (authError as Error).message)
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    }
+
+    console.log("✅ Usuário autenticado:", currentUser.email)
+
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
@@ -19,9 +31,9 @@ export async function GET() {
       Authorization: `Bearer ${supabaseKey}`,
     }
 
-    // Buscar todas as conexões WhatsApp incluindo api_type
+    // Buscar apenas conexões do usuário logado
     const response = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,connection_name,instance_name,status,api_type,user_id,phone_number,created_at,updated_at,settings,adciona_folow,remover_folow&order=created_at.desc`,
+      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,connection_name,instance_name,status,api_type,user_id,phone_number,created_at,updated_at,settings,adciona_folow,remover_folow&user_id=eq.${currentUser.id}&order=created_at.desc`,
       {
         headers,
       }

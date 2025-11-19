@@ -1,26 +1,36 @@
-import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
+import { type NextRequest, NextResponse } from "next/server"
+import { requireAuth } from "@/lib/auth-utils"
+import { checkRateLimit, getRequestIdentifier, RATE_LIMITS } from "@/lib/rate-limit"
+import { logAccessDenied, logRateLimitExceeded } from "@/lib/security-audit"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   console.log("📡 API: /api/user/agents chamada")
 
   try {
-    // Buscar usuário atual do cookie (igual ao admin)
-    const cookieStore = await cookies()
-    const userCookie = cookieStore.get("impaai_user")
-
-    if (!userCookie) {
-      console.log("❌ Cookie de usuário não encontrado")
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
+    // 🔒 SEGURANÇA: Autenticar usuário via JWT
     let currentUser
     try {
-      currentUser = JSON.parse(userCookie.value)
-      console.log("✅ Usuário encontrado:", currentUser.email)
-    } catch (error) {
-      console.log("❌ Erro ao parsear cookie do usuário")
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+      currentUser = await requireAuth(request)
+    } catch (authError) {
+      console.error("❌ Não autorizado:", (authError as Error).message)
+      logAccessDenied(undefined, undefined, '/api/user/agents', request, 'Token JWT inválido ou ausente')
+      return NextResponse.json(
+        { error: "Não autorizado - Usuário não autenticado" },
+        { status: 401 }
+      )
+    }
+
+    console.log("✅ Usuário autenticado:", currentUser.email, "| Role:", currentUser.role)
+
+    // 🔒 RATE LIMITING
+    const rateLimit = checkRateLimit(getRequestIdentifier(request, currentUser.id), RATE_LIMITS.READ)
+    if (!rateLimit.allowed) {
+      console.warn(`⚠️ [RATE-LIMIT] ${currentUser.email} bloqueado por ${rateLimit.retryAfter}s`)
+      logRateLimitExceeded(currentUser.id, currentUser.email, '/api/user/agents', request)
+      return NextResponse.json(
+        { success: false, error: `Muitas requisições. Aguarde ${rateLimit.retryAfter}s` },
+        { status: 429 }
+      )
     }
 
     const supabaseUrl = process.env.SUPABASE_URL
@@ -139,24 +149,24 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   console.log("📡 API: POST /api/user/agents chamada")
 
   try {
-    // Buscar usuário atual do cookie
-    const cookieStore = await cookies()
-    const userCookie = cookieStore.get("impaai_user")
-
-    if (!userCookie) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
+    // 🔒 SEGURANÇA: Autenticar usuário via JWT
     let currentUser
     try {
-      currentUser = JSON.parse(userCookie.value)
-    } catch (error) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+      currentUser = await requireAuth(request)
+    } catch (authError) {
+      console.error("❌ Não autorizado:", (authError as Error).message)
+      logAccessDenied(undefined, undefined, '/api/user/agents (POST)', request, 'Token JWT inválido ou ausente')
+      return NextResponse.json(
+        { error: "Não autorizado - Usuário não autenticado" },
+        { status: 401 }
+      )
     }
+
+    console.log("✅ Usuário autenticado:", currentUser.email)
 
     const agentData = await request.json()
     console.log("📝 Dados do agente recebidos:", { name: agentData.name, user_id: currentUser.id })
@@ -354,6 +364,29 @@ export async function POST(request: Request) {
 
         console.log("✅ [UAZAPI] N8N Session encontrado")
 
+        // Buscar API key ativa do usuário para incluir no url_api
+        console.log("🔍 [UAZAPI] Buscando API key ativa do usuário...")
+        let userApiKey = null
+        try {
+          const apiKeyResponse = await fetch(
+            `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${currentUser.id}&is_active=eq.true&order=created_at.desc&limit=1`,
+            { headers }
+          )
+          if (apiKeyResponse.ok) {
+            const apiKeys = await apiKeyResponse.json()
+            if (apiKeys && apiKeys.length > 0) {
+              userApiKey = apiKeys[0].api_key
+              console.log("✅ [UAZAPI] API key do usuário encontrada")
+            } else {
+              console.warn("⚠️ [UAZAPI] Nenhuma API key ativa encontrada para o usuário")
+              throw new Error("É necessário criar uma API key antes de criar um agente. Vá para 'Configurações > API Keys' e crie uma chave de API ativa.")
+            }
+          }
+        } catch (apiKeyError: any) {
+          console.error("❌ [UAZAPI] Erro com API key do usuário:", apiKeyError.message)
+          throw apiKeyError
+        }
+
         // ============================================
         // VALIDAÇÕES DE SEGURANÇA (BACKEND)
         // ============================================
@@ -409,11 +442,25 @@ export async function POST(request: Request) {
         }
         console.log("🔍 [UAZAPI] ignoreJids convertido:", ignoreJidsString)
         
+        // Construir URL com agentId, panelUrl e apiKey
+        let botUrlApi
+        if (n8nWebhookUrl) {
+          botUrlApi = `${n8nWebhookUrl}?agentId=${agentId}`
+          if (userApiKey) {
+            botUrlApi += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`
+          }
+        } else {
+          botUrlApi = `${baseUrl}/api/agents/webhook?agentId=${agentId}`
+          if (userApiKey) {
+            botUrlApi += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`
+          }
+        }
+        
+        console.log("📌 [UAZAPI] URL API construída:", botUrlApi)
+        
         const botPayload = {
           nome: agentData.name,
-          url_api: n8nWebhookUrl
-            ? `${n8nWebhookUrl}?agentId=${agentId}`
-            : `${baseUrl}/api/agents/webhook?agentId=${agentId}`,
+          url_api: botUrlApi,
           apikey: n8nIntegrations?.[0]?.api_key || null,
           gatilho: agentData.bot_gatilho || "Palavra-chave",
           operador_gatilho: agentData.bot_operador || "Contém",
@@ -580,14 +627,50 @@ export async function POST(request: Request) {
 
           console.log("🔗 URL da Evolution API:", evolutionApiUrl)
 
+          // Buscar API key ativa do usuário para incluir no webhook
+          console.log("🔍 Buscando API key ativa do usuário...")
+          let userApiKey = null
+          try {
+            const apiKeyResponse = await fetch(
+              `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${agentData.user_id}&is_active=eq.true&order=created_at.desc&limit=1`,
+              { headers }
+            )
+            if (apiKeyResponse.ok) {
+              const apiKeys = await apiKeyResponse.json()
+              if (apiKeys && apiKeys.length > 0) {
+                userApiKey = apiKeys[0].api_key
+                console.log("✅ API key do usuário encontrada")
+              } else {
+                console.warn("⚠️ Nenhuma API key ativa encontrada para o usuário")
+                throw new Error("É necessário criar uma API key antes de criar um agente. Vá para 'Configurações > API Keys' e crie uma chave de API ativa.")
+              }
+            }
+          } catch (apiKeyError: any) {
+            console.error("❌ Erro com API key do usuário:", apiKeyError.message)
+            throw apiKeyError
+          }
+
+          // Construir URL do webhook com agentId, panelUrl e apiKey
+          let webhookUrl
+          if (n8nWebhookUrl) {
+            webhookUrl = `${n8nWebhookUrl}?agentId=${agentId}`
+            if (userApiKey) {
+              webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`
+            }
+          } else {
+            webhookUrl = `${baseUrl}/api/agents/webhook?agentId=${agentId}`
+            if (userApiKey) {
+              webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`
+            }
+          }
+
+          console.log("📌 Webhook URL construída:", webhookUrl)
+
           // Preparar dados para Evolution API no formato correto
           const evolutionBotData = {
             enabled: true,
             description: agentData.name,
-            // Usar o ID real do agente no webhook
-            apiUrl: n8nWebhookUrl
-              ? `${n8nWebhookUrl}?agentId=${agentId}`
-              : `${baseUrl}/api/agents/webhook?agentId=${agentId}`,
+            apiUrl: webhookUrl,
             apiKey:
               n8nWebhookUrl && n8nIntegrations?.[0]?.api_key
                 ? n8nIntegrations[0].api_key

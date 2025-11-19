@@ -396,9 +396,8 @@ export async function PUT(
           }
         );
 
-        let webhookUrl = `${
-          process.env.NEXTAUTH_URL || "http://localhost:3000"
-        }/api/agents/webhook?agentId=${agentId}`;
+        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+        let webhookUrl = `${baseUrl}/api/agents/webhook?agentId=${agentId}`;
         let webhookApiKey = undefined;
 
         if (n8nResponse.ok) {
@@ -412,6 +411,44 @@ export async function PUT(
             }
           }
         }
+
+        // Buscar API key ativa do usuário para incluir no webhook
+        console.log("🔍 Buscando API key ativa do usuário...");
+        let userApiKey = null;
+        try {
+          const apiKeyResponse = await fetch(
+            `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${agent.user_id}&is_active=eq.true&order=created_at.desc&limit=1`,
+            {
+              headers: {
+                "Accept-Profile": "impaai",
+                "Content-Profile": "impaai",
+                Authorization: `Bearer ${supabaseKey}`,
+              },
+            }
+          );
+          if (apiKeyResponse.ok) {
+            const apiKeys = await apiKeyResponse.json();
+            if (apiKeys && apiKeys.length > 0) {
+              userApiKey = apiKeys[0].api_key;
+              console.log("✅ API key do usuário encontrada");
+            } else {
+              console.warn("⚠️ Nenhuma API key ativa encontrada para o usuário");
+            }
+          }
+        } catch (apiKeyError) {
+          console.warn("⚠️ Erro ao buscar API key do usuário:", apiKeyError);
+        }
+
+        // Adicionar panelUrl e apiKey à URL do webhook se disponíveis
+        if (userApiKey) {
+          const separator = webhookUrl.includes('?') ? '&' : '?';
+          if (!webhookUrl.includes('agentId=')) {
+            webhookUrl += `${separator}agentId=${agentId}`;
+          }
+          webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`;
+        }
+
+        console.log("📌 Webhook URL construída:", webhookUrl);
 
         // Processar ignore_jids se for string
         let ignoreJids = agent.ignore_jids || ["@g.us"];

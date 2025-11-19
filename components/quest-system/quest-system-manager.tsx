@@ -134,6 +134,12 @@ function QuestSystemContent() {
     return null
   }
 
+  // Não mostrar para usuários comuns (apenas admin)
+  const currentUser = getCurrentUser()
+  if (!currentUser || currentUser.role !== 'admin') {
+    return null
+  }
+
   return (
     <>
       {/* FAB Arrastável sempre visível */}
