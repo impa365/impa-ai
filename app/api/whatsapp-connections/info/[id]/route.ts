@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { requireAuth, hasPermission } from "@/lib/auth-utils"
 
 /**
  * GET /api/whatsapp-connections/info/[id]
@@ -6,32 +7,23 @@ import { NextResponse } from "next/server"
  * Validação de segurança: apenas o dono da conexão ou admin pode acessar
  */
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id: connectionId } = await params
     console.log("📡 API: GET /api/whatsapp-connections/info/[id] chamada para:", connectionId)
 
-    // Buscar usuário atual do cookie
-    const { cookies } = await import("next/headers")
-    const cookieStore = await cookies()
-    const userCookie = cookieStore.get("impaai_user")
-
-    if (!userCookie) {
-      console.error("❌ Não autorizado: cookie ausente")
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
+    // 🔒 SEGURANÇA: Autenticar usuário via JWT
     let currentUser
     try {
-      currentUser = JSON.parse(userCookie.value)
-    } catch (error) {
-      console.error("❌ Não autorizado: cookie inválido")
+      currentUser = await requireAuth(request)
+    } catch (authError) {
+      console.error("❌ Não autorizado:", (authError as Error).message)
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
-    console.log("👤 Usuário atual:", currentUser.email, "| Role:", currentUser.role)
+    console.log("✅ Usuário autenticado:", currentUser.email, "| Role:", currentUser.role)
 
     // Configurações do Supabase
     const supabaseUrl = process.env.SUPABASE_URL
@@ -79,11 +71,8 @@ export async function GET(
     const connection = connections[0]
     console.log("✅ Conexão encontrada:", connection.connection_name, "| API Type:", connection.api_type)
 
-    // Validação de segurança: verificar se o usuário tem permissão
-    const isAdmin = currentUser.role === "admin"
-    const isOwner = connection.user_id === currentUser.id
-
-    if (!isAdmin && !isOwner) {
+    // 🔒 SEGURANÇA: Validar propriedade da conexão
+    if (!hasPermission(currentUser.id, connection.user_id, currentUser.role)) {
       console.error("❌ Acesso negado: usuário não é dono nem admin")
       return NextResponse.json(
         { 
@@ -94,7 +83,7 @@ export async function GET(
       )
     }
 
-    console.log("✅ Acesso autorizado:", isAdmin ? "admin" : "owner")
+    console.log("✅ Acesso autorizado:", currentUser.role === "admin" ? "admin" : "owner")
 
     // Retornar apenas informações básicas (não retornar tokens/senhas)
     return NextResponse.json({

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { disconnectUazapiInstanceServer } from "@/lib/uazapi-server";
+import { requireAuth, hasPermission } from "@/lib/auth-utils";
 
 export async function DELETE(
   request: NextRequest,
@@ -15,6 +16,20 @@ export async function DELETE(
         { status: 400 }
       );
     }
+
+    // 🔒 SEGURANÇA: Autenticar usuário
+    let user;
+    try {
+      user = await requireAuth(request);
+    } catch (authError) {
+      console.error("❌ [DISCONNECT] Não autorizado:", (authError as Error).message);
+      return NextResponse.json(
+        { success: false, error: "Não autorizado" },
+        { status: 401 }
+      );
+    }
+
+    console.log("✅ [DISCONNECT] Usuário autenticado:", user.email);
 
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey =
@@ -35,10 +50,10 @@ export async function DELETE(
       Authorization: `Bearer ${supabaseKey}`,
     };
 
-    // Buscar dados da conexão incluindo api_type e instance_token
+    // Buscar dados da conexão incluindo user_id para validar propriedade
     console.log(`🔍 [DISCONNECT] Buscando dados da conexão: ${instanceName}`);
     const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}&select=id,instance_name,api_type,instance_token`,
+      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}&select=id,instance_name,user_id,api_type,instance_token`,
       { headers }
     );
 
@@ -58,6 +73,18 @@ export async function DELETE(
     }
 
     const connection = connections[0];
+
+    // 🔒 SEGURANÇA: Validar propriedade da conexão
+    if (!hasPermission(user.id, connection.user_id, user.role)) {
+      console.error("❌ [DISCONNECT] Acesso negado: usuário não é dono nem admin");
+      return NextResponse.json(
+        { success: false, error: "Você não tem permissão para desconectar esta instância" },
+        { status: 403 }
+      );
+    }
+
+    console.log("✅ [DISCONNECT] Permissão validada:", user.role === "admin" ? "admin" : "owner");
+
     const apiType = connection.api_type || "evolution";
     const instanceToken = connection.instance_token;
 

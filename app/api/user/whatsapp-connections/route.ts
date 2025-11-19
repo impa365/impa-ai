@@ -1,9 +1,21 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { requireAuth } from "@/lib/auth-utils"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   console.log("📡 API: GET /api/user/whatsapp-connections chamada")
 
   try {
+    // 🔒 SEGURANÇA: Autenticar usuário via JWT
+    let currentUser
+    try {
+      currentUser = await requireAuth(request)
+    } catch (authError) {
+      console.error("❌ Não autorizado:", (authError as Error).message)
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+    }
+
+    console.log("✅ Usuário autenticado:", currentUser.email)
+
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
@@ -17,22 +29,6 @@ export async function GET() {
       "Content-Profile": "impaai",
       apikey: supabaseKey,
       Authorization: `Bearer ${supabaseKey}`,
-    }
-
-    // Buscar usuário atual do cookie
-    const { cookies } = await import("next/headers")
-    const cookieStore = await cookies()
-    const userCookie = cookieStore.get("impaai_user")
-
-    if (!userCookie) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
-    let currentUser
-    try {
-      currentUser = JSON.parse(userCookie.value)
-    } catch (error) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
     // Buscar apenas conexões do usuário logado

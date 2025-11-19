@@ -1,23 +1,18 @@
-import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
+import { type NextRequest, NextResponse } from "next/server"
+import { requireAuth } from "@/lib/auth-utils"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Buscar usuário atual do cookie
-    const cookieStore = await cookies()
-    const userCookie = cookieStore.get("impaai_user")
-
-    if (!userCookie) {
-      return NextResponse.json({ success: false, error: "Usuário não autenticado" }, { status: 401 })
-    }
-
+    // 🔒 SEGURANÇA: Autenticar usuário via JWT
     let user
     try {
-      user = JSON.parse(userCookie.value)
-    } catch (error) {
+      user = await requireAuth(request)
+    } catch (authError) {
+      console.error("❌ Não autorizado:", (authError as Error).message)
       return NextResponse.json({ success: false, error: "Usuário não autenticado" }, { status: 401 })
     }
 
+    console.log("✅ Usuário autenticado:", user.email, "ID:", user.id)
     console.log("🔍 Buscando conexões WhatsApp para usuário:", user.email, "ID:", user.id)
 
     // Configuração do Supabase (apenas no servidor)
