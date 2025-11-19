@@ -1,26 +1,27 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { requireAuth } from "@/lib/auth-utils"
+import { logAccessDenied } from "@/lib/security-audit"
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   console.log("📡 API: GET /api/user/agents/[id] chamada")
 
   try {
     const { id: agentId } = await params
     
-    // Buscar usuário atual do cookie
-    const { cookies } = await import("next/headers")
-    const cookieStore = await cookies()
-    const userCookie = cookieStore.get("impaai_user")
-
-    if (!userCookie) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
+    // 🔒 SEGURANÇA: Autenticar usuário via JWT
     let currentUser
     try {
-      currentUser = JSON.parse(userCookie.value)
-    } catch (error) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+      currentUser = await requireAuth(request)
+    } catch (authError) {
+      console.error("❌ Não autorizado:", (authError as Error).message)
+      logAccessDenied(undefined, undefined, `/api/user/agents/${agentId}`, request, 'Token JWT inválido ou ausente')
+      return NextResponse.json(
+        { error: "Não autorizado - Usuário não autenticado" },
+        { status: 401 }
+      )
     }
+
+    console.log("✅ Usuário autenticado:", currentUser.email)
 
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
@@ -91,27 +92,25 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   console.log("📡 API: PUT /api/user/agents/[id] chamada")
 
   try {
     const { id: agentId } = await params
     
-    // Buscar usuário atual do cookie
-    const { cookies } = await import("next/headers")
-    const cookieStore = await cookies()
-    const userCookie = cookieStore.get("impaai_user")
-
-    if (!userCookie) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
+    // 🔒 SEGURANÇA: Autenticar usuário via JWT
     let currentUser
     try {
-      currentUser = JSON.parse(userCookie.value)
-    } catch (error) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+      currentUser = await requireAuth(request)
+    } catch (authError) {
+      console.error("❌ Não autorizado:", (authError as Error).message)
+      logAccessDenied(undefined, undefined, `/api/user/agents/${agentId} (PUT)`, request, 'Token JWT inválido ou ausente')
+      return NextResponse.json(
+        { error: "Não autorizado - Usuário não autenticado" },
+        { status: 401 }
+      )
     }
+
     const agentData = await request.json()
 
     console.log("🔄 Atualizando agente:", agentId, "para usuário:", currentUser.id)
@@ -439,27 +438,25 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   console.log("📡 API: DELETE /api/user/agents/[id] chamada")
 
   try {
     const { id: agentId } = await params
     
-    // Buscar usuário atual do cookie
-    const { cookies } = await import("next/headers")
-    const cookieStore = await cookies()
-    const userCookie = cookieStore.get("impaai_user")
-
-    if (!userCookie) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-    }
-
+    // 🔒 SEGURANÇA: Autenticar usuário via JWT
     let currentUser
     try {
-      currentUser = JSON.parse(userCookie.value)
-    } catch (error) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+      currentUser = await requireAuth(request)
+    } catch (authError) {
+      console.error("❌ Não autorizado:", (authError as Error).message)
+      logAccessDenied(undefined, undefined, `/api/user/agents/${agentId} (DELETE)`, request, 'Token JWT inválido ou ausente')
+      return NextResponse.json(
+        { error: "Não autorizado - Usuário não autenticado" },
+        { status: 401 }
+      )
     }
+
     console.log("🗑️ Deletando agente:", agentId, "para usuário:", currentUser.id)
 
     const supabaseUrl = process.env.SUPABASE_URL
