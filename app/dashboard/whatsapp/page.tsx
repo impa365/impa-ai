@@ -109,7 +109,20 @@ export default function WhatsAppPage() {
       const response = await publicApi.getCurrentUser();
       if (response.data?.user) {
         const canAccess = response.data.user.can_access_connections !== false;
+        const hideMenu = response.data.user.hide_connections_menu === true;
+        
         setHasAccess(canAccess);
+        
+        // Se o usuário não tem acesso E o menu está oculto, redirecionar para dashboard
+        if (!canAccess && hideMenu) {
+          router.push('/dashboard');
+          return;
+        }
+        
+        // Se tem acesso, carregar os dados
+        if (canAccess) {
+          await fetchWhatsAppConnections();
+        }
       }
     } catch (error) {
       console.error("Erro ao verificar permissões:", error);
@@ -245,10 +258,10 @@ export default function WhatsAppPage() {
 
   // Carregar conexões quando usuário estiver disponível
   useEffect(() => {
-    if (user) {
+    if (user && hasAccess) {
       fetchWhatsAppConnections();
     }
-  }, [user]);
+  }, [user, hasAccess]);
 
   // Configurar auto-sync quando usuário estiver disponível
   useEffect(() => {
@@ -527,14 +540,38 @@ export default function WhatsAppPage() {
 
   if (!hasAccess) {
     return (
-      <div className="p-6">
-        <Alert variant="destructive" className="max-w-2xl mx-auto mt-8">
-          <Lock className="h-5 w-5" />
-          <AlertDescription className="ml-2">
-            <div className="font-semibold mb-2">Acesso Negado</div>
-            <p>Você não tem permissão para acessar a funcionalidade de Conexões WhatsApp. Entre em contato com um administrador para solicitar acesso.</p>
-          </AlertDescription>
-        </Alert>
+      <div className="min-h-screen flex items-center justify-center p-6 bg-gray-50">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+            <div className="mb-6">
+              <div className="mx-auto w-20 h-20 bg-red-100 rounded-full flex items-center justify-center">
+                <Lock className="h-10 w-10 text-red-600" />
+              </div>
+            </div>
+            
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">
+              Acesso Restrito
+            </h2>
+            
+            <p className="text-gray-600 mb-6">
+              Você não tem permissão para acessar a funcionalidade de <strong>Conexões WhatsApp</strong>.
+            </p>
+            
+            <Alert className="mb-6 bg-blue-50 border-blue-200">
+              <AlertDescription className="text-left text-sm text-blue-800">
+                <strong>Como obter acesso:</strong><br />
+                Entre em contato com um administrador do sistema para solicitar permissão de acesso a esta funcionalidade.
+              </AlertDescription>
+            </Alert>
+            
+            <Button
+              onClick={() => router.push('/dashboard')}
+              className="w-full bg-blue-600 hover:bg-blue-700"
+            >
+              Voltar ao Dashboard
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
