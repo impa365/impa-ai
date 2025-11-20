@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     // Buscar perfil do usuário via REST API
     const response = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?id=eq.${user.id}&select=id,full_name,email,role,can_access_agents,can_access_connections,hide_agents_menu,hide_connections_menu`,
+      `${supabaseUrl}/rest/v1/user_profiles?id=eq.${user.id}&select=id,full_name,email,role,can_access_agents,can_access_connections,hide_agents_menu,hide_connections_menu,can_view_api_credentials`,
       {
         headers: {
           apikey: supabaseKey,

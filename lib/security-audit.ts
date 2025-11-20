@@ -219,3 +219,37 @@ export function logSuspiciousActivity(
     details: { activity, ...details },
   })
 }
+
+/**
+ * Log de acesso a dados sensíveis (API Keys, Credenciais, etc)
+ */
+export async function logSensitiveDataAccess(
+  dataType: string,
+  userEmail: string,
+  ipAddress: string,
+  details: string
+): Promise<void> {
+  const timestamp = new Date().toISOString()
+  console.log(`🔐 [SENSITIVE-DATA-ACCESS] ${timestamp} - ${userEmail} - ${dataType}`)
+  console.log(`   IP: ${ipAddress}`)
+  console.log(`   Details: ${details}`)
+  
+  // TODO: Salvar em banco de dados para auditoria
+  // await saveSensitiveDataAccessLog({ timestamp, userEmail, dataType, ipAddress, details })
+}
+
+/**
+ * Log simplificado de acesso negado (sem request object)
+ */
+export async function logAccessDeniedSimple(
+  eventType: string,
+  reason: string,
+  ipAddress: string,
+  details: string
+): Promise<void> {
+  const timestamp = new Date().toISOString()
+  console.log(`⛔ [ACCESS-DENIED] ${timestamp} - ${eventType}`)
+  console.log(`   Reason: ${reason}`)
+  console.log(`   IP: ${ipAddress}`)
+  console.log(`   Details: ${details}`)
+}

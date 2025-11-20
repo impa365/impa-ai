@@ -42,6 +42,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     can_access_connections: true,
     hide_agents_menu: false,
     hide_connections_menu: false,
+    can_view_api_credentials: false,
   })
 
   // Buscar valores padrão das configurações do sistema via API
@@ -128,6 +129,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             can_access_connections: userData.can_access_connections ?? true,
             hide_agents_menu: userData.hide_agents_menu ?? false,
             hide_connections_menu: userData.hide_connections_menu ?? false,
+            can_view_api_credentials: userData.can_view_api_credentials ?? false,
           })
         } catch (error: any) {
           console.error("❌ Erro ao buscar dados do usuário:", error.message)
@@ -146,6 +148,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             can_access_connections: user.can_access_connections ?? true,
             hide_agents_menu: user.hide_agents_menu ?? false,
             hide_connections_menu: user.hide_connections_menu ?? false,
+            can_view_api_credentials: user.can_view_api_credentials ?? false,
           })
         } finally {
           setLoadingData(false)
@@ -173,6 +176,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         can_access_connections: true,
         hide_agents_menu: false,
         hide_connections_menu: false,
+        can_view_api_credentials: false,
       })
     }
   }, [user, open, loadingDefaults])
@@ -220,6 +224,7 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         can_access_connections: formData.can_access_connections,
         hide_agents_menu: formData.hide_agents_menu,
         hide_connections_menu: formData.hide_connections_menu,
+        can_view_api_credentials: formData.can_view_api_credentials,
       }
 
       // Adicionar senha apenas se fornecida
@@ -497,6 +502,26 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                       </Label>
                     </div>
                   )}
+                </div>
+
+                {/* API Credentials Permission */}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="can_view_api_credentials"
+                      checked={formData.can_view_api_credentials}
+                      onCheckedChange={(checked) =>
+                        setFormData({ ...formData, can_view_api_credentials: checked as boolean })
+                      }
+                      disabled={loading}
+                    />
+                    <Label htmlFor="can_view_api_credentials" className="text-sm font-medium cursor-pointer">
+                      Pode visualizar credenciais da API (URL e API Key)
+                    </Label>
+                  </div>
+                  <p className="ml-6 text-xs text-muted-foreground">
+                    Permite visualizar URL da API e API Key das próprias instâncias WhatsApp
+                  </p>
                 </div>
               </div>
             </div>

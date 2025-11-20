@@ -55,6 +55,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
       can_access_connections: user.can_access_connections ?? true,
       hide_agents_menu: user.hide_agents_menu ?? false,
       hide_connections_menu: user.hide_connections_menu ?? false,
+      can_view_api_credentials: user.can_view_api_credentials ?? false,
     }
 
     return NextResponse.json({ user: safeUser })

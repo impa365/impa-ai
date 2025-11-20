@@ -35,12 +35,14 @@ import {
   Info,
   Loader2,
   Lock,
+  Key,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import WhatsAppConnectionModal from "@/components/whatsapp-connection-modal";
 import WhatsAppQRModal from "@/components/whatsapp-qr-modal";
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal";
 import WhatsAppInfoModal from "@/components/whatsapp-info-modal";
+import WhatsAppCredentialsModal from "@/components/whatsapp-credentials-modal";
 import { useToast } from "@/components/ui/use-toast";
 import { publicApi } from "@/lib/api-client";
 
@@ -88,7 +90,9 @@ export default function WhatsAppPage() {
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [credentialsModalOpen, setCredentialsModalOpen] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState<any>(null);
+  const [canViewCredentials, setCanViewCredentials] = useState(false);
 
   useEffect(() => {
     const currentUser = getCurrentUser();
@@ -110,8 +114,10 @@ export default function WhatsAppPage() {
       if (response.data?.user) {
         const canAccess = response.data.user.can_access_connections !== false;
         const hideMenu = response.data.user.hide_connections_menu === true;
+        const canViewCreds = response.data.user.can_view_api_credentials === true;
         
         setHasAccess(canAccess);
+        setCanViewCredentials(canViewCreds);
         
         // Se o usuário não tem acesso E o menu está oculto, redirecionar para dashboard
         if (!canAccess && hideMenu) {
@@ -863,6 +869,20 @@ export default function WhatsAppPage() {
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
+                      {canViewCredentials && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedConnection(connection);
+                            setCredentialsModalOpen(true);
+                          }}
+                          title="Ver Credenciais da API"
+                          className="border-purple-200 text-purple-600 hover:bg-purple-50"
+                        >
+                          <Key className="w-4 h-4" />
+                        </Button>
+                      )}
                       {(connection.status === "connected" ||
                         connection.status === "connecting") && (
                         <Button
@@ -952,6 +972,13 @@ export default function WhatsAppPage() {
         open={infoModalOpen}
         onOpenChange={setInfoModalOpen}
         connection={selectedConnection}
+      />
+
+      <WhatsAppCredentialsModal
+        open={credentialsModalOpen}
+        onOpenChange={setCredentialsModalOpen}
+        connectionId={selectedConnection?.id || ""}
+        connectionName={selectedConnection?.connection_name || ""}
       />
     </div>
   );

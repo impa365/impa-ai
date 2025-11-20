@@ -50,6 +50,7 @@ export async function GET() {
       can_access_connections: user.can_access_connections ?? true,
       hide_agents_menu: user.hide_agents_menu ?? false,
       hide_connections_menu: user.hide_connections_menu ?? false,
+      can_view_api_credentials: user.can_view_api_credentials ?? false,
     }))
 
     return NextResponse.json({ success: true, users: safeUsers })
@@ -102,6 +103,7 @@ export async function POST(request: Request) {
         can_access_connections: userData.can_access_connections ?? true,
         hide_agents_menu: userData.hide_agents_menu ?? false,
         hide_connections_menu: userData.hide_connections_menu ?? false,
+        can_view_api_credentials: userData.can_view_api_credentials ?? false,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }),
