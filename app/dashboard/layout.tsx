@@ -11,6 +11,8 @@ import { useTheme } from "@/components/theme-provider"
 import { DynamicTitle } from "@/components/dynamic-title"
 import { getAppVersion } from "@/lib/app-version"
 import { publicApi } from "@/lib/api-client"
+import { useAutoRefreshToken } from "@/hooks/useAutoRefreshToken"
+import { useAuthValidation } from "@/hooks/useAuthValidation"
 
 export default function DashboardLayout({
   children,
@@ -30,6 +32,12 @@ export default function DashboardLayout({
   const router = useRouter()
   const pathname = usePathname()
   const { theme } = useTheme()
+
+  // Auto-refresh de tokens para manter usuário logado
+  useAutoRefreshToken()
+
+  // Validar autenticação quando usuário retorna à aba
+  useAuthValidation()
 
   useEffect(() => {
     const currentUser = getCurrentUser()

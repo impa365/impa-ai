@@ -10,6 +10,8 @@ import { getCurrentUser } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
 import { DynamicTitle } from "@/components/dynamic-title"
 import { getAppVersion } from "@/lib/app-version"
+import { useAutoRefreshToken } from "@/hooks/useAutoRefreshToken"
+import { useAuthValidation } from "@/hooks/useAuthValidation"
 
 export default function AdminLayout({
   children,
@@ -24,6 +26,12 @@ export default function AdminLayout({
   const router = useRouter()
   const pathname = usePathname()
   const { theme } = useTheme()
+
+  // Auto-refresh de tokens para manter usuário logado
+  useAutoRefreshToken()
+
+  // Validar autenticação quando usuário retorna à aba
+  useAuthValidation()
 
   useEffect(() => {
     const currentUser = getCurrentUser()
