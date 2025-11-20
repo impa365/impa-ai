@@ -46,6 +46,10 @@ export async function GET() {
       connections_limit: user.connections_limit || 2,
       whatsapp_connections_limit: user.connections_limit || 2,
       login_count: user.login_count || 0,
+      can_access_agents: user.can_access_agents ?? true,
+      can_access_connections: user.can_access_connections ?? true,
+      hide_agents_menu: user.hide_agents_menu ?? false,
+      hide_connections_menu: user.hide_connections_menu ?? false,
     }))
 
     return NextResponse.json({ success: true, users: safeUsers })
@@ -94,6 +98,10 @@ export async function POST(request: Request) {
         status: userData.status || "active",
         agents_limit: userData.agents_limit || 5,
         connections_limit: userData.connections_limit || 2,
+        can_access_agents: userData.can_access_agents ?? true,
+        can_access_connections: userData.can_access_connections ?? true,
+        hide_agents_menu: userData.hide_agents_menu ?? false,
+        hide_connections_menu: userData.hide_connections_menu ?? false,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }),

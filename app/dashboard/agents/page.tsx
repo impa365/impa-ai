@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Plus, Search, Edit, Trash2, Eye, AlertTriangle, Loader2, Users } from "lucide-react"
+import { Bot, Plus, Search, Edit, Trash2, Eye, AlertTriangle, Loader2, Users, Lock } from "lucide-react"
 import { AgentModal, type Agent } from "@/components/agent-modal"
 import { getCurrentUser } from "@/lib/auth"
 import { useToast } from "@/components/ui/use-toast"
+import { publicApi } from "@/lib/api-client"
 
 // Limites padrão caso não estejam definidos no banco
 const DEFAULT_LIMITS = {
@@ -30,6 +31,7 @@ export default function UserAgentsPage() {
   const [maxAgentsReached, setMaxAgentsReached] = useState(false)
   const [userLimits, setUserLimits] = useState<any>(DEFAULT_LIMITS)
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null)
+  const [hasAccess, setHasAccess] = useState(true)
 
   const router = useRouter()
   const { toast } = useToast()
@@ -45,8 +47,28 @@ export default function UserAgentsPage() {
       return
     }
     setCurrentUser(user)
-    loadAgentsAndLimits()
+    checkAccessAndLoadData()
   }, [router])
+
+  const checkAccessAndLoadData = async () => {
+    try {
+      const response = await publicApi.getCurrentUser()
+      if (response.data?.user) {
+        const canAccess = response.data.user.can_access_agents !== false
+        setHasAccess(canAccess)
+        
+        if (!canAccess) {
+          setLoading(false)
+          return
+        }
+      }
+      
+      await loadAgentsAndLimits()
+    } catch (error) {
+      console.error("Erro ao verificar permissões:", error)
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     const filtered = agents.filter(
@@ -209,6 +231,20 @@ export default function UserAgentsPage() {
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
           <p className="text-gray-600">Carregando agentes...</p>
         </div>
+      </div>
+    )
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="p-6">
+        <Alert variant="destructive" className="max-w-2xl mx-auto mt-8">
+          <Lock className="h-5 w-5" />
+          <AlertDescription className="ml-2">
+            <div className="font-semibold mb-2">Acesso Negado</div>
+            <p>Você não tem permissão para acessar a funcionalidade de Agentes IA. Entre em contato com um administrador para solicitar acesso.</p>
+          </AlertDescription>
+        </Alert>
       </div>
     )
   }

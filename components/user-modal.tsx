@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, User } from "lucide-react"
 import { publicApi } from "@/lib/api-client"
 
@@ -37,6 +38,10 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     status: "active",
     whatsapp_limit: null as number | null,
     agents_limit: null as number | null,
+    can_access_agents: true,
+    can_access_connections: true,
+    hide_agents_menu: false,
+    hide_connections_menu: false,
   })
 
   // Buscar valores padrão das configurações do sistema via API
@@ -119,6 +124,10 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             status: userData.status || "active",
             whatsapp_limit: userData.connections_limit || userData.whatsapp_connections_limit || 1,
             agents_limit: userData.agents_limit || 2,
+            can_access_agents: userData.can_access_agents ?? true,
+            can_access_connections: userData.can_access_connections ?? true,
+            hide_agents_menu: userData.hide_agents_menu ?? false,
+            hide_connections_menu: userData.hide_connections_menu ?? false,
           })
         } catch (error: any) {
           console.error("❌ Erro ao buscar dados do usuário:", error.message)
@@ -133,6 +142,10 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
             status: user.status || "active",
             whatsapp_limit: user.connections_limit || 1,
             agents_limit: user.agents_limit || 2,
+            can_access_agents: user.can_access_agents ?? true,
+            can_access_connections: user.can_access_connections ?? true,
+            hide_agents_menu: user.hide_agents_menu ?? false,
+            hide_connections_menu: user.hide_connections_menu ?? false,
           })
         } finally {
           setLoadingData(false)
@@ -156,6 +169,10 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
         status: "active",
         whatsapp_limit: null,
         agents_limit: null,
+        can_access_agents: true,
+        can_access_connections: true,
+        hide_agents_menu: false,
+        hide_connections_menu: false,
       })
     }
   }, [user, open, loadingDefaults])
@@ -192,13 +209,17 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
     setError("")
 
     try {
-      const userData = {
+      const userData: any = {
         full_name: formData.full_name.trim(),
         email: formData.email.trim(),
         role: formData.role,
         status: formData.status,
         connections_limit: formData.whatsapp_limit,
         agents_limit: formData.agents_limit,
+        can_access_agents: formData.can_access_agents,
+        can_access_connections: formData.can_access_connections,
+        hide_agents_menu: formData.hide_agents_menu,
+        hide_connections_menu: formData.hide_connections_menu,
       }
 
       // Adicionar senha apenas se fornecida
@@ -400,6 +421,84 @@ export default function UserModal({ open, onOpenChange, user, onSuccess }: UserM
                 disabled={loading}
                 className="text-foreground"
               />
+            </div>
+
+            <div className="space-y-3 pt-2 border-t border-border">
+              <Label className="text-foreground font-semibold">Permissões de Acesso</Label>
+              
+              <div className="space-y-3">
+                {/* Agentes Permission */}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="can_access_agents"
+                      checked={formData.can_access_agents}
+                      onCheckedChange={(checked) =>
+                        setFormData({
+                          ...formData,
+                          can_access_agents: checked as boolean,
+                          hide_agents_menu: checked ? false : formData.hide_agents_menu,
+                        })
+                      }
+                      disabled={loading}
+                    />
+                    <Label htmlFor="can_access_agents" className="text-sm font-medium cursor-pointer">
+                      Pode acessar Agentes IA
+                    </Label>
+                  </div>
+                  {!formData.can_access_agents && (
+                    <div className="ml-6 flex items-center space-x-2">
+                      <Checkbox
+                        id="hide_agents_menu"
+                        checked={formData.hide_agents_menu}
+                        onCheckedChange={(checked) =>
+                          setFormData({ ...formData, hide_agents_menu: checked as boolean })
+                        }
+                        disabled={loading}
+                      />
+                      <Label htmlFor="hide_agents_menu" className="text-sm text-muted-foreground cursor-pointer">
+                        Ocultar Agentes do menu
+                      </Label>
+                    </div>
+                  )}
+                </div>
+
+                {/* Connections Permission */}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="can_access_connections"
+                      checked={formData.can_access_connections}
+                      onCheckedChange={(checked) =>
+                        setFormData({
+                          ...formData,
+                          can_access_connections: checked as boolean,
+                          hide_connections_menu: checked ? false : formData.hide_connections_menu,
+                        })
+                      }
+                      disabled={loading}
+                    />
+                    <Label htmlFor="can_access_connections" className="text-sm font-medium cursor-pointer">
+                      Pode acessar Conexões WhatsApp
+                    </Label>
+                  </div>
+                  {!formData.can_access_connections && (
+                    <div className="ml-6 flex items-center space-x-2">
+                      <Checkbox
+                        id="hide_connections_menu"
+                        checked={formData.hide_connections_menu}
+                        onCheckedChange={(checked) =>
+                          setFormData({ ...formData, hide_connections_menu: checked as boolean })
+                        }
+                        disabled={loading}
+                      />
+                      <Label htmlFor="hide_connections_menu" className="text-sm text-muted-foreground cursor-pointer">
+                        Ocultar Conexões do menu
+                      </Label>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {user && (

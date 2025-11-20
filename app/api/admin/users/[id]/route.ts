@@ -51,6 +51,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
       connections_limit: user.connections_limit || 2,
       whatsapp_connections_limit: user.connections_limit || 2,
       login_count: user.login_count || 0,
+      can_access_agents: user.can_access_agents ?? true,
+      can_access_connections: user.can_access_connections ?? true,
+      hide_agents_menu: user.hide_agents_menu ?? false,
+      hide_connections_menu: user.hide_connections_menu ?? false,
     }
 
     return NextResponse.json({ user: safeUser })

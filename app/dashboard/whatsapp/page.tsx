@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -33,6 +34,7 @@ import {
   Filter,
   Info,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import WhatsAppConnectionModal from "@/components/whatsapp-connection-modal";
@@ -40,6 +42,7 @@ import WhatsAppQRModal from "@/components/whatsapp-qr-modal";
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal";
 import WhatsAppInfoModal from "@/components/whatsapp-info-modal";
 import { useToast } from "@/components/ui/use-toast";
+import { publicApi } from "@/lib/api-client";
 
 interface WhatsAppConnection {
   id: string;
@@ -56,6 +59,7 @@ export default function WhatsAppPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [hasAccess, setHasAccess] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -97,8 +101,22 @@ export default function WhatsAppPage() {
       return;
     }
     setUser(currentUser);
-    setLoading(false);
+    checkAccessAndLoadData();
   }, [router]);
+
+  const checkAccessAndLoadData = async () => {
+    try {
+      const response = await publicApi.getCurrentUser();
+      if (response.data?.user) {
+        const canAccess = response.data.user.can_access_connections !== false;
+        setHasAccess(canAccess);
+      }
+    } catch (error) {
+      console.error("Erro ao verificar permissões:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Função para buscar conexões WhatsApp via API
   const fetchWhatsAppConnections = async (showLoading = true) => {
@@ -503,6 +521,20 @@ export default function WhatsAppPage() {
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
           <p className="text-gray-600">Carregando...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="p-6">
+        <Alert variant="destructive" className="max-w-2xl mx-auto mt-8">
+          <Lock className="h-5 w-5" />
+          <AlertDescription className="ml-2">
+            <div className="font-semibold mb-2">Acesso Negado</div>
+            <p>Você não tem permissão para acessar a funcionalidade de Conexões WhatsApp. Entre em contato com um administrador para solicitar acesso.</p>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }

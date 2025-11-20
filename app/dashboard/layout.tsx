@@ -10,6 +10,7 @@ import { getCurrentUser, signOut } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
 import { DynamicTitle } from "@/components/dynamic-title"
 import { getAppVersion } from "@/lib/app-version"
+import { publicApi } from "@/lib/api-client"
 
 export default function DashboardLayout({
   children,
@@ -20,6 +21,12 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true)
   const [appVersion, setAppVersion] = useState("1.0.0")
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null)
+  const [permissions, setPermissions] = useState({
+    can_access_agents: true,
+    can_access_connections: true,
+    hide_agents_menu: false,
+    hide_connections_menu: false,
+  })
   const router = useRouter()
   const pathname = usePathname()
   const { theme } = useTheme()
@@ -35,7 +42,28 @@ export default function DashboardLayout({
       return
     }
     setUser(currentUser)
-    setLoading(false)
+
+    // Carregar permissões do usuário
+    const loadPermissions = async () => {
+      try {
+        const response = await publicApi.getCurrentUser()
+        if (response.data?.user) {
+          const userData = response.data.user
+          setPermissions({
+            can_access_agents: userData.can_access_agents !== false,
+            can_access_connections: userData.can_access_connections !== false,
+            hide_agents_menu: userData.hide_agents_menu === true,
+            hide_connections_menu: userData.hide_connections_menu === true,
+          })
+        }
+      } catch (error) {
+        console.error("Erro ao carregar permissões:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadPermissions()
 
     // Carregar versão da aplicação
     getAppVersion().then(setAppVersion)
@@ -47,19 +75,32 @@ export default function DashboardLayout({
   }
 
   const sidebarItems = [
-    { icon: Home, label: "Dashboard", href: "/dashboard", active: pathname === "/dashboard" },
-    { icon: Bot, label: "Agentes IA", href: "/dashboard/agents", active: pathname === "/dashboard/agents" },
-    { icon: Smartphone, label: "WhatsApp", href: "/dashboard/whatsapp", active: pathname === "/dashboard/whatsapp" },
+    { icon: Home, label: "Dashboard", href: "/dashboard", active: pathname === "/dashboard", visible: true },
+    { 
+      icon: Bot, 
+      label: "Agentes IA", 
+      href: "/dashboard/agents", 
+      active: pathname === "/dashboard/agents",
+      visible: !permissions.hide_agents_menu
+    },
+    { 
+      icon: Smartphone, 
+      label: "WhatsApp", 
+      href: "/dashboard/whatsapp", 
+      active: pathname === "/dashboard/whatsapp",
+      visible: !permissions.hide_connections_menu
+    },
     { 
       icon: Cog, 
       label: "Configurações", 
       href: "/dashboard/settings", 
       active: pathname === "/dashboard/settings",
+      visible: true,
       submenu: [
         { icon: Sparkles, label: "API Keys LLM", href: "/dashboard/settings/apikeysllm", active: pathname === "/dashboard/settings/apikeysllm" }
       ]
     },
-  ]
+  ].filter(item => item.visible)
 
   if (loading) {
     return (
