@@ -1,33 +1,50 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
 import bcrypt from "bcryptjs"
 import { getCurrentServerUser } from "@/lib/auth-server"
 
-export async function GET() {
-  const supabase = createRouteHandlerClient({ cookies })
-
+export async function GET(request: NextRequest) {
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session) {
+    // Verificar autenticação via JWT
+    const user = await getCurrentServerUser(request)
+    if (!user) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
-    const { data: profile, error } = await supabase
-      .from("user_profiles")
-      .select("id, full_name, email, role, can_access_agents, can_access_connections, hide_agents_menu, hide_connections_menu")
-      .eq("id", session.user.id)
-      .single()
+    const supabaseUrl = process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY
 
-    if (error) {
-      console.error("Erro ao buscar perfil:", error)
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
+    }
+
+    // Buscar perfil do usuário via REST API
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/user_profiles?id=eq.${user.id}&select=id,full_name,email,role,can_access_agents,can_access_connections,hide_agents_menu,hide_connections_menu`,
+      {
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+          "Accept-Profile": "impaai",
+          "Content-Profile": "impaai",
+        },
+      }
+    )
+
+    if (!response.ok) {
+      console.error("❌ Erro ao buscar perfil:", response.status)
       return NextResponse.json({ error: "Erro ao buscar perfil" }, { status: 500 })
     }
 
-    return NextResponse.json(profile)
+    const profiles = await response.json()
+    
+    if (!profiles || profiles.length === 0) {
+      return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 })
+    }
+
+    const profile = profiles[0]
+
+    return NextResponse.json({ user: profile })
   } catch (error) {
     console.error("Erro no handler de perfil:", error)
     return NextResponse.json({ error: "Erro interno" }, { status: 500 })
