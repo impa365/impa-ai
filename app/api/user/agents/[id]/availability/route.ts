@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getCurrentServerUser } from "@/lib/auth-server"
-import { supabase } from "@/lib/supabase"
+import { getSupabaseServer } from "@/lib/supabase-config"
 
 /**
  * GET /api/user/agents/[id]/availability
  * Retorna os horários de disponibilidade de um agente
  */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const currentUser = await getCurrentServerUser(request)
 
@@ -14,7 +14,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ success: false, error: "Não autenticado" }, { status: 401 })
     }
 
-    const agentId = params.id
+    const { id: agentId } = await params
+    const supabase = getSupabaseServer()
 
     // Verificar se o agente pertence ao usuário
     const { data: agent, error: agentError } = await supabase
@@ -56,21 +57,23 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  * POST /api/user/agents/[id]/availability
  * Cria/atualiza horários de disponibilidade de um agente
  */
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const currentUser = await getCurrentUser()
+    const currentUser = await getCurrentServerUser(request)
 
     if (!currentUser) {
       return NextResponse.json({ success: false, error: "Não autenticado" }, { status: 401 })
     }
 
-    const agentId = params.id
+    const { id: agentId } = await params
     const body = await request.json()
     const { schedules } = body
 
     if (!Array.isArray(schedules)) {
       return NextResponse.json({ success: false, error: "Schedules deve ser um array" }, { status: 400 })
     }
+
+    const supabase = getSupabaseServer()
 
     // Verificar se o agente pertence ao usuário
     const { data: agent, error: agentError } = await supabase
@@ -122,15 +125,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
  * DELETE /api/user/agents/[id]/availability
  * Remove todos os horários de disponibilidade de um agente
  */
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const currentUser = await getCurrentUser()
+    const currentUser = await getCurrentServerUser(request)
 
     if (!currentUser) {
       return NextResponse.json({ success: false, error: "Não autenticado" }, { status: 401 })
     }
 
-    const agentId = params.id
+    const { id: agentId } = await params
+    const supabase = getSupabaseServer()
 
     // Verificar se o agente pertence ao usuário
     const { data: agent, error: agentError } = await supabase
