@@ -88,8 +88,40 @@ export async function PUT(
 
     const session = sessions[0]
 
-    // Admin pode atualizar qualquer sessão, user apenas suas próprias
-    // Como não temos bot_id na bot_sessions, vamos permitir para admin e user logado
+    // 🔒 SEGURANÇA CRÍTICA: Validar propriedade através do bot_id ou connection_id
+    if (session.bot_id) {
+      // Verificar se o bot pertence ao usuário
+      const botCheckResponse = await fetch(
+        `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id&id=eq.${session.bot_id}`,
+        { headers: headersWithSchema }
+      )
+      
+      if (botCheckResponse.ok) {
+        const bots = await botCheckResponse.json()
+        if (bots && bots.length > 0 && bots[0].user_id !== currentUser.id) {
+          console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou modificar sessão do bot", session.bot_id, "que pertence a", bots[0].user_id)
+          return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
+        }
+      }
+    }
+    
+    if (session.connection_id) {
+      // Verificar se a conexão pertence ao usuário
+      const connCheckResponse = await fetch(
+        `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,user_id&id=eq.${session.connection_id}`,
+        { headers: headersWithSchema }
+      )
+      
+      if (connCheckResponse.ok) {
+        const connections = await connCheckResponse.json()
+        if (connections && connections.length > 0 && connections[0].user_id !== currentUser.id) {
+          console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou modificar sessão da conexão", session.connection_id, "que pertence a", connections[0].user_id)
+          return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
+        }
+      }
+    }
+    
+    console.log(`✅ Propriedade validada para usuário: ${currentUser.id}`)
     console.log(`🔄 ${status ? "Reativando" : "Pausando"} bot para este chat...`)
 
     // Atualizar sessão
@@ -207,8 +239,40 @@ export async function DELETE(
 
     const session = sessions[0]
 
-    // Admin pode deletar qualquer sessão, user pode deletar se for dele
-    // Como não temos bot_id na bot_sessions, vamos permitir para admin e user logado
+    // 🔒 SEGURANÇA CRÍTICA: Validar propriedade através do bot_id ou connection_id
+    if (session.bot_id) {
+      // Verificar se o bot pertence ao usuário
+      const botCheckResponse = await fetch(
+        `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id&id=eq.${session.bot_id}`,
+        { headers: headersWithSchema }
+      )
+      
+      if (botCheckResponse.ok) {
+        const bots = await botCheckResponse.json()
+        if (bots && bots.length > 0 && bots[0].user_id !== currentUser.id) {
+          console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou deletar sessão do bot", session.bot_id, "que pertence a", bots[0].user_id)
+          return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
+        }
+      }
+    }
+    
+    if (session.connection_id) {
+      // Verificar se a conexão pertence ao usuário
+      const connCheckResponse = await fetch(
+        `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,user_id&id=eq.${session.connection_id}`,
+        { headers: headersWithSchema }
+      )
+      
+      if (connCheckResponse.ok) {
+        const connections = await connCheckResponse.json()
+        if (connections && connections.length > 0 && connections[0].user_id !== currentUser.id) {
+          console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou deletar sessão da conexão", session.connection_id, "que pertence a", connections[0].user_id)
+          return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
+        }
+      }
+    }
+    
+    console.log(`✅ Propriedade validada para usuário: ${currentUser.id}`)
     console.log("🗑️ Marcando sessão como INATIVA (soft delete)...")
     
     // SOFT DELETE: Marcar como inativa (deleted_at) ao invés de deletar fisicamente

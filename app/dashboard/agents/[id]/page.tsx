@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ArrowLeft, Copy, MessageSquare, Settings, Trash2, Power, PowerOff } from "lucide-react"
+import { ArrowLeft, Copy, MessageSquare, Settings, Trash2, Power, PowerOff, Users } from "lucide-react"
 import AgentModal from "@/components/agent-modal"
 import AgentDuplicateDialog from "@/components/agent-duplicate-dialog"
 import AgentStats from "@/components/agent-stats"
@@ -262,6 +262,10 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
         </div>
 
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/agents/${agent.id}/sessions`)}>
+            <Users className="mr-2 h-4 w-4" />
+            Sessões
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setDuplicateDialogOpen(true)}>
             <Copy className="mr-2 h-4 w-4" />
             Duplicar

@@ -72,6 +72,59 @@ export async function GET(request: Request) {
       )
     }
 
+    // 🔒 SEGURANÇA CRÍTICA: Validar propriedade do bot/conexão ANTES de buscar sessões
+    if (botId) {
+      // Verificar se o bot pertence ao usuário
+      const botCheckResponse = await fetch(
+        `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id&id=eq.${botId}`,
+        { headers: headersWithSchema }
+      )
+      
+      if (!botCheckResponse.ok) {
+        console.error("❌ Erro ao verificar propriedade do bot")
+        return NextResponse.json({ error: "Erro ao verificar bot" }, { status: 500 })
+      }
+      
+      const bots = await botCheckResponse.json()
+      if (!bots || bots.length === 0) {
+        console.error("❌ SEGURANÇA: Bot não encontrado:", botId)
+        return NextResponse.json({ error: "Bot não encontrado" }, { status: 404 })
+      }
+      
+      if (bots[0].user_id !== currentUser.id) {
+        console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou acessar sessões do bot", botId, "que pertence a", bots[0].user_id)
+        return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
+      }
+      
+      console.log("✅ Propriedade do bot validada para usuário:", currentUser.id)
+    }
+    
+    if (connectionId) {
+      // Verificar se a conexão pertence ao usuário
+      const connCheckResponse = await fetch(
+        `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,user_id&id=eq.${connectionId}`,
+        { headers: headersWithSchema }
+      )
+      
+      if (!connCheckResponse.ok) {
+        console.error("❌ Erro ao verificar propriedade da conexão")
+        return NextResponse.json({ error: "Erro ao verificar conexão" }, { status: 500 })
+      }
+      
+      const connections = await connCheckResponse.json()
+      if (!connections || connections.length === 0) {
+        console.error("❌ SEGURANÇA: Conexão não encontrada:", connectionId)
+        return NextResponse.json({ error: "Conexão não encontrada" }, { status: 404 })
+      }
+      
+      if (connections[0].user_id !== currentUser.id) {
+        console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou acessar sessões da conexão", connectionId, "que pertence a", connections[0].user_id)
+        return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
+      }
+      
+      console.log("✅ Propriedade da conexão validada para usuário:", currentUser.id)
+    }
+
     // Construir query - buscar direto da bot_sessions
     // IMPORTANTE: Sempre filtrar deleted_at IS NULL para ocultar sessões inativas
     let query = `${supabaseUrl}/rest/v1/bot_sessions?select=*&deleted_at=is.null`
