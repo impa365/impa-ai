@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth"
+import { getCurrentServerUser } from "@/lib/auth-server"
 import { supabase } from "@/lib/supabase"
 
 /**
@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase"
  */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const currentUser = await getCurrentUser()
+    const currentUser = await getCurrentServerUser(request)
 
     if (!currentUser) {
       return NextResponse.json({ success: false, error: "Não autenticado" }, { status: 401 })
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const currentUser = await getCurrentUser()
+    const currentUser = await getCurrentServerUser(request)
 
     if (!currentUser) {
       return NextResponse.json({ success: false, error: "Não autenticado" }, { status: 401 })
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
  */
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const currentUser = await getCurrentUser()
+    const currentUser = await getCurrentServerUser(request)
 
     if (!currentUser) {
       return NextResponse.json({ success: false, error: "Não autenticado" }, { status: 401 })
