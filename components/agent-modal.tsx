@@ -23,7 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Bot, Sparkles, Eye, EyeOff, Volume2, Users, MessageSquare, Clock, Search, Filter } from "lucide-react"
+import { Bot, Sparkles, Eye, EyeOff, Volume2, Users, MessageSquare, Clock, Search, Filter, Plus, Copy, Trash2 } from "lucide-react"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
 import { fetchWhatsAppConnections, fetchUsers } from "@/lib/whatsapp-connections"
@@ -216,6 +216,54 @@ export function AgentModal({
   const [tempIgnoreJids, setTempIgnoreJids] = useState<string[]>([])
   const [newIgnoreJid, setNewIgnoreJid] = useState("")
   const [pendingSubmit, setPendingSubmit] = useState(false)
+
+  // Estados para duplicação de horários
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+  const [sourceDayForDuplicate, setSourceDayForDuplicate] = useState<number | null>(null)
+  const [selectedDaysForDuplicate, setSelectedDaysForDuplicate] = useState<number[]>([])
+  const [scheduleErrors, setScheduleErrors] = useState<Map<number, string>>(new Map())
+  const [hasSubmitAttempted, setHasSubmitAttempted] = useState(false)
+
+  // Funções auxiliares para validação de sobreposição de horários
+  const timeToMinutes = (time: string): number => {
+    if (typeof time !== 'string') return 0
+    const [hours, minutes] = time.split(':').map(Number)
+    return hours * 60 + minutes
+  }
+
+  const checkTimeOverlap = (start1Minutes: number, end1Minutes: number, start2Minutes: number, end2Minutes: number): boolean => {
+    // Algoritmo clássico: (StartA < EndB) AND (EndA > StartB)
+    return start1Minutes < end2Minutes && end1Minutes > start2Minutes
+  }
+
+  const validateSchedulesForOverlap = (schedules: AvailabilitySchedule[]): { isValid: boolean; message?: string } => {
+    const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
+    
+    // Agrupar por dia da semana
+    for (let day = 0; day <= 6; day++) {
+      const daySchedules = schedules.filter(s => s.day_of_week === day && s.is_active !== false)
+      
+      // Verificar sobreposição dentro do mesmo dia
+      for (let i = 0; i < daySchedules.length; i++) {
+        for (let j = i + 1; j < daySchedules.length; j++) {
+          const schedule1 = daySchedules[i]
+          const schedule2 = daySchedules[j]
+          
+          if (checkTimeOverlap(schedule1.start_time, schedule1.end_time, schedule2.start_time, schedule2.end_time)) {
+            return {
+              isValid: false,
+              message: `❌ Sobreposição detectada em ${dayNames[day]}:\n\n` +
+                       `📍 Horário 1: ${schedule1.start_time} - ${schedule1.end_time}\n` +
+                       `📍 Horário 2: ${schedule2.start_time} - ${schedule2.end_time}\n\n` +
+                       `⚠️ Os horários não podem se sobrepor. Por favor, ajuste os intervalos.`
+            }
+          }
+        }
+      }
+    }
+    
+    return { isValid: true }
+  }
 
   // Estados para filtros de conexão
   const [connectionSearch, setConnectionSearch] = useState("")
@@ -1044,6 +1092,8 @@ _______________________________________
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setHasSubmitAttempted(true)
+    
     if (maxAgentsReached && !isEditing) {
       setError("Você atingiu o limite máximo de agentes.")
       return
@@ -1061,6 +1111,56 @@ _______________________________________
       setError("A conexão WhatsApp é obrigatória.")
       return
     }
+
+    // Validar sobreposição de horários
+    if (availabilitySchedules.length > 0) {
+      const validation = validateSchedulesForOverlap(availabilitySchedules)
+      if (!validation.isValid) {
+        // Mapear índices com erros
+        const errorIndexes = new Map<number, string>()
+        availabilitySchedules.forEach((schedule, i) => {
+          availabilitySchedules.forEach((otherSchedule, j) => {
+            if (i < j && schedule.day_of_week === otherSchedule.day_of_week) {
+              const start1 = timeToMinutes(schedule.start_time)
+              const end1 = timeToMinutes(schedule.end_time)
+              const start2 = timeToMinutes(otherSchedule.start_time)
+              const end2 = timeToMinutes(otherSchedule.end_time)
+              
+              if (checkTimeOverlap(start1, end1, start2, end2)) {
+                const errorMsg = `Conflito: ${schedule.start_time}-${schedule.end_time} ⚔️ ${otherSchedule.start_time}-${otherSchedule.end_time}`
+                errorIndexes.set(i, errorMsg)
+                errorIndexes.set(j, errorMsg)
+              }
+            }
+          })
+        })
+        
+        setScheduleErrors(errorIndexes)
+        
+        // Auto-scroll para primeiro erro
+        const firstErrorIndex = Math.min(...Array.from(errorIndexes.keys()))
+        setTimeout(() => {
+          const errorElement = document.querySelector(`[data-schedule-index="${firstErrorIndex}"]`)
+          if (errorElement) {
+            errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            const firstInput = errorElement.querySelector('input[type="time"]') as HTMLInputElement
+            if (firstInput) setTimeout(() => firstInput.focus(), 300)
+          }
+        }, 100)
+        
+        setError(validation.message || "Hor\u00e1rios com sobreposi\u00e7\u00e3o detectados")
+        toast({
+          title: "Hor\u00e1rios com sobreposi\u00e7\u00e3o",
+          description: validation.message,
+          variant: "destructive",
+          duration: 8000,
+        })
+        return
+      } else {
+        setScheduleErrors(new Map())
+      }
+    }
+
     // ============================================
     // VALIDAÇÕES DE UX (Frontend - apenas para melhorar experiência)
     // As validações REAIS e de SEGURANÇA estão no BACKEND
@@ -2510,14 +2610,14 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                 </div>
 
                 {formData.availability_mode === 'schedule' && (
-                  <div className="space-y-4 pl-4 border-l-2 border-blue-200 bg-blue-50 p-4 rounded dark:bg-gray-700 dark:border-blue-700">
+                  <div className="space-y-4 pl-4 border-l-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-lg dark:from-gray-800 dark:to-gray-900 dark:border-blue-700">
                     <div>
-                      <Label htmlFor="timezone" className="text-gray-900 dark:text-gray-100">Fuso Horário</Label>
+                      <Label htmlFor="timezone" className="text-gray-900 dark:text-gray-100 font-semibold">Fuso Horário</Label>
                       <Select
                         value={selectedTimezone}
                         onValueChange={setSelectedTimezone}
                       >
-                        <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
+                        <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 mt-2">
                           <SelectValue placeholder="Selecione o fuso horário" />
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 max-h-[400px]">
@@ -2735,103 +2835,269 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                       </p>
                     </div>
 
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-gray-900 dark:text-gray-100">Horários da Semana</Label>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const newSchedule: AvailabilitySchedule = {
-                              day_of_week: 1,
-                              start_time: '09:00',
-                              end_time: '18:00',
-                              timezone: selectedTimezone,
-                              is_active: true,
-                            }
-                            setAvailabilitySchedules([...availabilitySchedules, newSchedule])
-                          }}
-                        >
-                          + Adicionar Horário
-                        </Button>
+                    <div className="space-y-4 mt-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <Label className="text-gray-900 dark:text-gray-100 font-semibold text-base">Horários por Dia da Semana</Label>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Configure os horários de disponibilidade para cada dia</p>
+                        </div>
                       </div>
 
                       {availabilitySchedules.length === 0 && (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <Clock className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                          <p className="text-sm">Nenhum horário configurado</p>
-                          <p className="text-xs">Clique em "Adicionar Horário" para definir quando o agente estará disponível</p>
+                        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+                          <Clock className="w-16 h-16 mx-auto mb-3 text-gray-400 dark:text-gray-500" />
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nenhum horário configurado</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Adicione horários para definir quando o agente estará disponível</p>
                         </div>
                       )}
 
-                      <div className="space-y-2">
-                        {availabilitySchedules.map((schedule, index) => (
-                          <div key={index} className="flex items-center gap-2 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600">
-                            <div className="flex-1 grid grid-cols-3 gap-2">
-                              <Select
-                                value={schedule.day_of_week.toString()}
-                                onValueChange={(value) => {
-                                  const updated = [...availabilitySchedules]
-                                  updated[index].day_of_week = parseInt(value)
-                                  setAvailabilitySchedules(updated)
-                                }}
-                              >
-                                <SelectTrigger className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                                  <SelectItem value="0">Domingo</SelectItem>
-                                  <SelectItem value="1">Segunda</SelectItem>
-                                  <SelectItem value="2">Terça</SelectItem>
-                                  <SelectItem value="3">Quarta</SelectItem>
-                                  <SelectItem value="4">Quinta</SelectItem>
-                                  <SelectItem value="5">Sexta</SelectItem>
-                                  <SelectItem value="6">Sábado</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <Input
-                                type="time"
-                                value={schedule.start_time}
-                                onChange={(e) => {
-                                  const updated = [...availabilitySchedules]
-                                  updated[index].start_time = e.target.value
-                                  setAvailabilitySchedules(updated)
-                                }}
-                                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                              />
-                              <Input
-                                type="time"
-                                value={schedule.end_time}
-                                onChange={(e) => {
-                                  const updated = [...availabilitySchedules]
-                                  updated[index].end_time = e.target.value
-                                  setAvailabilitySchedules(updated)
-                                }}
-                                className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
-                              />
+                      {/* Agrupar por dia da semana */}
+                      {[0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => {
+                        const daySchedules = availabilitySchedules.filter(s => s.day_of_week === dayOfWeek)
+                        const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
+                        const dayEmojis = ['☀️', '🌙', '🔥', '💼', '⚡', '🎉', '🌴']
+                        
+                        return (
+                          <div key={dayOfWeek} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-700 dark:to-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-2xl">{dayEmojis[dayOfWeek]}</span>
+                                  <div>
+                                    <h4 className="font-semibold text-gray-900 dark:text-gray-100">{dayNames[dayOfWeek]}</h4>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                                      {daySchedules.length === 0 ? 'Sem horários' : `${daySchedules.length} horário${daySchedules.length > 1 ? 's' : ''}`}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {daySchedules.length > 0 && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSourceDayForDuplicate(dayOfWeek)
+                                        setSelectedDaysForDuplicate([])
+                                        setShowDuplicateModal(true)
+                                      }}
+                                      className="text-xs"
+                                      title="Duplicar para outros dias"
+                                    >
+                                      <Copy className="w-3 h-3 mr-1" />
+                                      Duplicar
+                                    </Button>
+                                  )}
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const newSchedule: AvailabilitySchedule = {
+                                        day_of_week: dayOfWeek,
+                                        start_time: '09:00',
+                                        end_time: '18:00',
+                                        timezone: selectedTimezone,
+                                        is_active: true,
+                                      }
+                                      setAvailabilitySchedules([...availabilitySchedules, newSchedule])
+                                    }}
+                                    className="text-xs"
+                                  >
+                                    <Plus className="w-3 h-3 mr-1" />
+                                    Adicionar
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                const updated = availabilitySchedules.filter((_, i) => i !== index)
-                                setAvailabilitySchedules(updated)
-                              }}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            >
-                              ✕
-                            </Button>
+
+                            {daySchedules.length > 0 && (
+                              <div className="p-3 space-y-2">
+                                {daySchedules.map((schedule, scheduleIndex) => {
+                                  const globalIndex = availabilitySchedules.findIndex(
+                                    s => s === schedule
+                                  )
+                                  const hasError = scheduleErrors.has(globalIndex)
+                                  const errorMessage = scheduleErrors.get(globalIndex)
+                                  
+                                  return (
+                                    <div key={scheduleIndex}>
+                                      <div 
+                                        data-schedule-index={globalIndex}
+                                        className={`flex items-center gap-2 p-3 rounded-lg border transition-all ${
+                                          hasError 
+                                            ? 'bg-red-50 dark:bg-red-950/30 border-red-400 dark:border-red-600 shadow-md' 
+                                            : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+                                        }`}
+                                      >
+                                        <Clock className={`w-4 h-4 ${
+                                          hasError ? 'text-red-500' : 'text-gray-400'
+                                        }`} />
+                                        <Input
+                                          type="time"
+                                          value={schedule.start_time}
+                                          onChange={(e) => {
+                                            const updated = [...availabilitySchedules]
+                                            updated[globalIndex].start_time = e.target.value
+                                            setAvailabilitySchedules(updated)
+                                            
+                                            // Reward Early: Se tinha erro, validar imediatamente ao corrigir
+                                            if (hasError || hasSubmitAttempted) {
+                                              setTimeout(() => {
+                                                const newErrors = new Map<number, string>()
+                                                updated.forEach((s, i) => {
+                                                  updated.forEach((other, j) => {
+                                                    if (i < j && s.day_of_week === other.day_of_week) {
+                                                      const start1 = timeToMinutes(s.start_time)
+                                                      const end1 = timeToMinutes(s.end_time)
+                                                      const start2 = timeToMinutes(other.start_time)
+                                                      const end2 = timeToMinutes(other.end_time)
+                                                      
+                                                      if (checkTimeOverlap(start1, end1, start2, end2)) {
+                                                        const msg = `Conflito: ${s.start_time}-${s.end_time} ⚔️ ${other.start_time}-${other.end_time}`
+                                                        newErrors.set(i, msg)
+                                                        newErrors.set(j, msg)
+                                                      }
+                                                    }
+                                                  })
+                                                })
+                                                setScheduleErrors(newErrors)
+                                              }, 300)
+                                            }
+                                          }}
+                                          onBlur={() => {
+                                            // Punish Late: Validar ao sair do campo mesmo sem erro anterior
+                                            setTimeout(() => {
+                                              const newErrors = new Map<number, string>()
+                                              availabilitySchedules.forEach((s, i) => {
+                                                availabilitySchedules.forEach((other, j) => {
+                                                  if (i < j && s.day_of_week === other.day_of_week) {
+                                                    const start1 = timeToMinutes(s.start_time)
+                                                    const end1 = timeToMinutes(s.end_time)
+                                                    const start2 = timeToMinutes(other.start_time)
+                                                    const end2 = timeToMinutes(other.end_time)
+                                                    
+                                                    if (checkTimeOverlap(start1, end1, start2, end2)) {
+                                                      const msg = `Conflito: ${s.start_time}-${s.end_time} ⚔️ ${other.start_time}-${other.end_time}`
+                                                      newErrors.set(i, msg)
+                                                      newErrors.set(j, msg)
+                                                    }
+                                                  }
+                                                })
+                                              })
+                                              setScheduleErrors(newErrors)
+                                            }, 150)
+                                          }}
+                                          className={`flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 ${
+                                            hasError 
+                                              ? 'border-red-500 dark:border-red-600 focus:ring-red-500' 
+                                              : 'border-gray-300 dark:border-gray-600'
+                                          }`}
+                                        />
+                                        <span className="text-gray-500 font-medium">até</span>
+                                        <Input
+                                          type="time"
+                                          value={schedule.end_time}
+                                          onChange={(e) => {
+                                            const updated = [...availabilitySchedules]
+                                            updated[globalIndex].end_time = e.target.value
+                                            setAvailabilitySchedules(updated)
+                                            
+                                            // Reward Early: Se tinha erro, validar imediatamente ao corrigir
+                                            if (hasError || hasSubmitAttempted) {
+                                              setTimeout(() => {
+                                                const newErrors = new Map<number, string>()
+                                                updated.forEach((s, i) => {
+                                                  updated.forEach((other, j) => {
+                                                    if (i < j && s.day_of_week === other.day_of_week) {
+                                                      const start1 = timeToMinutes(s.start_time)
+                                                      const end1 = timeToMinutes(s.end_time)
+                                                      const start2 = timeToMinutes(other.start_time)
+                                                      const end2 = timeToMinutes(other.end_time)
+                                                      
+                                                      if (checkTimeOverlap(start1, end1, start2, end2)) {
+                                                        const msg = `Conflito: ${s.start_time}-${s.end_time} ⚔️ ${other.start_time}-${other.end_time}`
+                                                        newErrors.set(i, msg)
+                                                        newErrors.set(j, msg)
+                                                      }
+                                                    }
+                                                  })
+                                                })
+                                                setScheduleErrors(newErrors)
+                                              }, 300)
+                                            }
+                                          }}
+                                          onBlur={() => {
+                                            // Punish Late: Validar ao sair do campo mesmo sem erro anterior
+                                            setTimeout(() => {
+                                              const newErrors = new Map<number, string>()
+                                              availabilitySchedules.forEach((s, i) => {
+                                                availabilitySchedules.forEach((other, j) => {
+                                                  if (i < j && s.day_of_week === other.day_of_week) {
+                                                    const start1 = timeToMinutes(s.start_time)
+                                                    const end1 = timeToMinutes(s.end_time)
+                                                    const start2 = timeToMinutes(other.start_time)
+                                                    const end2 = timeToMinutes(other.end_time)
+                                                    
+                                                    if (checkTimeOverlap(start1, end1, start2, end2)) {
+                                                      const msg = `Conflito: ${s.start_time}-${s.end_time} ⚔️ ${other.start_time}-${other.end_time}`
+                                                      newErrors.set(i, msg)
+                                                      newErrors.set(j, msg)
+                                                    }
+                                                  }
+                                                })
+                                              })
+                                              setScheduleErrors(newErrors)
+                                            }, 150)
+                                          }}
+                                          className={`flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 ${
+                                            hasError 
+                                              ? 'border-red-500 dark:border-red-600 focus:ring-red-500' 
+                                              : 'border-gray-300 dark:border-gray-600'
+                                          }`}
+                                        />
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => {
+                                            const updated = availabilitySchedules.filter((_, i) => i !== globalIndex)
+                                            setAvailabilitySchedules(updated)
+                                            // Limpar erro ao remover
+                                            const newErrors = new Map(scheduleErrors)
+                                            newErrors.delete(globalIndex)
+                                            setScheduleErrors(newErrors)
+                                          }}
+                                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                          title="Remover horário"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                      
+                                      {/* Mensagem de erro inline */}
+                                      {hasError && errorMessage && (
+                                        <div className="mt-2 ml-8 p-2 bg-red-100 dark:bg-red-900/40 border border-red-300 dark:border-red-700 rounded text-xs text-red-700 dark:text-red-300 flex items-start gap-2 animate-in fade-in slide-in-from-top-1">
+                                          <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                          </svg>
+                                          <span>{errorMessage}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
-                        ))}
-                      </div>
+                        )
+                      })}
                     </div>
 
                     {availabilitySchedules.length > 0 && (
-                      <Alert>
-                        <AlertDescription className="text-xs">
-                          <strong>Dica:</strong> Você pode adicionar múltiplos horários por dia. Por exemplo: 09:00-12:00 e 14:00-18:00 para ter pausa de almoço.
+                      <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800">
+                        <AlertDescription className="text-sm text-blue-800 dark:text-blue-200">
+                          <strong>💡 Dica:</strong> Você pode adicionar múltiplos horários por dia. Por exemplo: 09:00-12:00 e 14:00-18:00 para ter intervalo de almoço.
                         </AlertDescription>
                       </Alert>
                     )}
@@ -3423,6 +3689,128 @@ curl -X POST "https://api.exemplo.com/endpoint" \\
                   </Button>
                   <Button variant="destructive" onClick={proceedWithSubmit}>
                     Continuar sem Proteção
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* Modal de Duplicação de Horários */}
+          {showDuplicateModal && sourceDayForDuplicate !== null && (
+            <Dialog open={showDuplicateModal} onOpenChange={setShowDuplicateModal}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Duplicar Horários</DialogTitle>
+                  <DialogDescription>
+                    Selecione os dias para os quais deseja copiar os horários de{' '}
+                    <strong>
+                      {['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][sourceDayForDuplicate]}
+                    </strong>
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3 py-4">
+                  {[0, 1, 2, 3, 4, 5, 6]
+                    .filter(day => day !== sourceDayForDuplicate)
+                    .map(day => {
+                      const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
+                      const dayEmojis = ['☀️', '🌙', '🔥', '💼', '⚡', '🎉', '🌴']
+                      const hasSchedules = availabilitySchedules.some(s => s.day_of_week === day)
+                      const isSelected = selectedDaysForDuplicate.includes(day)
+
+                      return (
+                        <div
+                          key={day}
+                          className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                              : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+                          }`}
+                          onClick={() => {
+                            setSelectedDaysForDuplicate(prev =>
+                              isSelected
+                                ? prev.filter(d => d !== day)
+                                : [...prev, day]
+                            )
+                          }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-xl">{dayEmojis[day]}</span>
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-gray-100">{dayNames[day]}</p>
+                              {hasSchedules && (
+                                <p className="text-xs text-orange-600 dark:text-orange-400">
+                                  ⚠️ Já possui horários (serão mantidos)
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                            isSelected
+                              ? 'bg-blue-600 border-blue-600'
+                              : 'border-gray-300 dark:border-gray-600'
+                          }`}>
+                            {isSelected && (
+                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowDuplicateModal(false)
+                      setSelectedDaysForDuplicate([])
+                      setSourceDayForDuplicate(null)
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (selectedDaysForDuplicate.length === 0) {
+                        toast({
+                          title: "Nenhum dia selecionado",
+                          description: "Selecione pelo menos um dia para duplicar os horários.",
+                          variant: "destructive",
+                        })
+                        return
+                      }
+
+                      const sourceSchedules = availabilitySchedules.filter(
+                        s => s.day_of_week === sourceDayForDuplicate
+                      )
+
+                      const newSchedules = [...availabilitySchedules]
+                      selectedDaysForDuplicate.forEach(targetDay => {
+                        sourceSchedules.forEach(schedule => {
+                          newSchedules.push({
+                            ...schedule,
+                            day_of_week: targetDay,
+                          })
+                        })
+                      })
+
+                      setAvailabilitySchedules(newSchedules)
+                      setShowDuplicateModal(false)
+                      setSelectedDaysForDuplicate([])
+                      setSourceDayForDuplicate(null)
+
+                      toast({
+                        title: "Horários duplicados",
+                        description: `Horários copiados para ${selectedDaysForDuplicate.length} dia${selectedDaysForDuplicate.length > 1 ? 's' : ''}.`,
+                      })
+                    }}
+                    disabled={selectedDaysForDuplicate.length === 0}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Duplicar para {selectedDaysForDuplicate.length} dia{selectedDaysForDuplicate.length !== 1 ? 's' : ''}
                   </Button>
                 </DialogFooter>
               </DialogContent>

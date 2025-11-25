@@ -3,6 +3,58 @@ import { getCurrentServerUser } from "@/lib/auth-server"
 import { getSupabaseServer } from "@/lib/supabase-config"
 
 /**
+ * Converte horário no formato HH:MM para minutos desde meia-noite
+ */
+function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(':').map(Number)
+  return hours * 60 + minutes
+}
+
+/**
+ * Verifica se dois intervalos de tempo se sobrepõem
+ * Usa o algoritmo: (StartA < EndB) AND (EndA > StartB)
+ */
+function checkTimeOverlap(start1: string, end1: string, start2: string, end2: string): boolean {
+  const start1Minutes = timeToMinutes(start1)
+  const end1Minutes = timeToMinutes(end1)
+  const start2Minutes = timeToMinutes(start2)
+  const end2Minutes = timeToMinutes(end2)
+
+  return start1Minutes < end2Minutes && end1Minutes > start2Minutes
+}
+
+/**
+ * Valida se há sobreposição de horários na lista de schedules
+ */
+function validateSchedulesForOverlap(schedules: any[]): { isValid: boolean; message?: string } {
+  const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
+  
+  // Agrupar por dia da semana
+  for (let day = 0; day <= 6; day++) {
+    const daySchedules = schedules.filter(s => s.day_of_week === day && s.is_active !== false)
+    
+    // Verificar sobreposição dentro do mesmo dia
+    for (let i = 0; i < daySchedules.length; i++) {
+      for (let j = i + 1; j < daySchedules.length; j++) {
+        const schedule1 = daySchedules[i]
+        const schedule2 = daySchedules[j]
+        
+        if (checkTimeOverlap(schedule1.start_time, schedule1.end_time, schedule2.start_time, schedule2.end_time)) {
+          return {
+            isValid: false,
+            message: `Sobreposição detectada em ${dayNames[day]}: ` +
+                     `Horário 1 (${schedule1.start_time}-${schedule1.end_time}) sobrepõe ` +
+                     `Horário 2 (${schedule2.start_time}-${schedule2.end_time})`
+          }
+        }
+      }
+    }
+  }
+  
+  return { isValid: true }
+}
+
+/**
  * GET /api/admin/agents/[id]/availability
  * Retorna os horários de disponibilidade de um agente (admin)
  */
@@ -80,6 +132,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (!Array.isArray(schedules)) {
       return NextResponse.json({ success: false, error: "Schedules deve ser um array" }, { status: 400 })
+    }
+
+    // Validar sobreposição de horários
+    const validation = validateSchedulesForOverlap(schedules)
+    if (!validation.isValid) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Horários com sobreposição detectados", 
+        details: validation.message 
+      }, { status: 400 })
     }
 
     const supabase = getSupabaseServer()

@@ -21,7 +21,7 @@ export async function POST() {
 
       // Buscar dados atuais do usuário no banco
       const supabaseUrl = process.env.SUPABASE_URL
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+      const supabaseKey = process.env.SUPABASE_ANON_KEY
 
       if (!supabaseUrl || !supabaseKey) {
         console.error("❌ Configuração do Supabase não encontrada")
@@ -73,24 +73,7 @@ export async function POST() {
 
       logJWTOperation('REFRESH', user.email, true, `Role: ${user.role}`)
 
-      // Atualizar cookies com novos tokens
-      cookieStore.set("impaai_access_token", newTokens.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60, // 1 hora
-        path: "/",
-      })
-
-      cookieStore.set("impaai_refresh_token", newTokens.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 7, // 7 dias
-        path: "/",
-      })
-
-      // Atualizar cookie tradicional também
+      // Preparar dados do usuário
       const userData = {
         id: user.id,
         email: user.email,
@@ -102,17 +85,10 @@ export async function POST() {
         last_login_at: user.last_login_at,
       }
 
-      cookieStore.set("impaai_user", JSON.stringify(userData), {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 7,
-        path: "/",
-      })
-
       console.log("✅ Tokens atualizados com sucesso para:", user.email)
 
-      return NextResponse.json({
+      // Criar resposta com cookies usando NextResponse
+      const response = NextResponse.json({
         user: userData,
         tokens: {
           accessToken: newTokens.accessToken,
@@ -121,16 +97,45 @@ export async function POST() {
         message: "Tokens atualizados com sucesso",
       })
 
+      // Definir cookies na resposta
+      response.cookies.set("impaai_access_token", newTokens.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60, // 1 hora
+        path: "/",
+      })
+
+      response.cookies.set("impaai_refresh_token", newTokens.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7, // 7 dias
+        path: "/",
+      })
+
+      response.cookies.set("impaai_user", JSON.stringify(userData), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7,
+        path: "/",
+      })
+
+      return response
+
     } catch (refreshError) {
       console.log("❌ Refresh token inválido:", (refreshError as Error).message)
       logJWTOperation('REFRESH', 'unknown', false, (refreshError as Error).message)
       
-      // Limpar cookies inválidos
-      cookieStore.delete("impaai_access_token")
-      cookieStore.delete("impaai_refresh_token")
-      cookieStore.delete("impaai_user")
+      // Criar resposta de erro e limpar cookies
+      const response = NextResponse.json({ error: "Token de atualização inválido" }, { status: 401 })
       
-      return NextResponse.json({ error: "Token de atualização inválido" }, { status: 401 })
+      response.cookies.delete("impaai_access_token")
+      response.cookies.delete("impaai_refresh_token")
+      response.cookies.delete("impaai_user")
+      
+      return response
     }
 
   } catch (error: any) {
