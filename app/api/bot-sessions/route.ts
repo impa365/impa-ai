@@ -75,8 +75,9 @@ export async function GET(request: Request) {
     // 🔒 SEGURANÇA CRÍTICA: Validar propriedade do bot/conexão ANTES de buscar sessões
     if (botId) {
       // Verificar se o bot pertence ao usuário
+      // IMPORTANTE: bot_id é o UUID do bot externo, não o id do ai_agents
       const botCheckResponse = await fetch(
-        `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id&id=eq.${botId}`,
+        `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id,bot_id&bot_id=eq.${botId}`,
         { headers: headersWithSchema }
       )
       

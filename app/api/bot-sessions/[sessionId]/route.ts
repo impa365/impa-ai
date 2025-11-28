@@ -91,8 +91,9 @@ export async function PUT(
     // 🔒 SEGURANÇA CRÍTICA: Validar propriedade através do bot_id ou connection_id
     if (session.bot_id) {
       // Verificar se o bot pertence ao usuário
+      // IMPORTANTE: bot_id é o UUID do bot externo, não o id do ai_agents
       const botCheckResponse = await fetch(
-        `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id&id=eq.${session.bot_id}`,
+        `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id,bot_id&bot_id=eq.${session.bot_id}`,
         { headers: headersWithSchema }
       )
       
@@ -242,8 +243,9 @@ export async function DELETE(
     // 🔒 SEGURANÇA CRÍTICA: Validar propriedade através do bot_id ou connection_id
     if (session.bot_id) {
       // Verificar se o bot pertence ao usuário
+      // IMPORTANTE: bot_id é o UUID do bot externo, não o id do ai_agents
       const botCheckResponse = await fetch(
-        `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id&id=eq.${session.bot_id}`,
+        `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id,bot_id&bot_id=eq.${session.bot_id}`,
         { headers: headersWithSchema }
       )
       
