@@ -15,23 +15,25 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+    // Usar função RPC com SECURITY DEFINER para contornar RLS
     const regSettingResp = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?select=setting_value&setting_key=eq.allow_public_registration`,
+      `${supabaseUrl}/rest/v1/rpc/is_public_registration_allowed`,
       {
+        method: 'POST',
         headers: {
           apikey: supabaseKey,
           Authorization: `Bearer ${supabaseKey}`,
           "Content-Type": "application/json",
+          "Accept-Profile": "impaai",
+          "Content-Profile": "impaai",
         },
       }
     );
     let regEnabled = false;
     if (regSettingResp.ok) {
-      const regSettings = await regSettingResp.json();
-      if (regSettings && regSettings.length > 0) {
-        regEnabled =
-          String(regSettings[0].setting_value).toLowerCase() === "true";
-      }
+      const result = await regSettingResp.json();
+      // A função retorna boolean direto
+      regEnabled = result === true;
     }
     if (!regEnabled) {
       // Pegadinha/piada

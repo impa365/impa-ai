@@ -6,7 +6,7 @@ import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Users, Bot, MessageSquare, Settings, Home, LogOut, Menu, X, Key, Calendar, Sparkles, ChevronRight, Zap, Clock4 } from "lucide-react"
-import { getCurrentUser } from "@/lib/auth"
+import { getCurrentUser, signOut } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
 import { DynamicTitle } from "@/components/dynamic-title"
 import { getAppVersion } from "@/lib/app-version"
@@ -46,8 +46,8 @@ export default function AdminLayout({
     getAppVersion().then(setAppVersion)
   }, [router])
 
-  const handleLogout = () => {
-    localStorage.removeItem("user")
+  const handleLogout = async () => {
+    await signOut()
     router.push("/")
   }
 

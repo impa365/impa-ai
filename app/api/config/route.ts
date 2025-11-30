@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 // Cache simples para evitar consultas desnecessárias
 let configCache: { data: any; timestamp: number } | null = null
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutos
+const CACHE_TTL = 30 * 1000 // 30 segundos (sincronizado com /api/system/settings)
 
 export async function GET() {
   console.log("=== /api/config - Iniciando requisição ===")
@@ -86,9 +86,13 @@ export async function GET() {
 
     console.log("🔄 Fazendo requisição para system_settings...")
     // Buscar configuração de cadastro público do banco de dados
+    // Usar rpc/function do Supabase para contornar RLS
     const settingsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.allow_public_registration`, 
-      { headers }
+      `${supabaseUrl}/rest/v1/rpc/is_public_registration_allowed`, 
+      { 
+        method: 'POST',
+        headers 
+      }
     )
 
     console.log("📡 Resposta da requisição system_settings:")
@@ -98,12 +102,11 @@ export async function GET() {
 
     let allowPublicRegistration = false // Padrão seguro
     if (settingsResponse.ok) {
-      const settingsData = await settingsResponse.json()
-      console.log("✅ Settings data:", settingsData)
-      if (settingsData && settingsData.length > 0) {
-        allowPublicRegistration = settingsData[0].setting_value === 'true'
-        console.log("🔧 Allow public registration:", allowPublicRegistration)
-      }
+      const result = await settingsResponse.json()
+      console.log("✅ Settings result:", result)
+      // A função retorna boolean direto
+      allowPublicRegistration = result === true
+      console.log("🔧 Allow public registration:", allowPublicRegistration)
     } else {
       const errorText = await settingsResponse.text()
       console.error("⚠️ AVISO: Erro ao buscar settings (continuando com padrão):")

@@ -217,9 +217,26 @@ export function setCurrentUser(user: UserProfile): void {
 export function clearCurrentUser(): void {
   if (typeof window === "undefined") return
   try {
+    // Limpar localStorage
     localStorage.removeItem("user")
-    // Limpar cookie também
-    document.cookie = "impaai_user_client=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
+    
+    // Limpar TODOS os cookies de autenticação
+    const cookiesToDelete = [
+      "impaai_user_client",
+      "impaai_access_token",
+      "impaai_refresh_token",
+      "impaai_user"
+    ]
+    
+    cookiesToDelete.forEach(cookieName => {
+      document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+      // Também tentar deletar com domínio específico (caso exista)
+      if (window.location.hostname !== "localhost") {
+        document.cookie = `${cookieName}=; path=/; domain=${window.location.hostname}; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+      }
+    })
+    
+    console.log("🗑️ LocalStorage e cookies limpos")
   } catch (error) {
     console.error("Erro ao limpar usuário:", error)
   }
@@ -227,14 +244,17 @@ export function clearCurrentUser(): void {
 
 export async function signOut() {
   console.log("🚪 Realizando logout")
-  clearCurrentUser()
-
-  // Limpar cookie do servidor também
+  
+  // Limpar cookie do servidor PRIMEIRO
   try {
     await fetch("/api/auth/logout", { method: "POST" })
+    console.log("✅ Logout no servidor realizado")
   } catch (error) {
     console.error("Erro ao fazer logout no servidor:", error)
   }
+  
+  // Depois limpar dados do cliente
+  clearCurrentUser()
 
   return { success: true, error: null }
 }

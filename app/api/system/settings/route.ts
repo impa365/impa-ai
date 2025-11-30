@@ -76,12 +76,35 @@ export async function GET() {
       data.forEach((setting: any, index: number) => {
         console.log(`Setting ${index}:`, setting)
         try {
-          // Tentar fazer parse do JSON, se falhar usar o valor direto
-          settings[setting.setting_key] = JSON.parse(setting.setting_value)
-          console.log(`✅ ${setting.setting_key}: JSON parsed`)
+          const value = setting.setting_value
+          // Se já é boolean, manter como boolean
+          if (typeof value === 'boolean') {
+            settings[setting.setting_key] = value
+            console.log(`✅ ${setting.setting_key}: boolean direto`)
+          } else if (typeof value === 'string') {
+            // Para strings, tentar parse JSON
+            try {
+              settings[setting.setting_key] = JSON.parse(value)
+              console.log(`✅ ${setting.setting_key}: JSON parsed`)
+            } catch {
+              // Se parse falhar, tratar strings especiais boolean
+              if (value.toLowerCase() === 'true') {
+                settings[setting.setting_key] = true
+              } else if (value.toLowerCase() === 'false') {
+                settings[setting.setting_key] = false
+              } else {
+                settings[setting.setting_key] = value
+              }
+              console.log(`📝 ${setting.setting_key}: string convertida`)
+            }
+          } else {
+            // Outros tipos (number, object, etc)
+            settings[setting.setting_key] = value
+            console.log(`📝 ${setting.setting_key}: valor direto`)
+          }
         } catch {
           settings[setting.setting_key] = setting.setting_value
-          console.log(`📝 ${setting.setting_key}: valor direto`)
+          console.log(`⚠️ ${setting.setting_key}: erro no parse, usando valor direto`)
         }
       })
     } else {
@@ -154,11 +177,11 @@ async function updateSingleSetting(setting_key: string, setting_value: any) {
   console.log(`🔧 updateSingleSetting: ${setting_key} = ${setting_value}`)
   
   const supabaseUrl = process.env.SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseKey = process.env.SUPABASE_ANON_KEY
 
   console.log("📋 Verificando variáveis de ambiente para update:")
   console.log("SUPABASE_URL:", supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
-  console.log("SUPABASE_SERVICE_ROLE_KEY:", supabaseKey ? `${supabaseKey.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
+  console.log("SUPABASE_ANON_KEY:", supabaseKey ? `${supabaseKey.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
 
   if (!supabaseUrl || !supabaseKey) {
     console.error("❌ ERRO: Variáveis de ambiente para update não configuradas!")
@@ -169,8 +192,26 @@ async function updateSingleSetting(setting_key: string, setting_value: any) {
   }
 
   const updateUrl = `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${setting_key}`
+  
+  // Para booleans, salvar como boolean real (JSONB aceita)
+  // Para outros tipos, manter como estão (JSONB é flexível)
+  let settingValue
+  if (typeof setting_value === 'boolean') {
+    // Boolean direto - JSONB aceita nativamente
+    settingValue = setting_value
+  } else if (typeof setting_value === 'number') {
+    // Number direto - JSONB aceita nativamente
+    settingValue = setting_value
+  } else if (typeof setting_value === 'string') {
+    // String: manter como JSON string
+    settingValue = JSON.stringify(setting_value)
+  } else {
+    // Objetos e arrays: stringify
+    settingValue = JSON.stringify(setting_value)
+  }
+  
   const updateBody = {
-    setting_value: JSON.stringify(setting_value),
+    setting_value: settingValue,
     updated_at: new Date().toISOString()
   }
 
@@ -220,11 +261,11 @@ async function updateMultipleSettings(settings: any) {
   console.log("🔧 updateMultipleSettings:", settings)
   
   const supabaseUrl = process.env.SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseKey = process.env.SUPABASE_ANON_KEY
 
   console.log("📋 Verificando variáveis de ambiente para updates múltiplos:")
   console.log("SUPABASE_URL:", supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
-  console.log("SUPABASE_SERVICE_ROLE_KEY:", supabaseKey ? `${supabaseKey.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
+  console.log("SUPABASE_ANON_KEY:", supabaseKey ? `${supabaseKey.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
 
   if (!supabaseUrl || !supabaseKey) {
     console.error("❌ ERRO: Variáveis de ambiente para updates múltiplos não configuradas!")
@@ -246,8 +287,25 @@ async function updateMultipleSettings(settings: any) {
 
     try {
       const updateUrl = `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${key}`
+      
+      // Tratamento consistente de tipos para JSONB
+      let settingValue
+      if (typeof value === 'boolean') {
+        // Boolean direto - JSONB aceita nativamente
+        settingValue = value
+      } else if (typeof value === 'number') {
+        // Number direto - JSONB aceita nativamente
+        settingValue = value
+      } else if (typeof value === 'string') {
+        // String: manter como JSON string
+        settingValue = JSON.stringify(value)
+      } else {
+        // Objetos e arrays: stringify
+        settingValue = JSON.stringify(value)
+      }
+      
       const updateBody = {
-        setting_value: JSON.stringify(value),
+        setting_value: settingValue,
         updated_at: new Date().toISOString()
       }
 
