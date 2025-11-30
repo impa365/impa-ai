@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { QUEST_MISSIONS } from '@/lib/quest-missions'
-import { authenticateQuestRequest } from '@/lib/quest-auth'
+import { authenticateQuestRequest, checkQuestSystemEnabled } from '@/lib/quest-auth'
 import { supabaseGet, supabasePatch } from '@/lib/quest-supabase'
 
 export async function POST(request: NextRequest) {
@@ -17,6 +17,12 @@ export async function POST(request: NextRequest) {
     }
     
     const userId = auth.userId
+
+    // Verificar se quest system está ativo
+    const isEnabled = await checkQuestSystemEnabled(userId)
+    if (!isEnabled) {
+      return NextResponse.json({ questDisabled: true }, { status: 200 })
+    }
 
     const { missionId } = await request.json()
 

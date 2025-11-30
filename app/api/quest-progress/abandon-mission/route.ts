@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { authenticateQuestRequest } from '@/lib/quest-auth'
+import { authenticateQuestRequest, checkQuestSystemEnabled } from '@/lib/quest-auth'
 
 const SUPABASE_URL = process.env.SUPABASE_URL!
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY!
@@ -18,6 +18,12 @@ export async function POST(request: NextRequest) {
     }
     
     const userId = auth.userId
+
+    // Verificar se quest system está ativo
+    const isEnabled = await checkQuestSystemEnabled(userId)
+    if (!isEnabled) {
+      return NextResponse.json({ questDisabled: true }, { status: 200 })
+    }
 
     console.log('⚠️ [QUEST] Abandonando missão para usuário:', userId)
 

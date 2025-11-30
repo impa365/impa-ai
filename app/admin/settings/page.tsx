@@ -154,10 +154,10 @@ export default function AdminSettingsPage() {
       if (data.success && data.settings) {
         // Garantir que os valores sejam do tipo correto
         const settings = {
+          ...data.settings,
           default_whatsapp_connections_limit: Number(data.settings.default_whatsapp_connections_limit) || 1,
           default_agents_limit: Number(data.settings.default_agents_limit) || 2,
-          allow_public_registration: Boolean(data.settings.allow_public_registration),
-          ...data.settings,
+          // allow_public_registration já vem como boolean da API
         }
 
         setSystemSettings(settings)

@@ -76,6 +76,11 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
       onSuccess: (data) => {
+        // Se quest system está desativado, não processar
+        if (data && (data as any).questDisabled) {
+          console.log('⏸️ [QUEST PROVIDER] Sistema desativado')
+          return
+        }
       },
       onError: (err) => {
         console.error('❌ [QUEST PROVIDER] Erro ao carregar dados:', err)

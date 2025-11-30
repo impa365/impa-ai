@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authenticateQuestRequest } from '@/lib/quest-auth'
+import { authenticateQuestRequest, checkQuestSystemEnabled } from '@/lib/quest-auth'
 import { supabaseGet, supabasePatch } from '@/lib/quest-supabase'
 
 /**
@@ -18,6 +18,12 @@ export async function POST(request: NextRequest) {
 
     const userId = auth.userId
     console.log('🔄 [QUEST RESET] Resetando progresso do usuário:', userId)
+
+    // Verificar se quest system está ativo
+    const isEnabled = await checkQuestSystemEnabled(userId)
+    if (!isEnabled) {
+      return NextResponse.json({ questDisabled: true }, { status: 200 })
+    }
 
     // Buscar o registro atual
     let existingData

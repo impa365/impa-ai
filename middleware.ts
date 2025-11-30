@@ -71,7 +71,7 @@ export async function middleware(req: NextRequest) {
 
       if (!user) {
         console.log(
-          `🚫 Acesso negado à API ${pathname} - Usuário não autenticado (JWT e API key inválidos)`
+          `🚫 Acesso negado à API ${pathname} - Usuário não autenticado`
         );
         return NextResponse.json(
           { error: "Não autorizado - Usuário não autenticado" },
@@ -90,9 +90,12 @@ export async function middleware(req: NextRequest) {
         );
       }
 
-      console.log(
-        `✅ Acesso autorizado à API ${pathname} - Usuário: ${user.email} (${user.role}) via ${authMethod}`
-      );
+      // Log de sucesso apenas em ambiente de desenvolvimento
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `✅ Acesso autorizado à API ${pathname} - Usuário: ${user.email} (${user.role}) via ${authMethod}`
+        );
+      }
     }
 
     return NextResponse.next();
@@ -131,14 +134,16 @@ export async function middleware(req: NextRequest) {
 
     // Redirecionar admin para dashboard admin se acessar dashboard comum
     if (pathname.startsWith("/dashboard") && user.role === "admin") {
-      console.log(`🔄 Redirecionando admin ${user.email} para dashboard admin`);
       const adminUrl = pathname.replace("/dashboard", "/admin");
       return NextResponse.redirect(new URL(adminUrl, req.url));
     }
 
-    console.log(
-      `✅ Acesso autorizado à página ${pathname} - Usuário: ${user.email} (${user.role})`
-    );
+    // Log apenas em desenvolvimento
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `✅ Acesso autorizado à página ${pathname} - Usuário: ${user.email} (${user.role})`
+      );
+    }
   }
 
   // Configurar headers especiais para rotas de embed

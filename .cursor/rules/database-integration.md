@@ -78,7 +78,7 @@ Localizados em [database/](mdc:database/):
 ## Configuração de Ambiente
 - `SUPABASE_URL`: URL do projeto Supabase
 - `SUPABASE_ANON_KEY`: Chave anônima
-- `SUPABASE_SERVICE_ROLE_KEY`: Chave de serviço (admin)
+- `SUPABASE_SERVICE_ROLE_KEY`: Chave de serviço (admin) (NAO USADA NESSE PROJETO)
 
 ## Helpers e Utilities
 - [lib/api-helpers.ts](mdc:lib/api-helpers.ts): Helpers para API

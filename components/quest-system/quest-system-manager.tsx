@@ -128,9 +128,16 @@ function QuestSystemContent() {
     return null
   }
 
+  // Não mostrar se o quest system está desativado (questDisabled da API)
+  if (progress && (progress as any).questDisabled) {
+    console.log('⏸️ [QUEST MANAGER] Sistema desativado - não renderizando')
+    return null
+  }
+
   // Não mostrar se o usuário desabilitou (showARIA: false)
   const showARIA = progress?.preferences?.showARIA
   if (progress && showARIA === false) {
+    console.log('⏸️ [QUEST MANAGER] showARIA false - não renderizando')
     return null
   }
 

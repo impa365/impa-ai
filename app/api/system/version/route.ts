@@ -1,15 +1,22 @@
 import { NextResponse } from "next/server"
 
+// Cache simples para versão
+let versionCache: { version: string; timestamp: number } | null = null
+const CACHE_TTL = 60 * 1000 // 1 minuto
+
 export async function GET() {
   try {
-    console.log("🔧 Buscando versão da aplicação...")
+    // Verificar cache primeiro
+    const now = Date.now()
+    if (versionCache && (now - versionCache.timestamp) < CACHE_TTL) {
+      return NextResponse.json({ version: versionCache.version })
+    }
 
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ Configuração do Supabase não encontrada")
-      return NextResponse.json({ error: "Erro de configuração do servidor" }, { status: 500 })
+      return NextResponse.json({ version: "1.0.0" })
     }
 
     // Buscar versão via REST API
@@ -24,17 +31,17 @@ export async function GET() {
     })
 
     if (!response.ok) {
-      console.error("❌ Erro ao buscar versão:", response.status)
       return NextResponse.json({ version: "1.0.0" })
     }
 
     const data = await response.json()
     const version = data && data.length > 0 ? data[0].setting_value : "1.0.0"
 
-    console.log("✅ Versão encontrada:", version)
+    // Atualizar cache
+    versionCache = { version, timestamp: now }
+
     return NextResponse.json({ version })
   } catch (error: any) {
-    console.error("💥 Erro ao buscar versão:", error.message)
     return NextResponse.json({ version: "1.0.0" })
   }
 }
