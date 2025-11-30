@@ -4,16 +4,20 @@ import { verifyRefreshToken, generateTokenPair, logJWTOperation } from "@/lib/jw
 
 export async function POST() {
   try {
+    console.log("🔄 Tentativa de refresh de token...")
+
     const cookieStore = await cookies()
     const refreshTokenCookie = cookieStore.get("impaai_refresh_token")
 
     if (!refreshTokenCookie) {
+      console.log("❌ Refresh token não encontrado")
       return NextResponse.json({ error: "Token de atualização não encontrado" }, { status: 401 })
     }
 
     try {
       // Verificar refresh token
       const refreshPayload = verifyRefreshToken(refreshTokenCookie.value)
+      console.log("✅ Refresh token válido para:", refreshPayload.email)
 
       // Buscar dados atuais do usuário no banco
       const supabaseUrl = process.env.SUPABASE_URL
@@ -80,6 +84,8 @@ export async function POST() {
         updated_at: user.updated_at,
         last_login_at: user.last_login_at,
       }
+
+      console.log("✅ Tokens atualizados com sucesso para:", user.email)
 
       // Criar resposta com cookies usando NextResponse
       const response = NextResponse.json({

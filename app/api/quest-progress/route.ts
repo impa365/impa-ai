@@ -59,6 +59,8 @@ export async function GET(request: NextRequest) {
     
     const userId = auth.userId
 
+    console.log('🎮 [QUEST] Buscando progresso do usuário:', userId)
+
     // Buscar progresso no Supabase para verificar se está ativo
     let data
     try {
@@ -73,6 +75,8 @@ export async function GET(request: NextRequest) {
 
     // Se não existe, criar automaticamente
     if (!data || data.length === 0) {
+      console.log('🆕 [QUEST] Criando progresso inicial para usuário:', userId)
+      
       try {
         const newData = await supabasePost('user_quest_progress', {
           user_id: userId,
@@ -109,14 +113,16 @@ export async function GET(request: NextRequest) {
     // ⚠️ VERIFICAR SE SISTEMA ESTÁ DESATIVADO
     const preferences = data[0].preferences || {}
     if (preferences.showARIA === false) {
+      console.log('⏸️ [QUEST] Sistema desativado (showARIA: false) - retornando vazio')
       return NextResponse.json({
         questDisabled: true,
         message: 'Sistema de tutorial desativado'
       }, { status: 200 })
-      }, { status: 200 })
     }
 
+    console.log('✅ [QUEST] Progresso encontrado')
     const normalizedData = normalizeProgress(data[0])
+    return NextResponse.json(normalizedData)
 
   } catch (error: any) {
     console.error('❌ [QUEST] Erro geral:', error)

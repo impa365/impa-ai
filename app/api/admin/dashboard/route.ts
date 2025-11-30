@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
+    console.log("🔧 Buscando dados do dashboard admin...")
+
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
 
@@ -71,6 +73,8 @@ export async function GET() {
     const systemLimits = {
       defaultLimit: settings.length > 0 ? settings[0].setting_value : 2,
     }
+
+    console.log("✅ Dados do dashboard carregados")
 
     return NextResponse.json({
       users: users.map((user: any) => ({
