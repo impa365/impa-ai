@@ -136,8 +136,10 @@ export default function AdminSettingsPage() {
   const loadSystemSettings = async () => {
     if (settingsLoaded) return
 
+    console.log("📥 [FRONTEND] loadSystemSettings iniciado")
     setLoadingSettings(true)
     try {
+      console.log("📡 [FRONTEND] Fazendo GET /api/system/settings")
       const response = await fetch("/api/system/settings", {
         method: "GET",
         headers: {
@@ -145,13 +147,21 @@ export default function AdminSettingsPage() {
         },
       })
 
+      console.log("📨 [FRONTEND] Response status:", response.status)
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
 
       const data = await response.json()
+      console.log("📦 [FRONTEND] Data recebido do backend:", data)
+      console.log("📦 [FRONTEND] data.settings:", data.settings)
 
       if (data.success && data.settings) {
+        console.log("🔍 [FRONTEND] allow_public_registration ANTES do processamento:")
+        console.log("   Valor:", data.settings.allow_public_registration)
+        console.log("   Tipo:", typeof data.settings.allow_public_registration)
+        
         // Garantir que os valores sejam do tipo correto
         const settings = {
           ...data.settings,
@@ -160,13 +170,18 @@ export default function AdminSettingsPage() {
           // allow_public_registration já vem como boolean da API
         }
 
+        console.log("🔍 [FRONTEND] allow_public_registration DEPOIS do processamento:")
+        console.log("   Valor:", settings.allow_public_registration)
+        console.log("   Tipo:", typeof settings.allow_public_registration)
+        
+        console.log("💾 [FRONTEND] Settings final que será setado:", settings)
+
         setSystemSettings(settings)
         setSettingsLoaded(true)
-        // ✅ LOG SEGURO - apenas confirmação sem dados
-        console.log("Configurações do sistema carregadas com sucesso")
+        console.log("✅ [FRONTEND] Configurações do sistema carregadas com sucesso")
       }
     } catch (error) {
-      console.error("Erro ao buscar configurações do sistema")
+      console.error("❌ [FRONTEND] Erro ao buscar configurações do sistema:", error)
       toast({
         title: "Erro ao carregar configurações",
         description: "Não foi possível carregar as configurações do sistema.",

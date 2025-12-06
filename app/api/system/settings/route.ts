@@ -112,6 +112,16 @@ export async function GET() {
     }
 
     console.log("🎯 Settings finais:", settings)
+    
+    // LOG ESPECIAL para allow_public_registration
+    if ('allow_public_registration' in settings) {
+      console.log("🚨🚨🚨 [GET] allow_public_registration no settings final:")
+      console.log("   Valor:", settings.allow_public_registration)
+      console.log("   Tipo:", typeof settings.allow_public_registration)
+      console.log("   Boolean():", Boolean(settings.allow_public_registration))
+    } else {
+      console.log("⚠️ [GET] allow_public_registration NÃO está presente nos settings!")
+    }
 
     // Atualizar cache
     cachedSettings = {
