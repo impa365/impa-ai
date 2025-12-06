@@ -284,6 +284,8 @@ async function updateMultipleSettings(settings: any) {
     if (key === 'success' || key === 'settings') continue
 
     console.log(`🔄 Processando: ${key} = ${value}`)
+    console.log(`   Tipo recebido:`, typeof value)
+    console.log(`   Valor bruto:`, JSON.stringify(value))
 
     try {
       const updateUrl = `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${key}`
@@ -293,15 +295,19 @@ async function updateMultipleSettings(settings: any) {
       if (typeof value === 'boolean') {
         // Boolean direto - JSONB aceita nativamente
         settingValue = value
+        console.log(`   ✅ Boolean direto: ${settingValue}`)
       } else if (typeof value === 'number') {
         // Number direto - JSONB aceita nativamente
         settingValue = value
+        console.log(`   ✅ Number direto: ${settingValue}`)
       } else if (typeof value === 'string') {
         // String: manter como JSON string
         settingValue = JSON.stringify(value)
+        console.log(`   ✅ String stringified: ${settingValue}`)
       } else {
         // Objetos e arrays: stringify
         settingValue = JSON.stringify(value)
+        console.log(`   ✅ Object/Array stringified: ${settingValue}`)
       }
       
       const updateBody = {
@@ -310,7 +316,16 @@ async function updateMultipleSettings(settings: any) {
       }
 
       console.log(`📡 Update URL: ${updateUrl}`)
-      console.log(`📝 Update Body:`, updateBody)
+      console.log(`📝 Update Body:`, JSON.stringify(updateBody, null, 2))
+      
+      // LOG ESPECIAL para allow_public_registration
+      if (key === 'allow_public_registration') {
+        console.log(`🚨🚨🚨 ATENÇÃO: allow_public_registration`)
+        console.log(`   Valor original do frontend:`, value)
+        console.log(`   Tipo original:`, typeof value)
+        console.log(`   Valor que será enviado ao DB:`, settingValue)
+        console.log(`   Tipo que será enviado:`, typeof settingValue)
+      }
 
       const response = await fetch(updateUrl, {
           method: 'PATCH',

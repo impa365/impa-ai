@@ -179,8 +179,11 @@ export default function AdminSettingsPage() {
 
   // FUNÇÃO SEGURA - SEM LOGS DE DADOS SENSÍVEIS
   const saveSystemSettings = async () => {
+    console.log("🔵 [FRONTEND] saveSystemSettings iniciado")
+    console.log("📦 [FRONTEND] Dados a enviar:", systemSettings)
     setSavingSettings(true)
     try {
+      console.log("📡 [FRONTEND] Fazendo POST para /api/system/settings")
       const response = await fetch("/api/system/settings", {
         method: "POST",
         headers: {
@@ -189,32 +192,41 @@ export default function AdminSettingsPage() {
         body: JSON.stringify(systemSettings),
       })
 
+      console.log("📨 [FRONTEND] Response status:", response.status)
+      
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        const errorText = await response.text()
+        console.error("❌ [FRONTEND] Response não OK:", errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
       }
 
       const data = await response.json()
+      console.log("✅ [FRONTEND] Response data:", data)
 
       if (data.success) {
+        console.log("✅ [FRONTEND] Configurações salvas com sucesso!")
         toast({
           title: "Configurações salvas!",
           description: "As configurações do sistema foram atualizadas com sucesso.",
         })
         // Recarregar configurações após salvar para garantir sincronização
+        console.log("🔄 [FRONTEND] Recarregando configurações...")
         setSettingsLoaded(false)
         await loadSystemSettings()
       } else {
+        console.error("❌ [FRONTEND] data.success = false:", data.error)
         throw new Error(data.error || "Erro desconhecido")
       }
     } catch (error: any) {
-      console.error("Erro ao salvar configurações do sistema")
+      console.error("❌ [FRONTEND] Erro ao salvar configurações:", error)
       toast({
         title: "Erro ao salvar configurações",
-        description: "Não foi possível salvar as configurações.",
+        description: error.message || "Não foi possível salvar as configurações.",
         variant: "destructive",
       })
     } finally {
       setSavingSettings(false)
+      console.log("🔵 [FRONTEND] saveSystemSettings finalizado")
     }
   }
 
@@ -726,10 +738,16 @@ export default function AdminSettingsPage() {
                   id="allowRegistration"
                   checked={Boolean(systemSettings.allow_public_registration)}
                   onCheckedChange={(checked) => {
-                    setSystemSettings((prev) => ({
-                      ...prev,
-                      allow_public_registration: checked,
-                    }))
+                    console.log("🔘 [FRONTEND] Switch toggleado:", checked)
+                    console.log("📊 [FRONTEND] Estado anterior:", systemSettings.allow_public_registration)
+                    setSystemSettings((prev) => {
+                      const newState = {
+                        ...prev,
+                        allow_public_registration: checked,
+                      }
+                      console.log("📊 [FRONTEND] Novo estado:", newState)
+                      return newState
+                    })
                   }}
                 />
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
