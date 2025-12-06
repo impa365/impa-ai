@@ -412,12 +412,34 @@ export async function PUT(
           }
         }
 
-        // Buscar API key ativa do usuário para incluir no webhook
-        console.log("🔍 Buscando API key ativa do usuário...");
+        // Buscar API key ativa do ADMIN para incluir no webhook
+        console.log("🔍 Buscando API key ativa do ADMIN...");
         let userApiKey = null;
         try {
+          // Primeiro buscar o admin
+          const adminResponse = await fetch(
+            `${supabaseUrl}/rest/v1/user_profiles?select=id&role=eq.admin&limit=1`,
+            {
+              headers: {
+                "Accept-Profile": "impaai",
+                "Content-Profile": "impaai",
+                Authorization: `Bearer ${supabaseKey}`,
+              },
+            }
+          );
+          if (!adminResponse.ok) {
+            throw new Error("Não foi possível buscar informações do admin");
+          }
+          const admins = await adminResponse.json();
+          if (!admins || admins.length === 0) {
+            throw new Error("Nenhum administrador encontrado no sistema");
+          }
+          const adminId = admins[0].id;
+          console.log("✅ Admin identificado:", adminId);
+
+          // Agora buscar API key do admin
           const apiKeyResponse = await fetch(
-            `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${agent.user_id}&is_active=eq.true&order=created_at.desc&limit=1`,
+            `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${adminId}&is_active=eq.true&order=created_at.desc&limit=1`,
             {
               headers: {
                 "Accept-Profile": "impaai",
@@ -430,13 +452,13 @@ export async function PUT(
             const apiKeys = await apiKeyResponse.json();
             if (apiKeys && apiKeys.length > 0) {
               userApiKey = apiKeys[0].api_key;
-              console.log("✅ API key do usuário encontrada");
+              console.log("✅ API key do admin encontrada");
             } else {
-              console.warn("⚠️ Nenhuma API key ativa encontrada para o usuário");
+              console.warn("⚠️ Nenhuma API key ativa encontrada para o admin");
             }
           }
         } catch (apiKeyError) {
-          console.warn("⚠️ Erro ao buscar API key do usuário:", apiKeyError);
+          console.warn("⚠️ Erro ao buscar API key do admin:", apiKeyError);
         }
 
         // Adicionar panelUrl e apiKey à URL do webhook se disponíveis

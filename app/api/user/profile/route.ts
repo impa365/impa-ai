@@ -32,13 +32,15 @@ export async function GET(request: NextRequest) {
     )
 
     if (!response.ok) {
-      console.error("❌ Erro ao buscar perfil:", response.status)
+      const errorText = await response.text()
+      console.error("❌ Erro ao buscar perfil:", response.status, errorText)
       return NextResponse.json({ error: "Erro ao buscar perfil" }, { status: 500 })
     }
 
     const profiles = await response.json()
     
     if (!profiles || profiles.length === 0) {
+      console.error("❌ Perfil não encontrado para user.id:", user.id)
       return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 })
     }
 

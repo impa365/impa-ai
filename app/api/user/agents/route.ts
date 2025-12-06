@@ -364,26 +364,42 @@ export async function POST(request: NextRequest) {
 
         console.log("✅ [UAZAPI] N8N Session encontrado")
 
-        // Buscar API key ativa do usuário para incluir no url_api
-        console.log("🔍 [UAZAPI] Buscando API key ativa do usuário...")
+        // Buscar API key ativa do ADMIN (não do usuário) para incluir no url_api
+        console.log("🔍 [UAZAPI] Buscando API key ativa do ADMIN...")
         let userApiKey = null
         try {
+          // Primeiro buscar o admin
+          const adminResponse = await fetch(
+            `${supabaseUrl}/rest/v1/user_profiles?select=id&role=eq.admin&limit=1`,
+            { headers }
+          )
+          if (!adminResponse.ok) {
+            throw new Error("Não foi possível buscar informações do admin")
+          }
+          const admins = await adminResponse.json()
+          if (!admins || admins.length === 0) {
+            throw new Error("Nenhum administrador encontrado no sistema")
+          }
+          const adminId = admins[0].id
+          console.log("✅ [UAZAPI] Admin identificado:", adminId)
+
+          // Agora buscar API key do admin
           const apiKeyResponse = await fetch(
-            `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${currentUser.id}&is_active=eq.true&order=created_at.desc&limit=1`,
+            `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${adminId}&is_active=eq.true&order=created_at.desc&limit=1`,
             { headers }
           )
           if (apiKeyResponse.ok) {
             const apiKeys = await apiKeyResponse.json()
             if (apiKeys && apiKeys.length > 0) {
               userApiKey = apiKeys[0].api_key
-              console.log("✅ [UAZAPI] API key do usuário encontrada")
+              console.log("✅ [UAZAPI] API key do admin encontrada")
             } else {
-              console.warn("⚠️ [UAZAPI] Nenhuma API key ativa encontrada para o usuário")
-              throw new Error("É necessário criar uma API key antes de criar um agente. Vá para 'Configurações > API Keys' e crie uma chave de API ativa.")
+              console.warn("⚠️ [UAZAPI] Nenhuma API key ativa encontrada para o admin")
+              throw new Error("O administrador precisa criar uma API key antes que agentes possam ser criados. Entre em contato com o administrador do sistema.")
             }
           }
         } catch (apiKeyError: any) {
-          console.error("❌ [UAZAPI] Erro com API key do usuário:", apiKeyError.message)
+          console.error("❌ [UAZAPI] Erro com API key do admin:", apiKeyError.message)
           throw apiKeyError
         }
 
@@ -627,21 +643,37 @@ export async function POST(request: NextRequest) {
 
           console.log("🔗 URL da Evolution API:", evolutionApiUrl)
 
-          // Buscar API key ativa do usuário para incluir no webhook
-          console.log("🔍 Buscando API key ativa do usuário...")
+          // Buscar API key ativa do ADMIN (não do usuário) para incluir no webhook
+          console.log("🔍 Buscando API key ativa do ADMIN...")
           let userApiKey = null
           try {
+            // Primeiro buscar o admin
+            const adminResponse = await fetch(
+              `${supabaseUrl}/rest/v1/user_profiles?select=id&role=eq.admin&limit=1`,
+              { headers }
+            )
+            if (!adminResponse.ok) {
+              throw new Error("Não foi possível buscar informações do admin")
+            }
+            const admins = await adminResponse.json()
+            if (!admins || admins.length === 0) {
+              throw new Error("Nenhum administrador encontrado no sistema")
+            }
+            const adminId = admins[0].id
+            console.log("✅ Admin identificado:", adminId)
+
+            // Agora buscar API key do admin
             const apiKeyResponse = await fetch(
-              `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${agentData.user_id}&is_active=eq.true&order=created_at.desc&limit=1`,
+              `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${adminId}&is_active=eq.true&order=created_at.desc&limit=1`,
               { headers }
             )
             if (apiKeyResponse.ok) {
               const apiKeys = await apiKeyResponse.json()
               if (apiKeys && apiKeys.length > 0) {
                 userApiKey = apiKeys[0].api_key
-                console.log("✅ API key do usuário encontrada")
+                console.log("✅ API key do admin encontrada")
               } else {
-                console.warn("⚠️ Nenhuma API key ativa encontrada para o usuário")
+                console.warn("⚠️ Nenhuma API key ativa encontrada para o admin")
                 throw new Error("É necessário criar uma API key antes de criar um agente. Vá para 'Configurações > API Keys' e crie uma chave de API ativa.")
               }
             }
