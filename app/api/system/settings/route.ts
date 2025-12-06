@@ -32,7 +32,8 @@ export async function GET() {
       }, { status: 500 })
     }
 
-    const queryUrl = `${supabaseUrl}/rest/v1/system_settings?select=setting_key,setting_value&or=(setting_key.eq.footer_text,setting_key.eq.system_name,setting_key.eq.app_name,is_public.eq.true)`
+    // Buscar TODAS as configurações necessárias (públicas + admin settings)
+    const queryUrl = `${supabaseUrl}/rest/v1/system_settings?select=setting_key,setting_value&or=(setting_key.eq.footer_text,setting_key.eq.system_name,setting_key.eq.app_name,setting_key.eq.allow_public_registration,setting_key.eq.default_whatsapp_connections_limit,setting_key.eq.default_agents_limit,setting_key.eq.landing_page_enabled,is_public.eq.true)`
     
     console.log("🔄 Fazendo requisição para system_settings...")
     console.log("URL:", queryUrl)
