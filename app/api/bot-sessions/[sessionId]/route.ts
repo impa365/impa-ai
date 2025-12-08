@@ -31,6 +31,8 @@ export async function PUT(
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
+    const isAdmin = currentUser.role === "admin"
+
     const body = await request.json()
     const { status } = body
     
@@ -89,8 +91,9 @@ export async function PUT(
     const session = sessions[0]
 
     // 🔒 SEGURANÇA CRÍTICA: Validar propriedade através do bot_id ou connection_id
-    if (session.bot_id) {
-      // Verificar se o bot pertence ao usuário
+    // Admin tem acesso total, usuários comuns apenas aos seus
+    if (session.bot_id && !isAdmin) {
+      // Verificar se o bot pertence ao usuário (admin bypassa essa verificação)
       // IMPORTANTE: bot_id é o UUID do bot externo, não o id do ai_agents
       const botCheckResponse = await fetch(
         `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id,bot_id&bot_id=eq.${session.bot_id}`,
@@ -104,10 +107,12 @@ export async function PUT(
           return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
         }
       }
+    } else if (session.bot_id && isAdmin) {
+      console.log("✅ Admin modificando sessão do bot:", session.bot_id)
     }
     
-    if (session.connection_id) {
-      // Verificar se a conexão pertence ao usuário
+    if (session.connection_id && !isAdmin) {
+      // Verificar se a conexão pertence ao usuário (admin bypassa essa verificação)
       const connCheckResponse = await fetch(
         `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,user_id&id=eq.${session.connection_id}`,
         { headers: headersWithSchema }
@@ -120,6 +125,8 @@ export async function PUT(
           return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
         }
       }
+    } else if (session.connection_id && isAdmin) {
+      console.log("✅ Admin modificando sessão da conexão:", session.connection_id)
     }
     
     console.log(`✅ Propriedade validada para usuário: ${currentUser.id}`)
@@ -198,6 +205,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
+    const isAdmin = currentUser.role === "admin"
+
     // Configurações do Supabase
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
@@ -241,8 +250,9 @@ export async function DELETE(
     const session = sessions[0]
 
     // 🔒 SEGURANÇA CRÍTICA: Validar propriedade através do bot_id ou connection_id
-    if (session.bot_id) {
-      // Verificar se o bot pertence ao usuário
+    // Admin tem acesso total, usuários comuns apenas aos seus
+    if (session.bot_id && !isAdmin) {
+      // Verificar se o bot pertence ao usuário (admin bypassa essa verificação)
       // IMPORTANTE: bot_id é o UUID do bot externo, não o id do ai_agents
       const botCheckResponse = await fetch(
         `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id,bot_id&bot_id=eq.${session.bot_id}`,
@@ -256,10 +266,12 @@ export async function DELETE(
           return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
         }
       }
+    } else if (session.bot_id && isAdmin) {
+      console.log("✅ Admin deletando sessão do bot:", session.bot_id)
     }
     
-    if (session.connection_id) {
-      // Verificar se a conexão pertence ao usuário
+    if (session.connection_id && !isAdmin) {
+      // Verificar se a conexão pertence ao usuário (admin bypassa essa verificação)
       const connCheckResponse = await fetch(
         `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,user_id&id=eq.${session.connection_id}`,
         { headers: headersWithSchema }
@@ -272,6 +284,8 @@ export async function DELETE(
           return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
         }
       }
+    } else if (session.connection_id && isAdmin) {
+      console.log("✅ Admin deletando sessão da conexão:", session.connection_id)
     }
     
     console.log(`✅ Propriedade validada para usuário: ${currentUser.id}`)

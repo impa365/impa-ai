@@ -73,8 +73,11 @@ export async function GET(request: Request) {
     }
 
     // 🔒 SEGURANÇA CRÍTICA: Validar propriedade do bot/conexão ANTES de buscar sessões
-    if (botId) {
-      // Verificar se o bot pertence ao usuário
+    // Admin tem acesso total, usuários comuns apenas aos seus
+    const isAdmin = currentUser.role === "admin"
+    
+    if (botId && !isAdmin) {
+      // Verificar se o bot pertence ao usuário (admin bypassa essa verificação)
       // IMPORTANTE: bot_id é o UUID do bot externo, não o id do ai_agents
       const botCheckResponse = await fetch(
         `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id,bot_id&bot_id=eq.${botId}`,
@@ -98,10 +101,12 @@ export async function GET(request: Request) {
       }
       
       console.log("✅ Propriedade do bot validada para usuário:", currentUser.id)
+    } else if (botId && isAdmin) {
+      console.log("✅ Admin acessando bot:", botId)
     }
     
-    if (connectionId) {
-      // Verificar se a conexão pertence ao usuário
+    if (connectionId && !isAdmin) {
+      // Verificar se a conexão pertence ao usuário (admin bypassa essa verificação)
       const connCheckResponse = await fetch(
         `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,user_id&id=eq.${connectionId}`,
         { headers: headersWithSchema }
@@ -124,6 +129,8 @@ export async function GET(request: Request) {
       }
       
       console.log("✅ Propriedade da conexão validada para usuário:", currentUser.id)
+    } else if (connectionId && isAdmin) {
+      console.log("✅ Admin acessando conexão:", connectionId)
     }
 
     // Construir query - buscar direto da bot_sessions
