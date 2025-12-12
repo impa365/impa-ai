@@ -50,7 +50,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       throw new Error("Variáveis de ambiente do Supabase não configuradas")
     }
 
-    const agentId = params.id
     const ownsAgent = await ensureAgentOwnership(agentId, currentUser.id, supabaseUrl, supabaseKey)
 
     if (!ownsAgent) {

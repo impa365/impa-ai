@@ -190,9 +190,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       throw new Error("Variáveis de ambiente do Supabase não configuradas")
     }
 
-    const agentId = params.id
-    const triggerId = params.triggerId
-
     const ownsAgent = await ensureAgentOwnership(agentId, currentUser.id, supabaseUrl, supabaseKey)
     if (!ownsAgent) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
@@ -261,9 +258,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     if (!supabaseUrl || !supabaseKey) {
       throw new Error("Variáveis de ambiente do Supabase não configuradas")
     }
-
-    const agentId = params.id
-    const triggerId = params.triggerId
 
     const ownsAgent = await ensureAgentOwnership(agentId, currentUser.id, supabaseUrl, supabaseKey)
     if (!ownsAgent) {
