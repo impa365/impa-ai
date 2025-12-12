@@ -11,5 +11,10 @@ JWT_EXPIRY=7d
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=sua-chave-secreta-nextauth
 
-# Configurações opcionais
-NODE_ENV=development 
+# Configurações de segurança (produção)
+NODE_ENV=production
+NEXT_TELEMETRY_DISABLED=1
+
+# Configurações de Performance
+# Limite de tamanho de payload (em MB) - padrão é 1MB
+# BODY_SIZE_LIMIT=4mb 

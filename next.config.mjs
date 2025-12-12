@@ -3,6 +3,10 @@ const nextConfig = {
   // Habilitar output standalone para Docker
   output: 'standalone',
 
+  // Otimizações de produção
+  reactStrictMode: true,
+  poweredByHeader: false, // Remove header "X-Powered-By: Next.js" por segurança
+  
   eslint: {
     ignoreDuringBuilds: true,
   },

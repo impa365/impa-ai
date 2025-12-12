@@ -1,5 +1,5 @@
-# Use Node.js 18 Alpine como base
-FROM node:18-alpine AS base
+# Use Node.js 22 Alpine como base (compatível com Next.js 16 e React 19)
+FROM node:22-alpine AS base
 
 # Instalar dependências necessárias
 RUN apk add --no-cache libc6-compat
