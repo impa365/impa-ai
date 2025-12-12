@@ -18,10 +18,11 @@ COPY . .
 
 # NÃO definir variáveis  aqui - elas serão carregadas dinamicamente
 ENV NEXT_TELEMETRY_DISABLED=1
+# Desabilitar Turbopack para build de produção mais estável
+ENV TURBOPACK=0
 
 # Build da aplicação SEM variáveis específicas
-# Usar --no-turbopack para build de produção mais estável
-RUN npm run build -- --no-turbopack
+RUN npm run build
 
 # Imagem de produção
 FROM base AS runner
