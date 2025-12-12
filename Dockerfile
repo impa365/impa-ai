@@ -20,7 +20,8 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build da aplicação SEM variáveis específicas
-RUN npm run build
+# Usar --no-turbopack para build de produção mais estável
+RUN npm run build -- --no-turbopack
 
 # Imagem de produção
 FROM base AS runner

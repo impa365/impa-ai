@@ -7,16 +7,18 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false, // Remove header "X-Powered-By: Next.js" por segurança
   
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
   
-  // Configurações de imagem
+  // Configurações de imagem (atualizado para Next.js 16)
   images: {
-    domains: ['localhost'],
+    remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+      },
+    ],
     unoptimized: true
   },
   
@@ -54,17 +56,9 @@ const nextConfig = {
     ]
   },
   
-  // Configurações de webpack para compatibilidade
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-      }
-    }
-    return config
+  // Configurações Turbopack (Next.js 16+)
+  turbopack: {
+    // Configuração vazia para silenciar warning
   },
 
   // Configurações para external packages
