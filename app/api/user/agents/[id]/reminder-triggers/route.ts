@@ -54,8 +54,10 @@ async function ensureAgentOwnership(agentId: string, userId: string, supabaseUrl
   return true
 }
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id: agentId } = await params
+
     const cookieStore = await cookies()
     const userCookie = cookieStore.get("impaai_user")
 
@@ -107,8 +109,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id: agentId } = await params
+
     const cookieStore = await cookies()
     const userCookie = cookieStore.get("impaai_user")
 

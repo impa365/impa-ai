@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Validar API key
@@ -21,7 +21,7 @@ export async function GET(
     }
 
     const user = authResult.user;
-    const agentId = params.id;
+    const { id: agentId } = await params;
 
     // Configurar Supabase
     const supabaseUrl = process.env.SUPABASE_URL;

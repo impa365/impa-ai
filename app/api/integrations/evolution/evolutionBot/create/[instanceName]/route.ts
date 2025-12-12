@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 
 export async function POST(
   request: Request,
-  { params }: { params: { instanceName: string } }
+  { params }: { params: Promise<{ instanceName: string }> }
 ) {
   console.log(
     "📡 API: POST /api/integrations/evolution/evolutionBot/create chamada"
   );
 
   try {
-    const { instanceName } = params;
+    const { instanceName } = await params;
     const botData = await request.json();
 
     console.log(

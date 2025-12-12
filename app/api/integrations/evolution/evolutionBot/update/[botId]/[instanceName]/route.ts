@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 
-export async function PUT(request: Request, { params }: { params: { botId: string; instanceName: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ botId: string; instanceName: string }> }) {
   console.log("📡 API: PUT /api/integrations/evolution/evolutionBot/update chamada")
 
   try {
-    const { botId, instanceName } = params
+    const { botId, instanceName } = await params
     const botData = await request.json()
 
     console.log("🤖 Atualizando bot na Evolution API:", botId, "instância:", instanceName)

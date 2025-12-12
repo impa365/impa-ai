@@ -174,12 +174,14 @@ async function getCurrentUser() {
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string; triggerId: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string; triggerId: string }> }) {
   try {
     const currentUser = await getCurrentUser()
     if (!currentUser) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
+
+    const { id: agentId, triggerId } = await params
 
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY
@@ -244,12 +246,14 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string; triggerId: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string; triggerId: string }> }) {
   try {
     const currentUser = await getCurrentUser()
     if (!currentUser) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
+
+    const { id: agentId, triggerId } = await params
 
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_ANON_KEY

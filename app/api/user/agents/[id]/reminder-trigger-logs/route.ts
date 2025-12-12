@@ -25,8 +25,10 @@ async function ensureAgentOwnership(agentId: string, userId: string, supabaseUrl
   return Array.isArray(agents) && agents.length > 0
 }
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id: agentId } = await params
+
     const cookieStore = await cookies()
     const userCookie = cookieStore.get("impaai_user")
 

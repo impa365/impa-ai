@@ -6,9 +6,11 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       db: { schema: "impaai" },
     });
@@ -16,7 +18,7 @@ export async function DELETE(
     const { error } = await supabase
       .from("user_api_keys")
       .delete()
-      .eq("id", params.id);
+      .eq("id", id);
 
     if (error) {
       console.error("❌ Error deleting API key:", error);

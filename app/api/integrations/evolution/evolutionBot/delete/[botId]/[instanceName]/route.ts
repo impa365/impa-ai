@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 
-export async function DELETE(request: Request, { params }: { params: { botId: string; instanceName: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ botId: string; instanceName: string }> }) {
   console.log("📡 API: DELETE /api/integrations/evolution/evolutionBot/delete chamada")
 
   try {
-    const { botId, instanceName } = params
+    const { botId, instanceName } = await params
 
     console.log("🗑️ Deletando bot na Evolution API:", botId, "instância:", instanceName)
 

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const userId = params.id
+    const { id: userId } = await params
     console.log("🔍 Buscando usuário específico:", userId)
 
     const supabaseUrl = process.env.SUPABASE_URL
