@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getCurrentServerUser } from "@/lib/auth-server"
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit"
 import { logAccessDeniedSimple, logSensitiveDataAccess } from "@/lib/security-audit"
+import { queryOne } from "@/lib/db"
 
 /**
  * ENDPOINT SUPER PROTEGIDO - Credenciais da API
@@ -51,39 +52,13 @@ export async function GET(
       )
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
-    }
-
-    const headers = {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-    }
-
     // 🔒 PROTEÇÃO 3: Verificar permissão can_view_api_credentials
-    const userResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?id=eq.${currentUser.id}&select=can_view_api_credentials`,
-      { headers }
+    const userData = await queryOne<{ can_view_api_credentials: boolean }>(
+      'SELECT can_view_api_credentials FROM user_profiles WHERE id = $1',
+      [currentUser.id]
     )
 
-    if (!userResponse.ok) {
-      await logAccessDeniedSimple(
-        "API_CREDENTIALS",
-        "USER_FETCH_FAILED",
-        ipAddress,
-        `User: ${currentUser.email} | Connection: ${connectionId}`
-      )
-      return NextResponse.json({ error: "Erro ao verificar permissões" }, { status: 500 })
-    }
-
-    const users = await userResponse.json()
-    if (!users || users.length === 0) {
+    if (!userData) {
       await logAccessDeniedSimple(
         "API_CREDENTIALS",
         "USER_NOT_FOUND",
@@ -93,7 +68,6 @@ export async function GET(
       return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 })
     }
 
-    const userData = users[0]
     const canViewCredentials = userData.can_view_api_credentials === true
 
     if (!canViewCredentials) {
@@ -109,25 +83,12 @@ export async function GET(
     }
 
     // 🔒 PROTEÇÃO 4: Buscar conexão e verificar ownership
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${connectionId}&select=id,user_id,connection_name,instance_name,instance_token,api_type`,
-      { headers }
+    const connection = await queryOne<{ id: string; user_id: string; connection_name: string; instance_name: string; instance_token: string; api_type: string }>(
+      'SELECT id, user_id, connection_name, instance_name, instance_token, api_type FROM whatsapp_connections WHERE id = $1',
+      [connectionId]
     )
 
-    if (!connectionResponse.ok) {
-      const errorText = await connectionResponse.text()
-      console.error("❌ Erro ao buscar conexão:", connectionResponse.status, errorText)
-      await logAccessDeniedSimple(
-        "API_CREDENTIALS",
-        "CONNECTION_FETCH_FAILED",
-        ipAddress,
-        `User: ${currentUser.email} | Connection: ${connectionId} | Status: ${connectionResponse.status} | Error: ${errorText}`
-      )
-      return NextResponse.json({ error: "Erro ao buscar conexão" }, { status: 500 })
-    }
-
-    const connections = await connectionResponse.json()
-    if (!connections || connections.length === 0) {
+    if (!connection) {
       await logAccessDeniedSimple(
         "API_CREDENTIALS",
         "CONNECTION_NOT_FOUND",
@@ -136,8 +97,6 @@ export async function GET(
       )
       return NextResponse.json({ error: "Conexão não encontrada" }, { status: 404 })
     }
-
-    const connection = connections[0]
 
     // 🔒 PROTEÇÃO 5: VALIDAÇÃO CRÍTICA - Usuário DEVE ser o dono
     if (connection.user_id !== currentUser.id) {
@@ -163,18 +122,15 @@ export async function GET(
     
     const integrationType = integrationTypeMap[connection.api_type] || connection.api_type
     
-    const integrationResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?type=eq.${integrationType}&select=config`,
-      { headers }
+    const integration = await queryOne<{ config: any }>(
+      'SELECT config FROM integrations WHERE type = $1',
+      [integrationType]
     )
 
-    if (integrationResponse.ok) {
-      const integrations = await integrationResponse.json()
-      if (integrations && integrations.length > 0) {
-        const config = integrations[0].config
-        // Config é JSONB com apiUrl ou serverUrl
-        api_url = config?.apiUrl || config?.serverUrl || ""
-      }
+    if (integration) {
+      const config = integration.config
+      // Config é JSONB com apiUrl ou serverUrl
+      api_url = config?.apiUrl || config?.serverUrl || ""
     }
 
     // ✅ TODAS AS VALIDAÇÕES PASSARAM - Registrar acesso legítimo

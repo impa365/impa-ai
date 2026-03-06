@@ -62,7 +62,7 @@ const nextConfig = {
   },
 
   // Configurações para external packages
-  serverExternalPackages: ['@supabase/supabase-js']
+  serverExternalPackages: ['pg']
 }
 
 export default nextConfig

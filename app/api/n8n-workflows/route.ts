@@ -1,33 +1,12 @@
 import { NextResponse } from "next/server"
+import { query, queryMany, queryOne } from "@/lib/db"
 
 // GET - Listar workflows salvos no banco
 export async function GET() {
   try {
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
-    }
-
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/n8n_workflows?select=*&order=prioridade.asc,updated_at.desc`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-      }
+    const workflows = await queryMany(
+      "SELECT * FROM n8n_workflows ORDER BY prioridade ASC, updated_at DESC"
     )
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-
-    const workflows = await response.json()
 
     return NextResponse.json({
       success: true,
@@ -56,57 +35,21 @@ export async function POST(request: Request) {
       )
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
-    }
-
     // Verificar se workflow já existe
-    const checkResponse = await fetch(
-      `${supabaseUrl}/rest/v1/n8n_workflows?select=*&workflow_id=eq.${workflow_id}`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-      }
+    const existing = await queryOne(
+      "SELECT * FROM n8n_workflows WHERE workflow_id = $1",
+      [workflow_id]
     )
 
-    const existing = await checkResponse.json()
-
-    if (Array.isArray(existing) && existing.length > 0) {
+    if (existing) {
       // Atualizar workflow existente
-      const updateResponse = await fetch(
-        `${supabaseUrl}/rest/v1/n8n_workflows?workflow_id=eq.${workflow_id}`,
-        {
-          method: "PATCH",
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-          },
-          body: JSON.stringify({
-            name,
-            workflow_data,
-            categoria,
-            imagem_fluxo,
-            criado_em,
-            ultima_atualizacao,
-            updated_at: new Date().toISOString(),
-          }),
-        }
+      await query(
+        `UPDATE n8n_workflows
+         SET name = $1, workflow_data = $2, categoria = $3, imagem_fluxo = $4,
+             criado_em = $5, ultima_atualizacao = $6, updated_at = $7
+         WHERE workflow_id = $8`,
+        [name, workflow_data, categoria, imagem_fluxo, criado_em, ultima_atualizacao, new Date().toISOString(), workflow_id]
       )
-
-      if (!updateResponse.ok) {
-        throw new Error(`Erro ao atualizar workflow: ${updateResponse.status}`)
-      }
 
       return NextResponse.json({
         success: true,
@@ -116,37 +59,12 @@ export async function POST(request: Request) {
     }
 
     // Criar novo workflow
-    const createResponse = await fetch(
-      `${supabaseUrl}/rest/v1/n8n_workflows`,
-      {
-        method: "POST",
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify({
-          workflow_id,
-          name,
-          workflow_data,
-          categoria,
-          imagem_fluxo,
-          criado_em,
-          ultima_atualizacao,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }),
-      }
+    const { rows: created } = await query(
+      `INSERT INTO n8n_workflows (workflow_id, name, workflow_data, categoria, imagem_fluxo, criado_em, ultima_atualizacao, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [workflow_id, name, workflow_data, categoria, imagem_fluxo, criado_em, ultima_atualizacao, new Date().toISOString(), new Date().toISOString()]
     )
-
-    if (!createResponse.ok) {
-      throw new Error(`Erro ao criar workflow: ${createResponse.status}`)
-    }
-
-    const created = await createResponse.json()
 
     return NextResponse.json({
       success: true,

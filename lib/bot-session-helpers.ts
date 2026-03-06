@@ -1,6 +1,9 @@
 /**
- * Helper functions para gerenciar sessões de bots Uazapi
+ * Helper functions para gerenciar sessões de bots
+ * Migrated from Supabase REST API to direct PostgreSQL via lib/db
  */
+
+import { queryOne, queryMany } from "@/lib/db"
 
 export interface BotSession {
   sessionId: string
@@ -18,8 +21,6 @@ export interface CreateSessionParams {
   connectionId: string
   remoteJid: string
   status?: boolean
-  supabaseUrl: string
-  supabaseKey: string
 }
 
 export interface SessionResult {
@@ -38,96 +39,62 @@ export async function createOrUpdateSession({
   connectionId,
   remoteJid,
   status = true,
-  supabaseUrl,
-  supabaseKey,
 }: CreateSessionParams): Promise<SessionResult> {
   try {
     console.log(`🔄 [BOT-SESSION] Criar/Atualizar sessão para ${remoteJid} no bot ${botId}`)
 
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Verificar se sessão ATIVA já existe (deleted_at IS NULL)
-    const existingSessionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/bot_sessions?select=*&remoteJid=eq.${remoteJid}&bot_id=eq.${botId}&deleted_at=is.null`,
-      { headers }
+    const existingSession = await queryOne<BotSession>(
+      `SELECT * FROM bot_sessions
+       WHERE "remoteJid" = $1 AND bot_id = $2 AND deleted_at IS NULL
+       LIMIT 1`,
+      [remoteJid, botId]
     )
 
-    if (existingSessionResponse.ok) {
-      const existingSessions = await existingSessionResponse.json()
-      
-      if (existingSessions && existingSessions.length > 0) {
-        const existingSession = existingSessions[0]
-        console.log(`ℹ️ [BOT-SESSION] Sessão já existe, atualizando status para: ${status}`)
+    if (existingSession) {
+      console.log(`ℹ️ [BOT-SESSION] Sessão já existe, atualizando status para: ${status}`)
 
-        // Atualizar sessão existente
-        const updateResponse = await fetch(
-          `${supabaseUrl}/rest/v1/bot_sessions?sessionId=eq.${existingSession.sessionId}`,
-          {
-            method: "PATCH",
-            headers: {
-              ...headers,
-              Prefer: "return=representation",
-            },
-            body: JSON.stringify({
-              status,
-              ultimo_status: new Date().toISOString(),
-            }),
-          }
-        )
+      const updatedSession = await queryOne<BotSession>(
+        `UPDATE bot_sessions
+         SET status = $1, ultimo_status = $2
+         WHERE "sessionId" = $3
+         RETURNING *`,
+        [status, new Date().toISOString(), existingSession.sessionId]
+      )
 
-        if (!updateResponse.ok) {
-          const errorText = await updateResponse.text()
-          console.error("❌ [BOT-SESSION] Erro ao atualizar sessão:", errorText)
-          return {
-            success: false,
-            error: `Erro ao atualizar sessão: ${updateResponse.status}`,
-          }
-        }
-
-        const [updatedSession] = await updateResponse.json()
-        console.log("✅ [BOT-SESSION] Sessão atualizada")
-
+      if (!updatedSession) {
+        console.error("❌ [BOT-SESSION] Erro ao atualizar sessão")
         return {
-          success: true,
-          session: updatedSession,
+          success: false,
+          error: "Erro ao atualizar sessão",
         }
+      }
+
+      console.log("✅ [BOT-SESSION] Sessão atualizada")
+      return {
+        success: true,
+        session: updatedSession,
       }
     }
 
     // Criar nova sessão
     console.log("➕ [BOT-SESSION] Criando nova sessão")
-    const createResponse = await fetch(`${supabaseUrl}/rest/v1/bot_sessions`, {
-      method: "POST",
-      headers: {
-        ...headers,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        bot_id: botId,
-        connection_id: connectionId,
-        remoteJid,
-        status,
-      }),
-    })
+    const newSession = await queryOne<BotSession>(
+      `INSERT INTO bot_sessions (bot_id, connection_id, "remoteJid", status)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [botId, connectionId, remoteJid, status]
+    )
 
-    if (!createResponse.ok) {
-      const errorText = await createResponse.text()
-      console.error("❌ [BOT-SESSION] Erro ao criar sessão:", errorText)
+    if (!newSession) {
+      console.error("❌ [BOT-SESSION] Erro ao criar sessão")
       return {
         success: false,
-        error: `Erro ao criar sessão: ${createResponse.status}`,
+        error: "Erro ao criar sessão",
       }
     }
 
-    const [newSession] = await createResponse.json()
     console.log("✅ [BOT-SESSION] Sessão criada:", newSession.sessionId)
-
     return {
       success: true,
       session: newSession,
@@ -149,43 +116,23 @@ export async function createOrUpdateSession({
 export async function isBotActiveForChat({
   botId,
   remoteJid,
-  supabaseUrl,
-  supabaseKey,
 }: {
   botId: string
   remoteJid: string
-  supabaseUrl: string
-  supabaseKey: string
 }): Promise<boolean> {
   try {
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
-    // Buscar apenas sessões ATIVAS (deleted_at IS NULL)
-    const sessionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/bot_sessions?select=status&remoteJid=eq.${remoteJid}&bot_id=eq.${botId}&deleted_at=is.null`,
-      { headers }
+    const session = await queryOne<{ status: boolean }>(
+      `SELECT status FROM bot_sessions
+       WHERE "remoteJid" = $1 AND bot_id = $2 AND deleted_at IS NULL
+       LIMIT 1`,
+      [remoteJid, botId]
     )
 
-    if (!sessionResponse.ok) {
-      console.warn("⚠️ [BOT-SESSION] Erro ao verificar sessão, assumindo bot ativo")
-      return true // Em caso de erro, assumir bot ativo
+    if (!session) {
+      return true // Sem sessão = bot ativo por padrão
     }
 
-    const sessions = await sessionResponse.json()
-    
-    if (!sessions || sessions.length === 0) {
-      // Sem sessão = bot ativo por padrão
-      return true
-    }
-
-    // Retornar status da sessão
-    return Boolean(sessions[0].status)
+    return Boolean(session.status)
   } catch (error: any) {
     console.error("❌ [BOT-SESSION] Erro ao verificar status:", error)
     return true // Em caso de erro, assumir bot ativo
@@ -199,9 +146,7 @@ export async function pauseBotForChat({
   botId,
   connectionId,
   remoteJid,
-  supabaseUrl,
-  supabaseKey,
-}: CreateSessionParams): Promise<SessionResult> {
+}: Omit<CreateSessionParams, 'status'>): Promise<SessionResult> {
   console.log(`⏸️ [BOT-SESSION] Pausando bot para ${remoteJid}`)
   
   return createOrUpdateSession({
@@ -209,8 +154,6 @@ export async function pauseBotForChat({
     connectionId,
     remoteJid,
     status: false,
-    supabaseUrl,
-    supabaseKey,
   })
 }
 
@@ -221,9 +164,7 @@ export async function resumeBotForChat({
   botId,
   connectionId,
   remoteJid,
-  supabaseUrl,
-  supabaseKey,
-}: CreateSessionParams): Promise<SessionResult> {
+}: Omit<CreateSessionParams, 'status'>): Promise<SessionResult> {
   console.log(`▶️ [BOT-SESSION] Reativando bot para ${remoteJid}`)
   
   return createOrUpdateSession({
@@ -231,8 +172,6 @@ export async function resumeBotForChat({
     connectionId,
     remoteJid,
     status: true,
-    supabaseUrl,
-    supabaseKey,
   })
 }
 
@@ -241,41 +180,23 @@ export async function resumeBotForChat({
  */
 export async function getSessionsByBot({
   botId,
-  supabaseUrl,
-  supabaseKey,
   status,
 }: {
   botId: string
-  supabaseUrl: string
-  supabaseKey: string
   status?: boolean
 }): Promise<BotSession[]> {
   try {
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
+    let sql = `SELECT * FROM bot_sessions WHERE bot_id = $1 AND deleted_at IS NULL`
+    const params: any[] = [botId]
 
-    // Buscar apenas sessões ATIVAS (deleted_at IS NULL)
-    let query = `${supabaseUrl}/rest/v1/bot_sessions?select=*&bot_id=eq.${botId}&deleted_at=is.null`
-    
     if (typeof status === "boolean") {
-      query += `&status=eq.${status}`
+      sql += ` AND status = $2`
+      params.push(status)
     }
 
-    query += `&order=ultimo_status.desc`
+    sql += ` ORDER BY ultimo_status DESC`
 
-    const sessionsResponse = await fetch(query, { headers })
-
-    if (!sessionsResponse.ok) {
-      console.error("❌ [BOT-SESSION] Erro ao buscar sessões")
-      return []
-    }
-
-    const sessions = await sessionsResponse.json()
+    const sessions = await queryMany<BotSession>(sql, params)
     return sessions || []
   } catch (error: any) {
     console.error("❌ [BOT-SESSION] Erro ao buscar sessões:", error)

@@ -6,9 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { QUEST_MISSIONS } from '@/lib/quest-missions'
 import { authenticateQuestRequest, checkQuestSystemEnabled } from '@/lib/quest-auth'
-
-const SUPABASE_URL = process.env.SUPABASE_URL!
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY!
+import { queryOne } from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,27 +29,17 @@ export async function POST(request: NextRequest) {
     console.log('✅ [QUEST] Completando step:', stepId, 'da missão:', missionId)
 
     // Buscar progresso
-    const progressResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_quest_progress?user_id=eq.${userId}&select=*`,
-      {
-        headers: {
-          'Accept-Profile': 'impaai',
-          'Content-Profile': 'impaai',
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`
-        }
-      }
+    const progress = await queryOne<any>(
+      "SELECT * FROM user_quest_progress WHERE user_id = $1",
+      [userId]
     )
 
-    const progressData = await progressResponse.json()
-    console.log('📊 [QUEST] Dados recebidos:', progressData)
+    console.log('📊 [QUEST] Dados recebidos:', progress)
 
-    if (!progressData || progressData.length === 0 || !progressData[0]) {
+    if (!progress) {
       console.log('❌ [QUEST] Progresso não encontrado')
       return NextResponse.json({ error: 'Progresso não encontrado' }, { status: 404 })
     }
-
-    const progress = progressData[0]
 
     // Verificar se esta missão está ativa
     if (progress.active_mission_id !== missionId) {
@@ -99,37 +87,22 @@ export async function POST(request: NextRequest) {
       completedStepsCount: completedSteps.length
     })
 
-    const updateResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_quest_progress?user_id=eq.${userId}`,
-      {
-        method: 'PATCH',
-        headers: {
-          'Accept-Profile': 'impaai',
-          'Content-Profile': 'impaai',
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify({
-          mission_progress: updatedMissionProgress
-        })
-      }
+    const updated = await queryOne<any>(
+      "UPDATE user_quest_progress SET mission_progress = $1 WHERE user_id = $2 RETURNING *",
+      [JSON.stringify(updatedMissionProgress), userId]
     )
 
-    if (!updateResponse.ok) {
-      const error = await updateResponse.text()
-      console.error('❌ [QUEST] Erro ao completar step:', error)
+    if (!updated) {
+      console.error('❌ [QUEST] Erro ao completar step')
       return NextResponse.json(
         { error: 'Erro ao completar step' },
-        { status: updateResponse.status }
+        { status: 500 }
       )
     }
 
-    const updated = await updateResponse.json()
     console.log('✅ [QUEST] Step completado com sucesso')
 
-    return NextResponse.json(updated[0])
+    return NextResponse.json(updated)
 
   } catch (error: any) {
     console.error('❌ [QUEST] Erro geral:', error)

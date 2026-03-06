@@ -7,9 +7,8 @@ services:
     networks:
       - ServerIpa
     environment:
-      # Configuração do Supabase (SEM  - apenas para runtime)
-      - SUPABASE_URL=https://supabaseteste.impa365.com
-      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.0w0daMEG_Z8srUfzUgH5uEixdjJYp0Xyh_12su0L07Q
+      # Configuração do PostgreSQL
+      - DATABASE_URL=postgresql://postgres:sua-senha@host:5432/postgres
 
       # Configuração do NextAuth
       - NEXTAUTH_URL=https://aiteste.impa365.com

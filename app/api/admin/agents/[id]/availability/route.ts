@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getCurrentServerUser } from "@/lib/auth-server"
-import { getSupabaseServer } from "@/lib/supabase-config"
+import { queryOne, queryMany, query as dbQuery } from "@/lib/db"
 
 /**
  * Converte horário no formato HH:MM para minutos desde meia-noite
@@ -72,32 +72,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const { id: agentId } = await params
-    const supabase = getSupabaseServer()
 
     // Verificar se o agente existe
-    const { data: agent, error: agentError } = await supabase
-      .from("ai_agents")
-      .select("id, user_id")
-      .eq("id", agentId)
-      .single()
+    const agent = await queryOne<any>(
+      `SELECT id, user_id FROM ai_agents WHERE id = $1 LIMIT 1`,
+      [agentId]
+    )
 
-    if (agentError || !agent) {
+    if (!agent) {
       return NextResponse.json({ success: false, error: "Agente não encontrado" }, { status: 404 })
     }
 
     // Buscar schedules do agente
-    const { data: schedules, error: schedulesError } = await supabase
-      .from("agent_availability_schedules")
-      .select("*")
-      .eq("agent_id", agentId)
-      .eq("is_active", true)
-      .order("day_of_week", { ascending: true })
-      .order("start_time", { ascending: true })
-
-    if (schedulesError) {
-      console.error("Erro ao buscar schedules:", schedulesError)
-      return NextResponse.json({ success: false, error: "Erro ao buscar horários" }, { status: 500 })
-    }
+    const schedules = await queryMany<any>(
+      `SELECT * FROM agent_availability_schedules WHERE agent_id = $1 AND is_active = true ORDER BY day_of_week ASC, start_time ASC`,
+      [agentId]
+    )
 
     return NextResponse.json({
       success: true,
@@ -144,41 +134,40 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }, { status: 400 })
     }
 
-    const supabase = getSupabaseServer()
-
     // Verificar se o agente existe
-    const { data: agent, error: agentError } = await supabase
-      .from("ai_agents")
-      .select("id, user_id")
-      .eq("id", agentId)
-      .single()
+    const agent = await queryOne<any>(
+      `SELECT id, user_id FROM ai_agents WHERE id = $1 LIMIT 1`,
+      [agentId]
+    )
 
-    if (agentError || !agent) {
+    if (!agent) {
       return NextResponse.json({ success: false, error: "Agente não encontrado" }, { status: 404 })
     }
 
     // Deletar schedules antigos
-    await supabase.from("agent_availability_schedules").delete().eq("agent_id", agentId)
+    await dbQuery(`DELETE FROM agent_availability_schedules WHERE agent_id = $1`, [agentId])
 
     // Inserir novos schedules
     if (schedules.length > 0) {
-      const schedulesToInsert = schedules.map((schedule) => ({
-        agent_id: agentId,
-        day_of_week: schedule.day_of_week,
-        start_time: schedule.start_time,
-        end_time: schedule.end_time,
-        timezone: schedule.timezone || "America/Sao_Paulo",
-        is_active: schedule.is_active !== false,
-      }))
-
-      const { error: insertError } = await supabase
-        .from("agent_availability_schedules")
-        .insert(schedulesToInsert)
-
-      if (insertError) {
-        console.error("Erro ao inserir schedules:", insertError)
-        return NextResponse.json({ success: false, error: "Erro ao salvar horários" }, { status: 500 })
+      const values: any[] = []
+      const placeholders: string[] = []
+      let idx = 1
+      for (const schedule of schedules) {
+        placeholders.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`)
+        values.push(
+          agentId,
+          schedule.day_of_week,
+          schedule.start_time,
+          schedule.end_time,
+          schedule.timezone || "America/Sao_Paulo",
+          schedule.is_active !== false
+        )
       }
+
+      await dbQuery(
+        `INSERT INTO agent_availability_schedules (agent_id, day_of_week, start_time, end_time, timezone, is_active) VALUES ${placeholders.join(", ")}`,
+        values
+      )
     }
 
     return NextResponse.json({
@@ -209,29 +198,22 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     const { id: agentId } = await params
-    const supabase = getSupabaseServer()
 
     // Verificar se o agente existe
-    const { data: agent, error: agentError } = await supabase
-      .from("ai_agents")
-      .select("id, user_id")
-      .eq("id", agentId)
-      .single()
+    const agent = await queryOne<any>(
+      `SELECT id, user_id FROM ai_agents WHERE id = $1 LIMIT 1`,
+      [agentId]
+    )
 
-    if (agentError || !agent) {
+    if (!agent) {
       return NextResponse.json({ success: false, error: "Agente não encontrado" }, { status: 404 })
     }
 
     // Deletar schedules
-    const { error: deleteError } = await supabase
-      .from("agent_availability_schedules")
-      .delete()
-      .eq("agent_id", agentId)
-
-    if (deleteError) {
-      console.error("Erro ao deletar schedules:", deleteError)
-      return NextResponse.json({ success: false, error: "Erro ao deletar horários" }, { status: 500 })
-    }
+    await dbQuery(
+      `DELETE FROM agent_availability_schedules WHERE agent_id = $1`,
+      [agentId]
+    )
 
     return NextResponse.json({
       success: true,

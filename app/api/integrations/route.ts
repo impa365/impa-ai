@@ -1,44 +1,15 @@
 import { NextResponse } from "next/server"
+import { query, queryMany, buildInsert, buildUpdate } from "@/lib/db"
 
 export async function GET() {
   try {
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
-    }
-
-    // Buscar integrações via REST API
-    const response = await fetch(`${supabaseUrl}/rest/v1/integrations?select=*&order=created_at.desc`, {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-    })
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return NextResponse.json({
-          success: true,
-          integrations: [],
-          message: "Tabela 'integrations' não encontrada. Execute o script SQL para criar a estrutura.",
-        })
-      }
-      throw new Error(`HTTP ${response.status}`)
-    }
-
-    const integrations = await response.json()
-
-    // Garantir que sempre retornamos um array
-    const integrationsArray = Array.isArray(integrations) ? integrations : []
+    const integrations = await queryMany(
+      'SELECT * FROM integrations ORDER BY created_at DESC'
+    )
 
     return NextResponse.json({
       success: true,
-      integrations: integrationsArray,
+      integrations,
     })
   } catch (error: any) {
     console.error("Erro ao buscar integrações:", error.message)
@@ -66,89 +37,40 @@ export async function POST(request: Request) {
       )
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Configuração do servidor incompleta",
-        },
-        { status: 500 },
-      )
-    }
-
     // Verificar se já existe uma integração deste tipo
-    const checkResponse = await fetch(`${supabaseUrl}/rest/v1/integrations?select=*&type=eq.${type}`, {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-    })
+    const existing = await queryMany('SELECT * FROM integrations WHERE type = $1', [type])
 
-    if (checkResponse.ok) {
-      const existing = await checkResponse.json()
+    if (existing.length > 0) {
+      // Atualizar integração existente
+      const { text: updateSql, values: updateValues } = buildUpdate(
+        'integrations',
+        {
+          name: name || existing[0].name,
+          config: config,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        },
+        { id: existing[0].id }
+      )
+      await query(updateSql, updateValues)
 
-      if (Array.isArray(existing) && existing.length > 0) {
-        // Atualizar integração existente
-        const updateResponse = await fetch(`${supabaseUrl}/rest/v1/integrations?id=eq.${existing[0].id}`, {
-          method: "PATCH",
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-          },
-          body: JSON.stringify({
-            name: name || existing[0].name,
-            config: config,
-            is_active: true,
-            updated_at: new Date().toISOString(),
-          }),
-        })
-
-        if (!updateResponse.ok) {
-          const errorText = await updateResponse.text()
-          throw new Error(`Erro ao atualizar integração: ${updateResponse.status} - ${errorText}`)
-        }
-
-        return NextResponse.json({
-          success: true,
-          message: "Integração atualizada com sucesso!",
-          action: "updated",
-        })
-      }
+      return NextResponse.json({
+        success: true,
+        message: "Integração atualizada com sucesso!",
+        action: "updated",
+      })
     }
 
     // Criar nova integração
-    const createResponse = await fetch(`${supabaseUrl}/rest/v1/integrations`, {
-      method: "POST",
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-      body: JSON.stringify({
-        name: name || (type === "evolution_api" ? "Evolution API" : type === "n8n" ? "n8n" : type === "uazapi" ? "Uazapi" : "n8n Session"),
-        type,
-        config,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }),
+    const { text: insertSql, values: insertValues } = buildInsert('integrations', {
+      name: name || (type === "evolution_api" ? "Evolution API" : type === "n8n" ? "n8n" : type === "uazapi" ? "Uazapi" : "n8n Session"),
+      type,
+      config,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     })
-
-    if (!createResponse.ok) {
-      const errorText = await createResponse.text()
-      throw new Error(`Erro ao criar integração: ${createResponse.status} - ${errorText}`)
-    }
+    await query(insertSql, insertValues)
 
     return NextResponse.json({
       success: true,

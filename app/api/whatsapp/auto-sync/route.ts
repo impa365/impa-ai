@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getUazapiInstanceStatusServer } from "@/lib/uazapi-server"
+import { query, queryMany } from "@/lib/db"
 
 export async function POST(request: NextRequest) {
   try {
@@ -7,39 +8,23 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}))
     const forceSync = body?.force === true
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ success: false, error: "Configuração não encontrada" }, { status: 500 })
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Se for sincronização forçada, buscar TODAS as conexões
     // Senão, buscar apenas conexões que não foram atualizadas nos últimos 2 minutos
-    let connectionUrl = `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,instance_name,instance_token,api_type,status,updated_at`
-    
-    if (!forceSync) {
+    let connections: any[]
+
+    if (forceSync) {
+      console.log("🔄 Sincronização FORÇADA (manual)")
+      connections = await queryMany(
+        'SELECT id, instance_name, instance_token, api_type, status, updated_at FROM whatsapp_connections'
+      )
+    } else {
+      console.log("🔄 Sincronização automática (2+ min)")
       const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
-      connectionUrl += `&updated_at=lt.${twoMinutesAgo}`
+      connections = await queryMany(
+        'SELECT id, instance_name, instance_token, api_type, status, updated_at FROM whatsapp_connections WHERE updated_at < $1',
+        [twoMinutesAgo]
+      )
     }
-
-    console.log(forceSync ? "🔄 Sincronização FORÇADA (manual)" : "🔄 Sincronização automática (2+ min)")
-
-    const connectionsResponse = await fetch(connectionUrl, { headers })
-
-    if (!connectionsResponse.ok) {
-      return NextResponse.json({ success: false, error: "Erro ao buscar conexões" }, { status: 500 })
-    }
-
-    const connections = await connectionsResponse.json()
 
     if (!connections || connections.length === 0) {
       return NextResponse.json({
@@ -54,16 +39,13 @@ export async function POST(request: NextRequest) {
     let evolutionConfig: any = null
 
     if (hasEvolutionConnections) {
-      const integrationResponse = await fetch(
-        `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-        { headers }
+      const integrations = await queryMany(
+        'SELECT config FROM integrations WHERE type = $1 AND is_active = true',
+        ['evolution_api']
       )
 
-      if (integrationResponse.ok) {
-        const integrations = await integrationResponse.json()
-        if (integrations && integrations.length > 0) {
-          evolutionConfig = integrations[0].config
-        }
+      if (integrations && integrations.length > 0) {
+        evolutionConfig = integrations[0].config
       }
     }
 
@@ -159,14 +141,13 @@ export async function POST(request: NextRequest) {
             updateData.phone_number = phoneNumber
           }
 
-          await fetch(`${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${connection.id}`, {
-            method: "PATCH",
-            headers: {
-              ...headers,
-              Prefer: "return=minimal",
-            },
-            body: JSON.stringify(updateData),
-          })
+          await query(
+            'UPDATE whatsapp_connections SET status = $1, updated_at = $2' +
+              (phoneNumber ? ', phone_number = $3 WHERE id = $4' : ' WHERE id = $3'),
+            phoneNumber
+              ? [updateData.status, updateData.updated_at, phoneNumber, connection.id]
+              : [updateData.status, updateData.updated_at, connection.id]
+          )
 
           syncedCount++
           syncDetails.push({

@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
+import { query } from "@/lib/db";
 
 export async function DELETE(
   request: Request,
@@ -11,22 +8,7 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    });
-
-    const { error } = await supabase
-      .from("user_api_keys")
-      .delete()
-      .eq("id", id);
-
-    if (error) {
-      console.error("❌ Error deleting API key:", error);
-      return NextResponse.json(
-        { error: "Failed to delete API key" },
-        { status: 500 }
-      );
-    }
+    await query('DELETE FROM user_api_keys WHERE id = $1', [id]);
 
     return NextResponse.json({ message: "API Key deleted successfully" });
   } catch (error: any) {

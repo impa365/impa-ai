@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { queryMany, query } from '@/lib/db'
 
 // Cache simples em memória para otimização
 let cachedSettings: { settings: any; timestamp: number } | null = null
@@ -17,62 +18,29 @@ export async function GET() {
       })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    console.log("📋 Verificando variáveis de ambiente:")
-    console.log("SUPABASE_URL:", supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
-    console.log("SUPABASE_ANON_KEY:", supabaseKey ? `${supabaseKey.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ ERRO: Variáveis de ambiente não configuradas!")
-      return NextResponse.json({
-        success: false,
-        error: "Configuração do banco não encontrada"
-      }, { status: 500 })
-    }
-
     // Buscar TODAS as configurações necessárias (públicas + admin settings)
-    const queryUrl = `${supabaseUrl}/rest/v1/system_settings?select=setting_key,setting_value&or=(setting_key.eq.footer_text,setting_key.eq.system_name,setting_key.eq.app_name,setting_key.eq.allow_public_registration,setting_key.eq.default_whatsapp_connections_limit,setting_key.eq.default_agents_limit,setting_key.eq.landing_page_enabled,is_public.eq.true)`
-    
     console.log("🔄 Fazendo requisição para system_settings...")
-    console.log("URL:", queryUrl)
 
-    // Buscar apenas configurações públicas ou específicas necessárias
-    const response = await fetch(queryUrl, {
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json',
-          'Accept-Profile': 'impaai',
-          'Content-Profile': 'impaai'
-        }
-      }
+    const data = await queryMany<any>(
+      `SELECT setting_key, setting_value FROM system_settings
+       WHERE setting_key IN ($1, $2, $3, $4, $5, $6, $7) OR is_public = true`,
+      [
+        'footer_text',
+        'system_name',
+        'app_name',
+        'allow_public_registration',
+        'default_whatsapp_connections_limit',
+        'default_agents_limit',
+        'landing_page_enabled'
+      ]
     )
 
-    console.log("📡 Resposta da requisição system_settings:")
-    console.log("Status:", response.status)
-    console.log("StatusText:", response.statusText)
-    console.log("OK:", response.ok)
-    console.log("Headers:", Object.fromEntries(response.headers.entries()))
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ ERRO na requisição system_settings:")
-      console.error("Status:", response.status)
-      console.error("Body:", errorText)
-      throw new Error(`Erro na consulta: ${response.status}`)
-    }
-
-    const data = await response.json()
     console.log("✅ Dados recebidos:", data)
-    console.log("Tipo:", typeof data)
-    console.log("É array:", Array.isArray(data))
     console.log("Tamanho:", data.length)
 
     // Converter array de configurações em objeto
     const settings: any = {}
-    if (Array.isArray(data) && data.length > 0) {
+    if (data.length > 0) {
       console.log("🔄 Processando configurações...")
       data.forEach((setting: any, index: number) => {
         console.log(`Setting ${index}:`, setting)
@@ -187,23 +155,6 @@ export async function POST(request: Request) {
 async function updateSingleSetting(setting_key: string, setting_value: any) {
   console.log(`🔧 updateSingleSetting: ${setting_key} = ${setting_value}`)
   
-  const supabaseUrl = process.env.SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-  console.log("📋 Verificando variáveis de ambiente para update:")
-  console.log("SUPABASE_URL:", supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
-  console.log("SUPABASE_ANON_KEY:", supabaseKey ? `${supabaseKey.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
-
-  if (!supabaseUrl || !supabaseKey) {
-    console.error("❌ ERRO: Variáveis de ambiente para update não configuradas!")
-    return NextResponse.json({
-      success: false,
-      error: "Configuração do banco não encontrada"
-    }, { status: 500 })
-  }
-
-  const updateUrl = `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${setting_key}`
-  
   // Para booleans, salvar como boolean real (JSONB aceita)
   // Para outros tipos, manter como estão (JSONB é flexível)
   let settingValue
@@ -220,41 +171,14 @@ async function updateSingleSetting(setting_key: string, setting_value: any) {
     // Objetos e arrays: stringify
     settingValue = JSON.stringify(setting_value)
   }
-  
-  const updateBody = {
-    setting_value: settingValue,
-    updated_at: new Date().toISOString()
-  }
 
-  console.log("🔄 Fazendo update para:", updateUrl)
-  console.log("📝 Body do update:", updateBody)
+  console.log("🔄 Fazendo update para:", setting_key)
+  console.log("📝 Body do update:", { setting_value: settingValue })
 
-  // Atualizar configuração
-  const response = await fetch(updateUrl, {
-      method: 'PATCH',
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json',
-        'Accept-Profile': 'impaai',
-        'Content-Profile': 'impaai',
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify(updateBody)
-    }
+  await query(
+    "UPDATE system_settings SET setting_value = $1, updated_at = $2 WHERE setting_key = $3",
+    [settingValue, new Date().toISOString(), setting_key]
   )
-
-  console.log("📡 Resposta do update:")
-  console.log("Status:", response.status)
-  console.log("StatusText:", response.statusText)
-  console.log("OK:", response.ok)
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error("❌ ERRO no update:")
-    console.error("Body:", errorText)
-    throw new Error(`Erro ao atualizar: ${response.status}`)
-  }
 
   // Limpar cache
   cachedSettings = null
@@ -270,21 +194,6 @@ async function updateSingleSetting(setting_key: string, setting_value: any) {
 // Função para atualizar múltiplas configurações
 async function updateMultipleSettings(settings: any) {
   console.log("🔧 updateMultipleSettings:", settings)
-  
-  const supabaseUrl = process.env.SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-  console.log("📋 Verificando variáveis de ambiente para updates múltiplos:")
-  console.log("SUPABASE_URL:", supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
-  console.log("SUPABASE_ANON_KEY:", supabaseKey ? `${supabaseKey.substring(0, 20)}...` : "❌ NÃO ENCONTRADA")
-
-  if (!supabaseUrl || !supabaseKey) {
-    console.error("❌ ERRO: Variáveis de ambiente para updates múltiplos não configuradas!")
-    return NextResponse.json({
-      success: false,
-      error: "Configuração do banco não encontrada"
-    }, { status: 500 })
-  }
 
   const updates = []
   const errors = []
@@ -299,36 +208,22 @@ async function updateMultipleSettings(settings: any) {
     console.log(`   Valor bruto:`, JSON.stringify(value))
 
     try {
-      const updateUrl = `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.${key}`
-      
       // Tratamento consistente de tipos para JSONB
       let settingValue
       if (typeof value === 'boolean') {
-        // Boolean direto - JSONB aceita nativamente
         settingValue = value
         console.log(`   ✅ Boolean direto: ${settingValue}`)
       } else if (typeof value === 'number') {
-        // Number direto - JSONB aceita nativamente
         settingValue = value
         console.log(`   ✅ Number direto: ${settingValue}`)
       } else if (typeof value === 'string') {
-        // String: manter como JSON string
         settingValue = JSON.stringify(value)
         console.log(`   ✅ String stringified: ${settingValue}`)
       } else {
-        // Objetos e arrays: stringify
         settingValue = JSON.stringify(value)
         console.log(`   ✅ Object/Array stringified: ${settingValue}`)
       }
-      
-      const updateBody = {
-        setting_value: settingValue,
-        updated_at: new Date().toISOString()
-      }
 
-      console.log(`📡 Update URL: ${updateUrl}`)
-      console.log(`📝 Update Body:`, JSON.stringify(updateBody, null, 2))
-      
       // LOG ESPECIAL para allow_public_registration
       if (key === 'allow_public_registration') {
         console.log(`🚨🚨🚨 ATENÇÃO: allow_public_registration`)
@@ -338,30 +233,17 @@ async function updateMultipleSettings(settings: any) {
         console.log(`   Tipo que será enviado:`, typeof settingValue)
       }
 
-      const response = await fetch(updateUrl, {
-          method: 'PATCH',
-          headers: {
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`,
-            'Content-Type': 'application/json',
-            'Accept-Profile': 'impaai',
-            'Content-Profile': 'impaai',
-            'Prefer': 'return=minimal'
-          },
-          body: JSON.stringify(updateBody)
-        }
+      const { rowCount } = await query(
+        "UPDATE system_settings SET setting_value = $1, updated_at = $2 WHERE setting_key = $3",
+        [settingValue, new Date().toISOString(), key]
       )
 
-      console.log(`📡 Resposta para ${key}:`, response.status, response.statusText)
-
-      if (response.ok) {
+      if (rowCount > 0) {
         updates.push(`${key}: atualizado`)
         console.log(`✅ ${key}: sucesso`)
       } else {
-        const errorText = await response.text()
-        console.error(`❌ ${key}: erro ${response.status}`)
-        console.error(`Body:`, errorText)
-        errors.push(`${key}: erro ${response.status}`)
+        console.warn(`⚠️ ${key}: nenhuma linha atualizada (setting_key não encontrada)`)
+        errors.push(`${key}: não encontrada`)
       }
     } catch (error: any) {
       console.error(`💥 ${key}: erro de conexão`, error)

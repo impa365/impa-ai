@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getCurrentServerUser } from "@/lib/auth-server"
+import { queryMany } from "@/lib/db"
 
 export async function GET() {
   try {
@@ -15,36 +16,11 @@ export async function GET() {
 
     console.log("✅ Usuário autenticado:", currentUser.email)
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ Configuração do Supabase não encontrada")
-      return NextResponse.json({ error: "Erro de configuração do servidor" }, { status: 500 })
-    }
-
-    const headers = {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-    }
-
     // Buscar agentes do usuário
-    const agentsResponse = await fetch(`${supabaseUrl}/rest/v1/ai_agents?select=id&user_id=eq.${currentUser.id}`, {
-      headers,
-    })
+    const agents = await queryMany('SELECT id FROM ai_agents WHERE user_id = $1', [currentUser.id])
 
     // Buscar conexões WhatsApp do usuário
-    const connectionsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id&user_id=eq.${currentUser.id}`,
-      { headers },
-    )
-
-    // Processar respostas
-    const agents = agentsResponse.ok ? await agentsResponse.json() : []
-    const connections = connectionsResponse.ok ? await connectionsResponse.json() : []
+    const connections = await queryMany('SELECT id FROM whatsapp_connections WHERE user_id = $1', [currentUser.id])
 
     const stats = {
       agentCount: agents.length || 0,

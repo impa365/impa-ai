@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { query, queryMany } from "@/lib/db"
 
 /**
  * Endpoint para forçar limites de conexões
@@ -27,34 +28,13 @@ export async function POST() {
       return NextResponse.json({ success: false, error: "Apenas administradores podem executar esta ação" }, { status: 403 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ success: false, error: "Configuração do banco não encontrada" }, { status: 500 })
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     console.log("🔍 Verificando limites de todos os usuários...")
 
     // 1. Buscar todos os usuários
-    const usersResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?select=id,email,role,connections_limit`,
-      { headers }
+    const users = await queryMany<{ id: string; email: string; role: string; connections_limit: number }>(
+      `SELECT id, email, role, connections_limit FROM user_profiles`
     )
 
-    if (!usersResponse.ok) {
-      return NextResponse.json({ success: false, error: "Erro ao buscar usuários" }, { status: 500 })
-    }
-
-    const users = await usersResponse.json()
     const results: any[] = []
 
     // 2. Para cada usuário, verificar e bloquear conexões excedentes
@@ -62,17 +42,11 @@ export async function POST() {
       const userLimit = user.role === "admin" ? 999 : (user.connections_limit || 1)
 
       // Buscar conexões do usuário
-      const connectionsResponse = await fetch(
-        `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,connection_name,created_at,status&user_id=eq.${user.id}&order=created_at.desc`,
-        { headers }
+      const connections = await queryMany<{ id: string; connection_name: string; created_at: string; status: string }>(
+        `SELECT id, connection_name, created_at, status FROM whatsapp_connections WHERE user_id = $1 ORDER BY created_at DESC`,
+        [user.id]
       )
 
-      if (!connectionsResponse.ok) {
-        console.error(`Erro ao buscar conexões do usuário ${user.email}`)
-        continue
-      }
-
-      const connections = await connectionsResponse.json()
       const currentCount = connections.length
 
       if (currentCount > userLimit) {
@@ -83,17 +57,14 @@ export async function POST() {
         const blockedIds: string[] = []
 
         for (const conn of connectionsToBlock) {
-          const blockResponse = await fetch(
-            `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${conn.id}`,
-            {
-              method: "PATCH",
-              headers,
-              body: JSON.stringify({ status: "blocked_limit_exceeded" })
-            }
-          )
-
-          if (blockResponse.ok) {
+          try {
+            await query(
+              `UPDATE whatsapp_connections SET status = $1 WHERE id = $2`,
+              ["blocked_limit_exceeded", conn.id]
+            )
             blockedIds.push(conn.id)
+          } catch (err) {
+            console.error(`Erro ao bloquear conexão ${conn.id}:`, err)
           }
         }
 

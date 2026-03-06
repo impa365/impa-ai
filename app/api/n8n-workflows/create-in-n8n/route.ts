@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { query, queryMany } from "@/lib/db"
 
 // POST - Criar workflow no n8n usando a API
 export async function POST(request: Request) {
@@ -13,38 +14,11 @@ export async function POST(request: Request) {
       )
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { error: "Configuração do servidor incompleta" },
-        { status: 500 }
-      )
-    }
-
     // Buscar configurações do n8n
-    const integrationsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?select=*&type=eq.n8n_api`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-      }
+    const integrations = await queryMany(
+      "SELECT * FROM integrations WHERE type = $1",
+      ["n8n_api"]
     )
-
-    if (!integrationsResponse.ok) {
-      return NextResponse.json(
-        { error: "Erro ao buscar configurações do n8n" },
-        { status: 500 }
-      )
-    }
-
-    const integrations = await integrationsResponse.json()
 
     if (!Array.isArray(integrations) || integrations.length === 0) {
       return NextResponse.json(
@@ -109,23 +83,11 @@ export async function POST(request: Request) {
 
     // Atualizar banco com o ID do n8n
     if (workflow_id) {
-      await fetch(
-        `${supabaseUrl}/rest/v1/n8n_workflows?workflow_id=eq.${workflow_id}`,
-        {
-          method: "PATCH",
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-          },
-          body: JSON.stringify({
-            synced_to_n8n: true,
-            n8n_workflow_id: createdWorkflow.id,
-            updated_at: new Date().toISOString(),
-          }),
-        }
+      await query(
+        `UPDATE n8n_workflows
+         SET synced_to_n8n = $1, n8n_workflow_id = $2, updated_at = $3
+         WHERE workflow_id = $4`,
+        [true, createdWorkflow.id, new Date().toISOString(), workflow_id]
       )
     }
 

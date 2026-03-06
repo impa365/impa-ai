@@ -6,9 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { QUEST_MISSIONS } from '@/lib/quest-missions'
 import { authenticateQuestRequest, checkQuestSystemEnabled } from '@/lib/quest-auth'
-
-const SUPABASE_URL = process.env.SUPABASE_URL!
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY!
+import { queryOne } from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,25 +29,15 @@ export async function POST(request: NextRequest) {
     console.log('🎉 [QUEST] Completando missão:', missionId)
 
     // Buscar progresso
-    const progressResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_quest_progress?user_id=eq.${userId}&select=*`,
-      {
-        headers: {
-          'Accept-Profile': 'impaai',
-          'Content-Profile': 'impaai',
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`
-        }
-      }
+    const progress = await queryOne<any>(
+      "SELECT * FROM user_quest_progress WHERE user_id = $1",
+      [userId]
     )
 
-    const progressData = await progressResponse.json()
-    if (!progressData || progressData.length === 0 || !progressData[0]) {
+    if (!progress) {
       console.log('❌ [QUEST] Progresso não encontrado')
       return NextResponse.json({ error: 'Progresso não encontrado' }, { status: 404 })
     }
-
-    const progress = progressData[0]
 
     // Verificar se esta missão está ativa
     if (progress.active_mission_id !== missionId) {
@@ -111,44 +99,35 @@ export async function POST(request: NextRequest) {
     }
 
     // Atualizar progresso
-    const updateResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_quest_progress?user_id=eq.${userId}`,
-      {
-        method: 'PATCH',
-        headers: {
-          'Accept-Profile': 'impaai',
-          'Content-Profile': 'impaai',
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify({
-          total_xp: newXP,
-          completed_missions: completedMissions,
-          unlocked_badges: unlockedBadges,
-          active_mission_id: null,
-          mission_progress: null,
-          stats: newStats
-        })
-      }
+    const updated = await queryOne<any>(
+      `UPDATE user_quest_progress
+       SET total_xp = $1, completed_missions = $2, unlocked_badges = $3,
+           active_mission_id = $4, mission_progress = $5, stats = $6
+       WHERE user_id = $7 RETURNING *`,
+      [
+        newXP,
+        JSON.stringify(completedMissions),
+        JSON.stringify(unlockedBadges),
+        null,
+        JSON.stringify({}),
+        JSON.stringify(newStats),
+        userId
+      ]
     )
 
-    if (!updateResponse.ok) {
-      const error = await updateResponse.text()
-      console.error('❌ [QUEST] Erro ao completar missão:', error)
+    if (!updated) {
+      console.error('❌ [QUEST] Erro ao completar missão')
       return NextResponse.json(
         { error: 'Erro ao completar missão' },
-        { status: updateResponse.status }
+        { status: 500 }
       )
     }
 
-    const updated = await updateResponse.json()
     console.log('🎉 [QUEST] Missão completada! XP ganho:', mission.rewards.xp)
     console.log('🏆 [QUEST] Badges desbloqueados:', newBadges)
 
     return NextResponse.json({
-      ...updated[0],
+      ...updated,
       rewards: {
         xp: mission.rewards.xp,
         badges: newBadges,

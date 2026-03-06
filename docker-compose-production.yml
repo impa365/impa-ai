@@ -9,10 +9,8 @@ services:
       - serverBlack
     
     environment:
-      # Configuração do Supabase
-      - SUPABASE_URL=https://dadosupa.blackatende.com
-      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.QE8TiHnxIWyYVCC56S14W6YrHWBA1uGrOyCOuc1ZN9Q
-      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogInNlcnZpY2Vfcm9sZSIsCiAgImlzcyI6ICJzdXBhYmFzZSIsCiAgImlhdCI6IDE3MTUwNTA4MDAsCiAgImV4cCI6IDE4NzI4MTcyMDAKfQ.VR8XdJTPlU6Ly-f1Fl9mPb3zCT5c3uFyWMn_lJf5f88
+      # Configuração do PostgreSQL
+      - DATABASE_URL=postgresql://postgres:sua-senha@168.231.97.16:5432/postgres
       
       # Configuração do NextAuth
       - NEXTAUTH_URL=https://agentes.blackatende.com

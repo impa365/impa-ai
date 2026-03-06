@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { queryOne, queryMany } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,9 +12,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Verificar se o agente existe
-    const { data: agent, error: agentError } = await supabase.from("ai_agents").select("id").eq("id", agent_id).single()
+    const agent = await queryOne<{ id: string }>(
+      'SELECT id FROM ai_agents WHERE id = $1',
+      [agent_id]
+    )
 
-    if (agentError || !agent) {
+    if (!agent) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
@@ -36,19 +39,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Buscar logs do agente para estatísticas
-    const { data: logs, error: logsError } = await supabase
-      .from("agent_activity_logs")
-      .select("*")
-      .eq("agent_id", agent_id)
-      .gte("created_at", startDate.toISOString())
-      .order("created_at", { ascending: true })
-
-    if (logsError) {
-      throw logsError
-    }
+    const logs = await queryMany(
+      'SELECT * FROM agent_activity_logs WHERE agent_id = $1 AND created_at >= $2 ORDER BY created_at ASC',
+      [agent_id, startDate.toISOString()]
+    )
 
     // Processar estatísticas
-    const stats = processStats(logs || [])
+    const stats = processStats(logs)
 
     return NextResponse.json(stats)
   } catch (error: any) {

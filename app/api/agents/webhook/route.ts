@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { query, queryOne, buildInsert } from "@/lib/db"
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,34 +11,28 @@ export async function POST(request: NextRequest) {
     }
 
     // Buscar o agente pelo ID do bot na Evolution
-    const { data: agent, error: agentError } = await supabase
-      .from("ai_agents")
-      .select("id")
-      .eq("evolution_bot_id", bot_id)
-      .single()
+    const agent = await queryOne<{ id: string }>(
+      'SELECT id FROM ai_agents WHERE evolution_bot_id = $1',
+      [bot_id]
+    )
 
-    if (agentError || !agent) {
+    if (!agent) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
     // Registrar log de atividade
-    const { error } = await supabase.from("agent_activity_logs").insert([
-      {
-        agent_id: agent.id,
-        activity_type: "message",
-        activity_data: {
-          message,
-          response,
-          success: success !== false, // Default para true se não especificado
-          response_time: response_time || null,
-          timestamp: new Date().toISOString(),
-        },
+    const { text, values } = buildInsert('agent_activity_logs', {
+      agent_id: agent.id,
+      activity_type: "message",
+      activity_data: {
+        message,
+        response,
+        success: success !== false,
+        response_time: response_time || null,
+        timestamp: new Date().toISOString(),
       },
-    ])
-
-    if (error) {
-      throw error
-    }
+    })
+    await query(text, values)
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentServerUser } from "@/lib/auth-server";
+import { queryOne, buildInsert } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,50 +31,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Configurar Supabase
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { success: false, error: "Configuração do banco não encontrada" },
-        { status: 500 }
-      );
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    };
-
     // Buscar configuração da Evolution API existente
     console.log("🔍 [IMPORT-INSTANCE] Buscando configuração da Evolution API...");
     
-    const integrationResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-      { headers }
+    const integration = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["evolution_api"]
     );
 
-    if (!integrationResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao buscar configuração da Evolution API" },
-        { status: 500 }
-      );
-    }
-
-    const integrations = await integrationResponse.json();
-    
-    if (!integrations || integrations.length === 0) {
+    if (!integration) {
       return NextResponse.json(
         { success: false, error: "Evolution API não está configurada no sistema. Configure primeiro em Integrações." },
         { status: 404 }
       );
     }
 
-    const evolutionConfig = integrations[0].config as {
+    const evolutionConfig = integration.config as {
       apiUrl?: string;
       apiKey?: string;
     };
@@ -148,19 +121,16 @@ export async function POST(request: NextRequest) {
     console.log(`✅ [IMPORT-INSTANCE] Instância encontrada:`, targetInstance);
 
     // Verificar se a instância já existe no banco
-    const checkResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`,
-      { headers }
+    const existing = await queryOne(
+      `SELECT id FROM whatsapp_connections WHERE instance_name = $1 LIMIT 1`,
+      [instanceName]
     );
 
-    if (checkResponse.ok) {
-      const existing = await checkResponse.json();
-      if (existing && existing.length > 0) {
-        return NextResponse.json(
-          { success: false, error: "Esta instância já está cadastrada no sistema" },
-          { status: 409 }
-        );
-      }
+    if (existing) {
+      return NextResponse.json(
+        { success: false, error: "Esta instância já está cadastrada no sistema" },
+        { status: 409 }
+      );
     }
 
     // Mapear status da Evolution API para o banco
@@ -212,29 +182,18 @@ export async function POST(request: NextRequest) {
     console.log(`💾 [IMPORT-INSTANCE] Salvando no banco:`, connectionData);
 
     // Salvar no banco de dados
-    const insertResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections`,
-      {
-        method: "POST",
-        headers: {
-          ...headers,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify(connectionData),
-      }
-    );
+    const { text, values } = buildInsert("whatsapp_connections", connectionData);
+    const savedConnection = await queryOne(text, values);
 
-    if (!insertResponse.ok) {
-      const errorText = await insertResponse.text();
-      console.error(`❌ [IMPORT-INSTANCE] Erro ao salvar no banco: ${insertResponse.status} - ${errorText}`);
+    if (!savedConnection) {
+      console.error(`❌ [IMPORT-INSTANCE] Erro ao salvar no banco`);
       return NextResponse.json(
         { success: false, error: "Erro ao salvar instância no banco de dados" },
         { status: 500 }
       );
     }
 
-    const savedConnection = await insertResponse.json();
-    console.log(`✅ [IMPORT-INSTANCE] Instância salva com sucesso:`, savedConnection[0]);
+    console.log(`✅ [IMPORT-INSTANCE] Instância salva com sucesso:`, savedConnection);
 
     // A configuração da Evolution API já existe (foi verificada anteriormente)
     console.log(`✅ [IMPORT-INSTANCE] Usando configuração existente da Evolution API`);
@@ -242,7 +201,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Instância importada com sucesso",
-      data: savedConnection[0],
+      data: savedConnection,
     });
 
   } catch (error: any) {

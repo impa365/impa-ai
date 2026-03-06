@@ -46,24 +46,24 @@ export async function POST(request: NextRequest) {
     const resetData = {
       total_xp: 0,
       current_level: 1,
-      completed_missions: [],
-      unlocked_badges: [],
+      completed_missions: JSON.stringify([]),
+      unlocked_badges: JSON.stringify([]),
       active_mission_id: null,
-      mission_progress: null,
-      stats: {
+      mission_progress: JSON.stringify({}),
+      stats: JSON.stringify({
         perfectMissions: 0,
         fastestCompletionTime: null,
         totalMissionsCompleted: 0,
         totalHintsUsed: 0,
         totalTimeSpent: 0
-      },
-      preferences: {
+      }),
+      preferences: JSON.stringify({
         showARIA: true,
         soundEnabled: true,
         ariaPersonality: 'friendly',
         autoStartMissions: false,
         celebrationEffects: true
-      },
+      }),
       updated_at: new Date().toISOString()
     }
 

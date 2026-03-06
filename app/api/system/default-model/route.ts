@@ -1,41 +1,19 @@
 import { NextResponse } from "next/server"
+import { queryOne } from "@/lib/db"
 
 export async function GET() {
   console.log("📡 API: /api/system/default-model chamada")
 
   try {
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     console.log("🔍 Buscando modelo padrão do sistema...")
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?select=setting_value&setting_key=eq.default_model`,
-      { headers },
+    const row = await queryOne<{ setting_value: string }>(
+      "SELECT setting_value FROM system_settings WHERE setting_key = $1",
+      ["default_model"]
     )
+    console.log("✅ Resposta do sistema:", row)
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ Erro ao buscar default_model:", response.status, errorText)
-      throw new Error(`Erro ao buscar default_model: ${response.status}`)
-    }
-
-    const data = await response.json()
-    console.log("✅ Resposta do sistema:", data)
-
-    if (data && data.length > 0 && data[0].setting_value) {
-      const defaultModel = data[0].setting_value.toString().trim()
+    if (row && row.setting_value) {
+      const defaultModel = row.setting_value.toString().trim()
       console.log("✅ Default model encontrado:", defaultModel)
 
       return NextResponse.json({

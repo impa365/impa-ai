@@ -1,18 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { queryOne } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabase
-      .from("integrations")
-      .select("*")
-      .eq("type", "evolution_api")
-      .eq("is_active", true)
-      .single()
-
-    if (error && error.code !== "PGRST116") {
-      throw error
-    }
+    const data = await queryOne<any>(
+      `SELECT * FROM integrations WHERE type = $1 AND is_active = $2 LIMIT 1`,
+      ["evolution_api", true]
+    )
 
     return NextResponse.json({
       success: true,

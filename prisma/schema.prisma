@@ -1,0 +1,721 @@
+// Prisma Schema - IMPA AI
+// Schema: impaai
+// Migrado de Supabase para PostgreSQL direto
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["impaai"]
+}
+
+// ==================== ENUMS ====================
+
+enum AvailabilityMode {
+  always
+  schedule
+  disabled
+
+  @@map("availability_mode_enum")
+  @@schema("impaai")
+}
+
+enum LlmProvider {
+  openai
+  anthropic
+  google
+  ollama
+  groq
+
+  @@map("llm_provider_enum")
+  @@schema("impaai")
+}
+
+enum OperadorGatilho {
+  Contem     @map("Contém")
+  Igual
+  ComecaCom  @map("Começa Com")
+  TerminaCom @map("Termina Com")
+  Regex
+
+  @@map("operador_gatilho_enum")
+  @@schema("impaai")
+}
+
+enum TipoGatilho {
+  PalavraChave @map("Palavra-chave")
+  Todos
+  Avancado     @map("Avançado")
+  Nenhum
+
+  @@map("tipo_gatilho_enum")
+  @@schema("impaai")
+}
+
+enum TipoMidia {
+  text
+  image
+  video
+  audio
+  document
+
+  @@map("tipo_midia")
+  @@schema("impaai")
+}
+
+// ==================== MODELS ====================
+
+model UserProfile {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  full_name              String    @db.VarChar(255)
+  email                  String    @unique @db.VarChar(255)
+  password               String
+  role                   String    @default("user") @db.VarChar(50)
+  status                 String    @default("active") @db.VarChar(50)
+  avatar_url             String?
+  phone                  String?   @db.VarChar(20)
+  company                String?   @db.VarChar(255)
+  bio                    String?
+  timezone               String    @default("America/Sao_Paulo") @db.VarChar(100)
+  language               String    @default("pt-BR") @db.VarChar(10)
+  api_key                String?   @unique @db.VarChar(255)
+  email_verified         Boolean   @default(false)
+  preferences            Json      @default("{}")
+  theme_settings         Json      @default("{\"mode\": \"light\", \"color\": \"blue\"}")
+  agents_limit           Int       @default(3)
+  connections_limit      Int       @default(5)
+  monthly_messages_limit Int       @default(1000)
+  last_login_at          DateTime? @db.Timestamptz
+  login_count            Int       @default(0)
+  created_at             DateTime  @default(now()) @db.Timestamptz
+  updated_at             DateTime  @default(now()) @db.Timestamptz
+  can_access_agents      Boolean   @default(true)
+  can_access_connections Boolean   @default(true)
+  hide_agents_menu       Boolean   @default(false)
+  hide_connections_menu  Boolean   @default(false)
+  can_view_api_credentials Boolean @default(false)
+
+  // Relations
+  ai_agents             AiAgent[]
+  whatsapp_connections  WhatsappConnection[]
+  llm_api_keys          LlmApiKey[]
+  user_api_keys         UserApiKey[]
+  background_jobs       BackgroundJob[]
+  shared_whatsapp_links SharedWhatsappLink[]
+  user_quest_progress   UserQuestProgress?
+  bots                  Bot[]
+
+  @@map("user_profiles")
+  @@schema("impaai")
+}
+
+model AiAgent {
+  id                      String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                 String           @db.Uuid
+  whatsapp_connection_id  String?          @db.Uuid
+  evolution_bot_id        String?          @unique @db.VarChar(255)
+  name                    String           @db.VarChar(255)
+  description             String?
+  avatar_url              String?
+  identity_description    String?
+  training_prompt         String
+  voice_tone              String           @default("humanizado") @db.VarChar(50)
+  main_function           String           @default("atendimento") @db.VarChar(50)
+  model                   String?          @default("gpt-3.5-turbo") @db.VarChar(100)
+  temperature             Decimal?         @default(0.7) @db.Decimal(3, 2)
+  max_tokens              Int?             @default(1000)
+  top_p                   Decimal?         @default(1.0) @db.Decimal(3, 2)
+  frequency_penalty       Decimal?         @default(0.0) @db.Decimal(3, 2)
+  presence_penalty        Decimal?         @default(0.0) @db.Decimal(3, 2)
+  model_config            Json             @default("{}")
+  transcribe_audio        Boolean          @default(false)
+  understand_images       Boolean          @default(false)
+  voice_response_enabled  Boolean          @default(false)
+  voice_provider          String?          @db.VarChar(20)
+  voice_api_key           String?
+  voice_id                String?          @db.VarChar(255)
+  calendar_integration    Boolean          @default(false)
+  calendar_api_key        String?
+  calendar_meeting_id     String?          @db.VarChar(255)
+  chatnode_integration    Boolean          @default(false)
+  chatnode_api_key        String?
+  chatnode_bot_id         String?
+  orimon_integration      Boolean          @default(false)
+  orimon_api_key          String?
+  orimon_bot_id           String?
+  is_default              Boolean          @default(false)
+  listen_own_messages     Boolean          @default(false)
+  stop_bot_by_me          Boolean          @default(true)
+  keep_conversation_open  Boolean          @default(true)
+  split_long_messages     Boolean          @default(true)
+  character_wait_time     Int?             @default(100)
+  trigger_type            String?          @default("all") @db.VarChar(50)
+  working_hours           Json             @default("{\"enabled\": false, \"schedule\": {}, \"timezone\": \"America/Sao_Paulo\"}")
+  auto_responses          Json             @default("{}")
+  fallback_responses      Json             @default("{}")
+  status                  String           @default("inactive") @db.VarChar(20)
+  last_training_at        DateTime?        @db.Timestamptz
+  performance_score       Decimal?         @default(0.00) @db.Decimal(3, 2)
+  total_conversations     Int              @default(0)
+  total_messages          Int              @default(0)
+  created_at              DateTime         @default(now()) @db.Timestamptz
+  updated_at              DateTime         @default(now()) @db.Timestamptz
+  type                    String           @default("whatsapp") @db.VarChar(50)
+  prompt_template         String?
+  trigger_operator        String?          @default("equals") @db.VarChar(20)
+  trigger_value           String?          @db.VarChar(255)
+  keyword_finish          String?          @default("#sair") @db.VarChar(100)
+  debounce_time           Int?             @default(10)
+  listening_from_me       Boolean          @default(false)
+  stop_bot_from_me        Boolean          @default(true)
+  keep_open               Boolean          @default(false)
+  split_messages          Boolean          @default(true)
+  time_per_char           Int?             @default(100)
+  delay_message           Int?             @default(1000)
+  unknown_message         String?          @default("Desculpe, não entendi. Digite a palavra-chave para começar.")
+  expire_time             Int?             @default(0)
+  ignore_jids             String[]         @default([])
+  bot_id                  String?          @db.Uuid
+  llm_api_key             String?
+  calendar_provider       String?          @default("calcom")
+  calendar_api_version    String?          @default("v1")
+  calendar_api_url        String?          @default("https://api.cal.com/v1")
+  availability_mode       AvailabilityMode @default(always)
+
+  // Relations
+  user                   UserProfile               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  whatsapp_connection    WhatsappConnection?        @relation(fields: [whatsapp_connection_id], references: [id], onDelete: SetNull)
+  bot                    Bot?                       @relation(fields: [bot_id], references: [id], onDelete: SetNull)
+  activity_logs          ActivityLog[]
+  agent_activity_logs    AgentActivityLog[]
+  availability_schedules AgentAvailabilitySchedule[]
+  background_jobs        BackgroundJob[]
+  conversations          Conversation[]
+  messages               Message[]
+  reminder_triggers      ReminderTrigger[]
+
+  @@index([user_id], map: "idx_ai_agents_user_id")
+  @@index([whatsapp_connection_id], map: "idx_ai_agents_whatsapp_connection")
+  @@index([status], map: "idx_ai_agents_status")
+  @@index([type], map: "idx_ai_agents_type")
+  @@index([trigger_type], map: "idx_ai_agents_trigger_type")
+  @@index([evolution_bot_id], map: "idx_ai_agents_evolution_bot_id")
+  @@map("ai_agents")
+  @@schema("impaai")
+}
+
+model WhatsappConnection {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                String    @db.Uuid
+  connection_name        String    @db.VarChar(255)
+  instance_name          String    @db.VarChar(255)
+  instance_id            String?   @db.VarChar(255)
+  instance_token         String?
+  phone_number           String?   @db.VarChar(20)
+  status                 String    @default("disconnected") @db.VarChar(50)
+  qr_code                String?
+  qr_expires_at          DateTime? @db.Timestamptz
+  webhook_url            String?
+  webhook_events         Json      @default("[\"message\"]")
+  settings               Json      @default("{}")
+  auto_reconnect         Boolean   @default(true)
+  max_reconnect_attempts Int       @default(5)
+  reconnect_interval     Int       @default(30)
+  messages_sent          Int       @default(0)
+  messages_received      Int       @default(0)
+  last_message_at        DateTime? @db.Timestamptz
+  last_seen_at           DateTime? @db.Timestamptz
+  uptime_percentage      Decimal   @default(0.00) @db.Decimal(5, 2)
+  created_at             DateTime  @default(now()) @db.Timestamptz
+  updated_at             DateTime  @default(now()) @db.Timestamptz
+  adciona_folow          String?   @default("Gostaria de auxilio, algo mais?")
+  remover_folow          String?   @default("Agradecemos seu contato, Até Mais!")
+  api_type               String    @default("evolution") @db.VarChar(50)
+
+  // Relations
+  user               UserProfile          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  ai_agents          AiAgent[]
+  conversations      Conversation[]
+  shared_links       SharedWhatsappLink[]
+  bots               Bot[]
+  bot_sessions       BotSession[]
+  follow_up_messages FollowUpMessage[]
+  lead_follow_ups    LeadFollow24hs[]
+
+  @@unique([user_id, instance_name], map: "whatsapp_connections_user_id_instance_name_key")
+  @@map("whatsapp_connections")
+  @@schema("impaai")
+}
+
+model ActivityLog {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String?  @db.VarChar(255)
+  agent_id      String?  @db.Uuid
+  action        String   @db.VarChar(255)
+  resource_type String?  @db.VarChar(100)
+  resource_id   String?  @db.VarChar(255)
+  details       Json     @default("{}")
+  ip_address    String?  @db.Inet
+  user_agent    String?
+  created_at    DateTime @default(now()) @db.Timestamptz
+
+  // Relations
+  agent AiAgent? @relation(fields: [agent_id], references: [id], onDelete: SetNull)
+
+  // Note: user_id is varchar, not a direct FK to user_profiles.id (uuid)
+  // This is kept as-is from the original schema
+
+  @@index([user_id], map: "idx_activity_logs_user_id")
+  @@index([created_at], map: "idx_activity_logs_created_at")
+  @@map("activity_logs")
+  @@schema("impaai")
+}
+
+model AgentActivityLog {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agent_id         String   @db.Uuid
+  activity_type    String   @db.VarChar(100)
+  activity_data    Json     @default("{}")
+  user_message     String?
+  agent_response   String?
+  response_time_ms Int?
+  tokens_used      Int?
+  cost_estimate    Decimal? @db.Decimal(10, 6)
+  success          Boolean  @default(true)
+  error_message    String?
+  created_at       DateTime @default(now()) @db.Timestamptz
+
+  // Relations
+  agent AiAgent @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+
+  @@index([agent_id], map: "idx_agent_activity_logs_agent_id")
+  @@index([created_at], map: "idx_agent_activity_logs_created_at")
+  @@map("agent_activity_logs")
+  @@schema("impaai")
+}
+
+model AgentAvailabilitySchedule {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agent_id    String   @db.Uuid
+  day_of_week Int
+  start_time  DateTime @db.Time()
+  end_time    DateTime @db.Time()
+  timezone    String   @default("America/Sao_Paulo")
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz
+  updated_at  DateTime @default(now()) @db.Timestamptz
+
+  // Relations
+  agent AiAgent @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+
+  @@index([agent_id], map: "idx_availability_agent_id")
+  @@index([agent_id, day_of_week, is_active], map: "idx_availability_agent_day")
+  @@map("agent_availability_schedules")
+  @@schema("impaai")
+}
+
+model BackgroundJob {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type             String    @db.VarChar(50)
+  status           String    @default("pending") @db.VarChar(20)
+  user_id          String?   @db.Uuid
+  agent_id         String?   @db.Uuid
+  job_data         Json
+  progress         Int       @default(0)
+  total_items      Int       @default(0)
+  processed_items  Int       @default(0)
+  successful_items Int       @default(0)
+  failed_items     Int       @default(0)
+  results          Json      @default("{}")
+  error_message    String?
+  created_at       DateTime  @default(now()) @db.Timestamptz
+  started_at       DateTime? @db.Timestamptz
+  completed_at     DateTime? @db.Timestamptz
+  updated_at       DateTime  @default(now()) @db.Timestamptz
+
+  // Relations
+  user  UserProfile? @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  agent AiAgent?     @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+
+  @@index([type], map: "idx_background_jobs_type")
+  @@index([status], map: "idx_background_jobs_status")
+  @@index([user_id], map: "idx_background_jobs_user_id")
+  @@index([agent_id], map: "idx_background_jobs_agent_id")
+  @@index([created_at], map: "idx_background_jobs_created_at")
+  @@map("background_jobs")
+  @@schema("impaai")
+}
+
+model BookingsCal {
+  id                    BigInt    @id
+  titulo_da_reuniao     String?   @map("Titulo da reuniao")
+  empresa               String?   @map("Empresa")
+  email_da_empresa      String?
+  status                String?
+  inicio_reuniao        DateTime? @db.Timestamptz
+  fim_da_reuniao        DateTime? @db.Timestamptz
+  duracao               String?   @map("duração")
+  id_evento             BigInt?
+  slug_evento           String?
+  meetingUrl            String?   @map("meetingUrl")
+  localizacao           String?
+  nome_do_participante  String?   @map("Nome do Participante")
+  email_do_participante String?
+  whatsapp              String?
+  created_at            DateTime  @default(now()) @db.Timestamptz
+  updated_at            DateTime? @default(now()) @db.Timestamp()
+  lembrete_enviado      Boolean   @default(false)
+  lembrete_24h_enviado  Boolean   @default(false)
+  lembrete_3h_enviado   Boolean   @default(false)
+
+  @@map("bookings_cal")
+  @@schema("impaai")
+}
+
+model BotSession {
+  sessionId     String    @id @default(dbgenerated("gen_random_uuid()")) @map("sessionId") @db.Uuid
+  remoteJid     String    @map("remoteJid")
+  status        Boolean   @default(true)
+  ultimo_status DateTime  @default(now()) @db.Timestamptz
+  criado_em     DateTime  @default(now()) @db.Timestamptz
+  bot_id        String?   @db.Uuid
+  connection_id String    @db.Uuid
+  deleted_at    DateTime? @db.Timestamptz
+
+  // Relations
+  bot        Bot?               @relation(fields: [bot_id], references: [id], onDelete: Cascade)
+  connection WhatsappConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+
+  @@index([remoteJid], map: "idx_bot_sessions_remotejid")
+  @@index([status], map: "idx_bot_sessions_status")
+  @@index([bot_id], map: "idx_bot_sessions_bot_id")
+  @@index([connection_id], map: "idx_bot_sessions_connection_id")
+  @@map("bot_sessions")
+  @@schema("impaai")
+}
+
+model Bot {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome             String
+  url_api          String
+  apikey           String?
+  gatilho          TipoGatilho     @default(PalavraChave)
+  operador_gatilho OperadorGatilho @default(Contem)
+  value_gatilho    String?
+  debounce         Decimal?        @default(5)
+  splitMessage     Decimal?        @default(2) @map("splitMessage")
+  ignoreJids       String?         @default("@g.us,") @map("ignoreJids")
+  webhook_id       String?
+  user_id          String          @db.Uuid
+  connection_id    String          @db.Uuid
+  created_at       DateTime        @default(now()) @db.Timestamptz
+  updated_at       DateTime        @default(now()) @db.Timestamptz
+  padrao           Boolean         @default(false)
+
+  // Relations
+  user         UserProfile        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  connection   WhatsappConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+  ai_agents    AiAgent[]
+  bot_sessions BotSession[]
+
+  @@index([user_id], map: "idx_bots_user_id")
+  @@index([connection_id], map: "idx_bots_connection_id")
+  @@index([webhook_id], map: "idx_bots_webhook_id")
+  @@map("bots")
+  @@schema("impaai")
+}
+
+model Conversation {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agent_id               String    @db.Uuid
+  whatsapp_connection_id String?   @db.Uuid
+  contact_phone          String    @db.VarChar(20)
+  contact_name           String?   @db.VarChar(255)
+  status                 String    @default("active") @db.VarChar(50)
+  last_message_at        DateTime? @db.Timestamptz
+  message_count          Int       @default(0)
+  metadata               Json      @default("{}")
+  created_at             DateTime  @default(now()) @db.Timestamptz
+  updated_at             DateTime  @default(now()) @db.Timestamptz
+
+  // Relations
+  agent               AiAgent             @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+  whatsapp_connection WhatsappConnection? @relation(fields: [whatsapp_connection_id], references: [id], onDelete: SetNull)
+  messages            Message[]
+
+  @@index([agent_id], map: "idx_conversations_agent_id")
+  @@map("conversations")
+  @@schema("impaai")
+}
+
+model FollowUpMessage {
+  id                       BigInt             @id
+  whatsapp_conenections_id String             @db.Uuid
+  tentativa_dia            Decimal?
+  tipo_mensagem            TipoMidia?
+  mensagem                 String?
+  link                     String?
+
+  // Relations
+  connection WhatsappConnection @relation(fields: [whatsapp_conenections_id], references: [id], onDelete: Cascade)
+
+  @@map("folowUp24hs_mensagem")
+  @@schema("impaai")
+}
+
+model Integration {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String   @db.VarChar(255)
+  type       String   @unique @db.VarChar(100)
+  config     Json     @default("{}")
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @default(now()) @db.Timestamptz
+
+  @@map("integrations")
+  @@schema("impaai")
+}
+
+model LeadFollow24hs {
+  id                BigInt             @id
+  whatsappConection String             @map("whatsappConection") @db.Uuid
+  remoteJid         String?            @map("remoteJid")
+  dia               Decimal?
+  updated_at        DateTime?          @db.Timestamptz
+
+  // Relations
+  connection WhatsappConnection @relation(fields: [whatsappConection], references: [id], onDelete: Cascade)
+
+  @@map("lead_folow24hs")
+  @@schema("impaai")
+}
+
+model LlmApiKey {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String      @db.Uuid
+  key_name     String      @db.VarChar(255)
+  provider     LlmProvider
+  api_key      String
+  description  String?
+  is_active    Boolean     @default(true)
+  is_default   Boolean     @default(false)
+  usage_count  Int         @default(0)
+  last_used_at DateTime?   @db.Timestamptz
+  created_at   DateTime    @default(now()) @db.Timestamptz
+  updated_at   DateTime    @default(now()) @db.Timestamptz
+
+  // Relations
+  user UserProfile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, key_name], map: "unique_key_name_per_user")
+  @@map("llm_api_keys")
+  @@schema("impaai")
+}
+
+model Message {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id String    @db.Uuid
+  agent_id        String?   @db.Uuid
+  direction       String    @db.VarChar(20)
+  content         String
+  message_type    String    @default("text") @db.VarChar(50)
+  media_url       String?
+  metadata        Json      @default("{}")
+  processed_at    DateTime? @db.Timestamptz
+  created_at      DateTime  @default(now()) @db.Timestamptz
+
+  // Relations
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  agent        AiAgent?     @relation(fields: [agent_id], references: [id], onDelete: SetNull)
+
+  @@map("messages")
+  @@schema("impaai")
+}
+
+model N8nWorkflow {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflow_id        String    @unique @db.VarChar(255)
+  name               String    @db.VarChar(255)
+  workflow_data      Json
+  categoria          Json?
+  imagem_fluxo       String?
+  criado_em          DateTime? @db.Timestamptz
+  ultima_atualizacao DateTime? @db.Timestamptz
+  synced_to_n8n      Boolean   @default(false)
+  n8n_workflow_id    String?   @db.VarChar(255)
+  created_at         DateTime  @default(now()) @db.Timestamptz
+  updated_at         DateTime  @default(now()) @db.Timestamptz
+  descricao          String?
+
+  @@map("n8n_workflows")
+  @@schema("impaai")
+}
+
+model ReminderCronRun {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  started_at         DateTime  @default(now()) @db.Timestamptz
+  finished_at        DateTime? @db.Timestamptz
+  duration_ms        Int?
+  success            Boolean?
+  dry_run            Boolean   @default(false)
+  reminders_due      Int       @default(0)
+  reminders_sent     Int       @default(0)
+  reminders_failed   Int       @default(0)
+  triggers_processed Int       @default(0)
+  message            String?
+  details            Json?
+  created_at         DateTime  @default(now()) @db.Timestamptz
+
+  @@map("reminder_cron_runs")
+  @@schema("impaai")
+}
+
+model ReminderTriggerLog {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  trigger_id       String   @db.Uuid
+  booking_uid      String
+  scheduled_for    DateTime @db.Timestamptz
+  executed_at      DateTime @default(now()) @db.Timestamptz
+  success          Boolean  @default(false)
+  webhook_status   Int?
+  webhook_response Json?
+  error_message    String?
+  created_at       DateTime @default(now()) @db.Timestamptz
+
+  // Relations
+  trigger ReminderTrigger @relation(fields: [trigger_id], references: [id], onDelete: Cascade)
+
+  @@map("reminder_trigger_logs")
+  @@schema("impaai")
+}
+
+model ReminderTrigger {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agent_id        String   @db.Uuid
+  timing_type     String   @default("before_event_start")
+  offset_amount   Int
+  offset_unit     String
+  scope_type      String   @default("agent")
+  scope_reference String?
+  action_type     String   @default("webhook")
+  webhook_url     String?
+  is_active       Boolean  @default(true)
+  created_at      DateTime @default(now()) @db.Timestamptz
+  updated_at      DateTime @default(now()) @db.Timestamptz
+  action_payload  Json     @default("{}")
+
+  // Relations
+  agent AiAgent              @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+  logs  ReminderTriggerLog[]
+
+  @@map("reminder_triggers")
+  @@schema("impaai")
+}
+
+model SharedWhatsappLink {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  connection_id    String    @db.Uuid
+  user_id          String    @db.Uuid
+  token            String    @unique(map: "unique_active_token")
+  password_hash    String?
+  salt             String?
+  permissions      Json      @default("{\"stats\": false, \"qr_code\": true, \"settings\": false}")
+  expires_at       DateTime? @db.Timestamptz
+  max_uses         Int?
+  current_uses     Int       @default(0)
+  is_active        Boolean   @default(true)
+  last_accessed_at DateTime? @db.Timestamptz
+  last_accessed_ip String?   @db.Inet
+  access_logs      Json      @default("[]")
+  created_at       DateTime  @default(now()) @db.Timestamptz
+  updated_at       DateTime  @default(now()) @db.Timestamptz
+
+  // Relations
+  connection WhatsappConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+  user       UserProfile        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("shared_whatsapp_links")
+  @@schema("impaai")
+}
+
+model SystemSetting {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  setting_key      String   @unique @db.VarChar(255)
+  setting_value    Json
+  category         String?  @default("general") @db.VarChar(100)
+  description      String?
+  is_public        Boolean  @default(false)
+  requires_restart Boolean  @default(false)
+  created_at       DateTime @default(now()) @db.Timestamptz
+  updated_at       DateTime @default(now()) @db.Timestamptz
+
+  @@map("system_settings")
+  @@schema("impaai")
+}
+
+model SystemTheme {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String   @unique @db.VarChar(100)
+  display_name String   @db.VarChar(255)
+  description  String?
+  colors       Json
+  fonts        Json     @default("{}")
+  borders      Json     @default("{}")
+  logo_icon    String?  @default("🤖") @db.VarChar(10)
+  is_default   Boolean  @default(false)
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now()) @db.Timestamptz
+  updated_at   DateTime @default(now()) @db.Timestamptz
+
+  @@map("system_themes")
+  @@schema("impaai")
+}
+
+model UserApiKey {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String    @db.Uuid
+  api_key      String    @unique @db.VarChar(255)
+  name         String    @db.VarChar(255)
+  description  String?
+  permissions  Json      @default("[\"read\"]")
+  rate_limit   Int       @default(100)
+  is_active    Boolean   @default(true)
+  last_used_at DateTime? @db.Timestamptz
+  expires_at   DateTime? @db.Timestamptz
+  created_at   DateTime  @default(now()) @db.Timestamptz
+  updated_at   DateTime  @default(now()) @db.Timestamptz
+  access_scope String    @default("user") @db.VarChar(50)
+  is_admin_key Boolean   @default(false)
+  allowed_ips  Json      @default("[]")
+  usage_count  Int       @default(0)
+
+  // Relations
+  user UserProfile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_api_keys")
+  @@schema("impaai")
+}
+
+model UserQuestProgress {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String   @unique(map: "unique_user_progress") @db.Uuid
+  total_xp           Int      @default(0)
+  current_level      Int      @default(1)
+  completed_missions Json     @default("[]")
+  unlocked_badges    Json     @default("[]")
+  active_mission_id  String?
+  mission_progress   Json     @default("{}")
+  stats              Json     @default("{\"perfectMissions\": 0, \"fastestCompletionTime\": null, \"totalMissionsCompleted\": 0}")
+  preferences        Json     @default("{\"soundEnabled\": true, \"ariaPersonality\": \"friendly\", \"autoStartMissions\": false}")
+  created_at         DateTime @default(now()) @db.Timestamptz
+  updated_at         DateTime @default(now()) @db.Timestamptz
+
+  // Relations
+  user UserProfile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_quest_progress")
+  @@schema("impaai")
+}

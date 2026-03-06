@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getCurrentServerUser } from "./lib/auth-server";
-import { validateApiKey } from "./lib/api-auth";
+
+/**
+ * Lightweight API key check for Edge Middleware.
+ * Only validates format; full DB validation is handled by API route handlers.
+ */
+function hasValidApiKeyFormat(req: NextRequest): boolean {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return false;
+  const key = authHeader.replace("Bearer ", "").trim();
+  return key.startsWith("impaai_") && key.length > 20;
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -60,13 +70,11 @@ export async function middleware(req: NextRequest) {
       let user = await getCurrentServerUser(req);
       let authMethod = "jwt";
 
-      // Se não autenticou via JWT, tentar API key
-      if (!user) {
-        const apiKeyResult = await validateApiKey(req);
-        if (apiKeyResult.isValid) {
-          user = apiKeyResult.user;
-          authMethod = "api_key";
-        }
+      // Se não autenticou via JWT, verificar se tem API key
+      // A validação completa da API key é feita no handler da rota (api-auth.ts)
+      if (!user && hasValidApiKeyFormat(req)) {
+        // Let the request through - API route handler will validate the key
+        return NextResponse.next();
       }
 
       if (!user) {

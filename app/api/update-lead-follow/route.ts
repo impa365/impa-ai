@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { queryOne, buildUpdate } from "@/lib/db";
 import { validateApiKey } from "@/lib/api-auth";
 
 export async function PUT(request: NextRequest) {
@@ -33,63 +33,50 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "dia deve ser um número entre 1 e 30" }, { status: 400 });
     }
 
-    // 3. Conexão com o Supabase
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    });
-
-    // 4. Buscar conexão WhatsApp pelo instance_name
-    const { data: connection, error: connectionError } = await supabase
-      .from("whatsapp_connections")
-      .select("id, user_id")
-      .eq("instance_name", instance_name)
-      .single();
-    if (connectionError || !connection) {
+    // 3. Buscar conexão WhatsApp pelo instance_name
+    const connection = await queryOne(
+      `SELECT id, user_id FROM whatsapp_connections WHERE instance_name = $1`,
+      [instance_name]
+    );
+    if (!connection) {
       return NextResponse.json({ error: "Conexão WhatsApp não encontrada" }, { status: 404 });
     }
     if (connection.user_id !== userId) {
       return NextResponse.json({ error: "Esta conexão não pertence ao usuário da API Key" }, { status: 403 });
     }
 
-    // 5. Buscar lead pelo remoteJid e whatsappConection
+    // 4. Buscar lead pelo remoteJid e whatsappConection
     // ATENÇÃO: O nome dos campos é case sensitive! Use exatamente 'remoteJid' e 'whatsappConection'.
-    const { data: lead, error: findError } = await supabase
-      .from("lead_folow24hs")
-      .select("id")
-      .eq("remoteJid", remoteJid)
-      .eq("whatsappConection", connection.id)
-      .single();
-    if (findError || !lead) {
+    const lead = await queryOne(
+      `SELECT id FROM lead_folow24hs WHERE "remoteJid" = $1 AND "whatsappConection" = $2`,
+      [remoteJid, connection.id]
+    );
+    if (!lead) {
       const isDev = process.env.NODE_ENV !== "production";
       return NextResponse.json({
         error: "Lead não encontrado para esta conexão",
-        details: isDev ? findError : undefined,
+        details: isDev ? "No matching lead found" : undefined,
         supabase: isDev ? { remoteJid, whatsappConection: connection.id } : undefined
       }, { status: 404 });
     }
 
-    // 6. Atualizar lead
+    // 5. Atualizar lead
     const updateData: any = { dia: dayNumber, updated_at: new Date().toISOString() };
     if (name) updateData.name = String(name).trim();
     // ATENÇÃO: O nome dos campos é case sensitive! Use exatamente 'id' para o update.
-    const { data: updatedLead, error: updateError } = await supabase
-      .from("lead_folow24hs")
-      .update(updateData)
-      .eq("id", lead.id)
-      .select()
-      .single();
-    if (updateError) {
+    const { text, values } = buildUpdate("lead_folow24hs", updateData, { id: lead.id });
+    const updatedLead = await queryOne(text, values);
+
+    if (!updatedLead) {
       const isDev = process.env.NODE_ENV !== "production";
       return NextResponse.json({
         error: "Erro ao atualizar lead",
-        details: isDev ? updateError : undefined,
+        details: isDev ? "Update returned no rows" : undefined,
         supabase: isDev ? { updateData, leadId: lead.id } : undefined
       }, { status: 500 });
     }
 
-    // 7. Resposta de sucesso
+    // 6. Resposta de sucesso
     return NextResponse.json({
       success: true,
       message: "Lead atualizado com sucesso",

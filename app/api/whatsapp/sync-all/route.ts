@@ -1,43 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getUazapiInstanceStatusServer } from "@/lib/uazapi-server";
+import { query, queryMany } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { success: false, error: "Configuração não encontrada" },
-        { status: 500 }
-      );
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    };
-
     console.log("🔄 Sincronização FORÇADA de TODAS as conexões (Evolution + Uazapi)");
 
     // Buscar todas as conexões WhatsApp (incluindo api_type e instance_token)
-    const connectionsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,instance_name,instance_token,api_type,status`,
-      { headers }
+    const connections = await queryMany(
+      'SELECT id, instance_name, instance_token, api_type, status FROM whatsapp_connections'
     );
-
-    if (!connectionsResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao buscar conexões" },
-        { status: 500 }
-      );
-    }
-
-    const connections = await connectionsResponse.json();
 
     if (!connections || connections.length === 0) {
       return NextResponse.json({
@@ -52,16 +24,12 @@ export async function POST(request: NextRequest) {
     let evolutionConfig: any = null;
 
     if (hasEvolutionConnections) {
-      const integrationResponse = await fetch(
-        `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-        { headers }
+      const integrations = await queryMany(
+        'SELECT config FROM integrations WHERE type = $1 AND is_active = true',
+        ['evolution_api']
       );
-
-      if (integrationResponse.ok) {
-        const integrations = await integrationResponse.json();
-        if (integrations && integrations.length > 0) {
-          evolutionConfig = integrations[0].config;
-        }
+      if (integrations && integrations.length > 0) {
+        evolutionConfig = integrations[0].config;
       }
     }
 
@@ -166,13 +134,12 @@ export async function POST(request: NextRequest) {
             updateData.phone_number = phoneNumber;
           }
 
-          await fetch(
-            `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${connection.id}`,
-            {
-              method: "PATCH",
-              headers,
-              body: JSON.stringify(updateData),
-            }
+          await query(
+            'UPDATE whatsapp_connections SET status = $1, updated_at = $2' +
+              (phoneNumber ? ', phone_number = $3 WHERE id = $4' : ' WHERE id = $3'),
+            phoneNumber
+              ? [updateData.status, updateData.updated_at, phoneNumber, connection.id]
+              : [updateData.status, updateData.updated_at, connection.id]
           );
 
           syncedCount++;

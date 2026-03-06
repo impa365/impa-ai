@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { verifyRefreshToken, generateTokenPair, logJWTOperation } from "@/lib/jwt"
+import { queryOne } from "@/lib/db"
 
 export async function POST() {
   try {
@@ -20,41 +21,13 @@ export async function POST() {
       console.log("✅ Refresh token válido para:", refreshPayload.email)
 
       // Buscar dados atuais do usuário no banco
-      const supabaseUrl = process.env.SUPABASE_URL
-      const supabaseKey = process.env.SUPABASE_ANON_KEY
+      const user = await queryOne('SELECT * FROM user_profiles WHERE id = $1', [refreshPayload.id])
 
-      if (!supabaseUrl || !supabaseKey) {
-        console.error("❌ Configuração do Supabase não encontrada")
-        return NextResponse.json({ error: "Erro de configuração do servidor" }, { status: 500 })
-      }
-
-      const headers = {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      }
-
-      // Buscar usuário atual
-      const userResponse = await fetch(`${supabaseUrl}/rest/v1/user_profiles?id=eq.${refreshPayload.id}&select=*`, {
-        headers,
-      })
-
-      if (!userResponse.ok) {
-        console.error("❌ Erro ao buscar usuário para refresh")
+      if (!user) {
+        console.log("❌ Usuário não encontrado para refresh")
         logJWTOperation('REFRESH', refreshPayload.email, false, 'Usuário não encontrado')
         return NextResponse.json({ error: "Usuário não encontrado" }, { status: 401 })
       }
-
-      const users = await userResponse.json()
-      if (!users || users.length === 0) {
-        console.log("❌ Usuário não existe mais")
-        logJWTOperation('REFRESH', refreshPayload.email, false, 'Usuário removido')
-        return NextResponse.json({ error: "Usuário não encontrado" }, { status: 401 })
-      }
-
-      const user = users[0]
 
       // Verificar se usuário ainda está ativo
       if (user.status !== "active") {

@@ -1,24 +1,22 @@
-import { supabase } from "@/lib/supabase"
+import { queryOne } from "@/lib/db"
 
 export async function getUserAgentLimit(userId: string): Promise<number> {
   try {
     // Primeiro, tenta obter o limite específico do usuário
-    const { data: userSettings, error: userError } = await supabase
-      .from("user_settings")
-      .select("agents_limit")
-      .eq("user_id", userId)
-      .single()
+    const userSettings = await queryOne<{ agents_limit: number }>(
+      `SELECT agents_limit FROM user_settings WHERE user_id = $1`,
+      [userId]
+    );
 
     if (userSettings?.agents_limit !== undefined && userSettings?.agents_limit !== null) {
       return userSettings.agents_limit
     }
 
     // Se não encontrar configuração específica, usa o padrão do sistema
-    const { data: systemSettings, error: systemError } = await supabase
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "default_agents_limit")
-      .single()
+    const systemSettings = await queryOne<{ setting_value: string }>(
+      `SELECT setting_value FROM system_settings WHERE setting_key = $1`,
+      ["default_agents_limit"]
+    );
 
     if (systemSettings?.setting_value) {
       return Number.parseInt(systemSettings.setting_value)
@@ -34,13 +32,12 @@ export async function getUserAgentLimit(userId: string): Promise<number> {
 
 export async function getUserAgentCount(userId: string): Promise<number> {
   try {
-    const { count, error } = await supabase
-      .from("ai_agents")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
+    const result = await queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM ai_agents WHERE user_id = $1`,
+      [userId]
+    );
 
-    if (error) throw error
-    return count || 0
+    return parseInt(result?.count || "0")
   } catch (error) {
     console.error("Erro ao contar agentes do usuário:", error)
     return 0

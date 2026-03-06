@@ -1,41 +1,13 @@
 import { NextResponse } from "next/server";
+import { queryOne } from "@/lib/db";
 
 export async function GET() {
   try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { success: false, error: "Configuração do banco não encontrada" },
-        { status: 500 }
-      );
-    }
-
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
+    const integration = await queryOne<{ config: { apiUrl?: string; apiKey?: string } }>(
+      `SELECT config FROM integrations WHERE type = 'evolution_api' AND is_active = true LIMIT 1`
     );
 
-    if (!response.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao buscar configuração" },
-        { status: 500 }
-      );
-    }
-
-    const integrations = await response.json();
-
-    if (!integrations || integrations.length === 0) {
+    if (!integration) {
       return NextResponse.json(
         {
           success: false,
@@ -45,10 +17,7 @@ export async function GET() {
       );
     }
 
-    const config = integrations[0].config as {
-      apiUrl?: string;
-      apiKey?: string;
-    };
+    const config = integration.config;
 
     if (!config || typeof config !== "object") {
       return NextResponse.json(

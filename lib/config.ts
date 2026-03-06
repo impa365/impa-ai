@@ -19,14 +19,13 @@ export async function getConfig() {
   // SEGURANÇA: No servidor, ler diretamente das variáveis de ambiente
   if (typeof window === "undefined") {
     const config = {
-      supabaseUrl: process.env.SUPABASE_URL || "http://localhost:54321",
-      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "dummy-key",
+      databaseUrl: process.env.DATABASE_URL || "",
       nextAuthUrl: process.env.NEXTAUTH_URL || "http://localhost:3000",
       customKey: process.env.CUSTOM_KEY || "",
     };
 
     console.log("🔧 Server config loaded:");
-    console.log("Supabase URL:", config.supabaseUrl);
+    console.log("Database URL:", config.databaseUrl ? "✅ Defined" : "❌ Not defined");
     console.log("NextAuth URL:", config.nextAuthUrl);
     console.log(
       "Custom Key:",
@@ -55,17 +54,11 @@ export async function getConfig() {
 
     const config = await response.json();
 
-    // Validar que recebemos configurações válidas
-    if (!config.supabaseUrl || !config.supabaseAnonKey) {
-      throw new Error("Invalid config received from API");
-    }
-
     // Cache no cliente
     configCache = config;
     cacheTimestamp = now;
 
     console.log("🔧 Client config loaded from /api/config:");
-    console.log("Supabase URL:", config.supabaseUrl);
     console.log("NextAuth URL:", config.nextAuthUrl);
 
     return config;
@@ -80,8 +73,6 @@ export async function getConfig() {
        window.location.hostname.includes("localhost"))
     ) {
       const fallbackConfig = {
-        supabaseUrl: "http://localhost:54321",
-        supabaseAnonKey: "dummy-key",
         nextAuthUrl: "http://localhost:3000",
         customKey: "",
       };
@@ -105,13 +96,8 @@ export function clearConfigCache() {
 
 // Função para verificar se as configurações estão válidas
 export function validateConfig(config: any): boolean {
-  if (!config.supabaseUrl || config.supabaseUrl.includes("placeholder")) {
-    console.error("❌ Invalid Supabase URL:", config.supabaseUrl);
-    return false;
-  }
-
-  if (!config.supabaseAnonKey || config.supabaseAnonKey === "dummy-key") {
-    console.error("❌ Invalid Supabase Anon Key");
+  if (!config.databaseUrl) {
+    console.error("❌ DATABASE_URL not defined");
     return false;
   }
 

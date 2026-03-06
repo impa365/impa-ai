@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentServerUser } from "@/lib/auth-server"
 import { getUazapiPrivacySettingsServer, setUazapiPrivacySettingsServer } from "@/lib/uazapi-server"
+import { query, queryOne } from "@/lib/db"
 
 export async function GET(
   request: NextRequest,
@@ -21,48 +22,21 @@ export async function GET(
 
     console.log(`✅ [SETTINGS-GET] Usuário autorizado: ${user.email} (${user.role})`);
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ [SETTINGS-GET] Configuração do banco não encontrada");
-      return NextResponse.json(
-        { error: "Configuração do banco não encontrada" },
-        { status: 500 }
-      )
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Buscar a conexão pela instance_name incluindo api_type e instance_token
-    let url = `${supabaseUrl}/rest/v1/whatsapp_connections?select=*,adciona_folow,remover_folow,api_type,instance_token&instance_name=eq.${instanceName}`
-    
-    // Se não for admin, filtrar por usuário
-    if (user.role !== "admin") {
-      url += `&user_id=eq.${user.id}`
-    }
-
-    console.log(`🔍 [SETTINGS-GET] Buscando conexão no banco...`);
-
-    const response = await fetch(url, { headers })
-
-    if (!response.ok) {
-      console.error(`❌ [SETTINGS-GET] Erro ao buscar conexão: ${response.status}`);
-      return NextResponse.json(
-        { error: "Erro ao buscar conexão" },
-        { status: response.status }
+    let connection;
+    if (user.role === "admin") {
+      connection = await queryOne(
+        `SELECT * FROM whatsapp_connections WHERE instance_name = $1 LIMIT 1`,
+        [instanceName]
+      )
+    } else {
+      connection = await queryOne(
+        `SELECT * FROM whatsapp_connections WHERE instance_name = $1 AND user_id = $2 LIMIT 1`,
+        [instanceName, user.id]
       )
     }
 
-    const connections = await response.json()
-
-    if (!connections || connections.length === 0) {
+    if (!connection) {
       console.error(`❌ [SETTINGS-GET] Conexão não encontrada para instância: ${instanceName}`);
       return NextResponse.json(
         { error: "Conexão não encontrada" },
@@ -72,7 +46,6 @@ export async function GET(
 
     console.log(`✅ [SETTINGS-GET] Conexão encontrada no banco`);
 
-    const connection = connections[0]
     const apiType = connection.api_type || "evolution"
 
     console.log(`📡 [SETTINGS-GET] Tipo de API: ${apiType}`);
@@ -200,46 +173,18 @@ export async function PUT(
     const body = await request.json()
     const { adciona_folow, remover_folow } = body
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { error: "Configuração do banco não encontrada" },
-        { status: 500 }
-      )
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Primeiro, verificar se a conexão existe e pertence ao usuário
-    let checkUrl = `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,user_id&instance_name=eq.${instanceName}`
-    
-    const checkResponse = await fetch(checkUrl, { headers })
+    const connection = await queryOne<{ id: string; user_id: string }>(
+      `SELECT id, user_id FROM whatsapp_connections WHERE instance_name = $1 LIMIT 1`,
+      [instanceName]
+    )
 
-    if (!checkResponse.ok) {
-      return NextResponse.json(
-        { error: "Erro ao verificar conexão" },
-        { status: checkResponse.status }
-      )
-    }
-
-    const connections = await checkResponse.json()
-
-    if (!connections || connections.length === 0) {
+    if (!connection) {
       return NextResponse.json(
         { error: "Conexão não encontrada" },
         { status: 404 }
       )
     }
-
-    const connection = connections[0]
 
     // Verificar se o usuário tem permissão
     if (user.role !== "admin" && connection.user_id !== user.id) {
@@ -250,49 +195,40 @@ export async function PUT(
     }
 
     // Atualizar as colunas adciona_folow e remover_folow
-    const updateUrl = `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`
-    
-    const updateData: any = {
-      updated_at: new Date().toISOString(),
-    }
+    const setClauses: string[] = [`updated_at = $1`]
+    const values: any[] = [new Date().toISOString()]
+    let paramIdx = 2
 
     // Adicionar apenas os campos que foram fornecidos
     if (adciona_folow !== undefined) {
-      updateData.adciona_folow = adciona_folow
+      setClauses.push(`adciona_folow = $${paramIdx}`)
+      values.push(adciona_folow)
+      paramIdx++
     }
     if (remover_folow !== undefined) {
-      updateData.remover_folow = remover_folow
+      setClauses.push(`remover_folow = $${paramIdx}`)
+      values.push(remover_folow)
+      paramIdx++
     }
 
-    const updateResponse = await fetch(updateUrl, {
-      method: "PATCH",
-      headers: {
-        ...headers,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(updateData),
-    })
+    values.push(instanceName)
+    const updatedConnection = await queryOne(
+      `UPDATE whatsapp_connections SET ${setClauses.join(", ")} WHERE instance_name = $${paramIdx} RETURNING *`,
+      values
+    )
 
-    if (!updateResponse.ok) {
-      const errorText = await updateResponse.text()
-      console.error("Erro ao atualizar configurações:", errorText)
+    if (!updatedConnection) {
       return NextResponse.json(
         { error: "Erro ao salvar configurações" },
-        { status: updateResponse.status }
+        { status: 500 }
       )
     }
-
-    const updatedConnection = await updateResponse.json()
 
     return NextResponse.json({
       success: true,
       message: "Configurações salvas com sucesso",
-      adciona_folow: Array.isArray(updatedConnection) 
-        ? updatedConnection[0]?.adciona_folow 
-        : updatedConnection?.adciona_folow,
-      remover_folow: Array.isArray(updatedConnection) 
-        ? updatedConnection[0]?.remover_folow 
-        : updatedConnection?.remover_folow,
+      adciona_folow: updatedConnection.adciona_folow,
+      remover_folow: updatedConnection.remover_folow,
     })
   } catch (error) {
     console.error("Erro ao salvar configurações:", error)
@@ -324,44 +260,21 @@ export async function POST(
 
     console.log(`✅ [SETTINGS-POST] Usuário autorizado: ${user.email} (${user.role})`);
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ [SETTINGS-POST] Configuração do banco não encontrada");
-      return NextResponse.json(
-        { error: "Configuração do banco não encontrada" },
-        { status: 500 }
-      )
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Verificar se o usuário tem permissão para esta instância (incluir api_type e instance_token)
-    let url = `${supabaseUrl}/rest/v1/whatsapp_connections?select=*,api_type,instance_token&instance_name=eq.${instanceName}`
-    if (user.role !== "admin") {
-      url += `&user_id=eq.${user.id}`
-    }
-
-    console.log(`🔍 [SETTINGS-POST] Verificando permissões...`);
-
-    const connectionResponse = await fetch(url, { headers })
-    if (!connectionResponse.ok) {
-      console.error(`❌ [SETTINGS-POST] Erro ao verificar conexão: ${connectionResponse.status}`);
-      return NextResponse.json(
-        { error: "Erro ao verificar conexão" },
-        { status: connectionResponse.status }
+    let connection;
+    if (user.role === "admin") {
+      connection = await queryOne(
+        `SELECT * FROM whatsapp_connections WHERE instance_name = $1 LIMIT 1`,
+        [instanceName]
+      )
+    } else {
+      connection = await queryOne(
+        `SELECT * FROM whatsapp_connections WHERE instance_name = $1 AND user_id = $2 LIMIT 1`,
+        [instanceName, user.id]
       )
     }
 
-    const connections = await connectionResponse.json()
-    if (!connections || connections.length === 0) {
+    if (!connection) {
       console.error(`❌ [SETTINGS-POST] Conexão não encontrada ou sem permissão`);
       return NextResponse.json(
         { error: "Conexão não encontrada ou sem permissão" },
@@ -371,7 +284,6 @@ export async function POST(
 
     console.log(`✅ [SETTINGS-POST] Permissões verificadas`);
 
-    const connection = connections[0]
     const apiType = connection.api_type || "evolution"
 
     console.log(`📡 [SETTINGS-POST] Tipo de API: ${apiType}`);

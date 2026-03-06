@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { query, queryOne, queryMany, buildUpdate } from "@/lib/db";
 
 export async function GET(
   request: NextRequest,
@@ -8,45 +9,12 @@ export async function GET(
     const { id: agentId } = await params;
     console.log("📡 [GET AGENT] Iniciando busca do agente:", agentId);
 
-    // Verificar variáveis de ambiente em runtime
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ [GET AGENT] Variáveis de ambiente não configuradas");
-      return NextResponse.json(
-        { error: "Configuração do servidor incompleta" },
-        { status: 500 }
-      );
-    }
-
     console.log("🔍 [GET AGENT] Buscando agente no banco...");
 
-    // Buscar agente com dados relacionados
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
+    const agent = await queryOne(
+      `SELECT * FROM ai_agents WHERE id = $1`,
+      [agentId],
     );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ [GET AGENT] Erro ao buscar agente no banco:", response.status, errorText);
-      return NextResponse.json(
-        { error: `Erro ao buscar agente: ${response.status}` },
-        { status: response.status }
-      );
-    }
-
-    const agentData = await response.json();
-    const agent = agentData[0];
 
     if (!agent) {
       console.error("❌ [GET AGENT] Agente não encontrado:", agentId);
@@ -63,56 +31,30 @@ export async function GET(
     // Se tem whatsapp_connection_id, buscar dados da conexão
     if (agent.whatsapp_connection_id) {
       console.log("🔍 [GET AGENT] Buscando dados da conexão WhatsApp...");
-      
-      const connectionResponse = await fetch(
-        `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${agent.whatsapp_connection_id}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-          },
-        }
+
+      const connection = await queryOne(
+        `SELECT * FROM whatsapp_connections WHERE id = $1`,
+        [agent.whatsapp_connection_id],
       );
 
-      if (connectionResponse.ok) {
-        const connections = await connectionResponse.json();
-        const connection = connections[0];
-        
-        if (connection) {
-          agent.connection = connection;
-          console.log("✅ [GET AGENT] Conexão encontrada:", connection.connection_name);
-        }
+      if (connection) {
+        agent.connection = connection;
+        console.log("✅ [GET AGENT] Conexão encontrada:", connection.connection_name);
       }
     }
 
     // Se tem bot_id, buscar dados do bot Uazapi
     if (agent.bot_id) {
       console.log("🤖 [GET AGENT] Buscando dados do bot Uazapi...");
-      
-      const botResponse = await fetch(
-        `${supabaseUrl}/rest/v1/bots?id=eq.${agent.bot_id}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-          },
-        }
+
+      const bot = await queryOne(
+        `SELECT * FROM bots WHERE id = $1`,
+        [agent.bot_id],
       );
 
-      if (botResponse.ok) {
-        const bots = await botResponse.json();
-        const bot = bots[0];
-        
-        if (bot) {
-          agent.bot = bot;
-          console.log("✅ [GET AGENT] Bot encontrado:", bot.nome);
-        }
+      if (bot) {
+        agent.bot = bot;
+        console.log("✅ [GET AGENT] Bot encontrado:", bot.nome);
       }
     }
 
@@ -120,26 +62,15 @@ export async function GET(
     if (agent.llm_api_key && agent.llm_api_key.startsWith("__SAVED_KEY__")) {
       const keyId = agent.llm_api_key.replace("__SAVED_KEY__", "");
       console.log("🔑 [GET AGENT] Resolvendo chave salva:", keyId);
-      
-      const savedKeyResponse = await fetch(
-        `${supabaseUrl}/rest/v1/llm_api_keys?select=api_key&id=eq.${keyId}&is_active=eq.true`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-          },
-        }
+
+      const savedKey = await queryOne<{ api_key: string }>(
+        `SELECT api_key FROM llm_api_keys WHERE id = $1 AND is_active = true`,
+        [keyId],
       );
-      
-      if (savedKeyResponse.ok) {
-        const savedKeys = await savedKeyResponse.json();
-        if (savedKeys && savedKeys[0]) {
-          agent.llm_api_key = savedKeys[0].api_key;
-          console.log("✅ [GET AGENT] Chave salva resolvida:", `${agent.llm_api_key?.slice(0, 7)}...`);
-        }
+
+      if (savedKey) {
+        agent.llm_api_key = savedKey.api_key;
+        console.log("✅ [GET AGENT] Chave salva resolvida:", `${agent.llm_api_key?.slice(0, 7)}...`);
       }
     }
 
@@ -150,9 +81,9 @@ export async function GET(
     console.error("❌ [GET AGENT] Erro geral ao buscar agente:", error);
     console.error("❌ [GET AGENT] Stack trace:", error.stack);
     return NextResponse.json(
-      { 
+      {
         error: "Erro interno do servidor",
-        details: error.message 
+        details: error.message
       },
       { status: 500 }
     );
@@ -166,17 +97,6 @@ export async function PUT(
   try {
     const { id: agentId } = await params;
     const body = await request.json();
-
-    // Verificar variáveis de ambiente em runtime
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { error: "Configuração do servidor incompleta" },
-        { status: 500 }
-      );
-    }
 
     // 1. Atualizar no banco primeiro - filtrar apenas campos da tabela ai_agents
     const calendarProvider = body.calendar_provider || "calcom";
@@ -243,35 +163,22 @@ export async function PUT(
       Object.entries(aiAgentFields).filter(([_, value]) => value !== undefined && value !== null)
     );
 
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          Authorization: `Bearer ${supabaseKey}`,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify(filteredFields),
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+    if (Object.keys(filteredFields).length === 0) {
       return NextResponse.json(
-        {
-          error: `Erro ao atualizar agente: ${
-            errorData.message || response.statusText
-          }`,
-        },
-        { status: response.status }
+        { error: "Nenhum campo para atualizar" },
+        { status: 400 }
       );
     }
 
-    const updatedAgent = await response.json();
-    const agent = updatedAgent[0] || updatedAgent;
+    const { text: updateText, values: updateValues } = buildUpdate("ai_agents", filteredFields, { id: agentId });
+    const agent = await queryOne(updateText, updateValues);
+
+    if (!agent) {
+      return NextResponse.json(
+        { error: "Agente não encontrado" },
+        { status: 404 }
+      );
+    }
 
     // 2. Sincronizar com API externa (Evolution ou Uazapi)
     if (agent.whatsapp_connection_id) {
@@ -279,24 +186,10 @@ export async function PUT(
         console.log("🔄 Sincronizando agente atualizado...");
 
         // Buscar dados da conexão WhatsApp
-        const connectionResponse = await fetch(
-          `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${agent.whatsapp_connection_id}`,
-          {
-            headers: {
-              "Accept-Profile": "impaai",
-              "Content-Profile": "impaai",
-              Authorization: `Bearer ${supabaseKey}`,
-            },
-          }
+        const connection = await queryOne(
+          `SELECT * FROM whatsapp_connections WHERE id = $1`,
+          [agent.whatsapp_connection_id],
         );
-
-        if (!connectionResponse.ok) {
-          console.error("❌ Erro ao buscar conexão WhatsApp");
-          return NextResponse.json(agent); // Retorna sem sincronizar
-        }
-
-        const connections = await connectionResponse.json();
-        const connection = connections[0];
 
         if (!connection) {
           console.error("❌ Conexão WhatsApp não encontrada");
@@ -339,8 +232,6 @@ export async function PUT(
             const updateResult = await updateUazapiBotInDatabase({
               botId: agent.bot_id,
               botData: botUpdateData,
-              supabaseUrl,
-              supabaseKey,
             })
 
             if (updateResult.success) {
@@ -357,179 +248,142 @@ export async function PUT(
         if (apiType === "evolution" && agent.evolution_bot_id) {
           console.log("🤖 Atualizando bot na Evolution API...")
 
-        // Buscar configurações da Evolution API
-        const evolutionResponse = await fetch(
-          `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true`,
-          {
-            headers: {
-              "Accept-Profile": "impaai",
-              "Content-Profile": "impaai",
-              Authorization: `Bearer ${supabaseKey}`,
-            },
-          }
-        );
-
-        if (!evolutionResponse.ok) {
-          console.error("❌ Erro ao buscar configuração Evolution API");
-          return NextResponse.json(agent);
-        }
-
-        const evolutionIntegrations = await evolutionResponse.json();
-        const evolutionConfig = evolutionIntegrations[0];
-
-        if (!evolutionConfig) {
-          console.error("❌ Evolution API não configurada");
-          return NextResponse.json(agent);
-        }
-
-        const { apiUrl, apiKey } = evolutionConfig.config;
-
-        // Buscar configuração N8N para webhook
-        const n8nResponse = await fetch(
-          `${supabaseUrl}/rest/v1/integrations?type=eq.n8n&is_active=eq.true`,
-          {
-            headers: {
-              "Accept-Profile": "impaai",
-              "Content-Profile": "impaai",
-              Authorization: `Bearer ${supabaseKey}`,
-            },
-          }
-        );
-
-        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-        let webhookUrl = `${baseUrl}/api/agents/webhook?agentId=${agentId}`;
-        let webhookApiKey = undefined;
-
-        if (n8nResponse.ok) {
-          const n8nIntegrations = await n8nResponse.json();
-          const n8nConfig = n8nIntegrations[0];
-
-          if (n8nConfig?.config?.flowUrl) {
-            webhookUrl = `${n8nConfig.config.flowUrl}?agentId=${agentId}`;
-            if (n8nConfig.config.apiKey) {
-              webhookApiKey = n8nConfig.config.apiKey;
-            }
-          }
-        }
-
-        // Buscar API key ativa do ADMIN para incluir no webhook
-        console.log("🔍 Buscando API key ativa do ADMIN...");
-        let userApiKey = null;
-        try {
-          // Primeiro buscar o admin
-          const adminResponse = await fetch(
-            `${supabaseUrl}/rest/v1/user_profiles?select=id&role=eq.admin&limit=1`,
-            {
-              headers: {
-                "Accept-Profile": "impaai",
-                "Content-Profile": "impaai",
-                Authorization: `Bearer ${supabaseKey}`,
-              },
-            }
+          // Buscar configurações da Evolution API
+          const evolutionConfig = await queryOne(
+            `SELECT * FROM integrations WHERE type = $1 AND is_active = true`,
+            ['evolution_api'],
           );
-          if (!adminResponse.ok) {
-            throw new Error("Não foi possível buscar informações do admin");
-          }
-          const admins = await adminResponse.json();
-          if (!admins || admins.length === 0) {
-            throw new Error("Nenhum administrador encontrado no sistema");
-          }
-          const adminId = admins[0].id;
-          console.log("✅ Admin identificado:", adminId);
 
-          // Agora buscar API key do admin
-          const apiKeyResponse = await fetch(
-            `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${adminId}&is_active=eq.true&order=created_at.desc&limit=1`,
-            {
-              headers: {
-                "Accept-Profile": "impaai",
-                "Content-Profile": "impaai",
-                Authorization: `Bearer ${supabaseKey}`,
-              },
-            }
+          if (!evolutionConfig) {
+            console.error("❌ Evolution API não configurada");
+            return NextResponse.json(agent);
+          }
+
+          const { apiUrl, apiKey } = evolutionConfig.config;
+
+          // Buscar configuração N8N para webhook
+          const n8nIntegrations = await queryMany(
+            `SELECT * FROM integrations WHERE type = $1 AND is_active = true`,
+            ['n8n'],
           );
-          if (apiKeyResponse.ok) {
-            const apiKeys = await apiKeyResponse.json();
-            if (apiKeys && apiKeys.length > 0) {
-              userApiKey = apiKeys[0].api_key;
+
+          const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+          let webhookUrl = `${baseUrl}/api/agents/webhook?agentId=${agentId}`;
+          let webhookApiKey = undefined;
+
+          if (n8nIntegrations.length > 0) {
+            const n8nConfig = n8nIntegrations[0];
+
+            const configData = typeof n8nConfig.config === "string"
+              ? JSON.parse(n8nConfig.config)
+              : n8nConfig.config;
+
+            if (configData?.flowUrl) {
+              webhookUrl = `${configData.flowUrl}?agentId=${agentId}`;
+              if (configData.apiKey) {
+                webhookApiKey = configData.apiKey;
+              }
+            }
+          }
+
+          // Buscar API key ativa do ADMIN para incluir no webhook
+          console.log("🔍 Buscando API key ativa do ADMIN...");
+          let userApiKey = null;
+          try {
+            const admin = await queryOne<{ id: string }>(
+              `SELECT id FROM user_profiles WHERE role = $1 LIMIT 1`,
+              ['admin'],
+            );
+
+            if (!admin) {
+              throw new Error("Nenhum administrador encontrado no sistema");
+            }
+            console.log("✅ Admin identificado:", admin.id);
+
+            const apiKeyRow = await queryOne<{ api_key: string }>(
+              `SELECT api_key FROM user_api_keys WHERE user_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
+              [admin.id],
+            );
+
+            if (apiKeyRow) {
+              userApiKey = apiKeyRow.api_key;
               console.log("✅ API key do admin encontrada");
             } else {
               console.warn("⚠️ Nenhuma API key ativa encontrada para o admin");
             }
+          } catch (apiKeyError) {
+            console.warn("⚠️ Erro ao buscar API key do admin:", apiKeyError);
           }
-        } catch (apiKeyError) {
-          console.warn("⚠️ Erro ao buscar API key do admin:", apiKeyError);
-        }
 
-        // Adicionar panelUrl e apiKey à URL do webhook se disponíveis
-        if (userApiKey) {
-          const separator = webhookUrl.includes('?') ? '&' : '?';
-          if (!webhookUrl.includes('agentId=')) {
-            webhookUrl += `${separator}agentId=${agentId}`;
+          // Adicionar panelUrl e apiKey à URL do webhook se disponíveis
+          if (userApiKey) {
+            const separator = webhookUrl.includes('?') ? '&' : '?';
+            if (!webhookUrl.includes('agentId=')) {
+              webhookUrl += `${separator}agentId=${agentId}`;
+            }
+            webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`;
           }
-          webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`;
-        }
 
-        console.log("📌 Webhook URL construída:", webhookUrl);
+          console.log("📌 Webhook URL construída:", webhookUrl);
 
-        // Processar ignore_jids se for string
-        let ignoreJids = agent.ignore_jids || ["@g.us"];
-        if (typeof ignoreJids === "string") {
-          try {
-            ignoreJids = JSON.parse(ignoreJids);
-          } catch (e) {
-            ignoreJids = ["@g.us"];
+          // Processar ignore_jids se for string
+          let ignoreJids = agent.ignore_jids || ["@g.us"];
+          if (typeof ignoreJids === "string") {
+            try {
+              ignoreJids = JSON.parse(ignoreJids);
+            } catch (e) {
+              ignoreJids = ["@g.us"];
+            }
           }
-        }
 
-        // Preparar dados para Evolution API
-        const evolutionBotData = {
-          enabled: agent.status === "active",
-          apiUrl: webhookUrl,
-          apiKey: webhookApiKey,
-          triggerType: agent.trigger_type || "keyword",
-          triggerOperator: agent.trigger_operator || "equals",
-          triggerValue: agent.trigger_value || "",
-          expire: agent.expire_time || 0,
-          keywordFinish: agent.keyword_finish || "#sair",
-          delayMessage: agent.delay_message || 1000,
-          unknownMessage:
-            agent.unknown_message || "Desculpe, não entendi sua mensagem.",
-          listeningFromMe: Boolean(agent.listening_from_me),
-          stopBotFromMe: Boolean(agent.stop_bot_from_me),
-          keepOpen: Boolean(agent.keep_open),
-          debounceTime: (agent.debounce_time || 10) * 1000, // converter segundos para ms
-          ignoreJids: ignoreJids,
-          splitMessages: Boolean(agent.split_messages),
-          timePerChar: agent.time_per_char || 100,
-          description: agent.name,
-        };
+          // Preparar dados para Evolution API
+          const evolutionBotData = {
+            enabled: agent.status === "active",
+            apiUrl: webhookUrl,
+            apiKey: webhookApiKey,
+            triggerType: agent.trigger_type || "keyword",
+            triggerOperator: agent.trigger_operator || "equals",
+            triggerValue: agent.trigger_value || "",
+            expire: agent.expire_time || 0,
+            keywordFinish: agent.keyword_finish || "#sair",
+            delayMessage: agent.delay_message || 1000,
+            unknownMessage:
+              agent.unknown_message || "Desculpe, não entendi sua mensagem.",
+            listeningFromMe: Boolean(agent.listening_from_me),
+            stopBotFromMe: Boolean(agent.stop_bot_from_me),
+            keepOpen: Boolean(agent.keep_open),
+            debounceTime: (agent.debounce_time || 10) * 1000, // converter segundos para ms
+            ignoreJids: ignoreJids,
+            splitMessages: Boolean(agent.split_messages),
+            timePerChar: agent.time_per_char || 100,
+            description: agent.name,
+          };
 
-        // Atualizar bot na Evolution API
-        const evolutionUpdateResponse = await fetch(
-          `${apiUrl}/evolutionBot/update/${agent.evolution_bot_id}/${connection.instance_name}`,
-          {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              apikey: apiKey,
-            },
-            body: JSON.stringify(evolutionBotData),
-          }
-        );
-
-        if (evolutionUpdateResponse.ok) {
-          console.log("✅ Bot atualizado com sucesso na Evolution API");
-        } else {
-          const errorText = await evolutionUpdateResponse.text();
-          console.error(
-            "❌ Erro ao atualizar bot na Evolution API:",
-            errorText
+          // Atualizar bot na Evolution API
+          const evolutionUpdateResponse = await fetch(
+            `${apiUrl}/evolutionBot/update/${agent.evolution_bot_id}/${connection.instance_name}`,
+            {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: apiKey,
+              },
+              body: JSON.stringify(evolutionBotData),
+            }
           );
+
+          if (evolutionUpdateResponse.ok) {
+            console.log("✅ Bot atualizado com sucesso na Evolution API");
+          } else {
+            const errorText = await evolutionUpdateResponse.text();
+            console.error(
+              "❌ Erro ao atualizar bot na Evolution API:",
+              errorText
+            );
+          }
         }
-      }
-    } catch (syncError) {
-      console.error("❌ Erro ao sincronizar com API externa:", syncError);
+      } catch (syncError) {
+        console.error("❌ Erro ao sincronizar com API externa:", syncError);
         // Não falha a operação, apenas loga o erro
       }
     }
@@ -551,64 +405,29 @@ export async function DELETE(
   try {
     const { id: agentId } = await params;
 
-    // Verificar variáveis de ambiente em runtime
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { error: "Configuração do servidor incompleta" },
-        { status: 500 }
-      );
-    }
-
     // Buscar agente antes de deletar
-    const agentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
-      {
-        headers: {
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
+    const agent = await queryOne(
+      `SELECT * FROM ai_agents WHERE id = $1`,
+      [agentId],
     );
-    const agentData = await agentResponse.json();
-    const agent = agentData[0];
 
     // Se tem evolution_bot_id, deletar na Evolution API
     if (agent && agent.evolution_bot_id && agent.whatsapp_connection_id) {
       try {
         // Buscar dados da conexão WhatsApp
-        const connectionResponse = await fetch(
-          `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${agent.whatsapp_connection_id}`,
-          {
-            headers: {
-              "Accept-Profile": "impaai",
-              "Content-Profile": "impaai",
-              Authorization: `Bearer ${supabaseKey}`,
-            },
-          }
+        const connection = await queryOne(
+          `SELECT * FROM whatsapp_connections WHERE id = $1`,
+          [agent.whatsapp_connection_id],
         );
-        const connections = await connectionResponse.json();
-        const connection = connections[0];
 
         if (!connection) {
           console.error("❌ Conexão WhatsApp não encontrada para deletar Evolution Bot");
         } else {
           // Buscar configurações da Evolution API
-          const evolutionResponse = await fetch(
-            `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true`,
-            {
-              headers: {
-                "Accept-Profile": "impaai",
-                "Content-Profile": "impaai",
-                Authorization: `Bearer ${supabaseKey}`,
-              },
-            }
+          const evolutionConfig = await queryOne(
+            `SELECT * FROM integrations WHERE type = $1 AND is_active = true`,
+            ['evolution_api'],
           );
-          const evolutionIntegrations = await evolutionResponse.json();
-          const evolutionConfig = evolutionIntegrations[0];
 
           if (!evolutionConfig) {
             console.error("❌ Evolution API não configurada para deletar Evolution Bot");
@@ -638,28 +457,15 @@ export async function DELETE(
     }
 
     // Agora sim, deletar agente no banco
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
-      {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
+    const { rowCount } = await query(
+      `DELETE FROM ai_agents WHERE id = $1`,
+      [agentId],
     );
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+    if (rowCount === 0) {
       return NextResponse.json(
-        {
-          error: `Erro ao deletar agente: ${
-            errorData.message || response.statusText
-          }`,
-        },
-        { status: response.status }
+        { error: "Agente não encontrado" },
+        { status: 404 }
       );
     }
 

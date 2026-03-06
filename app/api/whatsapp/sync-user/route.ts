@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getCurrentServerUser } from "@/lib/auth-server";
+import { query, queryMany } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,41 +17,11 @@ export async function POST(request: NextRequest) {
 
     console.log(`👤 Sincronizando conexões do usuário: ${user.email}`);
 
-    // Usar a mesma lógica do admin, mas filtrada por usuário
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { success: false, error: "Configuração não encontrada" },
-        { status: 500 }
-      );
-    }
-
     // Buscar conexões do usuário
-    const connectionsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?user_id=eq.${user.id}&select=*`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
+    const connections = await queryMany(
+      'SELECT * FROM whatsapp_connections WHERE user_id = $1',
+      [user.id]
     );
-
-    if (!connectionsResponse.ok) {
-      console.error("❌ Erro ao buscar conexões do usuário");
-      return NextResponse.json(
-        { success: false, error: "Erro ao buscar conexões" },
-        { status: 500 }
-      );
-    }
-
-    const connections = await connectionsResponse.json();
 
     if (!connections || connections.length === 0) {
       console.log("ℹ️ Nenhuma conexão encontrada para o usuário");
@@ -66,31 +37,10 @@ export async function POST(request: NextRequest) {
     );
 
     // Buscar configuração da Evolution API
-    const integrationResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
+    const integrations = await queryMany(
+      'SELECT config FROM integrations WHERE type = $1 AND is_active = true',
+      ['evolution_api']
     );
-
-    if (!integrationResponse.ok) {
-      console.error("❌ Erro ao buscar configuração da Evolution API");
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Configuração da Evolution API não encontrada",
-        },
-        { status: 500 }
-      );
-    }
-
-    const integrations = await integrationResponse.json();
 
     if (!integrations || integrations.length === 0) {
       return NextResponse.json(
@@ -194,23 +144,14 @@ export async function POST(request: NextRequest) {
             updateData.phone_number = phoneNumber;
           }
 
-          const updateResponse = await fetch(
-            `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${connection.id}`,
-            {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                "Accept-Profile": "impaai",
-                "Content-Profile": "impaai",
-                apikey: supabaseKey,
-                Authorization: `Bearer ${supabaseKey}`,
-                Prefer: "return=representation",
-              },
-              body: JSON.stringify(updateData),
-            }
-          );
-
-          if (updateResponse.ok) {
+          try {
+            await query(
+              'UPDATE whatsapp_connections SET status = $1, updated_at = $2' +
+                (updateData.phone_number ? ', phone_number = $3 WHERE id = $4' : ' WHERE id = $3'),
+              updateData.phone_number
+                ? [updateData.status, updateData.updated_at, updateData.phone_number, connection.id]
+                : [updateData.status, updateData.updated_at, connection.id]
+            );
             console.log(
               `✅ Conexão ${connection.connection_name} atualizada: ${connection.status} → ${newStatus}`
             );
@@ -221,7 +162,7 @@ export async function POST(request: NextRequest) {
               oldStatus: connection.status,
               newStatus: newStatus,
             });
-          } else {
+          } catch (updateError) {
             console.error(
               `❌ Erro ao atualizar conexão ${connection.connection_name}`
             );

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { queryMany } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   console.log("📡 API: GET /api/user/whatsapp-connections chamada")
@@ -16,34 +17,15 @@ export async function GET(request: NextRequest) {
 
     console.log("✅ Usuário autenticado:", currentUser.email)
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Buscar apenas conexões do usuário logado
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,connection_name,instance_name,status,api_type,user_id,phone_number,created_at,updated_at,settings,adciona_folow,remover_folow&user_id=eq.${currentUser.id}&order=created_at.desc`,
-      {
-        headers,
-      }
+    const connections = await queryMany(
+      `SELECT id, connection_name, instance_name, status, api_type, user_id, phone_number,
+              created_at, updated_at, settings, adciona_folow, remover_folow
+       FROM whatsapp_connections
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [currentUser.id]
     )
-
-    if (!response.ok) {
-      throw new Error("Erro ao buscar conexões WhatsApp")
-    }
-
-    const connections = await response.json()
 
     // Garantir que api_type sempre existe (fallback para "evolution")
     const safeConnections = connections.map((conn: any) => ({

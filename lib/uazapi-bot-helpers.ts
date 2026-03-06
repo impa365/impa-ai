@@ -1,15 +1,15 @@
 /**
  * Helper functions para gerenciar bots Uazapi
+ * Migrated from Supabase REST API to direct PostgreSQL via lib/db
  */
 
 import type { Bot } from "@/types/bot"
 import { createUazapiWebhook, deleteUazapiWebhook } from "./uazapi-webhook-helpers"
+import { queryOne, queryMany, buildUpdate } from "@/lib/db"
 
 interface UpdateBotParams {
   botId: string
   botData: Partial<Bot>
-  supabaseUrl: string
-  supabaseKey: string
 }
 
 interface UpdateBotResult {
@@ -24,19 +24,9 @@ interface UpdateBotResult {
 export async function updateUazapiBotInDatabase({
   botId,
   botData,
-  supabaseUrl,
-  supabaseKey,
 }: UpdateBotParams): Promise<UpdateBotResult> {
   try {
     console.log(`🔄 [UAZAPI-BOT] Atualizando bot ${botId} no banco...`)
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
 
     // Converter ignoreJids de array para string se necessário
     let updatePayload = { ...botData }
@@ -44,27 +34,18 @@ export async function updateUazapiBotInDatabase({
       updatePayload.ignoreJids = (botData.ignoreJids as any).join(",") + ","
     }
 
-    const response = await fetch(`${supabaseUrl}/rest/v1/bots?id=eq.${botId}`, {
-      method: "PATCH",
-      headers: {
-        ...headers,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(updatePayload),
-    })
+    const { text, values } = buildUpdate("bots", updatePayload, { id: botId })
+    const updatedBot = await queryOne<Bot>(text, values)
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ [UAZAPI-BOT] Erro ao atualizar bot:", response.status, errorText)
+    if (!updatedBot) {
+      console.error("❌ [UAZAPI-BOT] Erro ao atualizar bot ou bot não encontrado")
       return {
         success: false,
-        error: `Erro ao atualizar bot: ${response.status}`,
+        error: "Erro ao atualizar bot ou bot não encontrado",
       }
     }
 
-    const [updatedBot] = await response.json()
     console.log("✅ [UAZAPI-BOT] Bot atualizado com sucesso")
-
     return {
       success: true,
       bot: updatedBot,
@@ -92,34 +73,15 @@ export async function updateUazapiBotWebhook({
   botData,
   connectionId,
   ignoreGroups = true,
-  supabaseUrl,
-  supabaseKey,
 }: UpdateBotWebhookParams): Promise<UpdateBotResult> {
   try {
     console.log(`🔄 [UAZAPI-BOT] Atualizando webhook do bot ${botId}...`)
 
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // 1. Buscar bot atual para obter webhook_id antigo
-    const botResponse = await fetch(`${supabaseUrl}/rest/v1/bots?id=eq.${botId}`, {
-      headers,
-    })
-
-    if (!botResponse.ok) {
-      return {
-        success: false,
-        error: "Erro ao buscar bot atual",
-      }
-    }
-
-    const bots = await botResponse.json()
-    const currentBot = bots[0]
+    const currentBot = await queryOne<any>(
+      `SELECT * FROM bots WHERE id = $1 LIMIT 1`,
+      [botId]
+    )
 
     if (!currentBot) {
       return {
@@ -129,20 +91,10 @@ export async function updateUazapiBotWebhook({
     }
 
     // 2. Buscar conexão WhatsApp
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${connectionId}`,
-      { headers }
+    const connection = await queryOne<any>(
+      `SELECT * FROM whatsapp_connections WHERE id = $1 LIMIT 1`,
+      [connectionId]
     )
-
-    if (!connectionResponse.ok) {
-      return {
-        success: false,
-        error: "Erro ao buscar conexão WhatsApp",
-      }
-    }
-
-    const connections = await connectionResponse.json()
-    const connection = connections[0]
 
     if (!connection) {
       return {
@@ -152,20 +104,12 @@ export async function updateUazapiBotWebhook({
     }
 
     // 3. Buscar configuração Uazapi
-    const uazapiResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?select=*&type=eq.uazapi&is_active=eq.true`,
-      { headers }
+    const integration = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["uazapi"]
     )
 
-    if (!uazapiResponse.ok) {
-      return {
-        success: false,
-        error: "Erro ao buscar configuração Uazapi",
-      }
-    }
-
-    const uazapiIntegrations = await uazapiResponse.json()
-    if (!uazapiIntegrations || uazapiIntegrations.length === 0) {
+    if (!integration) {
       return {
         success: false,
         error: "Uazapi não configurada",
@@ -173,9 +117,9 @@ export async function updateUazapiBotWebhook({
     }
 
     const uazapiConfig =
-      typeof uazapiIntegrations[0].config === "string"
-        ? JSON.parse(uazapiIntegrations[0].config)
-        : uazapiIntegrations[0].config
+      typeof integration.config === "string"
+        ? JSON.parse(integration.config)
+        : integration.config
 
     // 4. Deletar webhook antigo se existir
     if (currentBot.webhook_id) {
@@ -219,8 +163,6 @@ export async function updateUazapiBotWebhook({
         ...botData,
         webhook_id: newWebhookId || null,
       },
-      supabaseUrl,
-      supabaseKey,
     })
 
     return updateResult

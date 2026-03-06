@@ -44,7 +44,6 @@ import { getCurrentUser } from "@/lib/auth"
 import { useTheme } from "@/components/theme-provider"
 import { themePresets, type ThemeConfig } from "@/lib/theme"
 import Image from "next/image"
-import { disconnectInstance } from "@/lib/whatsapp-settings-api"
 import { publicApi } from "@/lib/api-client"
 
 export default function AdminDashboard() {
@@ -311,7 +310,8 @@ export default function AdminDashboard() {
         )
       );
 
-      const result = await disconnectInstance(connection.instance_name)
+      const res = await fetch(`/api/whatsapp/disconnect/${encodeURIComponent(connection.instance_name)}`, { method: 'POST' })
+      const result = await res.json()
       if (result.success) {
         await fetchWhatsAppConnections()
         setSaveMessage("Conexão desconectada com sucesso!")

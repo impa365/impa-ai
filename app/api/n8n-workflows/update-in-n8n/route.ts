@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { query, queryMany } from "@/lib/db"
 
 // POST - Atualizar workflow existente no n8n
 export async function POST(request: Request) {
@@ -21,35 +22,11 @@ export async function POST(request: Request) {
       )
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { error: "Configuração do servidor incompleta" },
-        { status: 500 }
-      )
-    }
-
     // Buscar configuração do n8n
-    const integrationResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?select=*&type=eq.n8n_api&is_active=eq.true`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-      }
+    const integrations = await queryMany(
+      "SELECT * FROM integrations WHERE type = $1 AND is_active = $2",
+      ["n8n_api", true]
     )
-
-    if (!integrationResponse.ok) {
-      throw new Error("Erro ao buscar configuração do n8n")
-    }
-
-    const integrations = await integrationResponse.json()
 
     if (!Array.isArray(integrations) || integrations.length === 0) {
       return NextResponse.json(
@@ -99,26 +76,14 @@ export async function POST(request: Request) {
     const updatedWorkflow = await updateResponse.json()
 
     // Atualizar última atualização no banco local
-    const updateLocalResponse = await fetch(
-      `${supabaseUrl}/rest/v1/n8n_workflows?workflow_id=eq.${workflow_id}`,
-      {
-        method: "PATCH",
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-        body: JSON.stringify({
-          workflow_data: workflow_data,
-          ultima_atualizacao: ultima_atualizacao || new Date().toISOString(), // Atualizar data da API
-          updated_at: new Date().toISOString(),
-        }),
-      }
+    const { rowCount } = await query(
+      `UPDATE n8n_workflows
+       SET workflow_data = $1, ultima_atualizacao = $2, updated_at = $3
+       WHERE workflow_id = $4`,
+      [workflow_data, ultima_atualizacao || new Date().toISOString(), new Date().toISOString(), workflow_id]
     )
 
-    if (!updateLocalResponse.ok) {
+    if (rowCount === 0) {
       console.error("Erro ao atualizar workflow local, mas n8n foi atualizado com sucesso")
     }
 

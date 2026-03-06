@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { query } from "@/lib/db"
 
 // POST - Atualizar workflow no banco local (marcar como atualizado)
 export async function POST(request: Request) {
@@ -21,38 +22,16 @@ export async function POST(request: Request) {
       )
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { error: "Configuração do servidor incompleta" },
-        { status: 500 }
-      )
-    }
-
     // Atualizar workflow no banco local
-    const updateResponse = await fetch(
-      `${supabaseUrl}/rest/v1/n8n_workflows?workflow_id=eq.${workflow_id}`,
-      {
-        method: "PATCH",
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-        body: JSON.stringify({
-          workflow_data: workflow_data,
-          ultima_atualizacao: ultima_atualizacao || new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }),
-      }
+    const { rowCount } = await query(
+      `UPDATE n8n_workflows
+       SET workflow_data = $1, ultima_atualizacao = $2, updated_at = $3
+       WHERE workflow_id = $4`,
+      [workflow_data, ultima_atualizacao || new Date().toISOString(), new Date().toISOString(), workflow_id]
     )
 
-    if (!updateResponse.ok) {
-      throw new Error(`Erro ao atualizar workflow: ${updateResponse.status}`)
+    if (rowCount === 0) {
+      throw new Error(`Workflow não encontrado: ${workflow_id}`)
     }
 
     return NextResponse.json({

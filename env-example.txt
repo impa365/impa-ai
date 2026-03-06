@@ -1,7 +1,5 @@
-# Configurações do Supabase - COPIE PARA .env.local
-SUPABASE_URL=https://sua-instancia.supabase.co
-SUPABASE_ANON_KEY=sua-chave-anonima-do-supabase
-SUPABASE_SERVICE_ROLE_KEY=sua-chave-service-role-do-supabase
+# Configuração do PostgreSQL - COPIE PARA .env.local
+DATABASE_URL=postgresql://usuario:senha@host:5432/postgres
 
 # Configurações de JWT para autenticação
 JWT_SECRET=sua-chave-secreta-jwt-super-segura

@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { queryOne } from "@/lib/db";
 
 export async function POST(
   request: NextRequest,
@@ -20,48 +21,19 @@ export async function POST(
     }
 
     // Buscar configuração da Evolution API
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { success: false, error: "Configuração não encontrada" },
-        { status: 500 }
-      );
-    }
-
-    // Buscar configuração da Evolution API
-    const integrationResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
+    const integration = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["evolution_api"]
     );
 
-    if (!integrationResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao buscar configuração da API" },
-        { status: 500 }
-      );
-    }
-
-    const integrations = await integrationResponse.json();
-
-    if (!integrations || integrations.length === 0) {
+    if (!integration) {
       return NextResponse.json(
         { success: false, error: "Evolution API não configurada" },
         { status: 500 }
       );
     }
 
-    const config = integrations[0].config;
+    const config = integration.config;
 
     if (!config?.apiUrl || !config?.apiKey) {
       return NextResponse.json(
@@ -110,47 +82,29 @@ export async function POST(
     }
 
     // Atualizar status no banco de dados
-    const updateData: any = {
-      status: realStatus,
-      updated_at: new Date().toISOString(),
-    };
+    const setClauses: string[] = [`status = $1`, `updated_at = $2`];
+    const values: any[] = [realStatus, new Date().toISOString()];
+    let paramIdx = 3;
 
     // Adicionar número do telefone se disponível
     if (phoneNumber) {
-      updateData.phone_number = phoneNumber;
+      setClauses.push(`phone_number = $${paramIdx}`);
+      values.push(phoneNumber);
+      paramIdx++;
     }
 
-    const updateResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify(updateData),
-      }
+    values.push(instanceName);
+    const updatedConnection = await queryOne(
+      `UPDATE whatsapp_connections SET ${setClauses.join(", ")} WHERE instance_name = $${paramIdx} RETURNING *`,
+      values
     );
-
-    if (!updateResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao atualizar status no banco" },
-        { status: 500 }
-      );
-    }
-
-    const updatedConnection = await updateResponse.json();
 
     return NextResponse.json({
       success: true,
       status: realStatus,
       phoneNumber: phoneNumber,
       updated: true,
-      connection: updatedConnection[0] || null,
+      connection: updatedConnection || null,
       message: `Status sincronizado: ${realStatus}`,
     });
   } catch (error: any) {

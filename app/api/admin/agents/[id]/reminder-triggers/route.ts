@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { queryOne, queryMany, buildInsert } from "@/lib/db"
 
 interface CreateTriggerPayload {
   timingType?: string
@@ -25,64 +26,29 @@ const sanitizePhoneNumber = (value?: string | null): string | null => {
   return digits.length > 0 ? digits : null
 }
 
-const SUPABASE_HEADERS = (key: string) => ({
-  "Content-Type": "application/json",
-  "Accept-Profile": "impaai",
-  "Content-Profile": "impaai",
-  apikey: key,
-  Authorization: `Bearer ${key}`,
-})
-
-async function ensureAgentExists(agentId: string, supabaseUrl: string, supabaseKey: string) {
-  const headers = SUPABASE_HEADERS(supabaseKey)
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/ai_agents?select=id&limit=1&id=eq.${agentId}`,
-    { headers },
+async function ensureAgentExists(agentId: string) {
+  const agent = await queryOne<{ id: string }>(
+    `SELECT id FROM ai_agents WHERE id = $1 LIMIT 1`,
+    [agentId],
   )
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Erro ao validar agente: ${response.status} - ${errorText}`)
-  }
-
-  const agents = await response.json()
-  if (!Array.isArray(agents) || agents.length === 0) {
-    return false
-  }
-
-  return true
+  return agent !== null
 }
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: agentId } = await context.params
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const exists = await ensureAgentExists(agentId, supabaseUrl, supabaseKey)
+    const exists = await ensureAgentExists(agentId)
     if (!exists) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    const headers = SUPABASE_HEADERS(supabaseKey)
-    const triggersResponse = await fetch(
-      `${supabaseUrl}/rest/v1/reminder_triggers?agent_id=eq.${agentId}&order=created_at.desc`,
-      { headers },
+    const triggers = await queryMany(
+      `SELECT * FROM reminder_triggers WHERE agent_id = $1 ORDER BY created_at DESC`,
+      [agentId],
     )
 
-    if (!triggersResponse.ok) {
-      const errorText = await triggersResponse.text()
-      throw new Error(`Erro ao buscar gatilhos: ${triggersResponse.status} - ${errorText}`)
-    }
-
-    const triggers = await triggersResponse.json()
-
-    return NextResponse.json({ success: true, triggers: Array.isArray(triggers) ? triggers : [] })
+    return NextResponse.json({ success: true, triggers })
   } catch (error: any) {
     console.error("❌ Erro em GET /api/admin/agents/[id]/reminder-triggers:", error)
     return NextResponse.json(
@@ -96,14 +62,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   try {
     const { id: agentId } = await context.params
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const exists = await ensureAgentExists(agentId, supabaseUrl, supabaseKey)
+    const exists = await ensureAgentExists(agentId)
     if (!exists) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
@@ -172,37 +131,27 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
     }
 
-    const headers = {
-      ...SUPABASE_HEADERS(supabaseKey),
-      Prefer: "return=representation",
+    const insertData = {
+      agent_id: agentId,
+      timing_type: timingType,
+      offset_amount: offsetAmount,
+      offset_unit: offsetUnit,
+      scope_type: scopeType,
+      scope_reference: scopeReference,
+      action_type: actionType,
+      webhook_url: webhookUrl,
+      action_payload: actionPayload,
+      is_active: isActive,
     }
 
-    const insertResponse = await fetch(`${supabaseUrl}/rest/v1/reminder_triggers`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        agent_id: agentId,
-        timing_type: timingType,
-        offset_amount: offsetAmount,
-        offset_unit: offsetUnit,
-        scope_type: scopeType,
-        scope_reference: scopeReference,
-        action_type: actionType,
-        webhook_url: webhookUrl,
-        action_payload: actionPayload,
-        is_active: isActive,
-      }),
-    })
+    const { text, values } = buildInsert("reminder_triggers", insertData)
+    const created = await queryOne(text, values)
 
-    if (!insertResponse.ok) {
-      const errorText = await insertResponse.text()
-      console.error("❌ Erro ao criar gatilho (admin):", insertResponse.status, errorText)
-      return NextResponse.json({ error: "Erro ao criar gatilho", details: errorText }, { status: insertResponse.status })
+    if (!created) {
+      return NextResponse.json({ error: "Erro ao criar gatilho" }, { status: 500 })
     }
 
-    const created = await insertResponse.json()
-
-    return NextResponse.json({ success: true, trigger: Array.isArray(created) ? created[0] : created })
+    return NextResponse.json({ success: true, trigger: created })
   } catch (error: any) {
     console.error("❌ Erro em POST /api/admin/agents/[id]/reminder-triggers:", error)
     return NextResponse.json(

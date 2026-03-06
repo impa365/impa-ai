@@ -1,104 +1,111 @@
 /**
- * Helper para fazer requisições ao Supabase no schema impaai
+ * Helper para fazer requisições ao PostgreSQL direto no schema impaai
  * Todas as tabelas do Quest System estão em impaai.user_quest_progress
+ * 
+ * MIGRADO de Supabase REST API para PostgreSQL direto
  */
 
-const SUPABASE_URL = process.env.SUPABASE_URL!
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY!
+import { queryMany, queryOne, query } from "./db"
 
 /**
- * Headers padrão para requisições ao schema impaai
+ * Buscar dados do banco (SELECT)
  */
-function getSupabaseHeaders(method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET') {
-  const headers: Record<string, string> = {
-    'apikey': SUPABASE_KEY,
-    'Authorization': `Bearer ${SUPABASE_KEY}`,
-    'Accept-Profile': 'impaai',
-    'Content-Profile': 'impaai'
-  }
-
-  if (method !== 'GET') {
-    headers['Content-Type'] = 'application/json'
-    headers['Prefer'] = 'return=representation'
-  }
-
-  return headers
-}
-
-/**
- * Buscar dados do Supabase (GET)
- */
-export async function supabaseGet(table: string, query: string = '') {
-  const url = `${SUPABASE_URL}/rest/v1/${table}${query ? '?' + query : ''}`
+export async function supabaseGet(table: string, queryStr: string = '') {
+  // Parse PostgREST-style query params into SQL
+  // e.g., "user_id=eq.abc123&select=*" 
+  const params: any[] = []
+  const conditions: string[] = []
+  let selectCols = '*'
   
-  const response = await fetch(url, {
-    headers: getSupabaseHeaders('GET')
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Supabase GET error: ${error}`)
+  if (queryStr) {
+    const parts = queryStr.split('&')
+    for (const part of parts) {
+      if (part.startsWith('select=')) {
+        selectCols = part.replace('select=', '')
+        continue
+      }
+      // Handle PostgREST filters: column=eq.value
+      const eqMatch = part.match(/^(\w+)=eq\.(.+)$/)
+      if (eqMatch) {
+        params.push(eqMatch[2])
+        conditions.push(`"${eqMatch[1]}" = $${params.length}`)
+      }
+    }
   }
-
-  return response.json()
+  
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const sql = `SELECT ${selectCols} FROM ${table} ${where}`
+  
+  return queryMany(sql, params)
 }
 
 /**
- * Criar dados no Supabase (POST)
+ * Criar dados no banco (INSERT)
  */
 export async function supabasePost(table: string, data: any) {
-  const url = `${SUPABASE_URL}/rest/v1/${table}`
+  const keys = Object.keys(data)
+  const values = Object.values(data)
+  const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ')
+  const columns = keys.map(k => `"${k}"`).join(', ')
   
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: getSupabaseHeaders('POST'),
-    body: JSON.stringify(data)
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Supabase POST error: ${error}`)
-  }
-
-  return response.json()
+  const sql = `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING *`
+  return queryMany(sql, values)
 }
 
 /**
- * Atualizar dados no Supabase (PATCH)
+ * Atualizar dados no banco (UPDATE)
  */
-export async function supabasePatch(table: string, query: string, data: any) {
-  const url = `${SUPABASE_URL}/rest/v1/${table}?${query}`
+export async function supabasePatch(table: string, queryStr: string, data: any) {
+  const dataKeys = Object.keys(data)
+  const values: any[] = []
+  let idx = 1
   
-  const response = await fetch(url, {
-    method: 'PATCH',
-    headers: getSupabaseHeaders('PATCH'),
-    body: JSON.stringify(data)
+  const setClauses = dataKeys.map(k => {
+    values.push(data[k])
+    return `"${k}" = $${idx++}`
   })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Supabase PATCH error: ${error}`)
+  
+  // Parse PostgREST-style query
+  const conditions: string[] = []
+  if (queryStr) {
+    const parts = queryStr.split('&')
+    for (const part of parts) {
+      const eqMatch = part.match(/^(\w+)=eq\.(.+)$/)
+      if (eqMatch) {
+        values.push(eqMatch[2])
+        conditions.push(`"${eqMatch[1]}" = $${idx++}`)
+      }
+    }
   }
-
-  return response.json()
+  
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const sql = `UPDATE ${table} SET ${setClauses.join(', ')} ${where} RETURNING *`
+  
+  return queryMany(sql, values)
 }
 
 /**
- * Deletar dados no Supabase (DELETE)
+ * Deletar dados no banco (DELETE)
  */
-export async function supabaseDelete(table: string, query: string) {
-  const url = `${SUPABASE_URL}/rest/v1/${table}?${query}`
+export async function supabaseDelete(table: string, queryStr: string) {
+  const params: any[] = []
+  const conditions: string[] = []
+  let idx = 1
   
-  const response = await fetch(url, {
-    method: 'DELETE',
-    headers: getSupabaseHeaders('DELETE')
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Supabase DELETE error: ${error}`)
+  if (queryStr) {
+    const parts = queryStr.split('&')
+    for (const part of parts) {
+      const eqMatch = part.match(/^(\w+)=eq\.(.+)$/)
+      if (eqMatch) {
+        params.push(eqMatch[2])
+        conditions.push(`"${eqMatch[1]}" = $${idx++}`)
+      }
+    }
   }
-
-  return response.json()
+  
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const sql = `DELETE FROM ${table} ${where} RETURNING *`
+  
+  return queryMany(sql, params)
 }
 

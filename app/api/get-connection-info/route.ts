@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { queryOne } from "@/lib/db";
 
 // Endpoint para buscar informações completas de uma conexão WhatsApp
 export async function POST(request: NextRequest) {
@@ -13,30 +13,21 @@ export async function POST(request: NextRequest) {
     instance_name = String(instance_name).trim();
     instance_token = String(instance_token).trim();
 
-    // 2. Conexão com o Supabase usando o schema correto
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    });
-
-    // 3. Buscar a conexão pelo instance_name e instance_token
-    const { data: connection, error: findError } = await supabase
-      .from("whatsapp_connections")
-      .select("*")
-      .eq("instance_name", instance_name)
-      .eq("instance_token", instance_token)
-      .single();
-    if (findError || !connection) {
+    // 2. Buscar a conexão pelo instance_name e instance_token
+    const connection = await queryOne(
+      `SELECT * FROM whatsapp_connections WHERE instance_name = $1 AND instance_token = $2`,
+      [instance_name, instance_token]
+    );
+    if (!connection) {
       const isDev = process.env.NODE_ENV !== "production";
       return NextResponse.json({
         error: "Conexão não encontrada",
-        details: isDev ? findError : undefined,
+        details: isDev ? "No matching connection found" : undefined,
         supabase: isDev ? { instance_name, instance_token } : undefined
       }, { status: 404 });
     }
 
-    // 4. Retornar todos os dados da conexão
+    // 3. Retornar todos os dados da conexão
     return NextResponse.json({
       success: true,
       connection

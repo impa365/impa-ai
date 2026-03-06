@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { queryOne } from "./db";
 
 export async function validateApiKey(
   request: Request
@@ -41,78 +41,58 @@ export async function validateApiKey(
       return { isValid: false, error: "Invalid API key format" };
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+    // Buscar a API key no banco com JOIN em user_profiles
+    const apiKeyData = await queryOne(
+      `SELECT 
+        ak.id,
+        ak.user_id,
+        ak.name,
+        ak.is_active,
+        ak.permissions,
+        ak.rate_limit,
+        ak.last_used_at,
+        up.id as user_profile_id,
+        up.email as user_email,
+        up.full_name as user_full_name,
+        up.role as user_role,
+        up.status as user_status
+      FROM user_api_keys ak
+      INNER JOIN user_profiles up ON ak.user_id = up.id
+      WHERE ak.api_key = $1 AND ak.is_active = true`,
+      [apiKey]
+    );
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return { isValid: false, error: "Server configuration error" };
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    });
-
-    // Buscar a API key no banco
-    const { data: apiKeyData, error: apiKeyError } = await supabase
-      .from("user_api_keys")
-      .select(
-        `
-        id,
-        user_id,
-        name,
-        is_active,
-        permissions,
-        rate_limit,
-        last_used_at,
-        user_profiles!inner(
-          id,
-          email,
-          full_name,
-          role,
-          status
-        )
-      `
-      )
-      .eq("api_key", apiKey)
-      .eq("is_active", true)
-      .single();
-
-    if (apiKeyError || !apiKeyData) {
+    if (!apiKeyData) {
       if (process.env.NODE_ENV === "development") {
-        console.log(
-          "API key lookup error:",
-          apiKeyError?.message || "Key not found"
-        );
+        console.log("API key lookup error: Key not found");
       }
       return { isValid: false, error: "Invalid or inactive API key" };
     }
 
     // Verificar se o usuário está ativo
-    if (apiKeyData.user_profiles.status !== "active") {
+    if (apiKeyData.user_status !== "active") {
       return { isValid: false, error: "User account is not active" };
     }
 
     // Atualizar o último uso da API key (sem aguardar)
-    supabase
-      .from("user_api_keys")
-      .update({ last_used_at: new Date().toISOString() })
-      .eq("id", apiKeyData.id)
-      .then(() => {
-        if (process.env.NODE_ENV === "development") {
-          console.log("API key last_used_at updated");
-        }
-      })
-      .catch((error) => {
-        console.error("Error updating last_used_at:", error);
-      });
+    queryOne(
+      `UPDATE user_api_keys SET last_used_at = $1 WHERE id = $2`,
+      [new Date().toISOString(), apiKeyData.id]
+    ).then(() => {
+      if (process.env.NODE_ENV === "development") {
+        console.log("API key last_used_at updated");
+      }
+    }).catch((error) => {
+      console.error("Error updating last_used_at:", error);
+    });
 
     return {
       isValid: true,
       user: {
-        id: apiKeyData.user_profiles.id,
-        email: apiKeyData.user_profiles.email,
-        full_name: apiKeyData.user_profiles.full_name,
-        role: apiKeyData.user_profiles.role,
+        id: apiKeyData.user_profile_id,
+        email: apiKeyData.user_email,
+        full_name: apiKeyData.user_full_name,
+        role: apiKeyData.user_role,
         api_key_id: apiKeyData.id,
         api_key_name: apiKeyData.name,
         permissions: apiKeyData.permissions || ["read"],

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createUazapiInstanceServer } from "@/lib/uazapi-server"
 import { checkRateLimit, getRequestIdentifier, RATE_LIMITS } from "@/lib/rate-limit"
 import { logResourceCreated, logRateLimitExceeded } from "@/lib/security-audit"
+import { query, queryOne, queryMany, buildInsert } from "@/lib/db"
 
 // Função para gerar token único
 function generateInstanceToken(): string {
@@ -22,32 +23,11 @@ function generateInstanceName(platformName: string, connectionName: string): str
 
 // Função para verificar se nome/token já existe
 async function checkInstanceExists(instanceName: string, token: string): Promise<boolean> {
-  const supabaseUrl = process.env.SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Configuração do banco não encontrada")
-  }
-
-  const headers = {
-    "Content-Type": "application/json",
-    "Accept-Profile": "impaai",
-    "Content-Profile": "impaai",
-    apikey: supabaseKey,
-    Authorization: `Bearer ${supabaseKey}`,
-  }
-
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/whatsapp_connections?select=id&or=(instance_name.eq.${instanceName},instance_token.eq.${token})&limit=1`,
-    { headers }
+  const rows = await queryMany(
+    'SELECT id FROM whatsapp_connections WHERE instance_name = $1 OR instance_token = $2 LIMIT 1',
+    [instanceName, token]
   )
-
-  if (!response.ok) {
-    throw new Error("Erro ao verificar instância existente")
-  }
-
-  const data = await response.json()
-  return (data?.length || 0) > 0
+  return rows.length > 0
 }
 
 // Função para validar se a resposta é JSON
@@ -82,39 +62,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verificar variáveis de ambiente
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ success: false, error: "Configuração do banco não encontrada" }, { status: 500 })
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // ==================== VALIDAÇÃO DE LIMITE ====================
     console.log("🔍 Verificando limite de conexões do usuário...")
 
     // 1. Buscar perfil do usuário e limites
-    const userProfileResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?select=connections_limit,role&id=eq.${userId}`,
-      { headers }
+    const userProfiles = await queryMany(
+      'SELECT connections_limit, role FROM user_profiles WHERE id = $1',
+      [userId]
     )
 
-    if (!userProfileResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao verificar limites do usuário" },
-        { status: 500 }
-      )
-    }
-
-    const userProfiles = await userProfileResponse.json()
     if (!userProfiles || userProfiles.length === 0) {
       return NextResponse.json(
         { success: false, error: "Usuário não encontrado" },
@@ -128,19 +84,10 @@ export async function POST(request: NextRequest) {
     console.log(`📊 Limite do usuário: ${userLimit}`)
 
     // 2. Buscar conexões atuais do usuário
-    const existingConnectionsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,created_at&user_id=eq.${userId}&order=created_at.desc`,
-      { headers }
+    const existingConnections = await queryMany(
+      'SELECT id, created_at FROM whatsapp_connections WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
     )
-
-    if (!existingConnectionsResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao verificar conexões existentes" },
-        { status: 500 }
-      )
-    }
-
-    const existingConnections = await existingConnectionsResponse.json()
     const currentCount = existingConnections.length
 
     console.log(`📊 Conexões atuais: ${currentCount} / ${userLimit}`)
@@ -167,31 +114,21 @@ export async function POST(request: NextRequest) {
       const connectionsToBlock = existingConnections.slice(0, currentCount - userLimit)
       
       for (const conn of connectionsToBlock) {
-        await fetch(
-          `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${conn.id}`,
-          {
-            method: "PATCH",
-            headers,
-            body: JSON.stringify({ status: "blocked_limit_exceeded" })
-          }
-        )
+        await query('UPDATE whatsapp_connections SET status = $1 WHERE id = $2', ['blocked_limit_exceeded', conn.id])
       }
 
       console.log(`✅ ${connectionsToBlock.length} conexões bloqueadas por excederem o limite`)
     }
 
     // Buscar nome da plataforma
-    const themeResponse = await fetch(
-      `${supabaseUrl}/rest/v1/global_theme_config?select=system_name&order=created_at.desc&limit=1`,
-      { headers }
-    )
-
     let platformName = "impaai"
-    if (themeResponse.ok) {
-      const themeData = await themeResponse.json()
+    try {
+      const themeData = await queryMany('SELECT system_name FROM global_theme_config ORDER BY created_at DESC LIMIT 1')
       if (themeData && themeData.length > 0 && themeData[0].system_name) {
         platformName = themeData[0].system_name
       }
+    } catch (themeError) {
+      console.warn("⚠️ Erro ao buscar nome da plataforma, usando padrão")
     }
 
     // Gerar nome e token únicos
@@ -237,22 +174,10 @@ export async function POST(request: NextRequest) {
     } else {
       // ========== EVOLUTION API ==========
       // Buscar configurações da Evolution API
-      const integrationResponse = await fetch(
-        `${supabaseUrl}/rest/v1/integrations?select=config&type=eq.evolution_api&is_active=eq.true&limit=1`,
-        { headers }
+      const integrationData = await queryMany(
+        'SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1',
+        ['evolution_api']
       )
-
-      if (!integrationResponse.ok) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Erro ao buscar configuração da Evolution API",
-          },
-          { status: 500 }
-        )
-      }
-
-      const integrationData = await integrationResponse.json()
 
       if (!integrationData || integrationData.length === 0) {
         return NextResponse.json({ success: false, error: "Evolution API não configurada" }, { status: 400 })
@@ -376,23 +301,13 @@ export async function POST(request: NextRequest) {
       api_type: apiType, // Novo campo para identificar qual API está sendo usada
     }
 
-    const saveResponse = await fetch(`${supabaseUrl}/rest/v1/whatsapp_connections`, {
-      method: "POST",
-      headers: {
-        ...headers,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(connectionData),
-    })
+    const { text: insertText, values: insertValues } = buildInsert('whatsapp_connections', connectionData)
+    const connection = await queryOne(insertText, insertValues)
 
-    if (!saveResponse.ok) {
-      const errorText = await saveResponse.text()
-      console.error("Erro ao salvar conexão no banco de dados:", errorText)
+    if (!connection) {
+      console.error("Erro ao salvar conexão no banco de dados")
       return NextResponse.json({ success: false, error: "Erro ao salvar conexão no banco de dados." }, { status: 500 })
     }
-
-    const savedConnection = await saveResponse.json()
-    const connection = Array.isArray(savedConnection) ? savedConnection[0] : savedConnection
 
     // Log de auditoria - criação de conexão
     logResourceCreated(userId, connectionName, 'connection', connection.id, request)

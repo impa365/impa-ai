@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServer } from "@/lib/supabase-config";
+import { queryOne, query as dbQuery } from "@/lib/db";
 import { getCurrentServerUser } from "@/lib/auth-server";
 
 // Global job processor para rodar em background
@@ -48,29 +48,23 @@ export async function POST(
       );
     }
 
-    const supabase = getSupabaseServer();
+    const agentSql = `
+      SELECT a.*,
+        json_build_object(
+          'id', wc.id,
+          'instance_id', wc.instance_id,
+          'instance_name', wc.instance_name,
+          'instance_token', wc.instance_token
+        ) AS whatsapp_connections
+      FROM ai_agents a
+      LEFT JOIN whatsapp_connections wc ON wc.id = a.whatsapp_connection_id
+      WHERE a.id = $1
+    ` + (user.role !== "admin" ? ` AND a.user_id = $2` : "") + ` LIMIT 1`;
+    const agentParams = user.role !== "admin" ? [id, user.id] : [id];
 
-    // Buscar o agente e verificar permissões
-    let query = supabase
-      .from("ai_agents")
-      .select(`
-        *,
-        whatsapp_connections!whatsapp_connection_id (
-          id,
-          instance_id,
-          instance_name,
-          instance_token
-        )
-      `)
-      .eq("id", id);
+    const agent = await queryOne<any>(agentSql, agentParams);
 
-    if (user.role !== "admin") {
-      query = query.eq("user_id", user.id);
-    }
-
-    const { data: agent, error: agentError } = await query.single();
-
-    if (agentError || !agent) {
+    if (!agent) {
       return NextResponse.json(
         { error: "Agente não encontrado" },
         { status: 404 }
@@ -105,15 +99,17 @@ export async function POST(
     }));
 
     // Criar job no banco
-    const { data: job, error: jobError } = await supabase
-      .from("background_jobs")
-      .insert({
-        type: 'mass_session_update',
-        user_id: user.id,
-        agent_id: id,
-        status: 'pending',
-        total_items: sessions.length,
-        job_data: {
+    const job = await queryOne<any>(
+      `INSERT INTO background_jobs (type, user_id, agent_id, status, total_items, job_data)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [
+        'mass_session_update',
+        user.id,
+        id,
+        'pending',
+        sessions.length,
+        JSON.stringify({
           sessionIds,
           sessions,
           status,
@@ -123,12 +119,11 @@ export async function POST(
             evolution_bot_id: agent.evolution_bot_id,
             instance_name: agent.whatsapp_connections.instance_name
           }
-        }
-      })
-      .select()
-      .single();
+        })
+      ]
+    );
 
-    if (jobError) {
+    if (!job) {
       console.error("❌ Erro ao criar job:", jobError);
       return NextResponse.json(
         { error: "Erro ao criar job de processamento" },
@@ -170,48 +165,37 @@ async function processJobInBackground(jobId: string) {
   jobProcessor.set(jobId, true);
   
   try {
-    const supabase = getSupabaseServer();
-    
     // Buscar job
-    const { data: job, error: jobError } = await supabase
-      .from("background_jobs")
-      .select("*")
-      .eq("id", jobId)
-      .single();
+    const job = await queryOne<any>(
+      `SELECT * FROM background_jobs WHERE id = $1`,
+      [jobId]
+    );
 
-    if (jobError || !job) {
+    if (!job) {
       console.error("❌ Job não encontrado:", jobId);
       return;
     }
 
     // Marcar como iniciado
-    await supabase
-      .from("background_jobs")
-      .update({
-        status: 'running',
-        started_at: new Date().toISOString()
-      })
-      .eq("id", jobId);
+    await dbQuery(
+      `UPDATE background_jobs SET status = $1, started_at = $2 WHERE id = $3`,
+      ['running', new Date().toISOString(), jobId]
+    );
 
-    const { sessions, status, agent: agentData } = job.job_data;
+    const jobData = typeof job.job_data === 'string' ? JSON.parse(job.job_data) : job.job_data;
+    const { sessions, status, agent: agentData } = jobData;
     
     // Buscar configurações da Evolution API
-    const { data: integration, error: integrationError } = await supabase
-      .from("integrations")
-      .select("config")
-      .eq("type", "evolution_api")
-      .eq("is_active", true)
-      .single();
+    const integration = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["evolution_api"]
+    );
 
-    if (integrationError || !integration) {
-      await supabase
-        .from("background_jobs")
-        .update({
-          status: 'failed',
-          error_message: 'Evolution API não configurada',
-          completed_at: new Date().toISOString()
-        })
-        .eq("id", jobId);
+    if (!integration) {
+      await dbQuery(
+        `UPDATE background_jobs SET status = $1, error_message = $2, completed_at = $3 WHERE id = $4`,
+        ['failed', 'Evolution API não configurada', new Date().toISOString(), jobId]
+      );
       return;
     }
 
@@ -294,15 +278,10 @@ async function processJobInBackground(jobId: string) {
       const processedItems = i + batch.length;
       const progress = Math.round((processedItems / sessions.length) * 100);
       
-      await supabase
-        .from("background_jobs")
-        .update({
-          processed_items: processedItems,
-          successful_items: results.success.length,
-          failed_items: results.errors.length,
-          progress
-        })
-        .eq("id", jobId);
+      await dbQuery(
+        `UPDATE background_jobs SET processed_items = $1, successful_items = $2, failed_items = $3, progress = $4 WHERE id = $5`,
+        [processedItems, results.success.length, results.errors.length, progress, jobId]
+      );
 
       // Pausa entre lotes
       if (i + batchSize < sessions.length) {
@@ -311,37 +290,36 @@ async function processJobInBackground(jobId: string) {
     }
 
     // Finalizar job
-    await supabase
-      .from("background_jobs")
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        processed_items: sessions.length,
-        successful_items: results.success.length,
-        failed_items: results.errors.length,
-        progress: 100,
-        results: {
+    await dbQuery(
+      `UPDATE background_jobs
+       SET status = $1, completed_at = $2, processed_items = $3,
+           successful_items = $4, failed_items = $5, progress = $6, results = $7
+       WHERE id = $8`,
+      [
+        'completed',
+        new Date().toISOString(),
+        sessions.length,
+        results.success.length,
+        results.errors.length,
+        100,
+        JSON.stringify({
           summary: `${results.success.length} sucessos, ${results.errors.length} erros`,
           success: results.success,
           errors: results.errors
-        }
-      })
-      .eq("id", jobId);
+        }),
+        jobId
+      ]
+    );
 
     console.log(`✅ Job ${jobId} concluído: ${results.success.length} sucessos, ${results.errors.length} erros`);
 
   } catch (error: any) {
     console.error(`❌ Erro no processamento do job ${jobId}:`, error);
     
-    const supabase = getSupabaseServer();
-    await supabase
-      .from("background_jobs")
-      .update({
-        status: 'failed',
-        error_message: error.message || 'Erro desconhecido',
-        completed_at: new Date().toISOString()
-      })
-      .eq("id", jobId);
+    await dbQuery(
+      `UPDATE background_jobs SET status = $1, error_message = $2, completed_at = $3 WHERE id = $4`,
+      ['failed', error.message || 'Erro desconhecido', new Date().toISOString(), jobId]
+    );
   } finally {
     jobProcessor.delete(jobId);
   }

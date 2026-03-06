@@ -1,65 +1,41 @@
 import { NextResponse } from "next/server"
+import { queryMany, queryOne } from "@/lib/db"
 
 export async function GET() {
   try {
     console.log("🔧 Buscando dados do dashboard admin...")
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ Configuração do Supabase não encontrada")
-      return NextResponse.json({ error: "Erro de configuração do servidor" }, { status: 500 })
-    }
-
-    const headers = {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-    }
-
     // Buscar usuários
-    const usersResponse = await fetch(`${supabaseUrl}/rest/v1/user_profiles?select=*&order=created_at.desc`, {
-      headers,
-    })
-
-    // Buscar agentes
-    const agentsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,user_profiles(email)&order=created_at.desc`,
-      {
-        headers,
-      },
+    const users = await queryMany(
+      `SELECT * FROM user_profiles ORDER BY created_at DESC`
     )
 
-    // Buscar conexões WhatsApp
-    const whatsappResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=*,user_profiles(full_name,email)&order=created_at.desc`,
-      {
-        headers,
-      },
+    // Buscar agentes com email do usuário (JOIN)
+    const agents = await queryMany(
+      `SELECT a.*, up.email AS user_email
+       FROM ai_agents a
+       LEFT JOIN user_profiles up ON a.user_id = up.id
+       ORDER BY a.created_at DESC`
+    )
+
+    // Buscar conexões WhatsApp com dados do usuário (JOIN)
+    const whatsappConnections = await queryMany(
+      `SELECT wc.*, up.full_name AS user_full_name, up.email AS user_email
+       FROM whatsapp_connections wc
+       LEFT JOIN user_profiles up ON wc.user_id = up.id
+       ORDER BY wc.created_at DESC`
     )
 
     // Buscar integrações
-    const integrationsResponse = await fetch(`${supabaseUrl}/rest/v1/integrations?select=*&order=created_at.desc`, {
-      headers,
-    })
-
-    // Buscar configurações do sistema
-    const settingsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.default_whatsapp_connections_limit`,
-      {
-        headers,
-      },
+    const integrations = await queryMany(
+      `SELECT * FROM integrations ORDER BY created_at DESC`
     )
 
-    // Processar respostas
-    const users = usersResponse.ok ? await usersResponse.json() : []
-    const agents = agentsResponse.ok ? await agentsResponse.json() : []
-    const whatsappConnections = whatsappResponse.ok ? await whatsappResponse.json() : []
-    const integrations = integrationsResponse.ok ? await integrationsResponse.json() : []
-    const settings = settingsResponse.ok ? await settingsResponse.json() : []
+    // Buscar configurações do sistema
+    const defaultLimitSetting = await queryOne(
+      `SELECT setting_value FROM system_settings WHERE setting_key = $1`,
+      ["default_whatsapp_connections_limit"]
+    )
 
     // Calcular métricas
     const metrics = {
@@ -71,7 +47,7 @@ export async function GET() {
 
     // Configurações do sistema
     const systemLimits = {
-      defaultLimit: settings.length > 0 ? settings[0].setting_value : 2,
+      defaultLimit: defaultLimitSetting ? defaultLimitSetting.setting_value : 2,
     }
 
     console.log("✅ Dados do dashboard carregados")
@@ -92,7 +68,7 @@ export async function GET() {
         name: agent.name,
         type: agent.type,
         status: agent.status,
-        user_email: agent.user_profiles?.email,
+        user_email: agent.user_email,
         created_at: agent.created_at,
       })),
       whatsappConnections: whatsappConnections.map((conn: any) => ({
@@ -100,8 +76,8 @@ export async function GET() {
         connection_name: conn.connection_name,
         instance_name: conn.instance_name,
         status: conn.status,
-        user_name: conn.user_profiles?.full_name,
-        user_email: conn.user_profiles?.email,
+        user_name: conn.user_full_name,
+        user_email: conn.user_email,
         created_at: conn.created_at,
       })),
       integrations,

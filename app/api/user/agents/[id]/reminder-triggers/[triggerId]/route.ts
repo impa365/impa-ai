@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { queryOne } from "@/lib/db"
 
 interface UpdateTriggerPayload {
   timingType?: string
@@ -23,56 +24,6 @@ const sanitizePhoneNumber = (value?: string | null): string | null => {
   }
   const digits = String(value).replace(/\D+/g, "")
   return digits.length > 0 ? digits : null
-}
-
-const SUPABASE_HEADERS = (key: string) => ({
-  "Content-Type": "application/json",
-  "Accept-Profile": "impaai",
-  "Content-Profile": "impaai",
-  apikey: key,
-  Authorization: `Bearer ${key}`,
-})
-
-async function ensureAgentOwnership(
-  agentId: string,
-  userId: string,
-  supabaseUrl: string,
-  supabaseKey: string,
-) {
-  const headers = SUPABASE_HEADERS(supabaseKey)
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/ai_agents?select=id&user_id=eq.${userId}&id=eq.${agentId}&limit=1`,
-    { headers },
-  )
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Erro ao validar agente: ${response.status} - ${errorText}`)
-  }
-
-  const agents = await response.json()
-  return Array.isArray(agents) && agents.length > 0
-}
-
-async function ensureTriggerExistsForAgent(
-  triggerId: string,
-  agentId: string,
-  supabaseUrl: string,
-  supabaseKey: string,
-) {
-  const headers = SUPABASE_HEADERS(supabaseKey)
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/reminder_triggers?select=id&limit=1&id=eq.${triggerId}&agent_id=eq.${agentId}`,
-    { headers },
-  )
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Erro ao validar gatilho: ${response.status} - ${errorText}`)
-  }
-
-  const triggers = await response.json()
-  return Array.isArray(triggers) && triggers.length > 0
 }
 
 function buildUpdatePayload(payload: UpdateTriggerPayload) {
@@ -143,13 +94,13 @@ function buildUpdatePayload(payload: UpdateTriggerPayload) {
       throw new Error("templateText é obrigatório para gatilhos WhatsApp")
     }
 
-    updateData.action_payload = {
+    updateData.action_payload = JSON.stringify({
       version: 1,
       channel,
       customNumber,
       templateId,
       templateText: templateTextRaw,
-    }
+    })
   }
 
   if (Object.keys(updateData).length === 0) {
@@ -183,19 +134,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const { id: agentId, triggerId } = await params
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
+    const agent = await queryOne(
+      "SELECT id FROM ai_agents WHERE id = $1 AND user_id = $2",
+      [agentId, currentUser.id],
+    )
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const ownsAgent = await ensureAgentOwnership(agentId, currentUser.id, supabaseUrl, supabaseKey)
-    if (!ownsAgent) {
+    if (!agent) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    const triggerExists = await ensureTriggerExistsForAgent(triggerId, agentId, supabaseUrl, supabaseKey)
+    const triggerExists = await queryOne(
+      "SELECT id FROM reminder_triggers WHERE id = $1 AND agent_id = $2",
+      [triggerId, agentId],
+    )
+
     if (!triggerExists) {
       return NextResponse.json({ error: "Gatilho não encontrado" }, { status: 404 })
     }
@@ -203,27 +155,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const payload = (await request.json()) as UpdateTriggerPayload
     const updateData = buildUpdatePayload(payload)
 
-    const headers = {
-      ...SUPABASE_HEADERS(supabaseKey),
-      Prefer: "return=representation",
-    }
+    // Build dynamic UPDATE query
+    const keys = Object.keys(updateData)
+    const setClauses = keys.map((key, i) => `${key} = $${i + 1}`)
+    const values = keys.map((key) => updateData[key])
+    const paramOffset = keys.length
 
-    const patchResponse = await fetch(
-      `${supabaseUrl}/rest/v1/reminder_triggers?id=eq.${triggerId}&agent_id=eq.${agentId}`,
-      {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify(updateData),
-      },
+    const trigger = await queryOne(
+      `UPDATE reminder_triggers SET ${setClauses.join(", ")} WHERE id = $${paramOffset + 1} AND agent_id = $${paramOffset + 2} RETURNING *`,
+      [...values, triggerId, agentId],
     )
-
-    if (!patchResponse.ok) {
-      const errorText = await patchResponse.text()
-      throw new Error(`Erro ao atualizar gatilho: ${patchResponse.status} - ${errorText}`)
-    }
-
-    const updated = await patchResponse.json()
-    const trigger = Array.isArray(updated) && updated.length > 0 ? updated[0] : null
 
     if (!trigger) {
       return NextResponse.json({ error: "Gatilho não encontrado" }, { status: 404 })
@@ -252,40 +193,21 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
     const { id: agentId, triggerId } = await params
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
+    const agent = await queryOne(
+      "SELECT id FROM ai_agents WHERE id = $1 AND user_id = $2",
+      [agentId, currentUser.id],
+    )
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const ownsAgent = await ensureAgentOwnership(agentId, currentUser.id, supabaseUrl, supabaseKey)
-    if (!ownsAgent) {
+    if (!agent) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
 
-    const headers = {
-      ...SUPABASE_HEADERS(supabaseKey),
-      Prefer: "return=representation",
-    }
-
-    const deleteResponse = await fetch(
-      `${supabaseUrl}/rest/v1/reminder_triggers?id=eq.${triggerId}&agent_id=eq.${agentId}`,
-      {
-        method: "DELETE",
-        headers,
-      },
+    const deleted = await queryOne(
+      "DELETE FROM reminder_triggers WHERE id = $1 AND agent_id = $2 RETURNING *",
+      [triggerId, agentId],
     )
 
-    if (!deleteResponse.ok) {
-      const errorText = await deleteResponse.text()
-      throw new Error(`Erro ao remover gatilho: ${deleteResponse.status} - ${errorText}`)
-    }
-
-    const deleted = await deleteResponse.json()
-    const trigger = Array.isArray(deleted) && deleted.length > 0 ? deleted[0] : null
-
-    if (!trigger) {
+    if (!deleted) {
       return NextResponse.json({ error: "Gatilho não encontrado" }, { status: 404 })
     }
 

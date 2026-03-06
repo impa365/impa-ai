@@ -5,9 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateQuestRequest, checkQuestSystemEnabled } from '@/lib/quest-auth'
-
-const SUPABASE_URL = process.env.SUPABASE_URL!
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY!
+import { queryOne } from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,63 +26,37 @@ export async function POST(request: NextRequest) {
     console.log('⚠️ [QUEST] Abandonando missão para usuário:', userId)
 
     // Buscar progresso
-    const progressResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_quest_progress?user_id=eq.${userId}&select=*`,
-      {
-        headers: {
-          'Accept-Profile': 'impaai',
-          'Content-Profile': 'impaai',
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`
-        }
-      }
+    const progress = await queryOne<any>(
+      "SELECT * FROM user_quest_progress WHERE user_id = $1",
+      [userId]
     )
 
-    const progressData = await progressResponse.json()
-    if (!progressData || progressData.length === 0 || !progressData[0]) {
+    if (!progress) {
       console.log('❌ [QUEST] Progresso não encontrado')
       return NextResponse.json({ error: 'Progresso não encontrado' }, { status: 404 })
     }
-
-    const progress = progressData[0]
 
     if (!progress.active_mission_id) {
       return NextResponse.json({ error: 'Nenhuma missão ativa' }, { status: 400 })
     }
 
     // Limpar missão ativa
-    const updateResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_quest_progress?user_id=eq.${userId}`,
-      {
-        method: 'PATCH',
-        headers: {
-          'Accept-Profile': 'impaai',
-          'Content-Profile': 'impaai',
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify({
-          active_mission_id: null,
-          mission_progress: null
-        })
-      }
+    const updated = await queryOne<any>(
+      "UPDATE user_quest_progress SET active_mission_id = NULL, mission_progress = $2 WHERE user_id = $1 RETURNING *",
+      [userId, JSON.stringify({})]
     )
 
-    if (!updateResponse.ok) {
-      const error = await updateResponse.text()
-      console.error('❌ [QUEST] Erro ao abandonar missão:', error)
+    if (!updated) {
+      console.error('❌ [QUEST] Erro ao abandonar missão')
       return NextResponse.json(
         { error: 'Erro ao abandonar missão' },
-        { status: updateResponse.status }
+        { status: 500 }
       )
     }
 
-    const updated = await updateResponse.json()
     console.log('✅ [QUEST] Missão abandonada')
 
-    return NextResponse.json(updated[0])
+    return NextResponse.json(updated)
 
   } catch (error: any) {
     console.error('❌ [QUEST] Erro geral:', error)

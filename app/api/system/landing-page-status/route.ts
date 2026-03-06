@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { queryOne, query } from '@/lib/db'
 
 // Cache simples em memória para otimização
 let cachedStatus: { enabled: boolean; timestamp: number } | null = null
@@ -24,44 +25,16 @@ export async function GET() {
       })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      // Fallback seguro: se não conseguir conectar, desativa landing page
-      return NextResponse.json({
-        success: true,
-        landingPageEnabled: false
-      })
-    }
-
     // Buscar configuração específica da landing page
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?select=setting_value&setting_key=eq.landing_page_enabled&limit=1`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-      }
+    const setting = await queryOne<any>(
+      "SELECT setting_value FROM system_settings WHERE setting_key = $1 LIMIT 1",
+      ['landing_page_enabled']
     )
 
-    if (!response.ok) {
-      // Fallback: se não conseguir acessar, assume desabilitado por segurança
-      return NextResponse.json({
-        success: true,
-        landingPageEnabled: false
-      })
-    }
-
-    const settings = await response.json()
     let isEnabled = false
 
-    if (Array.isArray(settings) && settings.length > 0) {
-      const settingValue = settings[0].setting_value
+    if (setting) {
+      const settingValue = setting.setting_value
       // Suporte a diferentes formatos de valor
       if (typeof settingValue === 'boolean') {
         isEnabled = settingValue
@@ -70,24 +43,18 @@ export async function GET() {
       }
     } else {
       // Se não existe a configuração, criar com valor padrão (habilitado)
-      await fetch(`${supabaseUrl}/rest/v1/system_settings`, {
-        method: "POST",
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-        body: JSON.stringify({
-          setting_key: "landing_page_enabled",
-          setting_value: "true",
-          category: "interface",
-          description: "Controla se a landing page está ativa ou se deve mostrar login direto",
-          is_public: false,
-          requires_restart: false
-        })
-      })
+      await query(
+        `INSERT INTO system_settings (setting_key, setting_value, category, description, is_public, requires_restart)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          'landing_page_enabled',
+          'true',
+          'interface',
+          'Controla se a landing page está ativa ou se deve mostrar login direto',
+          false,
+          false
+        ]
+      )
       isEnabled = true
     }
 
@@ -134,82 +101,34 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({
-        success: false,
-        error: "Configuração do servidor incompleta"
-      }, { status: 500 })
-    }
-
     // Verificar se a configuração já existe
-    const checkResponse = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?select=id&setting_key=eq.landing_page_enabled`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-      }
+    const existing = await queryOne<any>(
+      "SELECT id FROM system_settings WHERE setting_key = $1",
+      ['landing_page_enabled']
     )
 
-    const existing = await checkResponse.json()
-    const settingExists = Array.isArray(existing) && existing.length > 0
-
-    if (settingExists) {
+    if (existing) {
       // Atualizar configuração existente
-      const updateResponse = await fetch(
-        `${supabaseUrl}/rest/v1/system_settings?setting_key=eq.landing_page_enabled`,
-        {
-          method: "PATCH",
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-          },
-          body: JSON.stringify({
-            setting_value: enabled.toString(),
-            updated_at: new Date().toISOString(),
-          }),
-        }
+      await query(
+        "UPDATE system_settings SET setting_value = $1, updated_at = $2 WHERE setting_key = $3",
+        [enabled.toString(), new Date().toISOString(), 'landing_page_enabled']
       )
-
-      if (!updateResponse.ok) {
-        throw new Error(`Erro ao atualizar configuração: ${updateResponse.status}`)
-      }
     } else {
       // Criar nova configuração
-      const createResponse = await fetch(`${supabaseUrl}/rest/v1/system_settings`, {
-        method: "POST",
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-        body: JSON.stringify({
-          setting_key: "landing_page_enabled",
-          setting_value: enabled.toString(),
-          category: "interface",
-          description: "Controla se a landing page está ativa ou se deve mostrar login direto",
-          is_public: false,
-          requires_restart: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }),
-      })
-
-      if (!createResponse.ok) {
-        throw new Error(`Erro ao criar configuração: ${createResponse.status}`)
-      }
+      await query(
+        `INSERT INTO system_settings (setting_key, setting_value, category, description, is_public, requires_restart, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          'landing_page_enabled',
+          enabled.toString(),
+          'interface',
+          'Controla se a landing page está ativa ou se deve mostrar login direto',
+          false,
+          false,
+          new Date().toISOString(),
+          new Date().toISOString()
+        ]
+      )
     }
 
     // Limpar cache para forçar atualização na próxima consulta

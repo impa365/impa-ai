@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentServerUser } from "@/lib/auth-server"
+import { queryOne, queryMany } from "@/lib/db"
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,59 +19,32 @@ export async function POST(request: NextRequest) {
 
     console.log("🔄 Criando conexão WhatsApp para usuário:", user.email, "- Nome:", connectionName)
 
-    // Configuração do Supabase (apenas no servidor)
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ success: false, error: "Configuração do banco não encontrada" }, { status: 500 })
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // 1. VERIFICAR LIMITES DO USUÁRIO (SEGURANÇA NO BACKEND)
-    const userProfileResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?select=connections_limit,role&id=eq.${user.id}`,
-      { headers },
+    const profile = await queryOne<{ connections_limit: any; role: string }>(
+      'SELECT connections_limit, role FROM user_profiles WHERE id = $1',
+      [user.id]
     )
 
     let userLimit = 2 // padrão
-    if (userProfileResponse.ok) {
-      const userProfileData = await userProfileResponse.json()
-      if (userProfileData && userProfileData.length > 0) {
-        const profile = userProfileData[0]
-
-        // Se for admin, limite ilimitado
-        if (profile.role === "admin") {
-          userLimit = 999
-        }
-        // Usar connections_limit se definido
-        else if (profile.connections_limit !== undefined && profile.connections_limit !== null) {
-          userLimit =
-            typeof profile.connections_limit === "string"
-              ? Number.parseInt(profile.connections_limit)
-              : profile.connections_limit
-        }
+    if (profile) {
+      // Se for admin, limite ilimitado
+      if (profile.role === "admin") {
+        userLimit = 999
+      }
+      // Usar connections_limit se definido
+      else if (profile.connections_limit !== undefined && profile.connections_limit !== null) {
+        userLimit =
+          typeof profile.connections_limit === "string"
+            ? Number.parseInt(profile.connections_limit)
+            : profile.connections_limit
       }
     }
 
     // 2. VERIFICAR CONEXÕES ATUAIS
-    const connectionsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id&user_id=eq.${user.id}`,
-      { headers },
+    const existingConnections = await queryMany<{ id: string }>(
+      'SELECT id FROM whatsapp_connections WHERE user_id = $1',
+      [user.id]
     )
-
-    if (!connectionsResponse.ok) {
-      return NextResponse.json({ success: false, error: "Erro ao verificar conexões existentes" }, { status: 500 })
-    }
-
-    const existingConnections = await connectionsResponse.json()
     const currentCount = existingConnections.length
 
     console.log(`📊 Usuário tem ${currentCount}/${userLimit} conexões`)
@@ -89,16 +63,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. VERIFICAR SE JÁ EXISTE CONEXÃO COM MESMO NOME
-    const duplicateResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id&user_id=eq.${user.id}&connection_name=eq.${encodeURIComponent(connectionName)}`,
-      { headers },
+    const duplicates = await queryMany<{ id: string }>(
+      'SELECT id FROM whatsapp_connections WHERE user_id = $1 AND connection_name = $2',
+      [user.id, connectionName]
     )
 
-    if (duplicateResponse.ok) {
-      const duplicates = await duplicateResponse.json()
-      if (duplicates.length > 0) {
-        return NextResponse.json({ success: false, error: "Já existe uma conexão com este nome" }, { status: 400 })
-      }
+    if (duplicates.length > 0) {
+      return NextResponse.json({ success: false, error: "Já existe uma conexão com este nome" }, { status: 400 })
     }
 
     // 5. CHAMAR A API DE CRIAÇÃO DE INSTÂNCIA

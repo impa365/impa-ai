@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { generateTokenPair, logJWTOperation } from "@/lib/jwt";
 import { checkRateLimit, getRequestIdentifier, RATE_LIMITS } from "@/lib/rate-limit";
 import { logLoginAttempt, logRateLimitExceeded } from "@/lib/security-audit";
+import { queryOne } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,44 +43,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ Configuração do Supabase não encontrada");
-      return NextResponse.json(
-        { error: "Erro de configuração do servidor" },
-        { status: 500 }
-      );
-    }
-
-    const headers = {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-    };
-
     // Buscar usuário por email
-    const userResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?email=eq.${email}&select=*`,
-      {
-        headers,
-      }
-    );
+    const user = await queryOne('SELECT * FROM user_profiles WHERE email = $1', [email]);
 
-    if (!userResponse.ok) {
-      console.error("❌ Erro ao buscar usuário:", userResponse.status);
-      return NextResponse.json(
-        { error: "Erro interno do servidor" },
-        { status: 500 }
-      );
-    }
-
-    const users = await userResponse.json();
-
-    if (!users || users.length === 0) {
+    if (!user) {
       console.log("❌ Usuário não encontrado:", email);
       logLoginAttempt(email, false, request, 'Usuário não encontrado')
       return NextResponse.json(
@@ -87,8 +54,6 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-
-    const user = users[0];
 
     // Verificar senha usando bcrypt
     const passwordMatch = await bcrypt.compare(password, user.password)
@@ -105,19 +70,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Atualizar último login
-    const updateResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?id=eq.${user.id}`,
-      {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({
-          last_login_at: new Date().toISOString(),
-          login_count: (user.login_count || 0) + 1,
-        }),
-      }
-    );
-
-    if (!updateResponse.ok) {
+    try {
+      await queryOne('UPDATE user_profiles SET last_login_at = $1, login_count = $2 WHERE id = $3', [new Date().toISOString(), (user.login_count || 0) + 1, user.id]);
+    } catch (updateError) {
       console.warn("⚠️ Não foi possível atualizar último login");
     }
 

@@ -82,25 +82,25 @@ export async function GET(request: NextRequest) {
           user_id: userId,
           total_xp: 0,
           current_level: 1,
-          completed_missions: [],
-          unlocked_badges: [],
+          completed_missions: JSON.stringify([]),
+          unlocked_badges: JSON.stringify([]),
           active_mission_id: null,
-          mission_progress: null,
-          stats: {
+          mission_progress: JSON.stringify({}),
+          stats: JSON.stringify({
             totalMissionsCompleted: 0,
             fastestSpeedrun: null,
             perfectMissions: 0,
             totalHintsUsed: 0,
             totalTimeSpent: 0
-          },
-          preferences: {
+          }),
+          preferences: JSON.stringify({
             soundEnabled: true,
             autoStartMissions: false,
             showARIA: true,
             celebrationEffects: true
-          }
+          })
         })
-        data = [newData]
+        data = newData
       } catch (error: any) {
         console.error('❌ [QUEST] Erro ao criar progresso:', error.message)
         return NextResponse.json(

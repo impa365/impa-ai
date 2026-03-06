@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getCurrentServerUser } from "@/lib/auth-server";
 import { deleteUazapiInstanceServer } from "@/lib/uazapi-server";
 import { logResourceDeleted, logAccessDenied } from "@/lib/security-audit";
+import { query, queryOne, queryMany } from "@/lib/db";
 
 export async function DELETE(
   request: NextRequest,
@@ -37,71 +38,25 @@ export async function DELETE(
       role: user.role
     });
 
-    // Configuração do Supabase
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { success: false, error: "Configuração não encontrada" },
-        { status: 500 }
-      );
-    }
-
     console.log("🔍 Buscando conexão com instance_name:", instanceName);
 
     // Buscar conexão incluindo api_type e instance_token
-    const connectionCheckResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}&select=id,user_id,connection_name,api_type,instance_token`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
+    const connections = await queryMany(
+      'SELECT id, user_id, connection_name, api_type, instance_token FROM whatsapp_connections WHERE instance_name = $1',
+      [instanceName]
     );
 
-    console.log("📡 Resposta da busca de conexão:", {
-      status: connectionCheckResponse.status,
-      ok: connectionCheckResponse.ok
-    });
-
-    if (!connectionCheckResponse.ok) {
-      console.error("❌ Erro ao buscar conexão:", connectionCheckResponse.statusText);
-      return NextResponse.json(
-        { success: false, error: "Erro ao verificar conexão" },
-        { status: 500 }
-      );
-    }
-
-    const connections = await connectionCheckResponse.json();
     console.log("📋 Conexões encontradas:", connections);
 
     if (!connections || connections.length === 0) {
       console.error("❌ Nenhuma conexão encontrada com instance_name:", instanceName);
       
       // Buscar todas as conexões do usuário para debug
-      const allConnectionsResponse = await fetch(
-        `${supabaseUrl}/rest/v1/whatsapp_connections?user_id=eq.${user.id}&select=id,instance_name,connection_name`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-          },
-        }
+      const allConnections = await queryMany(
+        'SELECT id, instance_name, connection_name FROM whatsapp_connections WHERE user_id = $1',
+        [user.id]
       );
-      
-      if (allConnectionsResponse.ok) {
-        const allConnections = await allConnectionsResponse.json();
-        console.log("🔍 Todas as conexões do usuário:", allConnections);
-      }
+      console.log("🔍 Todas as conexões do usuário:", allConnections);
       
       return NextResponse.json(
         { success: false, error: "Conexão não encontrada" },
@@ -153,23 +108,10 @@ export async function DELETE(
     } else {
       // Evolution API (padrão)
       console.log("🔄 Deletando instância da Evolution API...");
-      const integrationResponse = await fetch(
-        `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-          },
-        }
+      const integrations = await queryMany(
+        'SELECT config FROM integrations WHERE type = $1 AND is_active = true',
+        ['evolution_api']
       );
-
-      if (!integrationResponse.ok) {
-        console.warn("⚠️ Não foi possível buscar configuração da Evolution API");
-      } else {
-        const integrations = await integrationResponse.json();
 
         if (integrations && integrations.length > 0) {
           const config = integrations[0].config;
@@ -201,30 +143,10 @@ export async function DELETE(
             }
           }
         }
-      }
     }
 
     // Deletar do banco de dados (sempre executar, mesmo se falhar na API)
-    const deleteFromDBResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`,
-      {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
-    );
-
-    if (!deleteFromDBResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao deletar conexão do banco de dados" },
-        { status: 500 }
-      );
-    }
+    await query('DELETE FROM whatsapp_connections WHERE instance_name = $1', [instanceName]);
 
     // Log de auditoria - deleção bem-sucedida
     logResourceDeleted(user.id, user.email, 'connection', connection.id, request)

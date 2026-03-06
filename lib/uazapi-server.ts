@@ -45,40 +45,19 @@ export interface UazapiCreateInstanceResponse {
  */
 export async function getUazapiConfigServer(): Promise<UazapiConfig | null> {
   try {
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+    const { queryOne } = await import("@/lib/db")
 
-    if (!supabaseUrl || !supabaseKey) {
-      console.error('❌ Variáveis de ambiente do Supabase não configuradas')
-      return null
-    }
-
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?select=config&type=eq.uazapi&is_active=eq.true&limit=1`,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept-Profile': 'impaai',
-          'Content-Profile': 'impaai',
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
+    const row = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["uazapi"]
     )
 
-    if (!response.ok) {
-      console.error('❌ Erro ao buscar configurações da Uazapi do banco:', response.status)
-      return null
-    }
-
-    const data = await response.json()
-
-    if (!data || data.length === 0) {
+    if (!row) {
       console.log('⚠️ Uazapi não está configurada no banco de dados')
       return null
     }
 
-    const config = data[0].config
+    const config = typeof row.config === "string" ? JSON.parse(row.config) : row.config
 
     if (!config?.serverUrl || !config?.apiKey) {
       console.error('❌ Configuração da Uazapi está incompleta no banco')

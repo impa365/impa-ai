@@ -1,7 +1,6 @@
 "use client"
 
 import { createContext, useContext } from "react"
-import { getSupabaseServer } from "@/lib/supabase"
 
 // Definição do tipo ThemeConfig
 export interface ThemeConfig {
@@ -157,104 +156,8 @@ export function applyThemeColors(theme: ThemeConfig): void {
   }
 }
 
-// Função para carregar o tema do banco de dados (para uso no servidor)
-export async function loadThemeFromDatabase(): Promise<ThemeConfig | null> {
-  try {
-    console.log("🎨 Loading theme from database...")
-    const client = await getSupabaseServer()
-    const { data, error } = await client.from("system_themes").select("*").eq("is_active", true).single()
-
-    if (error) {
-      console.error("❌ Erro ao carregar tema:", error)
-      return null
-    }
-
-    if (!data) {
-      console.log("ℹ️ Nenhum tema ativo encontrado, usando tema padrão")
-      return null
-    }
-
-    // Mapear os dados do banco para o formato ThemeConfig
-    const theme: ThemeConfig = {
-      systemName: data.display_name || defaultTheme.systemName,
-      description: data.description || defaultTheme.description,
-      logoIcon: data.logo_icon || defaultTheme.logoIcon,
-      primaryColor: data.colors?.primary || defaultTheme.primaryColor,
-      secondaryColor: data.colors?.secondary || defaultTheme.secondaryColor,
-      accentColor: data.colors?.accent || defaultTheme.accentColor,
-      textColor: data.colors?.text,
-      backgroundColor: data.colors?.background,
-      fontFamily: data.fonts?.primary,
-      borderRadius: data.borders?.radius,
-      customCss: data.custom_css,
-    }
-
-    console.log("✅ Theme loaded successfully:", theme.systemName)
-    return theme
-  } catch (error) {
-    console.error("❌ Erro ao carregar tema do banco:", error)
-    return null
-  }
-}
-
-// Função para salvar o tema no banco de dados (para uso no servidor)
-export async function saveThemeToDatabase(theme: ThemeConfig): Promise<boolean> {
-  try {
-    console.log("💾 Saving theme to database:", theme.systemName)
-    const client = await getSupabaseServer()
-
-    // Verificar se já existe um tema ativo
-    const { data: existingTheme } = await client.from("system_themes").select("id").eq("is_active", true).single()
-
-    // Preparar os dados para salvar
-    const themeData = {
-      name: theme.systemName.toLowerCase().replace(/\s+/g, "_"),
-      display_name: theme.systemName,
-      description: theme.description || "Tema personalizado",
-      colors: {
-        primary: theme.primaryColor,
-        secondary: theme.secondaryColor,
-        accent: theme.accentColor,
-        text: theme.textColor,
-        background: theme.backgroundColor,
-      },
-      fonts: {
-        primary: theme.fontFamily,
-      },
-      borders: {
-        radius: theme.borderRadius,
-      },
-      custom_css: theme.customCss,
-      is_default: false,
-      is_active: true,
-      logo_icon: theme.logoIcon,
-    }
-
-    if (existingTheme) {
-      // Atualizar tema existente
-      const { error } = await client.from("system_themes").update(themeData).eq("id", existingTheme.id)
-
-      if (error) {
-        console.error("❌ Erro ao atualizar tema:", error)
-        return false
-      }
-    } else {
-      // Criar novo tema
-      const { error } = await client.from("system_themes").insert(themeData)
-
-      if (error) {
-        console.error("❌ Erro ao criar tema:", error)
-        return false
-      }
-    }
-
-    console.log("✅ Theme saved successfully")
-    return true
-  } catch (error) {
-    console.error("❌ Erro ao salvar tema no banco:", error)
-    return false
-  }
-}
+// Funções de banco de dados movidas para lib/theme-server.ts
+// Use loadThemeFromDatabase/saveThemeToDatabase de "@/lib/theme-server"
 
 // Função para carregar o tema do localStorage
 export function loadThemeFromLocalStorage(): ThemeConfig | null {

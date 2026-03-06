@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { queryOne } from "@/lib/db"
 
 interface EventTypeResponse {
   timeZone: string | null
@@ -9,40 +10,20 @@ interface EventTypeResponse {
   eventTypeId: string
 }
 
-function getSupabaseHeaders(supabaseKey: string) {
-  return {
-    "Content-Type": "application/json",
-    "Accept-Profile": "impaai",
-    "Content-Profile": "impaai",
-    apikey: supabaseKey,
-    Authorization: `Bearer ${supabaseKey}`,
-  }
-}
-
-async function fetchAgentRecord(
-  supabaseUrl: string,
-  supabaseKey: string,
-  agentId: string,
-) {
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/ai_agents?select=id,name,calendar_integration,calendar_provider,calendar_api_key,calendar_api_version,calendar_meeting_id&limit=1&id=eq.${agentId}`,
-    {
-      headers: getSupabaseHeaders(supabaseKey),
-      cache: "no-store",
-    },
+async function fetchAgentRecord(agentId: string) {
+  return queryOne<{
+    id: string
+    name: string
+    calendar_integration: boolean
+    calendar_provider: string
+    calendar_api_key: string
+    calendar_api_version: string
+    calendar_meeting_id: string
+  }>(
+    `SELECT id, name, calendar_integration, calendar_provider, calendar_api_key, calendar_api_version, calendar_meeting_id
+     FROM ai_agents WHERE id = $1 LIMIT 1`,
+    [agentId],
   )
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "")
-    throw new Error(`Erro ao buscar agente: ${response.status} - ${text}`)
-  }
-
-  const data = await response.json()
-  if (!Array.isArray(data) || data.length === 0) {
-    return null
-  }
-
-  return data[0]
 }
 
 async function fetchEventTypeFromCal(
@@ -108,7 +89,6 @@ async function fetchScheduleTimeZone(
     return schedule?.timeZone ?? schedule?.timezone ?? null
   }
 
-  // Alguns tenants retornam um objeto único em data
   if (payload?.data && !Array.isArray(payload.data) && String(payload.data?.id) === String(scheduleId)) {
     return payload.data?.timeZone ?? payload.data?.timezone ?? null
   }
@@ -152,17 +132,7 @@ export async function GET(
       return NextResponse.json({ error: "eventTypeId obrigatório" }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { error: "Supabase não configurado" },
-        { status: 500 },
-      )
-    }
-
-    const agent = await fetchAgentRecord(supabaseUrl, supabaseKey, agentId)
+    const agent = await fetchAgentRecord(agentId)
 
     if (!agent) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })

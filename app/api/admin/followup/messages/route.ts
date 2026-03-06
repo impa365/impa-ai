@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getCurrentServerUser } from "@/lib/auth-server"
+import { queryMany, queryOne, query, buildInsert } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,58 +12,41 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const connectionId = searchParams.get("connection_id")
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
+    const conditions: string[] = []
+    const params: any[] = []
+    let paramIdx = 1
 
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
-    // Construir query
-    let query = `${supabaseUrl}/rest/v1/folowUp24hs_mensagem?select=*,whatsapp_connections!whatsapp_conenections_id(connection_name)&order=tentativa_dia.asc`
-
-    // Filtrar por conexão se especificado
     if (connectionId) {
-      query += `&whatsapp_conenections_id=eq.${connectionId}`
+      conditions.push(`m.whatsapp_conenections_id = $${paramIdx++}`)
+      params.push(connectionId)
     }
 
-    // Se não for admin, filtrar por usuário
+    // Se não for admin, filtrar por conexões do usuário
     if (user.role !== "admin") {
-      // Buscar conexões do usuário primeiro
-      const connectionsResponse = await fetch(
-        `${supabaseUrl}/rest/v1/whatsapp_connections?select=id&user_id=eq.${user.id}`,
-        { headers }
+      const userConnections = await queryMany(
+        `SELECT id FROM whatsapp_connections WHERE user_id = $1`,
+        [user.id]
       )
-      
-      if (!connectionsResponse.ok) {
-        throw new Error("Erro ao buscar conexões do usuário")
-      }
-      
-      const userConnections = await connectionsResponse.json()
       const connectionIds = userConnections.map((conn: any) => conn.id)
-      
+
       if (connectionIds.length === 0) {
         return NextResponse.json({ success: true, messages: [] })
       }
-      
-      query += `&whatsapp_conenections_id=in.(${connectionIds.join(",")})`
+
+      conditions.push(`m.whatsapp_conenections_id = ANY($${paramIdx++})`)
+      params.push(connectionIds)
     }
 
-    const response = await fetch(query, { headers })
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
 
-    if (!response.ok) {
-      throw new Error("Erro ao buscar mensagens")
-    }
-
-    const messages = await response.json()
+    const messages = await queryMany(
+      `SELECT m.*, wc.connection_name
+       FROM "folowUp24hs_mensagem" m
+       LEFT JOIN whatsapp_connections wc ON m.whatsapp_conenections_id = wc.id
+       ${whereClause}
+       ORDER BY m.tentativa_dia ASC`,
+      params
+    )
 
     return NextResponse.json({
       success: true,
@@ -94,66 +78,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Verificar se a conexão pertence ao usuário (se não for admin)
     if (user.role !== "admin") {
-      const connectionResponse = await fetch(
-        `${supabaseUrl}/rest/v1/whatsapp_connections?select=id&id=eq.${whatsapp_conenections_id}&user_id=eq.${user.id}`,
-        { headers }
+      const conn = await queryOne(
+        `SELECT id FROM whatsapp_connections WHERE id = $1 AND user_id = $2`,
+        [whatsapp_conenections_id, user.id]
       )
 
-      if (!connectionResponse.ok) {
-        throw new Error("Erro ao verificar conexão")
-      }
-
-      const connections = await connectionResponse.json()
-      if (!connections || connections.length === 0) {
+      if (!conn) {
         return NextResponse.json({ error: "Conexão não encontrada ou sem permissão" }, { status: 403 })
       }
     }
 
     // Criar mensagem
-    const newMessage = {
+    const ins = buildInsert('"folowUp24hs_mensagem"', {
       whatsapp_conenections_id,
       tentativa_dia: Number(tentativa_dia),
       tipo_mensagem,
       mensagem: mensagem || null,
       link: link || null,
-    }
-
-    const response = await fetch(`${supabaseUrl}/rest/v1/folowUp24hs_mensagem`, {
-      method: "POST",
-      headers: {
-        ...headers,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(newMessage),
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Erro ao criar mensagem: ${errorText}`)
-    }
-
-    const createdMessage = await response.json()
+    const createdMessage = await queryOne(ins.text, ins.values)
 
     return NextResponse.json({
       success: true,
-      message: createdMessage[0],
+      message: createdMessage,
     })
   } catch (error: any) {
     console.error("Erro na API followup/messages POST:", error)
@@ -178,69 +128,64 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "ID da mensagem é obrigatório" }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Verificar se a mensagem existe e se o usuário tem permissão
     if (user.role !== "admin") {
-      const messageResponse = await fetch(
-        `${supabaseUrl}/rest/v1/folowUp24hs_mensagem?select=*,whatsapp_connections!whatsapp_conenections_id(user_id)&id=eq.${id}`,
-        { headers }
+      const msg = await queryOne(
+        `SELECT m.*, wc.user_id AS wc_user_id
+         FROM "folowUp24hs_mensagem" m
+         LEFT JOIN whatsapp_connections wc ON m.whatsapp_conenections_id = wc.id
+         WHERE m.id = $1`,
+        [id]
       )
 
-      if (!messageResponse.ok) {
-        throw new Error("Erro ao verificar mensagem")
-      }
-
-      const messages = await messageResponse.json()
-      if (!messages || messages.length === 0) {
+      if (!msg) {
         return NextResponse.json({ error: "Mensagem não encontrada" }, { status: 404 })
       }
 
-      if (messages[0].whatsapp_connections?.user_id !== user.id) {
+      if (msg.wc_user_id !== user.id) {
         return NextResponse.json({ error: "Sem permissão para editar esta mensagem" }, { status: 403 })
       }
     }
 
-    // Atualizar mensagem
-    const updateData: any = {}
-    if (whatsapp_conenections_id !== undefined) updateData.whatsapp_conenections_id = whatsapp_conenections_id
-    if (tentativa_dia !== undefined) updateData.tentativa_dia = Number(tentativa_dia)
-    if (tipo_mensagem !== undefined) updateData.tipo_mensagem = tipo_mensagem
-    if (mensagem !== undefined) updateData.mensagem = mensagem || null
-    if (link !== undefined) updateData.link = link || null
+    // Atualizar mensagem - build SET clauses dynamically
+    const setClauses: string[] = []
+    const params: any[] = []
+    let paramIdx = 1
 
-    const response = await fetch(`${supabaseUrl}/rest/v1/folowUp24hs_mensagem?id=eq.${id}`, {
-      method: "PATCH",
-      headers: {
-        ...headers,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(updateData),
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Erro ao atualizar mensagem: ${errorText}`)
+    if (whatsapp_conenections_id !== undefined) {
+      setClauses.push(`whatsapp_conenections_id = $${paramIdx++}`)
+      params.push(whatsapp_conenections_id)
+    }
+    if (tentativa_dia !== undefined) {
+      setClauses.push(`tentativa_dia = $${paramIdx++}`)
+      params.push(Number(tentativa_dia))
+    }
+    if (tipo_mensagem !== undefined) {
+      setClauses.push(`tipo_mensagem = $${paramIdx++}`)
+      params.push(tipo_mensagem)
+    }
+    if (mensagem !== undefined) {
+      setClauses.push(`mensagem = $${paramIdx++}`)
+      params.push(mensagem || null)
+    }
+    if (link !== undefined) {
+      setClauses.push(`link = $${paramIdx++}`)
+      params.push(link || null)
     }
 
-    const updatedMessage = await response.json()
+    if (setClauses.length === 0) {
+      return NextResponse.json({ error: "Nenhum campo para atualizar" }, { status: 400 })
+    }
+
+    params.push(id)
+    const updatedMessage = await queryOne(
+      `UPDATE "folowUp24hs_mensagem" SET ${setClauses.join(", ")} WHERE id = $${paramIdx} RETURNING *`,
+      params
+    )
 
     return NextResponse.json({
       success: true,
-      message: updatedMessage[0],
+      message: updatedMessage,
     })
   } catch (error: any) {
     console.error("Erro na API followup/messages PUT:", error)
@@ -265,52 +210,27 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "ID da mensagem é obrigatório" }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Verificar se a mensagem existe e se o usuário tem permissão
     if (user.role !== "admin") {
-      const messageResponse = await fetch(
-        `${supabaseUrl}/rest/v1/folowUp24hs_mensagem?select=*,whatsapp_connections!whatsapp_conenections_id(user_id)&id=eq.${id}`,
-        { headers }
+      const msg = await queryOne(
+        `SELECT m.*, wc.user_id AS wc_user_id
+         FROM "folowUp24hs_mensagem" m
+         LEFT JOIN whatsapp_connections wc ON m.whatsapp_conenections_id = wc.id
+         WHERE m.id = $1`,
+        [id]
       )
 
-      if (!messageResponse.ok) {
-        throw new Error("Erro ao verificar mensagem")
-      }
-
-      const messages = await messageResponse.json()
-      if (!messages || messages.length === 0) {
+      if (!msg) {
         return NextResponse.json({ error: "Mensagem não encontrada" }, { status: 404 })
       }
 
-      if (messages[0].whatsapp_connections?.user_id !== user.id) {
+      if (msg.wc_user_id !== user.id) {
         return NextResponse.json({ error: "Sem permissão para deletar esta mensagem" }, { status: 403 })
       }
     }
 
     // Deletar mensagem
-    const response = await fetch(`${supabaseUrl}/rest/v1/folowUp24hs_mensagem?id=eq.${id}`, {
-      method: "DELETE",
-      headers,
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Erro ao deletar mensagem: ${errorText}`)
-    }
+    await query(`DELETE FROM "folowUp24hs_mensagem" WHERE id = $1`, [id])
 
     return NextResponse.json({
       success: true,

@@ -1,25 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/supabase";
-
-// Verificar se as variáveis de ambiente estão definidas
-if (!process.env.SUPABASE_URL) {
-  console.error("SUPABASE_URL não está definida");
-}
-
-if (!process.env.SUPABASE_ANON_KEY) {
-  console.error("SUPABASE_ANON_KEY não está definida");
-}
+import { query, queryOne, queryMany, buildInsert } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
-    // Verificar se o Supabase está configurado
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-      return NextResponse.json(
-        { error: "Configuração do Supabase não encontrada" },
-        { status: 500 }
-      );
-    }
-
     const body = await request.json();
     const { agent_id, activity_type, activity_data } = body;
 
@@ -31,13 +14,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar se o agente existe
-    const { data: agent, error: agentError } = await db
-      .agents()
-      .select("id")
-      .eq("id", agent_id)
-      .single();
+    const agent = await queryOne<{ id: string }>(
+      'SELECT id FROM ai_agents WHERE id = $1',
+      [agent_id]
+    );
 
-    if (agentError || !agent) {
+    if (!agent) {
       return NextResponse.json(
         { error: "Agente não encontrado" },
         { status: 404 }
@@ -45,17 +27,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Registrar log
-    const { data, error } = await db.activityLogs().insert([
-      {
-        agent_id,
-        activity_type,
-        activity_data: activity_data || {},
-      },
-    ]);
-
-    if (error) {
-      throw error;
-    }
+    const { text, values } = buildInsert('agent_activity_logs', {
+      agent_id,
+      activity_type,
+      activity_data: activity_data || {},
+    });
+    await query(text, values);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -66,14 +43,6 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Verificar se o Supabase está configurado
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-      return NextResponse.json(
-        { error: "Configuração do Supabase não encontrada" },
-        { status: 500 }
-      );
-    }
-
     const searchParams = request.nextUrl.searchParams;
     const agent_id = searchParams.get("agent_id");
     const limit = Number.parseInt(searchParams.get("limit") || "50");
@@ -87,20 +56,20 @@ export async function GET(request: NextRequest) {
     }
 
     // Buscar logs do agente
-    const { data, error, count } = await db
-      .activityLogs()
-      .select("*", { count: "exact" })
-      .eq("agent_id", agent_id)
-      .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
+    const logs = await queryMany(
+      'SELECT * FROM agent_activity_logs WHERE agent_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [agent_id, limit, offset]
+    );
 
-    if (error) {
-      throw error;
-    }
+    // Contar total de registros
+    const countResult = await queryOne<{ total: string }>(
+      'SELECT COUNT(*) as total FROM agent_activity_logs WHERE agent_id = $1',
+      [agent_id]
+    );
 
     return NextResponse.json({
-      logs: data,
-      total: count,
+      logs,
+      total: countResult ? parseInt(countResult.total) : 0,
       limit,
       offset,
     });

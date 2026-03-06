@@ -1,117 +1,58 @@
 import { NextResponse } from "next/server";
+import { query, queryOne, queryMany, buildInsert, buildUpdate } from "@/lib/db";
 
 export async function GET() {
   console.log("📡 API: /api/admin/agents chamada");
 
   try {
-    // Usar as variáveis que já existem no projeto
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ Variáveis de ambiente não encontradas:", {
-        supabaseUrl: !!supabaseUrl,
-        supabaseKey: !!supabaseKey,
-      });
-      throw new Error("Variáveis de ambiente do Supabase não configuradas");
-    }
-
-    // Headers para Supabase REST API
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    };
-
     console.log("🔍 Buscando agentes...");
     // Buscar agentes com joins - incluindo model_config para provedor LLM
-    const agentsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,user_profiles!ai_agents_user_id_fkey(id,email,full_name),whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(connection_name,status,api_type)&order=created_at.desc`,
-      { headers }
-    );
-
-    if (!agentsResponse.ok) {
-      const errorText = await agentsResponse.text();
-      console.error(
-        "❌ Erro ao buscar agentes:",
-        agentsResponse.status,
-        errorText
-      );
-      throw new Error(`Erro ao buscar agentes: ${agentsResponse.status}`);
-    }
-
-    const agents = await agentsResponse.json();
+    const agents = await queryMany(`
+      SELECT a.*,
+        CASE WHEN up.id IS NOT NULL THEN json_build_object('id', up.id, 'email', up.email, 'full_name', up.full_name) ELSE NULL END as user_profiles,
+        CASE WHEN wc.id IS NOT NULL THEN json_build_object('connection_name', wc.connection_name, 'status', wc.status, 'api_type', wc.api_type) ELSE NULL END as whatsapp_connections
+      FROM ai_agents a
+      LEFT JOIN user_profiles up ON a.user_id = up.id
+      LEFT JOIN whatsapp_connections wc ON a.whatsapp_connection_id = wc.id
+      ORDER BY a.created_at DESC
+    `);
     console.log("✅ Agentes encontrados:", agents.length);
 
     console.log("🔍 Buscando usuários...");
-    // Buscar usuários
-    const usersResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?select=id,email,full_name&order=full_name.asc`,
-      { headers }
+    const users = await queryMany(
+      `SELECT id, email, full_name FROM user_profiles ORDER BY full_name ASC`
     );
-
-    if (!usersResponse.ok) {
-      const errorText = await usersResponse.text();
-      console.error(
-        "❌ Erro ao buscar usuários:",
-        usersResponse.status,
-        errorText
-      );
-      throw new Error(`Erro ao buscar usuários: ${usersResponse.status}`);
-    }
-
-    const users = await usersResponse.json();
     console.log("✅ Usuários encontrados:", users.length);
 
     console.log("🔍 Buscando conexões WhatsApp...");
-    // Buscar conexões WhatsApp
-    const connectionsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=*&order=connection_name.asc`,
-      { headers }
+    const connections = await queryMany(
+      `SELECT * FROM whatsapp_connections ORDER BY connection_name ASC`
     );
-
-    if (!connectionsResponse.ok) {
-      const errorText = await connectionsResponse.text();
-      console.error(
-        "❌ Erro ao buscar conexões:",
-        connectionsResponse.status,
-        errorText
-      );
-      throw new Error(`Erro ao buscar conexões: ${connectionsResponse.status}`);
-    }
-
-    const connections = await connectionsResponse.json();
     console.log("✅ Conexões encontradas:", connections.length);
 
     console.log("🔍 Buscando configurações de provedores LLM...");
-    // Buscar configurações de sistema para provedores LLM
-    const settingsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?select=setting_key,setting_value&setting_key=in.(available_llm_providers,default_model)`,
-      { headers }
-    );
-
     let llmConfig = {
       available_providers: ["openai", "anthropic", "google"],
       default_model: "gpt-4o-mini"
     };
 
-    if (settingsResponse.ok) {
-      const settings = await settingsResponse.json();
-      settings.forEach((setting: any) => {
-        if (setting.setting_key === 'available_llm_providers') {
-          try {
-            llmConfig.available_providers = JSON.parse(setting.setting_value);
-          } catch (e) {
-            console.warn("Erro ao parsear available_llm_providers, usando padrão");
-          }
+    const settings = await queryMany(
+      `SELECT setting_key, setting_value FROM system_settings WHERE setting_key = ANY($1)`,
+      [['available_llm_providers', 'default_model']]
+    );
+
+    settings.forEach((setting: any) => {
+      if (setting.setting_key === 'available_llm_providers') {
+        try {
+          llmConfig.available_providers = JSON.parse(setting.setting_value);
+        } catch (e) {
+          console.warn("Erro ao parsear available_llm_providers, usando padrão");
         }
-        if (setting.setting_key === 'default_model') {
-          llmConfig.default_model = setting.setting_value;
-        }
-      });
-    }
+      }
+      if (setting.setting_key === 'default_model') {
+        llmConfig.default_model = setting.setting_value;
+      }
+    });
     console.log("✅ Configurações LLM carregadas:", llmConfig.available_providers.length, "provedores");
 
     console.log("✅ Dados processados com sucesso");
@@ -144,38 +85,16 @@ export async function POST(request: Request) {
       user_id: agentData.user_id,
     });
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas");
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    };
-
     // Primeiro, buscar a conexão WhatsApp para obter o instance_name
     console.log("🔍 Buscando dados da conexão WhatsApp...");
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=*&id=eq.${agentData.whatsapp_connection_id}`,
-      { headers }
+    const connection = await queryOne(
+      `SELECT * FROM whatsapp_connections WHERE id = $1`,
+      [agentData.whatsapp_connection_id]
     );
 
-    if (!connectionResponse.ok) {
-      throw new Error("Erro ao buscar conexão WhatsApp");
-    }
-
-    const connections = await connectionResponse.json();
-    if (!connections || connections.length === 0) {
+    if (!connection) {
       throw new Error("Conexão WhatsApp não encontrada");
     }
-
-    const connection = connections[0];
     console.log("✅ Conexão encontrada:", connection.connection_name);
 
     // PRIMEIRO: Criar agente no banco para obter o ID real
@@ -236,7 +155,7 @@ export async function POST(request: Request) {
       delay_message: Number(agentData.delay_message) || 1000,
       unknown_message: agentData.unknown_message,
       expire_time: Number(agentData.expire_time) || 0,
-      ignore_jids: `{${ignoreJidsArray.map((jid) => `"${jid}"`).join(",")}}`,
+      ignore_jids: ignoreJidsArray,
       
       // Funcionalidades extras
       transcribe_audio: Boolean(agentData.transcribe_audio),
@@ -261,58 +180,33 @@ export async function POST(request: Request) {
       // NÃO incluir bot_* campos aqui! Eles são para a tabela bots
     };
 
-    const createAgentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents`,
-      {
-        method: "POST",
-        headers: {
-          ...headers,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify(dbAgentData),
-      }
-    );
+    const { text: insertText, values: insertValues } = buildInsert("ai_agents", dbAgentData);
+    const newAgent = await queryOne(insertText, insertValues);
 
-    if (!createAgentResponse.ok) {
-      const errorText = await createAgentResponse.text();
-      console.error(
-        "❌ Erro ao criar agente no banco:",
-        createAgentResponse.status,
-        errorText
-      );
-      throw new Error(
-        `Erro ao criar agente no banco: ${createAgentResponse.status}`
-      );
+    if (!newAgent) {
+      throw new Error("Erro ao criar agente no banco");
     }
 
-    const newAgentArray = await createAgentResponse.json();
-    const newAgent = newAgentArray[0];
     const agentId = newAgent.id;
-
     console.log("✅ Agente criado no banco com ID:", agentId);
 
     // SEGUNDO: Buscar configuração do N8N para incluir no webhook
     console.log("🔍 Buscando configuração do N8N...");
     let n8nWebhookUrl = null;
-    let n8nIntegrations = null;
+    let n8nIntegrations: any[] | null = null;
     try {
-      const n8nResponse = await fetch(
-        `${supabaseUrl}/rest/v1/integrations?select=*&type=eq.n8n&is_active=eq.true`,
-        {
-          headers,
-        }
+      n8nIntegrations = await queryMany(
+        `SELECT * FROM integrations WHERE type = $1 AND is_active = true`,
+        ['n8n']
       );
 
-      if (n8nResponse.ok) {
-        n8nIntegrations = await n8nResponse.json();
-        if (n8nIntegrations && n8nIntegrations.length > 0) {
-          const n8nConfig =
-            typeof n8nIntegrations[0].config === "string"
-              ? JSON.parse(n8nIntegrations[0].config)
-              : n8nIntegrations[0].config;
-          n8nWebhookUrl = n8nConfig.flowUrl;
-          console.log("✅ N8N webhook encontrado");
-        }
+      if (n8nIntegrations && n8nIntegrations.length > 0) {
+        const n8nConfig =
+          typeof n8nIntegrations[0].config === "string"
+            ? JSON.parse(n8nIntegrations[0].config)
+            : n8nIntegrations[0].config;
+        n8nWebhookUrl = n8nConfig.flowUrl;
+        console.log("✅ N8N webhook encontrado");
       }
     } catch (n8nError) {
       console.log("⚠️ N8N não configurado, continuando sem webhook N8N");
@@ -334,21 +228,18 @@ export async function POST(request: Request) {
       try {
         // Buscar configuração do N8N Session
         console.log("🔍 [UAZAPI] Buscando configuração N8N Session...");
-        const n8nSessionResponse = await fetch(
-          `${supabaseUrl}/rest/v1/integrations?select=*&type=eq.n8n_session&is_active=eq.true`,
-          { headers }
+        const n8nSessions = await queryMany(
+          `SELECT * FROM integrations WHERE type = $1 AND is_active = true`,
+          ['n8n_session']
         );
 
         let n8nSessionUrl = null;
-        if (n8nSessionResponse.ok) {
-          const n8nSessions = await n8nSessionResponse.json();
-          if (n8nSessions && n8nSessions.length > 0) {
-            const n8nSessionConfig =
-              typeof n8nSessions[0].config === "string"
-                ? JSON.parse(n8nSessions[0].config)
-                : n8nSessions[0].config;
-            n8nSessionUrl = n8nSessionConfig.webhookUrl || n8nSessionConfig.webhook_url;
-          }
+        if (n8nSessions && n8nSessions.length > 0) {
+          const n8nSessionConfig =
+            typeof n8nSessions[0].config === "string"
+              ? JSON.parse(n8nSessions[0].config)
+              : n8nSessions[0].config;
+          n8nSessionUrl = n8nSessionConfig.webhookUrl || n8nSessionConfig.webhook_url;
         }
 
         if (!n8nSessionUrl) {
@@ -361,25 +252,17 @@ export async function POST(request: Request) {
         console.log("🔍 [UAZAPI] Buscando API key ativa do usuário:", agentData.user_id);
         let userApiKey = null;
         try {
-          // Buscar API key do usuário diretamente
-          const apiKeyUrl = `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${agentData.user_id}&is_active=eq.true&order=created_at.desc&limit=1`;
-          console.log("📊 [DEBUG] API Key URL:", apiKeyUrl);
-          const apiKeyResponse = await fetch(apiKeyUrl, { headers });
-          console.log("📊 [DEBUG] API Key response status:", apiKeyResponse.status);
-          if (apiKeyResponse.ok) {
-            const apiKeys = await apiKeyResponse.json();
-            console.log("📊 [DEBUG] API Keys encontradas:", JSON.stringify(apiKeys));
-            if (apiKeys && apiKeys.length > 0) {
-              userApiKey = apiKeys[0].api_key;
-              console.log("✅ [UAZAPI] API key do usuário encontrada");
-            } else {
-              console.warn("⚠️ [UAZAPI] Nenhuma API key ativa encontrada");
-              throw new Error("Você precisa criar uma API key antes de criar agentes. Vá para 'Gerenciar API Keys' e crie uma chave de API ativa.");
-            }
+          const apiKeyRow = await queryOne<{ api_key: string }>(
+            `SELECT api_key FROM user_api_keys WHERE user_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
+            [agentData.user_id]
+          );
+
+          if (apiKeyRow) {
+            userApiKey = apiKeyRow.api_key;
+            console.log("✅ [UAZAPI] API key do usuário encontrada");
           } else {
-            const errorText = await apiKeyResponse.text();
-            console.error("❌ [DEBUG] API Key response error:", errorText);
-            throw new Error("Erro ao buscar API key");
+            console.warn("⚠️ [UAZAPI] Nenhuma API key ativa encontrada");
+            throw new Error("Você precisa criar uma API key antes de criar agentes. Vá para 'Gerenciar API Keys' e crie uma chave de API ativa.");
           }
         } catch (apiKeyError: any) {
           console.error("❌ [UAZAPI] Erro com API key:", apiKeyError.message);
@@ -453,18 +336,13 @@ export async function POST(request: Request) {
           connection_id: agentData.whatsapp_connection_id,
         };
 
-        const createBotResponse = await fetch(`${supabaseUrl}/rest/v1/bots`, {
-          method: "POST",
-          headers: { ...headers, Prefer: "return=representation", "Content-Profile": "impaai", "Accept-Profile": "impaai" },
-          body: JSON.stringify(botPayload),
-        });
+        const { text: botInsertText, values: botInsertValues } = buildInsert("bots", botPayload);
+        const createdBot = await queryOne(botInsertText, botInsertValues);
 
-        if (!createBotResponse.ok) {
-          const errorText = await createBotResponse.text();
-          throw new Error(`Falha ao criar bot no banco: ${errorText}`);
+        if (!createdBot) {
+          throw new Error("Falha ao criar bot no banco");
         }
 
-        const [createdBot] = await createBotResponse.json();
         createdBotId = createdBot.id;
         console.log(`✅ [UAZAPI] Bot criado no banco: ${createdBotId}`);
 
@@ -497,40 +375,19 @@ export async function POST(request: Request) {
 
         // ETAPA 3: Salvar webhook_id no bot
         console.log("💾 [UAZAPI] ETAPA 3/3: Salvando webhook_id no bot...");
-        const updateBotResponse = await fetch(
-          `${supabaseUrl}/rest/v1/bots?id=eq.${createdBotId}`,
-          {
-            method: "PATCH",
-            headers: { ...headers, "Content-Profile": "impaai", "Accept-Profile": "impaai" },
-            body: JSON.stringify({ webhook_id: webhookResult.webhookId }),
-          }
+        await query(
+          `UPDATE bots SET webhook_id = $1 WHERE id = $2`,
+          [webhookResult.webhookId, createdBotId]
         );
-
-        if (!updateBotResponse.ok) {
-          throw new Error("Falha ao salvar webhook_id no bot");
-        }
-
         console.log("✅ [UAZAPI] webhook_id salvo no bot");
 
         // ETAPA 4: Vincular bot ao agente
         console.log("🔗 [UAZAPI] Vinculando bot ao agente...");
         console.log(`📝 [UAZAPI] Atualizando agente ${agentId} com bot_id: ${createdBotId}`);
-        const updateAgentResponse = await fetch(
-          `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
-          {
-            method: "PATCH",
-            headers: { ...headers, "Content-Profile": "impaai", "Accept-Profile": "impaai" },
-            body: JSON.stringify({ bot_id: createdBotId }),
-          }
+        await query(
+          `UPDATE ai_agents SET bot_id = $1 WHERE id = $2`,
+          [createdBotId, agentId]
         );
-
-        if (!updateAgentResponse.ok) {
-          const errorText = await updateAgentResponse.text();
-          console.error(`❌ [UAZAPI] Erro ao vincular bot - Status: ${updateAgentResponse.status}`);
-          console.error(`❌ [UAZAPI] Erro detalhado:`, errorText);
-          throw new Error(`Falha ao vincular bot ao agente: ${updateAgentResponse.status} - ${errorText}`);
-        }
-
         console.log("✅ [UAZAPI] Bot vinculado ao agente com sucesso!");
 
       } catch (uazapiError: any) {
@@ -541,10 +398,7 @@ export async function POST(request: Request) {
 
         try {
           console.log(`🗑️ [UAZAPI ROLLBACK] Deletando agente: ${agentId}`);
-          await fetch(`${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`, {
-            method: "DELETE",
-            headers: { ...headers, "Content-Profile": "impaai", "Accept-Profile": "impaai" },
-          });
+          await query(`DELETE FROM ai_agents WHERE id = $1`, [agentId]);
           console.log("✅ [UAZAPI ROLLBACK] Agente deletado");
         } catch (e) {
           console.error("❌ [UAZAPI ROLLBACK] Falha ao deletar agente:", e);
@@ -554,35 +408,28 @@ export async function POST(request: Request) {
           try {
             console.log(`🗑️ [UAZAPI ROLLBACK] Deletando bot: ${createdBotId}`);
 
-            const getBotResponse = await fetch(
-              `${supabaseUrl}/rest/v1/bots?id=eq.${createdBotId}&select=webhook_id`,
-              { headers: { ...headers, "Content-Profile": "impaai", "Accept-Profile": "impaai" } }
+            const botForRollback = await queryOne<{ webhook_id: string }>(
+              `SELECT webhook_id FROM bots WHERE id = $1`,
+              [createdBotId]
             );
 
-            if (getBotResponse.ok) {
-              const [bot] = await getBotResponse.json();
+            if (botForRollback?.webhook_id) {
+              console.log(`🗑️ [UAZAPI ROLLBACK] Deletando webhook: ${botForRollback.webhook_id}`);
+              const { deleteUazapiWebhook } = await import("@/lib/uazapi-webhook-helpers");
+              const { getUazapiConfigServer } = await import("@/lib/uazapi-server");
+              const uazapiConfig = await getUazapiConfigServer();
 
-              if (bot?.webhook_id) {
-                console.log(`🗑️ [UAZAPI ROLLBACK] Deletando webhook: ${bot.webhook_id}`);
-                const { deleteUazapiWebhook } = await import("@/lib/uazapi-webhook-helpers");
-                const { getUazapiConfigServer } = await import("@/lib/uazapi-server");
-                const uazapiConfig = await getUazapiConfigServer();
-
-                if (uazapiConfig) {
-                  await deleteUazapiWebhook({
-                    uazapiServerUrl: uazapiConfig.serverUrl,
-                    instanceToken: connection.instance_token,
-                    webhookId: bot.webhook_id,
-                  });
-                  console.log("✅ [UAZAPI ROLLBACK] Webhook deletado");
-                }
+              if (uazapiConfig) {
+                await deleteUazapiWebhook({
+                  uazapiServerUrl: uazapiConfig.serverUrl,
+                  instanceToken: connection.instance_token,
+                  webhookId: botForRollback.webhook_id,
+                });
+                console.log("✅ [UAZAPI ROLLBACK] Webhook deletado");
               }
             }
 
-            await fetch(`${supabaseUrl}/rest/v1/bots?id=eq.${createdBotId}`, {
-              method: "DELETE",
-              headers: { ...headers, "Content-Profile": "impaai", "Accept-Profile": "impaai" },
-            });
+            await query(`DELETE FROM bots WHERE id = $1`, [createdBotId]);
             console.log("✅ [UAZAPI ROLLBACK] Bot deletado");
           } catch (e) {
             console.error("❌ [UAZAPI ROLLBACK] Falha ao deletar bot:", e);
@@ -610,34 +457,28 @@ export async function POST(request: Request) {
         let userApiKey = null;
         try {
           // Primeiro buscar o admin
-          const adminResponse = await fetch(
-            `${supabaseUrl}/rest/v1/user_profiles?select=id&role=eq.admin&limit=1`,
-            { headers }
+          const admin = await queryOne<{ id: string }>(
+            `SELECT id FROM user_profiles WHERE role = $1 LIMIT 1`,
+            ['admin']
           );
-          if (!adminResponse.ok) {
-            throw new Error("Não foi possível buscar informações do admin");
-          }
-          const admins = await adminResponse.json();
-          if (!admins || admins.length === 0) {
+
+          if (!admin) {
             throw new Error("Nenhum administrador encontrado no sistema");
           }
-          const adminId = admins[0].id;
-          console.log("✅ Admin identificado:", adminId);
+          console.log("✅ Admin identificado:", admin.id);
 
           // Agora buscar API key do admin
-          const apiKeyResponse = await fetch(
-            `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${adminId}&is_active=eq.true&order=created_at.desc&limit=1`,
-            { headers }
+          const apiKeyRow = await queryOne<{ api_key: string }>(
+            `SELECT api_key FROM user_api_keys WHERE user_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
+            [admin.id]
           );
-          if (apiKeyResponse.ok) {
-            const apiKeys = await apiKeyResponse.json();
-            if (apiKeys && apiKeys.length > 0) {
-              userApiKey = apiKeys[0].api_key;
-              console.log("✅ API key do admin encontrada");
-            } else {
-              console.warn("⚠️ Nenhuma API key ativa encontrada para o admin");
-              throw new Error("O administrador precisa criar uma API key antes que agentes possam ser criados. Vá para 'Gerenciar API Keys' e crie uma chave de API ativa.");
-            }
+
+          if (apiKeyRow) {
+            userApiKey = apiKeyRow.api_key;
+            console.log("✅ API key do admin encontrada");
+          } else {
+            console.warn("⚠️ Nenhuma API key ativa encontrada para o admin");
+            throw new Error("O administrador precisa criar uma API key antes que agentes possam ser criados. Vá para 'Gerenciar API Keys' e crie uma chave de API ativa.");
           }
         } catch (apiKeyError: any) {
           console.error("❌ Erro com API key do usuário:", apiKeyError.message);
@@ -690,37 +531,6 @@ export async function POST(request: Request) {
 
         console.log("📤 Enviando dados para Evolution API:", evolutionBotData);
 
-        // const evolutionIntegration = connections[0];
-        // console.log(
-        //   "✅ Integração Evolution API encontrada:",
-        //   evolutionIntegration.name
-        // );
-
-        // // Extrair configurações do JSON
-        // let evolutionConfig;
-        // try {
-        //   evolutionConfig =
-        //     typeof evolutionIntegration.config === "string"
-        //       ? JSON.parse(evolutionIntegration.config)
-        //       : evolutionIntegration.config;
-        // } catch (parseError) {
-        //   console.error("❌ Erro ao fazer parse da configuração:", parseError);
-        //   throw new Error("Configuração da Evolution API está malformada");
-        // }
-
-        // const evolutionUrl = evolutionConfig.apiUrl;
-        // const evolutionKey = evolutionConfig.apiKey;
-
-        // if (!evolutionUrl || !evolutionKey) {
-        //   console.error("❌ Configurações incompletas:", {
-        //     hasUrl: !!evolutionUrl,
-        //     hasKey: !!evolutionKey,
-        //     config: evolutionConfig,
-        //   });
-        //   throw new Error(
-        //     "Configurações da Evolution API incompletas. Verifique apiUrl e apiKey."
-        //   );
-        // }
         console.log("Instance token ->>", connection.instance_token);
         const createBotResponse = await fetch(evolutionApiUrl, {
           method: "POST",
@@ -740,21 +550,14 @@ export async function POST(request: Request) {
 
           // QUARTO: Atualizar agente no banco com o evolution_bot_id
           console.log("🔄 Atualizando agente com evolution_bot_id...");
-          const updateResponse = await fetch(
-            `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
-            {
-              method: "PATCH",
-              headers,
-              body: JSON.stringify({ evolution_bot_id: evolutionBotId }),
-            }
-          );
-
-          if (!updateResponse.ok) {
-            console.warn(
-              "⚠️ Erro ao atualizar evolution_bot_id, mas agente foi criado"
+          try {
+            await query(
+              `UPDATE ai_agents SET evolution_bot_id = $1 WHERE id = $2`,
+              [evolutionBotId, agentId]
             );
-          } else {
             console.log("✅ evolution_bot_id atualizado no banco");
+          } catch (updateErr) {
+            console.warn("⚠️ Erro ao atualizar evolution_bot_id, mas agente foi criado");
           }
         } else {
           const errorText = await createBotResponse.text();
@@ -800,171 +603,147 @@ export async function PUT(request: Request) {
     const { id, ...agentData } = await request.json();
     console.log("📝 Atualizando agente:", id);
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas");
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    };
-
     // Buscar agente atual para obter evolution_bot_id, bot_id e connection info
-    const currentAgentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(instance_name)&id=eq.${id}`,
-      { headers }
-    );
+    const currentAgent = await queryOne(`
+      SELECT a.*,
+        CASE WHEN wc.id IS NOT NULL THEN json_build_object('instance_name', wc.instance_name) ELSE NULL END as whatsapp_connections
+      FROM ai_agents a
+      LEFT JOIN whatsapp_connections wc ON a.whatsapp_connection_id = wc.id
+      WHERE a.id = $1
+    `, [id]);
 
-    let currentAgent = null;
-    if (currentAgentResponse.ok) {
-      const currentAgents = await currentAgentResponse.json();
-      if (currentAgents && currentAgents.length > 0) {
-        currentAgent = currentAgents[0];
+    if (currentAgent) {
+      // Atualizar bot na Evolution API se existir
+      if (
+        currentAgent.evolution_bot_id &&
+        currentAgent.whatsapp_connections?.instance_name
+      ) {
+        console.log("🤖 Atualizando bot na Evolution API...");
+        try {
+          // PROBLEMA IDENTIFICADO: Usar URL absoluta ao invés de relativa no Docker
+          const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+          const evolutionApiUrl = `${baseUrl}/api/integrations/evolution/evolutionBot/update/${currentAgent.evolution_bot_id}/${currentAgent.whatsapp_connections.instance_name}`;
 
-        // Atualizar bot na Evolution API se existir
-        if (
-          currentAgent.evolution_bot_id &&
-          currentAgent.whatsapp_connections?.instance_name
-        ) {
-          console.log("🤖 Atualizando bot na Evolution API...");
+          console.log(
+            "🔗 URL da Evolution API para update:",
+            evolutionApiUrl
+          );
+
+          // Buscar configuração do N8N para incluir no webhook
+          let n8nWebhookUrl = null;
+          let n8nIntegrations: any[] | null = null;
           try {
-            // PROBLEMA IDENTIFICADO: Usar URL absoluta ao invés de relativa no Docker
-            const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-            const evolutionApiUrl = `${baseUrl}/api/integrations/evolution/evolutionBot/update/${currentAgent.evolution_bot_id}/${currentAgent.whatsapp_connections.instance_name}`;
-
-            console.log(
-              "🔗 URL da Evolution API para update:",
-              evolutionApiUrl
+            n8nIntegrations = await queryMany(
+              `SELECT * FROM integrations WHERE type = $1 AND is_active = true`,
+              ['n8n']
             );
 
-            // Buscar configuração do N8N para incluir no webhook
-            let n8nWebhookUrl = null;
-            let n8nIntegrations = null;
-            try {
-              const n8nResponse = await fetch(
-                `${supabaseUrl}/rest/v1/integrations?select=*&type=eq.n8n&is_active=eq.true`,
-                { headers }
-              );
-
-              if (n8nResponse.ok) {
-                n8nIntegrations = await n8nResponse.json();
-                if (n8nIntegrations && n8nIntegrations.length > 0) {
-                  const n8nConfig =
-                    typeof n8nIntegrations[0].config === "string"
-                      ? JSON.parse(n8nIntegrations[0].config)
-                      : n8nIntegrations[0].config;
-                  n8nWebhookUrl = n8nConfig.flowUrl;
-                }
-              }
-            } catch (n8nError) {
-              console.log("⚠️ N8N não configurado para atualização");
+            if (n8nIntegrations && n8nIntegrations.length > 0) {
+              const n8nConfig =
+                typeof n8nIntegrations[0].config === "string"
+                  ? JSON.parse(n8nIntegrations[0].config)
+                  : n8nIntegrations[0].config;
+              n8nWebhookUrl = n8nConfig.flowUrl;
             }
+          } catch (n8nError) {
+            console.log("⚠️ N8N não configurado para atualização");
+          }
 
-            // Buscar API key ativa do usuário para incluir no webhook
-            console.log("🔍 Buscando API key ativa do usuário...");
-            let userApiKey = null;
-            try {
-              const apiKeyResponse = await fetch(
-                `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${agentData.user_id}&is_active=eq.true&order=created_at.desc&limit=1`,
-                { headers }
-              );
-              if (apiKeyResponse.ok) {
-                const apiKeys = await apiKeyResponse.json();
-                if (apiKeys && apiKeys.length > 0) {
-                  userApiKey = apiKeys[0].api_key;
-                  console.log("✅ API key do usuário encontrada");
-                } else {
-                  console.warn("⚠️ Nenhuma API key ativa encontrada para o usuário");
-                }
-              }
-            } catch (apiKeyError) {
-              console.warn("⚠️ Erro ao buscar API key do usuário:", apiKeyError);
-            }
-
-            // Construir URL do webhook com agentId, panelUrl e apiKey
-            let webhookUrl;
-            if (n8nWebhookUrl) {
-              webhookUrl = `${n8nWebhookUrl}?agentId=${id}`;
-              if (userApiKey) {
-                webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`;
-              }
+          // Buscar API key ativa do usuário para incluir no webhook
+          console.log("🔍 Buscando API key ativa do usuário...");
+          let userApiKey = null;
+          try {
+            const apiKeyRow = await queryOne<{ api_key: string }>(
+              `SELECT api_key FROM user_api_keys WHERE user_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
+              [agentData.user_id]
+            );
+            if (apiKeyRow) {
+              userApiKey = apiKeyRow.api_key;
+              console.log("✅ API key do usuário encontrada");
             } else {
-              webhookUrl = `${baseUrl}/api/agents/webhook?agentId=${id}`;
-              if (userApiKey) {
-                webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`;
-              }
+              console.warn("⚠️ Nenhuma API key ativa encontrada para o usuário");
             }
+          } catch (apiKeyError) {
+            console.warn("⚠️ Erro ao buscar API key do usuário:", apiKeyError);
+          }
 
-            console.log("📌 Webhook URL construída:", webhookUrl);
-
-            const evolutionBotData = {
-              enabled: true,
-              description: agentData.name,
-              apiUrl: webhookUrl,
-              apiKey:
-                n8nWebhookUrl && n8nIntegrations?.[0]?.api_key
-                  ? n8nIntegrations[0].api_key
-                  : undefined,
-              triggerType: agentData.trigger_type || "keyword",
-              triggerOperator: agentData.trigger_operator || "equals",
-              triggerValue: agentData.trigger_value || "",
-              expire: agentData.expire_time || 0,
-              keywordFinish: agentData.keyword_finish || "#sair",
-              delayMessage: agentData.delay_message || 1000,
-              unknownMessage:
-                agentData.unknown_message ||
-                "Desculpe, não entendi sua mensagem.",
-              listeningFromMe: Boolean(agentData.listening_from_me),
-              stopBotFromMe: Boolean(agentData.stop_bot_from_me),
-              keepOpen: Boolean(agentData.keep_open),
-              debounceTime: agentData.debounce_time || 10,
-              ignoreJids: Array.isArray(agentData.ignore_jids)
-                ? agentData.ignore_jids
-                : ["@g.us"],
-              splitMessages: Boolean(agentData.split_messages),
-              timePerChar: agentData.time_per_char || 100,
-            };
-
-            console.log(
-              "📤 Enviando dados de update para Evolution API:",
-              evolutionBotData
-            );
-
-            const updateBotResponse = await fetch(evolutionApiUrl, {
-              method: "PUT",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(evolutionBotData),
-            });
-
-            console.log(
-              "📥 Resposta do update da Evolution API:",
-              updateBotResponse.status
-            );
-
-            if (updateBotResponse.ok) {
-              console.log("✅ Bot atualizado na Evolution API");
-            } else {
-              const errorText = await updateBotResponse.text();
-              console.warn(
-                "⚠️ Erro ao atualizar bot na Evolution API:",
-                updateBotResponse.status,
-                errorText
-              );
+          // Construir URL do webhook com agentId, panelUrl e apiKey
+          let webhookUrl;
+          if (n8nWebhookUrl) {
+            webhookUrl = `${n8nWebhookUrl}?agentId=${id}`;
+            if (userApiKey) {
+              webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`;
             }
-          } catch (evolutionError) {
+          } else {
+            webhookUrl = `${baseUrl}/api/agents/webhook?agentId=${id}`;
+            if (userApiKey) {
+              webhookUrl += `&panelUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(userApiKey)}`;
+            }
+          }
+
+          console.log("📌 Webhook URL construída:", webhookUrl);
+
+          const evolutionBotData = {
+            enabled: true,
+            description: agentData.name,
+            apiUrl: webhookUrl,
+            apiKey:
+              n8nWebhookUrl && n8nIntegrations?.[0]?.api_key
+                ? n8nIntegrations[0].api_key
+                : undefined,
+            triggerType: agentData.trigger_type || "keyword",
+            triggerOperator: agentData.trigger_operator || "equals",
+            triggerValue: agentData.trigger_value || "",
+            expire: agentData.expire_time || 0,
+            keywordFinish: agentData.keyword_finish || "#sair",
+            delayMessage: agentData.delay_message || 1000,
+            unknownMessage:
+              agentData.unknown_message ||
+              "Desculpe, não entendi sua mensagem.",
+            listeningFromMe: Boolean(agentData.listening_from_me),
+            stopBotFromMe: Boolean(agentData.stop_bot_from_me),
+            keepOpen: Boolean(agentData.keep_open),
+            debounceTime: agentData.debounce_time || 10,
+            ignoreJids: Array.isArray(agentData.ignore_jids)
+              ? agentData.ignore_jids
+              : ["@g.us"],
+            splitMessages: Boolean(agentData.split_messages),
+            timePerChar: agentData.time_per_char || 100,
+          };
+
+          console.log(
+            "📤 Enviando dados de update para Evolution API:",
+            evolutionBotData
+          );
+
+          const updateBotResponse = await fetch(evolutionApiUrl, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(evolutionBotData),
+          });
+
+          console.log(
+            "📥 Resposta do update da Evolution API:",
+            updateBotResponse.status
+          );
+
+          if (updateBotResponse.ok) {
+            console.log("✅ Bot atualizado na Evolution API");
+          } else {
+            const errorText = await updateBotResponse.text();
             console.warn(
               "⚠️ Erro ao atualizar bot na Evolution API:",
-              evolutionError
+              updateBotResponse.status,
+              errorText
             );
           }
+        } catch (evolutionError) {
+          console.warn(
+            "⚠️ Erro ao atualizar bot na Evolution API:",
+            evolutionError
+          );
         }
       }
     }
@@ -988,49 +767,37 @@ export async function PUT(request: Request) {
 
     const dbAgentData = {
       ...aiAgentFields,
-      // Garantir que campos booleanos sejam strings para o Supabase
-      transcribe_audio: String(Boolean(agentData.transcribe_audio)),
-      understand_images: String(Boolean(agentData.understand_images)),
-      voice_response_enabled: String(Boolean(agentData.voice_response_enabled)),
-      calendar_integration: String(Boolean(agentData.calendar_integration)),
-      chatnode_integration: String(Boolean(agentData.chatnode_integration)),
-      orimon_integration: String(Boolean(agentData.orimon_integration)),
-      is_default: String(Boolean(agentData.is_default)),
-      listening_from_me: String(Boolean(agentData.listening_from_me)),
-      stop_bot_from_me: String(Boolean(agentData.stop_bot_from_me)),
-      keep_open: String(Boolean(agentData.keep_open)),
-      split_messages: String(Boolean(agentData.split_messages)),
-      // CORRIGIR: Usar formato PostgreSQL array ao invés de JSON string
-      ignore_jids: `{${ignoreJidsArray.map((jid) => `"${jid}"`).join(",")}}`,
+      // Usar valores booleanos nativos para PostgreSQL direto
+      transcribe_audio: Boolean(agentData.transcribe_audio),
+      understand_images: Boolean(agentData.understand_images),
+      voice_response_enabled: Boolean(agentData.voice_response_enabled),
+      calendar_integration: Boolean(agentData.calendar_integration),
+      chatnode_integration: Boolean(agentData.chatnode_integration),
+      orimon_integration: Boolean(agentData.orimon_integration),
+      is_default: Boolean(agentData.is_default),
+      listening_from_me: Boolean(agentData.listening_from_me),
+      stop_bot_from_me: Boolean(agentData.stop_bot_from_me),
+      keep_open: Boolean(agentData.keep_open),
+      split_messages: Boolean(agentData.split_messages),
+      // Passar array nativo para PostgreSQL
+      ignore_jids: ignoreJidsArray,
     };
 
     // Atualizar agente no banco
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?id=eq.${id}`,
-      {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify(dbAgentData),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Erro ao atualizar agente:", response.status, errorText);
-      throw new Error(`Erro ao atualizar agente: ${response.status}`);
-    }
+    const { text: updateText, values: updateValues } = buildUpdate("ai_agents", dbAgentData, { id });
+    await queryOne(updateText, updateValues);
 
     console.log("✅ Agente atualizado com sucesso");
 
     // ============================================
     // ATUALIZAR CONFIGURAÇÕES DO BOT (UazAPI)
     // ============================================
-    if (currentAgent.bot_id && (bot_gatilho || bot_operador || bot_value || bot_debounce || bot_splitMessage || bot_ignoreJids || bot_padrao !== undefined)) {
+    if (currentAgent && currentAgent.bot_id && (bot_gatilho || bot_operador || bot_value || bot_debounce || bot_splitMessage || bot_ignoreJids || bot_padrao !== undefined)) {
       console.log("🤖 [UAZAPI] Atualizando configurações do bot:", currentAgent.bot_id);
       
       try {
         // Preparar dados do bot
-        const botData: any = {};
+        const botData: Record<string, any> = {};
         
         if (bot_gatilho !== undefined) botData.gatilho = bot_gatilho;
         if (bot_operador !== undefined) botData.operador_gatilho = bot_operador;
@@ -1052,27 +819,12 @@ export async function PUT(request: Request) {
 
         console.log("📝 [UAZAPI] Dados do bot para atualização:", botData);
 
-        // Atualizar bot na tabela bots
-        const updateBotResponse = await fetch(
-          `${supabaseUrl}/rest/v1/bots?id=eq.${currentAgent.bot_id}`,
-          {
-            method: "PATCH",
-            headers: {
-              ...headers,
-              "Content-Profile": "impaai",
-              "Accept-Profile": "impaai",
-            },
-            body: JSON.stringify(botData),
-          }
-        );
-
-        if (!updateBotResponse.ok) {
-          const errorText = await updateBotResponse.text();
-          console.error("❌ [UAZAPI] Erro ao atualizar bot:", updateBotResponse.status, errorText);
-          throw new Error(`Erro ao atualizar bot: ${updateBotResponse.status}`);
+        if (Object.keys(botData).length > 0) {
+          // Atualizar bot na tabela bots
+          const { text: botUpdateText, values: botUpdateValues } = buildUpdate("bots", botData, { id: currentAgent.bot_id });
+          await queryOne(botUpdateText, botUpdateValues);
+          console.log("✅ [UAZAPI] Bot atualizado com sucesso");
         }
-
-        console.log("✅ [UAZAPI] Bot atualizado com sucesso");
       } catch (botError: any) {
         console.error("❌ [UAZAPI] Erro ao atualizar bot:", botError.message);
         // Não falhar a operação principal se o bot falhar
@@ -1110,127 +862,98 @@ export async function DELETE(request: Request) {
 
     console.log("🗑️ Deletando agente:", agentId);
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas");
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    };
-
     // Buscar agente para obter evolution_bot_id antes de deletar
-    const agentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(instance_name)&id=eq.${agentId}`,
-      { headers }
-    );
+    const agent = await queryOne(`
+      SELECT a.*,
+        CASE WHEN wc.id IS NOT NULL THEN json_build_object('instance_name', wc.instance_name) ELSE NULL END as whatsapp_connections
+      FROM ai_agents a
+      LEFT JOIN whatsapp_connections wc ON a.whatsapp_connection_id = wc.id
+      WHERE a.id = $1
+    `, [agentId]);
 
-    if (agentResponse.ok) {
-      const agents = await agentResponse.json();
-      if (agents && agents.length > 0) {
-        const agent = agents[0];
+    if (agent) {
+      // Deletar bot da Evolution API se existir
+      if (
+        agent.evolution_bot_id &&
+        agent.whatsapp_connections?.instance_name
+      ) {
+        console.log("🤖 Deletando bot da Evolution API...");
+        try {
+          // PROBLEMA IDENTIFICADO: Usar URL absoluta ao invés de relativa no Docker
+          const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+          const evolutionApiUrl = `${baseUrl}/api/integrations/evolution/evolutionBot/delete/${agent.evolution_bot_id}/${agent.whatsapp_connections.instance_name}`;
 
-        // Deletar bot da Evolution API se existir
-        if (
-          agent.evolution_bot_id &&
-          agent.whatsapp_connections?.instance_name
-        ) {
-          console.log("🤖 Deletando bot da Evolution API...");
-          try {
-            // PROBLEMA IDENTIFICADO: Usar URL absoluta ao invés de relativa no Docker
-            const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-            const evolutionApiUrl = `${baseUrl}/api/integrations/evolution/evolutionBot/delete/${agent.evolution_bot_id}/${agent.whatsapp_connections.instance_name}`;
+          console.log(
+            "🔗 URL da Evolution API para delete:",
+            evolutionApiUrl
+          );
 
-            console.log(
-              "🔗 URL da Evolution API para delete:",
-              evolutionApiUrl
-            );
+          const deleteBotResponse = await fetch(evolutionApiUrl, {
+            method: "DELETE",
+          });
 
-            const deleteBotResponse = await fetch(evolutionApiUrl, {
-              method: "DELETE",
-            });
+          console.log(
+            "📥 Resposta do delete da Evolution API:",
+            deleteBotResponse.status
+          );
 
-            console.log(
-              "📥 Resposta do delete da Evolution API:",
-              deleteBotResponse.status
-            );
-
-            if (deleteBotResponse.ok) {
-              console.log("✅ Bot deletado da Evolution API");
-            } else {
-              const errorText = await deleteBotResponse.text();
-              console.warn(
-                "⚠️ Erro ao deletar bot da Evolution API:",
-                deleteBotResponse.status,
-                errorText
-              );
-            }
-          } catch (evolutionError) {
+          if (deleteBotResponse.ok) {
+            console.log("✅ Bot deletado da Evolution API");
+          } else {
+            const errorText = await deleteBotResponse.text();
             console.warn(
               "⚠️ Erro ao deletar bot da Evolution API:",
-              evolutionError
+              deleteBotResponse.status,
+              errorText
             );
           }
+        } catch (evolutionError) {
+          console.warn(
+            "⚠️ Erro ao deletar bot da Evolution API:",
+            evolutionError
+          );
         }
+      }
 
-        // Deletar bot Uazapi e webhook se existir
-        if (agent.bot_id) {
-          console.log(`🗑️ [DELETE AGENT] Agente tem bot_id: ${agent.bot_id}, iniciando deleção...`);
-          try {
-            const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-            const deleteBotUrl = `${baseUrl}/api/bots/${agent.bot_id}`;
+      // Deletar bot Uazapi e webhook se existir
+      if (agent.bot_id) {
+        console.log(`🗑️ [DELETE AGENT] Agente tem bot_id: ${agent.bot_id}, iniciando deleção...`);
+        try {
+          const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+          const deleteBotUrl = `${baseUrl}/api/bots/${agent.bot_id}`;
 
-            console.log(`🔗 [DELETE AGENT] URL do bot para delete: ${deleteBotUrl}`);
+          console.log(`🔗 [DELETE AGENT] URL do bot para delete: ${deleteBotUrl}`);
 
-            const deleteBotResponse = await fetch(deleteBotUrl, {
-              method: "DELETE",
-              headers: {
-                "Content-Type": "application/json",
-                "Cookie": request.headers.get("cookie") || "",
-              },
-            });
+          const deleteBotResponse = await fetch(deleteBotUrl, {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              "Cookie": request.headers.get("cookie") || "",
+            },
+          });
 
-            console.log(`📥 [DELETE AGENT] Resposta do delete do bot: ${deleteBotResponse.status}`);
+          console.log(`📥 [DELETE AGENT] Resposta do delete do bot: ${deleteBotResponse.status}`);
 
-            if (deleteBotResponse.ok) {
-              console.log("✅ [DELETE AGENT] Bot e webhook deletados com sucesso");
-            } else {
-              const errorText = await deleteBotResponse.text();
-              console.warn(
-                `⚠️ [DELETE AGENT] Erro ao deletar bot: ${deleteBotResponse.status} - ${errorText}`
-              );
-            }
-          } catch (botError: any) {
+          if (deleteBotResponse.ok) {
+            console.log("✅ [DELETE AGENT] Bot e webhook deletados com sucesso");
+          } else {
+            const errorText = await deleteBotResponse.text();
             console.warn(
-              `⚠️ [DELETE AGENT] Erro ao deletar bot: ${botError.message}`
+              `⚠️ [DELETE AGENT] Erro ao deletar bot: ${deleteBotResponse.status} - ${errorText}`
             );
           }
-        } else {
-          console.log("ℹ️ [DELETE AGENT] Agente não possui bot_id, pulando deleção de bot/webhook");
+        } catch (botError: any) {
+          console.warn(
+            `⚠️ [DELETE AGENT] Erro ao deletar bot: ${botError.message}`
+          );
         }
+      } else {
+        console.log("ℹ️ [DELETE AGENT] Agente não possui bot_id, pulando deleção de bot/webhook");
       }
     }
 
     // Deletar agente do banco
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
-      {
-        method: "DELETE",
-        headers,
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Erro ao deletar agente:", response.status, errorText);
-      throw new Error(`Erro ao deletar agente: ${response.status}`);
-    }
+    await query(`DELETE FROM ai_agents WHERE id = $1`, [agentId]);
 
     console.log("✅ Agente deletado com sucesso");
 

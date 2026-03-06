@@ -6,62 +6,20 @@ export async function getDefaultModel(): Promise<string | null> {
   try {
     console.log("🔍 [getDefaultModel] Iniciando busca do modelo padrão...");
 
-    // Verificar variáveis de ambiente primeiro
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseKey =
-      process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    const { queryOne } = await import("./db");
 
-    console.log("🔧 [getDefaultModel] Variáveis de ambiente:");
-    console.log(
-      "- SUPABASE_URL:",
-      supabaseUrl ? "✅ Definida" : "❌ Não encontrada"
-    );
-    console.log(
-      "- SUPABASE_ANON_KEY:",
-      supabaseKey ? "✅ Definida" : "❌ Não encontrada"
+    console.log("🔗 [getDefaultModel] Conectando ao PostgreSQL, fazendo query...");
+
+    // Query com timeout de 5 segundos
+    const { queryWithTimeout } = await import("./db");
+
+    const result = await queryWithTimeout<{ setting_value: string }>(
+      `SELECT setting_value FROM system_settings WHERE setting_key = $1`,
+      ["default_model"],
+      5000
     );
 
-    if (!supabaseUrl || !supabaseKey) {
-      console.error(
-        "❌ [getDefaultModel] Variáveis do Supabase não configuradas"
-      );
-      return "gpt-4o-mini"; // Fallback padrão
-    }
-
-    // Importar e criar cliente
-    const { createClient } = await import("@supabase/supabase-js");
-
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      db: { schema: "impaai" },
-      auth: { persistSession: false }, // Não persistir sessão para operações server-side
-    });
-
-    console.log(
-      "🔗 [getDefaultModel] Cliente Supabase criado, fazendo query..."
-    );
-
-    // Query com timeout
-    const queryPromise = supabase
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "default_model")
-      .single();
-
-    // Timeout de 5 segundos
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout na consulta ao banco")), 5000)
-    );
-
-    const { data, error } = (await Promise.race([
-      queryPromise,
-      timeoutPromise,
-    ])) as any;
-
-    if (error) {
-      console.error("❌ [getDefaultModel] Erro na query:", error.message);
-      console.error("❌ [getDefaultModel] Detalhes do erro:", error);
-      return "gpt-4o-mini"; // Fallback padrão
-    }
+    const data = result.rows[0];
 
     if (!data || !data.setting_value) {
       console.warn(

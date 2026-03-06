@@ -1,43 +1,27 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
+import { queryOne, queryMany, buildInsert } from "@/lib/db";
 
 export async function GET() {
   try {
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    });
-
-    const { data, error } = await supabase
-      .from("user_api_keys")
-      .select(
-        `
-        id,
-        user_id,
-        name,
-        api_key,
-        description,
-        is_active,
-        last_used_at,
-        created_at,
-        user_profiles!inner(
-          full_name,
-          email,
-          role
-        )
-      `
-      )
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("❌ Error fetching API keys:", error);
-      return NextResponse.json(
-        { error: "Failed to fetch API keys" },
-        { status: 500 }
-      );
-    }
+    const data = await queryMany(
+      `SELECT
+        k.id,
+        k.user_id,
+        k.name,
+        k.api_key,
+        k.description,
+        k.is_active,
+        k.last_used_at,
+        k.created_at,
+        json_build_object(
+          'full_name', p.full_name,
+          'email', p.email,
+          'role', p.role
+        ) AS user_profiles
+      FROM user_api_keys k
+      INNER JOIN user_profiles p ON p.id = k.user_id
+      ORDER BY k.created_at DESC`
+    );
 
     return NextResponse.json(data || []);
   } catch (error: any) {
@@ -60,10 +44,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    });
-
     // Gerar API Key
     const chars =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -72,7 +52,7 @@ export async function POST(request: Request) {
       newApiKey += chars.charAt(Math.floor(Math.random() * chars.length));
     }
 
-    const { error } = await supabase.from("user_api_keys").insert({
+    const { text, values } = buildInsert("user_api_keys", {
       user_id: userId,
       name: name.trim(),
       api_key: newApiKey,
@@ -87,13 +67,7 @@ export async function POST(request: Request) {
       usage_count: 0,
     });
 
-    if (error) {
-      console.error("❌ Error creating API key:", error);
-      return NextResponse.json(
-        { error: "Failed to create API key" },
-        { status: 500 }
-      );
-    }
+    await queryOne(text, values);
 
     return NextResponse.json(
       { message: "API Key created successfully" },

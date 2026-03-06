@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { validateApiKey } from "@/lib/api-auth";
-import { createClient } from "@supabase/supabase-js";
+import { queryOne, queryMany } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,76 +19,29 @@ export async function GET(request: NextRequest) {
 
     const user = authResult.user;
 
-    // Configurar Supabase
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error(
-        "Server configuration error: Supabase URL or Anon Key is missing."
-      );
-      return NextResponse.json(
-        { error: "Server configuration error" },
-        { status: 500 }
-      );
-    }
-
     // Logo após validar a API key, adicione:
     console.log("🔍 Iniciando busca do default_model...");
 
     // Buscar modelo padrão diretamente
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    });
-
-    const { data: defaultModelData, error: defaultModelError } = await supabase
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "default_model")
-      .single();
+    const defaultModelData = await queryOne(
+      `SELECT setting_value FROM system_settings WHERE setting_key = $1`,
+      ['default_model']
+    );
 
     let systemDefaultModel = null;
-    if (defaultModelError) {
-      console.error("❌ Erro ao buscar default_model:", defaultModelError);
-    } else if (defaultModelData && defaultModelData.setting_value) {
+    if (!defaultModelData) {
+      console.error("❌ default_model não encontrado");
+    } else if (defaultModelData.setting_value) {
       systemDefaultModel = defaultModelData.setting_value.toString().trim();
       console.log("✅ Default model encontrado:", systemDefaultModel);
     } else {
       console.error("❌ default_model não encontrado");
     }
 
-    // Remova a linha: const systemDefaultModel = await getDefaultModel()
-    // Remova a linha: const fallbackModel = systemDefaultModel || "gpt-4o-mini"
-
     // Buscar agentes do usuário
-    let query = supabase
-      .from("ai_agents")
-      .select(
-        `
-        id,
-        name,
-        description,
-        model,
-        training_prompt,
-        temperature,
-        max_tokens,
-        status,
-        created_at,
-        updated_at,
-        user_id,
-        main_function,
-        total_conversations,
-        total_messages,
-        performance_score,
-        type,
-        calendar_provider,
-        calendar_api_version,
-        calendar_api_url,
-        calendar_api_key
-      `
-      )
-      .eq("status", "active");
+    const agentCols = `id, name, description, model, training_prompt, temperature, max_tokens, status, created_at, updated_at, user_id, main_function, total_conversations, total_messages, performance_score, type, calendar_provider, calendar_api_version, calendar_api_url, calendar_api_key`;
 
+    let agents;
     if (user.role !== "admin") {
       if (!user.id) {
         console.error("User ID is missing for non-admin role.");
@@ -97,27 +50,18 @@ export async function GET(request: NextRequest) {
           { status: 400 }
         );
       }
-      query = query.eq("user_id", user.id);
-    }
-
-    const { data: agents, error: dbError } = await query.order("created_at", {
-      ascending: false,
-    });
-
-    if (dbError) {
-      console.error("Error fetching agents from Supabase:", dbError);
-      return NextResponse.json(
-        {
-          error: "Failed to fetch agents",
-          details: dbError.message,
-          hint: dbError.hint,
-        },
-        { status: 500 }
+      agents = await queryMany(
+        `SELECT ${agentCols} FROM ai_agents WHERE status = 'active' AND user_id = $1 ORDER BY created_at DESC`,
+        [user.id]
+      );
+    } else {
+      agents = await queryMany(
+        `SELECT ${agentCols} FROM ai_agents WHERE status = 'active' ORDER BY created_at DESC`
       );
     }
 
     const formattedAgents =
-      agents?.map((agent) => ({
+      agents?.map((agent: any) => ({
         id: agent.id,
         name: agent.name,
         description: agent.description,

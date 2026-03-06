@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { queryOne } from "@/lib/db"
 
 const DEFAULT_V2_HEADER_VERSION = "2024-08-13"
 
@@ -32,38 +33,14 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const supabaseHeaders = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
-    const agentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*&id=eq.${agentId}&user_id=eq.${currentUser.id}`,
-      { headers: supabaseHeaders },
+    const agent = await queryOne(
+      "SELECT * FROM ai_agents WHERE id = $1 AND user_id = $2",
+      [agentId, currentUser.id],
     )
 
-    if (!agentResponse.ok) {
-      const errorText = await agentResponse.text()
-      throw new Error(`Erro ao buscar agente: ${agentResponse.status} - ${errorText}`)
-    }
-
-    const agents = await agentResponse.json()
-
-    if (!agents || agents.length === 0) {
+    if (!agent) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }
-
-    const agent = agents[0]
 
     if (!agent.calendar_integration) {
       return NextResponse.json({ error: "Agente não possui integração de calendário ativa" }, { status: 400 })

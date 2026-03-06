@@ -9,8 +9,24 @@ import {
   getSecurityHeaders,
   logSecurityEvent
 } from "./security-utils";
+import { query, queryOne, queryMany, buildInsert } from "@/lib/db";
 
-
+/** Helper: fetch shared link(s) with whatsapp_connections JOIN */
+async function fetchLinksWithConnection(whereClause: string, params: any[]): Promise<any[]> {
+  return queryMany(
+    `SELECT sl.*,
+      json_build_object(
+        'id', wc.id,
+        'connection_name', wc.connection_name,
+        'instance_name', wc.instance_name,
+        'status', wc.status
+      ) as whatsapp_connections
+    FROM shared_whatsapp_links sl
+    LEFT JOIN whatsapp_connections wc ON wc.id = sl.connection_id
+    WHERE ${whereClause}`,
+    params
+  );
+}
 
 // GET - Listar links compartilhados do usuário
 export async function GET(request: NextRequest) {
@@ -26,41 +42,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ [SHARED-LINKS] Configuração Supabase ausente");
-      return NextResponse.json(
-        { success: false, error: "Configuração do servidor incompleta" },
-        { status: 500 }
-      );
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    };
-
     // Buscar links do usuário com informações da conexão
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/shared_whatsapp_links?user_id=eq.${user.id}&is_active=eq.true&order=created_at.desc&select=*,whatsapp_connections(id,connection_name,instance_name,status)`,
-      { headers }
+    const links = await fetchLinksWithConnection(
+      `sl.user_id = $1 AND sl.is_active = true ORDER BY sl.created_at DESC`,
+      [user.id]
     );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ [SHARED-LINKS] Erro ao buscar links:", response.status, errorText);
-      return NextResponse.json(
-        { success: false, error: "Erro ao buscar links" },
-        { status: 500 }
-      );
-    }
-
-    const links = await response.json();
     console.log(`✅ [SHARED-LINKS] ${links?.length || 0} links encontrados`);
     
     // Debug: verificar estrutura dos links
@@ -279,40 +266,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ [SHARED-LINKS] Configuração Supabase ausente");
-      return NextResponse.json(
-        { success: false, error: "Configuração do servidor incompleta" },
-        { status: 500, headers: securityHeaders }
-      );
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    };
-
     // Verificar se a conexão pertence ao usuário
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${connection_id}&user_id=eq.${user.id}&select=id,user_id,connection_name`,
-      { headers }
+    const connections = await queryMany(
+      `SELECT id, user_id, connection_name FROM whatsapp_connections WHERE id = $1 AND user_id = $2`,
+      [connection_id, user.id]
     );
-
-    if (!connectionResponse.ok) {
-      console.error("❌ [SHARED-LINKS] Erro ao verificar conexão:", connectionResponse.status);
-      return NextResponse.json(
-        { success: false, error: "Erro ao verificar conexão" },
-        { status: 500, headers: securityHeaders }
-      );
-    }
-
-    const connections = await connectionResponse.json();
     if (!connections || connections.length === 0) {
       logSecurityEvent({
         type: 'SUSPICIOUS_ACTIVITY',
@@ -363,29 +321,16 @@ export async function POST(request: NextRequest) {
       max_uses
     };
 
-    const insertResponse = await fetch(
-      `${supabaseUrl}/rest/v1/shared_whatsapp_links`,
-      {
-        method: "POST",
-        headers: {
-          ...headers,
-          "Prefer": "return=representation"
-        },
-        body: JSON.stringify(insertData)
-      }
-    );
+    const { text: insertSql, values: insertValues } = buildInsert("shared_whatsapp_links", insertData);
+    const newLink = await queryOne(insertSql, insertValues);
 
-    if (!insertResponse.ok) {
-      const errorText = await insertResponse.text();
-      console.error("❌ [SHARED-LINKS] Erro ao criar link:", insertResponse.status, errorText);
+    if (!newLink) {
+      console.error("❌ [SHARED-LINKS] Erro ao criar link");
       return NextResponse.json(
         { success: false, error: "Erro ao criar link compartilhado" },
         { status: 500, headers: securityHeaders }
       );
     }
-
-    const newLinks = await insertResponse.json();
-    const newLink = newLinks[0];
 
     console.log("✅ [SHARED-LINKS] Link criado com sucesso:", newLink.id);
 
@@ -406,17 +351,14 @@ export async function POST(request: NextRequest) {
     });
 
     // Buscar dados completos com join
-    const fullLinkResponse = await fetch(
-      `${supabaseUrl}/rest/v1/shared_whatsapp_links?id=eq.${newLink.id}&select=*,whatsapp_connections(id,connection_name,instance_name,status)`,
-      { headers }
+    const fullLinks = await fetchLinksWithConnection(
+      `sl.id = $1`,
+      [newLink.id]
     );
 
     let linkWithConnection = newLink;
-    if (fullLinkResponse.ok) {
-      const fullLinks = await fullLinkResponse.json();
-      if (fullLinks && fullLinks.length > 0) {
-        linkWithConnection = fullLinks[0];
-      }
+    if (fullLinks && fullLinks.length > 0) {
+      linkWithConnection = fullLinks[0];
     }
 
     // Retornar dados seguros
@@ -485,44 +427,17 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ [SHARED-LINKS] Configuração Supabase ausente");
-      return NextResponse.json(
-        { success: false, error: "Configuração do servidor incompleta" },
-        { status: 500 }
-      );
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    };
-
     // Verificar se o link pertence ao usuário e desativar
-    const updateResponse = await fetch(
-      `${supabaseUrl}/rest/v1/shared_whatsapp_links?id=eq.${linkId}&user_id=eq.${user.id}`,
-      {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({ 
-          is_active: false,
-          updated_at: new Date().toISOString()
-        })
-      }
+    const { rowCount } = await query(
+      `UPDATE shared_whatsapp_links SET is_active = false, updated_at = $1 WHERE id = $2 AND user_id = $3`,
+      [new Date().toISOString(), linkId, user.id]
     );
 
-    if (!updateResponse.ok) {
-      const errorText = await updateResponse.text();
-      console.error("❌ [SHARED-LINKS] Erro ao deletar link:", updateResponse.status, errorText);
+    if (rowCount === 0) {
+      console.error("❌ [SHARED-LINKS] Link não encontrado ou sem permissão:", linkId);
       return NextResponse.json(
-        { success: false, error: "Erro ao deletar link" },
-        { status: 500 }
+        { success: false, error: "Link não encontrado ou sem permissão" },
+        { status: 404 }
       );
     }
 
@@ -596,43 +511,12 @@ export async function PUT(request: NextRequest) {
       max_uses: body.max_uses
     });
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ [SHARED-LINKS] Configuração Supabase ausente");
-      return NextResponse.json(
-        { success: false, error: "Configuração do servidor incompleta" },
-        { status: 500 }
-      );
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    };
-
     // Primeiro, verificar se o link existe e pertence ao usuário
-    const checkResponse = await fetch(
-      `${supabaseUrl}/rest/v1/shared_whatsapp_links?id=eq.${linkId}&user_id=eq.${user.id}`,
-      {
-        method: "GET",
-        headers
-      }
+    const existingLinks = await queryMany(
+      `SELECT * FROM shared_whatsapp_links WHERE id = $1 AND user_id = $2`,
+      [linkId, user.id]
     );
 
-    if (!checkResponse.ok) {
-      console.error("❌ [SHARED-LINKS] Erro ao verificar link:", checkResponse.status);
-      return NextResponse.json(
-        { success: false, error: "Erro ao verificar link" },
-        { status: 500 }
-      );
-    }
-
-    const existingLinks = await checkResponse.json();
     if (!existingLinks || existingLinks.length === 0) {
       return NextResponse.json(
         { success: false, error: "Link não encontrado ou não autorizado" },
@@ -698,43 +582,29 @@ export async function PUT(request: NextRequest) {
 
     console.log("🔄 [SHARED-LINKS] Atualizando link:", linkId.substring(0, 8) + '...');
 
-    // Atualizar o link
-    const updateResponse = await fetch(
-      `${supabaseUrl}/rest/v1/shared_whatsapp_links?id=eq.${linkId}`,
-      {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify(updateData),
-      }
-    );
+    // Atualizar o link - build dynamic SET clause
+    const setClauses: string[] = [];
+    const values: any[] = [];
+    let paramIdx = 1;
 
-    if (!updateResponse.ok) {
-      const errorBody = await updateResponse.text();
-      console.error("❌ [SHARED-LINKS] Erro ao atualizar link:", updateResponse.status, errorBody);
-      return NextResponse.json(
-        { success: false, error: "Erro ao atualizar link" },
-        { status: 500 }
-      );
+    for (const [key, value] of Object.entries(updateData)) {
+      setClauses.push(`"${key}" = $${paramIdx}`);
+      values.push(value);
+      paramIdx++;
     }
+
+    values.push(linkId);
+    await query(
+      `UPDATE shared_whatsapp_links SET ${setClauses.join(", ")} WHERE id = $${paramIdx}`,
+      values
+    );
 
     // Buscar o link atualizado com informações da conexão
-    const fetchResponse = await fetch(
-      `${supabaseUrl}/rest/v1/shared_whatsapp_links?id=eq.${linkId}&select=*,whatsapp_connections(id,connection_name,instance_name,status)`,
-      {
-        method: "GET",
-        headers
-      }
+    const updatedLinks = await fetchLinksWithConnection(
+      `sl.id = $1`,
+      [linkId]
     );
 
-    if (!fetchResponse.ok) {
-      console.error("❌ [SHARED-LINKS] Erro ao buscar link atualizado:", fetchResponse.status);
-      return NextResponse.json(
-        { success: false, error: "Erro ao buscar link atualizado" },
-        { status: 500 }
-      );
-    }
-
-    const updatedLinks = await fetchResponse.json();
     const updatedLink = updatedLinks[0];
 
     if (!updatedLink) {

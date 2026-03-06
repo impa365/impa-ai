@@ -41,8 +41,8 @@ async function executeRun(trigger: string) {
   }
 }
 
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  log("⚠️  Variáveis SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são necessárias para o worker.")
+if (!process.env.DATABASE_URL) {
+  log("⚠️  Variável DATABASE_URL é necessária para o worker.")
 }
 
 log(`Worker iniciado. Agenda: "${schedule}". Dry run: ${dryRun ? "ativo" : "desativado"}.`)

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { logAccessDenied } from "@/lib/security-audit"
+import { queryOne, queryMany, query, buildUpdate } from "@/lib/db"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   console.log("📡 API: GET /api/user/agents/[id] chamada")
@@ -23,56 +24,47 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     console.log("✅ Usuário autenticado:", currentUser.email)
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Buscar agente com conexão WhatsApp - FILTRAR POR USER_ID
-    const agentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections(id,connection_name,phone_number,instance_name,api_type)&id=eq.${agentId}&user_id=eq.${currentUser.id}`,
-      { headers },
+    const agentRow = await queryOne(
+      `SELECT a.*,
+        json_build_object(
+          'id', wc.id,
+          'connection_name', wc.connection_name,
+          'phone_number', wc.phone_number,
+          'instance_name', wc.instance_name,
+          'api_type', wc.api_type
+        ) AS whatsapp_connections
+      FROM ai_agents a
+      LEFT JOIN whatsapp_connections wc ON a.whatsapp_connection_id = wc.id
+      WHERE a.id = $1 AND a.user_id = $2`,
+      [agentId, currentUser.id]
     )
 
-    if (!agentResponse.ok) {
-      throw new Error("Erro ao buscar agente")
-    }
-
-    const agents = await agentResponse.json()
-    if (!agents || agents.length === 0) {
+    if (!agentRow) {
       return NextResponse.json({ error: "Agente não encontrado ou não pertence ao usuário" }, { status: 404 })
     }
 
-    const agent = agents[0]
+    const agent = agentRow
+    // Normalise: if no connection was joined, set to null instead of JSON with all nulls
+    if (agent.whatsapp_connections && agent.whatsapp_connections.id === null) {
+      agent.whatsapp_connections = null
+    }
 
     // Resolver llm_api_key se for referência salva
     if (agent.llm_api_key && agent.llm_api_key.startsWith("__SAVED_KEY__")) {
       const keyId = agent.llm_api_key.replace("__SAVED_KEY__", "");
       console.log("🔑 Resolvendo chave salva:", keyId);
       
-      const savedKeyResponse = await fetch(
-        `${supabaseUrl}/rest/v1/llm_api_keys?select=api_key&id=eq.${keyId}&is_active=eq.true`,
-        { headers }
+      const savedKey = await queryOne(
+        `SELECT api_key FROM llm_api_keys WHERE id = $1 AND is_active = true`,
+        [keyId]
       );
       
-      if (savedKeyResponse.ok) {
-        const savedKeys = await savedKeyResponse.json();
-        if (savedKeys && savedKeys[0]) {
-          agent.llm_api_key = savedKeys[0].api_key;
-          console.log("✅ Chave salva resolvida:", `${agent.llm_api_key?.slice(0, 7)}...`);
-        } else {
-          console.warn("⚠️ Chave salva não encontrada:", keyId);
-        }
+      if (savedKey) {
+        agent.llm_api_key = savedKey.api_key;
+        console.log("✅ Chave salva resolvida:", `${agent.llm_api_key?.slice(0, 7)}...`);
+      } else {
+        console.warn("⚠️ Chave salva não encontrada:", keyId);
       }
     }
 
@@ -115,39 +107,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     console.log("🔄 Atualizando agente:", agentId, "para usuário:", currentUser.id)
 
-    // Verificar configurações do Supabase
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Verificar se o agente pertence ao usuário
     console.log("🔍 Verificando propriedade do agente...")
-    const agentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*&id=eq.${agentId}&user_id=eq.${currentUser.id}`,
-      { headers }
+    const existingAgent = await queryOne(
+      `SELECT * FROM ai_agents WHERE id = $1 AND user_id = $2`,
+      [agentId, currentUser.id]
     )
 
-    if (!agentResponse.ok) {
-      throw new Error("Erro ao verificar agente")
-    }
-
-    const agents = await agentResponse.json()
-    if (!agents || agents.length === 0) {
+    if (!existingAgent) {
       return NextResponse.json({ error: "Agente não encontrado ou não pertence ao usuário" }, { status: 404 })
     }
 
-    console.log("✅ Agente verificado:", agents[0].name)
+    console.log("✅ Agente verificado:", existingAgent.name)
 
     // Preparar dados para atualização - garantir segurança
     const ignoreJidsArray = Array.isArray(agentData.ignore_jids) ? agentData.ignore_jids : ["@g.us"]
@@ -163,7 +134,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           (calendarVersion === "v2" ? "https://api.cal.com/v2" : "https://api.cal.com/v1")
         : agentData.calendar_api_url || null
 
-    const secureUpdateData = {
+    const secureUpdateData: Record<string, any> = {
       name: agentData.name,
       identity_description: agentData.identity_description,
       training_prompt: agentData.training_prompt,
@@ -215,39 +186,42 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // Atualizar agente no banco de dados
     console.log("💾 Atualizando agente no banco de dados...")
-    const updateResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}&user_id=eq.${currentUser.id}`,
-      {
-        method: "PATCH",
-        headers: {
-          ...headers,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify(secureUpdateData),
-      }
+    const { text: updateSql, values: updateValues } = buildUpdate(
+      "ai_agents",
+      secureUpdateData,
+      { id: agentId, user_id: currentUser.id }
     )
+    const { rows: updatedRows } = await query(updateSql, updateValues)
 
-    if (!updateResponse.ok) {
-      const errorText = await updateResponse.text()
-      console.error("❌ Erro ao atualizar agente no banco:", updateResponse.status, errorText)
-      throw new Error(`Erro ao atualizar agente no banco: ${updateResponse.status}`)
+    if (!updatedRows || updatedRows.length === 0) {
+      throw new Error("Erro ao atualizar agente no banco: nenhuma linha afetada")
     }
 
-    const [updatedAgent] = await updateResponse.json()
+    const updatedAgent = updatedRows[0]
     console.log("✅ Agente atualizado com sucesso no banco:", updatedAgent.id)
 
     // Buscar agente atual para obter evolution_bot_id, bot_id e connection info
     console.log("🔍 Buscando agente atual para sincronização...")
-    const currentAgentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(instance_name,api_type,id)&id=eq.${agentId}&user_id=eq.${currentUser.id}`,
-      { headers }
+    const currentAgent = await queryOne(
+      `SELECT a.*,
+        json_build_object(
+          'instance_name', wc.instance_name,
+          'api_type', wc.api_type,
+          'id', wc.id
+        ) AS whatsapp_connections
+      FROM ai_agents a
+      LEFT JOIN whatsapp_connections wc ON a.whatsapp_connection_id = wc.id
+      WHERE a.id = $1 AND a.user_id = $2`,
+      [agentId, currentUser.id]
     )
 
-    if (currentAgentResponse.ok) {
-      const currentAgents = await currentAgentResponse.json()
-      if (currentAgents && currentAgents.length > 0) {
-        const currentAgent = currentAgents[0]
-        const apiType = currentAgent.whatsapp_connections?.api_type || "evolution"
+    if (currentAgent) {
+      // Normalise null join
+      if (currentAgent.whatsapp_connections && currentAgent.whatsapp_connections.id === null) {
+        currentAgent.whatsapp_connections = null
+      }
+
+      const apiType = currentAgent.whatsapp_connections?.api_type || "evolution"
 
         // Atualizar bot Uazapi se existir
         if (apiType === "uazapi" && currentAgent.bot_id) {
@@ -283,8 +257,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             const updateResult = await updateUazapiBotInDatabase({
               botId: currentAgent.bot_id,
               botData: botUpdateData,
-              supabaseUrl,
-              supabaseKey,
             })
 
             if (updateResult.success) {
@@ -312,22 +284,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
             // Buscar configuração do N8N para incluir no webhook (igual ao admin)
             let n8nWebhookUrl = null
-            let n8nIntegrations = null
+            let n8nIntegrations: any[] | null = null
             try {
-              const n8nResponse = await fetch(
-                `${supabaseUrl}/rest/v1/integrations?select=*&type=eq.n8n&is_active=eq.true`,
-                { headers }
+              n8nIntegrations = await queryMany(
+                `SELECT * FROM integrations WHERE type = 'n8n' AND is_active = true`
               )
 
-              if (n8nResponse.ok) {
-                n8nIntegrations = await n8nResponse.json()
-                if (n8nIntegrations && n8nIntegrations.length > 0) {
-                  const n8nConfig =
-                    typeof n8nIntegrations[0].config === "string"
-                      ? JSON.parse(n8nIntegrations[0].config)
-                      : n8nIntegrations[0].config
-                  n8nWebhookUrl = n8nConfig.flowUrl
-                }
+              if (n8nIntegrations && n8nIntegrations.length > 0) {
+                const n8nConfig =
+                  typeof n8nIntegrations[0].config === "string"
+                    ? JSON.parse(n8nIntegrations[0].config)
+                    : n8nIntegrations[0].config
+                n8nWebhookUrl = n8nConfig.flowUrl
               }
             } catch (n8nError) {
               console.log("⚠️ N8N não configurado para atualização")
@@ -338,33 +306,25 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             let userApiKey = null
             try {
               // Primeiro buscar o admin
-              const adminResponse = await fetch(
-                `${supabaseUrl}/rest/v1/user_profiles?select=id&role=eq.admin&limit=1`,
-                { headers }
+              const admin = await queryOne(
+                `SELECT id FROM user_profiles WHERE role = 'admin' LIMIT 1`
               )
-              if (!adminResponse.ok) {
-                throw new Error("Não foi possível buscar informações do admin")
-              }
-              const admins = await adminResponse.json()
-              if (!admins || admins.length === 0) {
+              if (!admin) {
                 throw new Error("Nenhum administrador encontrado no sistema")
               }
-              const adminId = admins[0].id
+              const adminId = admin.id
               console.log("✅ Admin identificado:", adminId)
 
               // Agora buscar API key do admin
-              const apiKeyResponse = await fetch(
-                `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${adminId}&is_active=eq.true&order=created_at.desc&limit=1`,
-                { headers }
+              const apiKeyRow = await queryOne(
+                `SELECT api_key FROM user_api_keys WHERE user_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
+                [adminId]
               )
-              if (apiKeyResponse.ok) {
-                const apiKeys = await apiKeyResponse.json()
-                if (apiKeys && apiKeys.length > 0) {
-                  userApiKey = apiKeys[0].api_key
-                  console.log("✅ API key do admin encontrada")
-                } else {
-                  console.warn("⚠️ Nenhuma API key ativa encontrada para o admin")
-                }
+              if (apiKeyRow) {
+                userApiKey = apiKeyRow.api_key
+                console.log("✅ API key do admin encontrada")
+              } else {
+                console.warn("⚠️ Nenhuma API key ativa encontrada para o admin")
               }
             } catch (apiKeyError) {
               console.warn("⚠️ Erro ao buscar API key do admin:", apiKeyError)
@@ -434,7 +394,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             console.warn("⚠️ Erro ao atualizar bot na Evolution API:", evolutionError)
           }
         }
-      }
     }
 
     return NextResponse.json({
@@ -475,38 +434,29 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     console.log("🗑️ Deletando agente:", agentId, "para usuário:", currentUser.id)
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Buscar agente e verificar se pertence ao usuário
     console.log("🔍 Verificando propriedade do agente...")
-    const agentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(instance_name,instance_token)&id=eq.${agentId}&user_id=eq.${currentUser.id}`,
-      { headers }
+    const agent = await queryOne(
+      `SELECT a.*,
+        json_build_object(
+          'instance_name', wc.instance_name,
+          'instance_token', wc.instance_token
+        ) AS whatsapp_connections
+      FROM ai_agents a
+      LEFT JOIN whatsapp_connections wc ON a.whatsapp_connection_id = wc.id
+      WHERE a.id = $1 AND a.user_id = $2`,
+      [agentId, currentUser.id]
     )
 
-    if (!agentResponse.ok) {
-      throw new Error("Erro ao buscar agente")
-    }
-
-    const agents = await agentResponse.json()
-    if (!agents || agents.length === 0) {
+    if (!agent) {
       return NextResponse.json({ error: "Agente não encontrado ou não pertence ao usuário" }, { status: 404 })
     }
 
-    const agent = agents[0]
+    // Normalise null join
+    if (agent.whatsapp_connections && agent.whatsapp_connections.instance_name === null) {
+      agent.whatsapp_connections = null
+    }
+
     console.log("✅ Agente encontrado e verificado:", agent.name)
 
     // Deletar bot da Evolution API se existir
@@ -582,18 +532,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     // Deletar agente do banco
     console.log("💾 Deletando agente do banco de dados...")
-    const deleteResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}&user_id=eq.${currentUser.id}`,
-      {
-        method: "DELETE",
-        headers,
-      }
+    const { rowCount } = await query(
+      `DELETE FROM ai_agents WHERE id = $1 AND user_id = $2`,
+      [agentId, currentUser.id]
     )
 
-    if (!deleteResponse.ok) {
-      const errorText = await deleteResponse.text()
-      console.error("❌ Erro ao deletar agente do banco:", deleteResponse.status, errorText)
-      throw new Error(`Erro ao deletar agente do banco: ${deleteResponse.status}`)
+    if (rowCount === 0) {
+      throw new Error("Erro ao deletar agente do banco: nenhuma linha afetada")
     }
 
     console.log("✅ Agente deletado com sucesso do banco")

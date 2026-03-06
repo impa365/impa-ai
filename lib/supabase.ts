@@ -1,4 +1,14 @@
-// Interfaces para compatibilidade
+/**
+ * Database Access Layer - MIGRATED from Supabase to PostgreSQL Direct
+ * 
+ * All database access now goes through lib/db.ts using direct PostgreSQL.
+ * This file provides backward compatibility for existing imports.
+ * 
+ * For new code, use:
+ *   import { query, queryOne, queryMany } from "@/lib/db"
+ */
+
+// Re-export interfaces for compatibility
 export interface UserProfile {
   id: string
   full_name: string | null
@@ -15,28 +25,24 @@ export interface UserProfile {
   preferences?: any
 }
 
-// TODAS essas funções redirecionam para APIs SEGURAS
-export async function getSupabase() {
-  throw new Error("❌ getSupabase() is deprecated. Use API endpoints instead.")
-}
-
+// Re-export getSupabaseServer from compat layer
 export function getSupabaseServer() {
-  // Esta função só deve ser usada em API routes do servidor
   if (typeof window !== "undefined") {
     throw new Error("❌ getSupabaseServer should only be used in API routes")
   }
-
-  // Importar apenas quando necessário (servidor)
   const { getSupabaseServer: getServerClient } = require("./supabase-config")
   return getServerClient()
 }
 
-// DEPRECATED: Todas essas funções redirecionam para APIs
-export const supabase = {
-  from: () => {
-    throw new Error("❌ Direct Supabase access is deprecated. Use API endpoints instead.")
-  },
+// Re-export getSupabase (deprecated)
+export async function getSupabase() {
+  throw new Error("❌ getSupabase() is deprecated. Use lib/db.ts directly.")
 }
+
+// Compatibility: supabase object uses the compat client
+const { getSupabaseServer: _getServer } = require("./supabase-config")
+
+export const supabase = _getServer()
 
 export const db = {
   users: () => {

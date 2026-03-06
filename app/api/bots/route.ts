@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getCurrentServerUser } from "@/lib/auth-server"
+import { queryMany, buildInsert, queryOne } from "@/lib/db"
 
 /**
  * GET /api/bots
@@ -14,41 +15,12 @@ export async function GET(request: NextRequest) {
     }
     console.log(`🔍 [GET /api/bots] Buscando bots do usuário: ${user.email}`)
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ [GET /api/bots] Variáveis de ambiente não encontradas")
-      return NextResponse.json(
-        { error: "Configuração do Supabase não encontrada" },
-        { status: 500 }
-      )
-    }
-
-    const headers = {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-    }
-
     // Buscar bots do usuário
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/bots?user_id=eq.${user.id}&select=*&order=created_at.desc`,
-      { headers }
+    const bots = await queryMany(
+      "SELECT * FROM bots WHERE user_id = $1 ORDER BY created_at DESC",
+      [user.id]
     )
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ [GET /api/bots] Erro ao buscar bots:", response.status, errorText)
-      return NextResponse.json(
-        { error: "Erro ao buscar bots", details: errorText },
-        { status: response.status }
-      )
-    }
-
-    const bots = await response.json()
     console.log(`✅ [GET /api/bots] ${bots.length} bot(s) encontrado(s)`)
 
     return NextResponse.json({ success: true, bots }, { status: 200 })
@@ -78,17 +50,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     console.log(`📝 [POST /api/bots] Criando bot para usuário: ${user.email}`)
-
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ [POST /api/bots] Variáveis de ambiente não encontradas")
-      return NextResponse.json(
-        { error: "Configuração do Supabase não encontrada" },
-        { status: 500 }
-      )
-    }
 
     // Validações
     if (!body.nome || !body.url_api || !body.connection_id) {
@@ -123,15 +84,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const headers = {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      Prefer: "return=representation",
-    }
-
     // Montar payload
     const botPayload = {
       nome: body.nome,
@@ -150,26 +102,16 @@ export async function POST(request: NextRequest) {
     console.log('📦 [POST /api/bots] Payload:', { ...botPayload, apikey: botPayload.apikey ? '***' : null })
 
     // Criar bot
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/bots`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify(botPayload),
-      }
-    )
+    const insert = buildInsert("bots", botPayload)
+    const bot = await queryOne(insert.text, insert.values)
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ [POST /api/bots] Erro ao criar bot:", response.status, errorText)
+    if (!bot) {
+      console.error("❌ [POST /api/bots] Erro ao criar bot: nenhum registro retornado")
       return NextResponse.json(
-        { error: "Erro ao criar bot", details: errorText },
-        { status: response.status }
+        { error: "Erro ao criar bot" },
+        { status: 500 }
       )
     }
-
-    const bots = await response.json()
-    const bot = bots[0]
 
     console.log(`✅ [POST /api/bots] Bot criado com sucesso: ${bot.id}`)
 
@@ -182,4 +124,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

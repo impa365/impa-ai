@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { query, queryOne, queryMany, buildInsert } from "@/lib/db";
 import { validateApiKey } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest) {
@@ -21,31 +21,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    });
-
     // Buscar configuração de follow-up
-    const { data: config, error: configError } = await supabase
-      .from("followup_24hs")
-      .select(
-        `
-        *,
-        followup_messages(*)
-      `
-      )
-      .eq("user_id", user.id)
-      .eq("instance_name", instanceName)
-      .single();
+    const config = await queryOne(
+      `SELECT * FROM followup_24hs WHERE user_id = $1 AND instance_name = $2`,
+      [user.id, instanceName]
+    );
 
-    if (configError && configError.code !== "PGRST116") {
-      console.error("Error fetching followup config:", configError);
-      return NextResponse.json(
-        { error: "Failed to fetch followup configuration" },
-        { status: 500 }
+    // Se config existe, buscar mensagens relacionadas
+    if (config) {
+      const messages = await queryMany(
+        `SELECT * FROM followup_messages WHERE followup_config_id = $1`,
+        [config.id]
       );
+      config.followup_messages = messages;
     }
 
     return NextResponse.json({
@@ -80,27 +68,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    });
+    // Criar ou atualizar configuração de follow-up (upsert)
+    const config = await queryOne(
+      `INSERT INTO followup_24hs (user_id, instance_name, company_name, is_active, updated_at)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id, instance_name) DO UPDATE SET
+         company_name = EXCLUDED.company_name,
+         is_active = EXCLUDED.is_active,
+         updated_at = EXCLUDED.updated_at
+       RETURNING *`,
+      [user.id, instanceName, companyName, true, new Date().toISOString()]
+    );
 
-    // Criar ou atualizar configuração de follow-up
-    const { data: config, error: configError } = await supabase
-      .from("followup_24hs")
-      .upsert({
-        user_id: user.id,
-        instance_name: instanceName,
-        company_name: companyName,
-        is_active: true,
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (configError) {
-      console.error("Error creating/updating followup config:", configError);
+    if (!config) {
+      console.error("Error creating/updating followup config: no row returned");
       return NextResponse.json(
         { error: "Failed to create/update followup configuration" },
         { status: 500 }
@@ -110,30 +91,34 @@ export async function POST(request: NextRequest) {
     // Se mensagens foram fornecidas, atualizar
     if (messages && Array.isArray(messages)) {
       // Remover mensagens existentes
-      await supabase
-        .from("followup_messages")
-        .delete()
-        .eq("followup_config_id", config.id);
+      await query(
+        'DELETE FROM followup_messages WHERE followup_config_id = $1',
+        [config.id]
+      );
 
       // Inserir novas mensagens
-      const messagesToInsert = messages.map((msg) => ({
-        followup_config_id: config.id,
-        day_number: msg.dayNumber,
-        message_text: msg.messageText,
-        media_url: msg.mediaUrl,
-        media_type: msg.mediaType || "text",
-        is_active: true,
-      }));
+      if (messages.length > 0) {
+        const msgValues: any[] = [];
+        const msgPlaceholders: string[] = [];
+        messages.forEach((msg: any, i: number) => {
+          const offset = i * 6;
+          msgPlaceholders.push(
+            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6})`
+          );
+          msgValues.push(
+            config.id,
+            msg.dayNumber,
+            msg.messageText,
+            msg.mediaUrl || null,
+            msg.mediaType || "text",
+            true
+          );
+        });
 
-      const { error: messagesError } = await supabase
-        .from("followup_messages")
-        .insert(messagesToInsert);
-
-      if (messagesError) {
-        console.error("Error inserting followup messages:", messagesError);
-        return NextResponse.json(
-          { error: "Failed to create followup messages" },
-          { status: 500 }
+        await query(
+          `INSERT INTO followup_messages (followup_config_id, day_number, message_text, media_url, media_type, is_active)
+           VALUES ${msgPlaceholders.join(', ')}`,
+          msgValues
         );
       }
     }

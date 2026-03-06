@@ -6,20 +6,11 @@ import {
   logSecurityEvent,
   validateTokenFormat
 } from "../../security-utils";
-import { createClient } from "@supabase/supabase-js";
+import { query, queryOne, queryMany } from "@/lib/db";
 
 // Função para incrementar uso do link
 async function incrementLinkUsage(linkId: string, ip: string, userAgent: string) {
   try {
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-    const supabaseUrl = process.env.SUPABASE_URL;
-    
-    if (!serviceKey || !supabaseUrl) return;
-
-    const serviceSupabase = createClient(supabaseUrl, serviceKey, {
-      db: { schema: "impaai" },
-    });
-
     const accessLog = {
       timestamp: new Date().toISOString(),
       ip,
@@ -28,11 +19,10 @@ async function incrementLinkUsage(linkId: string, ip: string, userAgent: string)
     };
 
     // Buscar dados atuais primeiro
-    const { data: currentLink } = await serviceSupabase
-      .from("shared_whatsapp_links")
-      .select("current_uses, access_logs")
-      .eq("id", linkId)
-      .single();
+    const currentLink = await queryOne(
+      'SELECT current_uses, access_logs FROM shared_whatsapp_links WHERE id = $1',
+      [linkId]
+    );
 
     if (currentLink) {
       const newUses = (currentLink.current_uses || 0) + 1;
@@ -40,15 +30,12 @@ async function incrementLinkUsage(linkId: string, ip: string, userAgent: string)
       const newLogs = [...currentLogs, accessLog];
 
       // Atualizar logs de acesso e contador
-      await serviceSupabase
-        .from("shared_whatsapp_links")
-        .update({
-          current_uses: newUses,
-          last_accessed_at: new Date().toISOString(),
-          last_accessed_ip: ip,
-          access_logs: newLogs
-        })
-        .eq("id", linkId);
+      await query(
+        `UPDATE shared_whatsapp_links 
+         SET current_uses = $1, last_accessed_at = $2, last_accessed_ip = $3, access_logs = $4::jsonb 
+         WHERE id = $5`,
+        [newUses, new Date().toISOString(), ip, JSON.stringify(newLogs), linkId]
+      );
         
       console.log("✅ [QR-GENERATE] Uso incrementado:", newUses);
     }
@@ -119,38 +106,15 @@ export async function POST(
       );
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return NextResponse.json(
-        { success: false, error: "Configuração do servidor incompleta" },
-        { status: 500, headers: securityHeaders }
-      );
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseAnonKey,
-      Authorization: `Bearer ${supabaseAnonKey}`,
-    };
-
     // Buscar link compartilhado com informações da conexão
-    const linkResponse = await fetch(
-      `${supabaseUrl}/rest/v1/shared_whatsapp_links?token=eq.${token}&is_active=eq.true&select=*,whatsapp_connections(id,instance_name,status)`,
-      { headers }
+    const links = await queryMany(
+      `SELECT sl.*, wc.id as wc_id, wc.instance_name as wc_instance_name, wc.status as wc_status, wc.connection_name as wc_connection_name
+       FROM shared_whatsapp_links sl
+       LEFT JOIN whatsapp_connections wc ON sl.connection_id = wc.id
+       WHERE sl.token = $1 AND sl.is_active = true`,
+      [token]
     );
 
-    if (!linkResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao verificar link" },
-        { status: 500, headers: securityHeaders }
-      );
-    }
-
-    const links = await linkResponse.json();
     if (!links || links.length === 0) {
       logSecurityEvent({
         type: 'SUSPICIOUS_ACTIVITY',
@@ -237,27 +201,11 @@ export async function POST(
     }
 
     // Buscar dados da conexão INCLUINDO api_type e instance_token
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${link.connection_id}&select=id,instance_name,status,api_type,instance_token,user_id`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai", 
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${supabaseAnonKey}`,
-        },
-      }
+    const connections = await queryMany(
+      'SELECT id, instance_name, status, api_type, instance_token, user_id FROM whatsapp_connections WHERE id = $1',
+      [link.connection_id]
     );
 
-    if (!connectionResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Conexão não encontrada" },
-        { status: 500, headers: securityHeaders }
-      );
-    }
-
-    const connections = await connectionResponse.json();
     if (!connections || connections.length === 0) {
       return NextResponse.json(
         { 
@@ -279,19 +227,11 @@ export async function POST(
       console.log("🔵 [QR-GENERATE] Gerando QR Code via Uazapi...");
       
       // Buscar configuração da Uazapi
-      const uazapiIntegrationResponse = await fetch(
-        `${supabaseUrl}/rest/v1/integrations?type=eq.uazapi&is_active=eq.true&select=config`,
-        { headers }
+      const uazapiIntegrations = await queryMany(
+        'SELECT config FROM integrations WHERE type = $1 AND is_active = true',
+        ['uazapi']
       );
 
-      if (!uazapiIntegrationResponse.ok) {
-        return NextResponse.json(
-          { success: false, error: "Configuração da Uazapi não encontrada" },
-          { status: 500, headers: securityHeaders }
-        );
-      }
-
-      const uazapiIntegrations = await uazapiIntegrationResponse.json();
       if (!uazapiIntegrations || uazapiIntegrations.length === 0) {
         return NextResponse.json(
           { success: false, error: "Uazapi não configurada" },
@@ -391,7 +331,7 @@ export async function POST(
             pair_code: pairCode,
             expires_in: 120, // 2 minutos para QR Code
             connection: {
-              name: link.whatsapp_connections?.connection_name || "WhatsApp",
+              name: link.wc_connection_name || "WhatsApp",
               instance_name: connection.instance_name,
               status: statusData.instance?.status || "connecting"
             },
@@ -420,19 +360,11 @@ export async function POST(
     console.log("🟢 [QR-GENERATE] Gerando QR Code via Evolution API...");
     
     // Buscar configuração da Evolution API
-    const integrationResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-      { headers }
+    const integrations = await queryMany(
+      'SELECT config FROM integrations WHERE type = $1 AND is_active = true',
+      ['evolution_api']
     );
 
-    if (!integrationResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Configuração da Evolution API não encontrada" },
-        { status: 500, headers: securityHeaders }
-      );
-    }
-
-    const integrations = await integrationResponse.json();
     if (!integrations || integrations.length === 0) {
       return NextResponse.json(
         { success: false, error: "Evolution API não configurada" },

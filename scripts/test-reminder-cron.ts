@@ -3,8 +3,7 @@ import { runReminderCron } from "../lib/reminders/run-reminder-cron"
 type FetchInput = Parameters<typeof fetch>[0]
 type FetchInit = Parameters<typeof fetch>[1]
 
-process.env.SUPABASE_URL = "https://supabase.local"
-process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key"
+process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/postgres"
 process.env.REMINDER_CRON_SECRET = "secret"
 
 function jsonResponse(body: any, init: ResponseInit = { status: 200 }) {
@@ -21,50 +20,13 @@ function textResponse(text: string, init: ResponseInit = { status: 200 }) {
   })
 }
 
+// NOTE: run-reminder-cron.ts now uses direct SQL via @/lib/db instead of Supabase REST API.
+// This test script's fetch mocks only cover external API calls (e.g. Cal.com).
+// To fully test, mock the db module or use a real test database.
+
 // @ts-ignore - override global fetch with mock
 global.fetch = async (input: FetchInput, init?: FetchInit) => {
   const url = typeof input === "string" ? input : input.toString()
-
-  if (url.includes("/rest/v1/reminder_triggers")) {
-    if (init?.method === "POST") {
-      return textResponse("", { status: 201 })
-    }
-
-    return jsonResponse([
-      {
-        id: "trigger-1",
-        agent_id: "agent-1",
-        offset_amount: 1,
-        offset_unit: "hours",
-        webhook_url: "https://webhook.test/reminder",
-        scope_reference: "event-type-123",
-        is_active: true,
-      },
-    ])
-  }
-
-  if (url.includes("/rest/v1/reminder_trigger_logs")) {
-    if (init?.method === "POST") {
-      return textResponse("", { status: 201 })
-    }
-
-    return jsonResponse([])
-  }
-
-  if (url.includes("/rest/v1/ai_agents")) {
-    return jsonResponse([
-      {
-        id: "agent-1",
-        name: "Agente Teste",
-        user_id: "user-1",
-        calendar_provider: "cal.com",
-        calendar_api_key: "cal-key",
-        calendar_api_url: "https://api.cal.com/v2",
-        calendar_api_version: "v2",
-        calendar_meeting_id: "event-type-123",
-      },
-    ])
-  }
 
   if (url.includes("api.cal.com")) {
     const now = Date.now()

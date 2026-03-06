@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { disconnectUazapiInstanceServer } from "@/lib/uazapi-server";
 import { requireAuth, hasPermission } from "@/lib/auth-utils";
 import { logAccessDenied } from "@/lib/security-audit";
+import { query, queryOne, queryMany } from "@/lib/db";
 
 export async function DELETE(
   request: NextRequest,
@@ -33,40 +34,12 @@ export async function DELETE(
 
     console.log("✅ [DISCONNECT] Usuário autenticado:", user.email);
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { success: false, error: "Configuração não encontrada" },
-        { status: 500 }
-      );
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    };
-
     // Buscar dados da conexão incluindo user_id para validar propriedade
     console.log(`🔍 [DISCONNECT] Buscando dados da conexão: ${instanceName}`);
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}&select=id,instance_name,user_id,api_type,instance_token`,
-      { headers }
+    const connections = await queryMany(
+      'SELECT id, instance_name, user_id, api_type, instance_token FROM whatsapp_connections WHERE instance_name = $1',
+      [instanceName]
     );
-
-    if (!connectionResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao buscar conexão" },
-        { status: 500 }
-      );
-    }
-
-    const connections = await connectionResponse.json();
     if (!connections || connections.length === 0) {
       return NextResponse.json(
         { success: false, error: "Conexão não encontrada" },
@@ -120,20 +93,9 @@ export async function DELETE(
       console.log(`✅ [DISCONNECT-UAZAPI] Desconexão bem-sucedida`);
 
       // Atualizar status no banco
-      await fetch(
-        `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`,
-        {
-          method: "PATCH",
-          headers: {
-            ...headers,
-            Prefer: "return=representation",
-          },
-          body: JSON.stringify({
-            status: "disconnected",
-            phone_number: null,
-            updated_at: new Date().toISOString(),
-          }),
-        }
+      await query(
+        'UPDATE whatsapp_connections SET status = $1, phone_number = $2, updated_at = $3 WHERE instance_name = $4',
+        ['disconnected', null, new Date().toISOString(), instanceName]
       );
 
       return NextResponse.json({
@@ -145,19 +107,10 @@ export async function DELETE(
     // === EVOLUTION API ===
     console.log(`🟢 [DISCONNECT-EVOLUTION] Desconectando via Evolution API...`);
     
-    const integrationResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-      { headers }
+    const integrations = await queryMany(
+      'SELECT config FROM integrations WHERE type = $1 AND is_active = true',
+      ['evolution_api']
     );
-
-    if (!integrationResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao buscar configuração da Evolution API" },
-        { status: 500 }
-      );
-    }
-
-    const integrations = await integrationResponse.json();
 
     if (!integrations || integrations.length === 0) {
       return NextResponse.json(
@@ -206,31 +159,10 @@ export async function DELETE(
     console.log(`✅ [DISCONNECT-EVOLUTION] Desconexão bem-sucedida:`, logoutData);
 
     // Atualizar status no banco de dados
-    const updateResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify({
-          status: "disconnected",
-          phone_number: null,
-          updated_at: new Date().toISOString(),
-        }),
-      }
+    await query(
+      'UPDATE whatsapp_connections SET status = $1, phone_number = $2, updated_at = $3 WHERE instance_name = $4',
+      ['disconnected', null, new Date().toISOString(), instanceName]
     );
-
-    if (!updateResponse.ok) {
-      console.error(
-        "Erro ao atualizar status no banco, mas desconexão foi bem-sucedida"
-      );
-    }
 
     return NextResponse.json({
       success: true,

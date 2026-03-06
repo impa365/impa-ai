@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { queryOne, queryMany } from "@/lib/db";
 import { validateApiKey } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest) {
@@ -36,27 +36,10 @@ export async function GET(request: NextRequest) {
       targetUserId = userIdParam;
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    });
-
-    // Construir query
-    let query = supabase
-      .from("lead_follow24hs")
-      .select(
-        `
-        *,
-        followup_message_history(
-          day_number,
-          sent_at,
-          status
-        )
-      `
-      )
-      .eq("user_id", targetUserId)
-      .eq("instance_name", instanceName);
+    // Construir query dinâmica com parâmetros
+    const conditions: string[] = ['l.user_id = $1', 'l.instance_name = $2'];
+    const params: any[] = [targetUserId, instanceName];
+    let paramIndex = 3;
 
     // Filtros opcionais
     if (dia) {
@@ -80,54 +63,49 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      query = query.eq("start_date", filterDate.toISOString().split("T")[0]);
+      conditions.push(`l.start_date = $${paramIndex}`);
+      params.push(filterDate.toISOString().split("T")[0]);
+      paramIndex++;
     }
 
     if (isActive !== null) {
-      query = query.eq("is_active", isActive === "true");
+      conditions.push(`l.is_active = $${paramIndex}`);
+      params.push(isActive === "true");
+      paramIndex++;
     }
 
-    // Paginação
+    const whereClause = conditions.join(' AND ');
     const offset = (page - 1) * limit;
-    query = query.range(offset, offset + limit - 1);
 
-    // Ordenar por data de criação (mais recentes primeiro)
-    query = query.order("created_at", { ascending: false });
-
-    const { data: leads, error: queryError } = await query;
-
-    if (queryError) {
-      console.error("Error fetching leads:", queryError);
-      return NextResponse.json(
-        { error: "Failed to fetch leads" },
-        { status: 500 }
-      );
-    }
+    // Query principal com subquery para message history
+    const leads = await queryMany(
+      `SELECT l.*,
+        COALESCE(
+          (SELECT json_agg(json_build_object(
+            'day_number', h.day_number,
+            'sent_at', h.sent_at,
+            'status', h.status
+          ))
+          FROM followup_message_history h
+          WHERE h.lead_follow_id = l.id),
+          '[]'::json
+        ) AS followup_message_history
+      FROM lead_follow24hs l
+      WHERE ${whereClause}
+      ORDER BY l.created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      [...params, limit, offset]
+    );
 
     // Contar total para paginação
-    let countQuery = supabase
-      .from("lead_follow24hs")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", targetUserId)
-      .eq("instance_name", instanceName);
-
-    if (dia) {
-      const [day, month, year] = dia.split("/");
-      const filterDate = new Date(`${year}-${month}-${day}`);
-      countQuery = countQuery.eq(
-        "start_date",
-        filterDate.toISOString().split("T")[0]
-      );
-    }
-
-    if (isActive !== null) {
-      countQuery = countQuery.eq("is_active", isActive === "true");
-    }
-
-    const { count } = await countQuery;
+    const countResult = await queryOne(
+      `SELECT COUNT(*)::int AS count FROM lead_follow24hs l WHERE ${whereClause}`,
+      params
+    );
+    const count = countResult?.count || 0;
 
     // Formatar dados de resposta
-    const formattedLeads = leads?.map((lead) => ({
+    const formattedLeads = leads?.map((lead: any) => ({
       ...lead,
       start_date_formatted: new Date(lead.start_date).toLocaleDateString(
         "pt-BR"
@@ -145,8 +123,8 @@ export async function GET(request: NextRequest) {
       pagination: {
         page,
         limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit),
+        total: count,
+        totalPages: Math.ceil(count / limit),
       },
     });
   } catch (error) {

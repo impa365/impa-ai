@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { checkRateLimit, getRequestIdentifier, RATE_LIMITS } from "@/lib/rate-limit"
 import { logAccessDenied, logRateLimitExceeded } from "@/lib/security-audit"
+import { queryMany } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,64 +32,33 @@ export async function GET(request: NextRequest) {
 
     console.log("✅ Usuário autenticado:", user.email, "| Role:", user.role)
 
-    // Verificar variáveis de ambiente
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Configuração do banco não encontrada",
-        },
-        { status: 500 },
-      )
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // 🔒 SEGURANÇA: Admins veem tudo, usuários só suas próprias conexões
     const isAdmin = user.role === "admin"
-    
-    let url = `${supabaseUrl}/rest/v1/whatsapp_connections?select=*,adciona_folow,remover_folow,api_type,instance_token,user_profiles(id,email,full_name)&order=connection_name.asc`
 
-    // Filtrar por usuário se não for admin
-    if (!isAdmin) {
-      url += `&user_id=eq.${user.id}`
-    }
-
-    const response = await fetch(url, {
-      headers,
-      cache: "no-store", // Evitar cache
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      // LOG DETALHADO NO SERVIDOR
+    let connections: any[]
+    try {
+      const sql = `
+        SELECT wc.*, up.id AS user_profile_id, up.email AS user_profile_email, up.full_name AS user_profile_full_name
+        FROM whatsapp_connections wc
+        LEFT JOIN user_profiles up ON wc.user_id = up.id
+        ${isAdmin ? '' : 'WHERE wc.user_id = $1'}
+        ORDER BY wc.connection_name ASC`
+      connections = isAdmin ? await queryMany(sql) : await queryMany(sql, [user.id])
+    } catch (dbError: any) {
       console.error("[WhatsApp-Connections][ERRO] Falha ao buscar conexões:", {
-        url,
-        status: response.status,
-        userId,
+        userId: user.id,
         isAdmin,
-        errorText,
+        error: dbError.message,
       })
       return NextResponse.json(
         {
           success: false,
-          error: `Erro ao buscar conexões: ${response.status}`,
-          details: errorText,
+          error: "Erro ao buscar conexões",
+          details: dbError.message,
         },
-        { status: response.status },
+        { status: 500 },
       )
     }
-
-    const connections = await response.json()
 
     // Filtrar dados sensíveis
     const safeConnections = connections.map((conn: any) => ({
@@ -96,12 +66,12 @@ export async function GET(request: NextRequest) {
       connection_name: conn.connection_name,
       instance_name: conn.instance_name,
       status: conn.status || "disconnected",
-      api_type: conn.api_type || "evolution", // CRÍTICO: Incluir api_type
+      api_type: conn.api_type || "evolution",
       user_id: conn.user_id,
       phone_number: conn.phone_number,
       created_at: conn.created_at,
       updated_at: conn.updated_at,
-      user_profiles: conn.user_profiles,
+      user_profiles: conn.user_profile_id ? { id: conn.user_profile_id, email: conn.user_profile_email, full_name: conn.user_profile_full_name } : null,
       settings: conn.settings,
       adciona_folow: conn.adciona_folow,
       remover_folow: conn.remover_folow,

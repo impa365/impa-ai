@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServer } from "@/lib/supabase-config";
+import { queryOne, queryMany } from "@/lib/db";
 import { getCurrentServerUser } from "@/lib/auth-server";
 
 export async function GET(
@@ -18,30 +18,32 @@ export async function GET(
       );
     }
 
-    const supabase = getSupabaseServer();
-
     // Buscar o agente e sua conexão WhatsApp
-    let query = supabase
-      .from("ai_agents")
-      .select(`
-        *,
-        whatsapp_connections!whatsapp_connection_id (
-          id,
-          instance_id,
-          instance_name,
-          instance_token
-        )
-      `)
-      .eq("id", id);
+    let sql = `
+      SELECT a.*,
+        json_build_object(
+          'id', wc.id,
+          'instance_id', wc.instance_id,
+          'instance_name', wc.instance_name,
+          'instance_token', wc.instance_token
+        ) AS whatsapp_connections
+      FROM ai_agents a
+      LEFT JOIN whatsapp_connections wc ON wc.id = a.whatsapp_connection_id
+      WHERE a.id = $1
+    `;
+    const sqlParams: any[] = [id];
 
     // Se não for admin, filtrar apenas agentes do usuário
     if (user.role !== "admin") {
-      query = query.eq("user_id", user.id);
+      sql += ` AND a.user_id = $2`;
+      sqlParams.push(user.id);
     }
 
-    const { data: agent, error: agentError } = await query.single();
+    sql += ` LIMIT 1`;
 
-    if (agentError || !agent) {
+    const agent = await queryOne<any>(sql, sqlParams);
+
+    if (!agent) {
       return NextResponse.json(
         { error: "Agente não encontrado" },
         { status: 404 }
@@ -63,14 +65,12 @@ export async function GET(
     }
 
     // Buscar configurações da Evolution API
-    const { data: integration, error: integrationError } = await supabase
-      .from("integrations")
-      .select("config")
-      .eq("type", "evolution_api")
-      .eq("is_active", true)
-      .single();
+    const integration = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["evolution_api"]
+    );
 
-    if (integrationError || !integration) {
+    if (!integration) {
       return NextResponse.json(
         { error: "Evolution API não configurada" },
         { status: 400 }

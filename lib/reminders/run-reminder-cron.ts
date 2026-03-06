@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto"
+import { queryOne, queryMany, query as dbQuery } from "@/lib/db"
 const DEFAULT_V2_HEADER_VERSION = "2024-08-13"
 const TOLERANCE_MINUTES = Number(process.env.REMINDER_CRON_TOLERANCE_MINUTES ?? "5")
 const REQUEST_TIMEOUT_MS = Number(process.env.REMINDER_CRON_TIMEOUT_MS ?? "20000") // ✅ Aumentado para 20s para aguardar delay da Uazapi
@@ -126,24 +127,7 @@ const OFFSET_TO_MINUTES: Record<OffsetUnit, number> = {
   days: 60 * 24,
 }
 
-function getSupabaseCredentials() {
-  const supabaseUrl = process.env.SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Variáveis de ambiente SUPABASE_URL/SUPABASE_* não configuradas para o cron de lembretes")
-  }
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "Accept-Profile": "impaai",
-    "Content-Profile": "impaai",
-    apikey: supabaseKey,
-    Authorization: `Bearer ${supabaseKey}`,
-  }
-
-  return { supabaseUrl, headers }
-}
+// Removed: getSupabaseCredentials() - now using lib/db directly
 
 function convertOffsetToMinutes(amount: number, unit: OffsetUnit): number {
   const factor = OFFSET_TO_MINUTES[unit]
@@ -465,24 +449,12 @@ async function getIntegrationConfig(
   }
 
   try {
-    const { supabaseUrl, headers } = getSupabaseCredentials()
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?select=config,is_active&type=eq.${type}&is_active=eq.true&limit=1`,
-      { headers, cache: "no-store" },
+    const row = await queryOne<{ config: any; is_active: boolean }>(
+      `SELECT config, is_active FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      [type]
     )
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => "")
-      console.error(`Erro ao buscar configuração da integração ${type}:`, response.status, text)
-      integrationConfigCache.set(type, null)
-      return null
-    }
-
-    const data = await response.json()
-    const rawConfig = Array.isArray(data) && data.length > 0 ? data[0]?.config ?? null : null
-    const config =
-      rawConfig && typeof rawConfig === "object" && !Array.isArray(rawConfig) ? rawConfig : null
-
+    const config = row?.config && typeof row.config === "object" && !Array.isArray(row.config) ? row.config : null
     integrationConfigCache.set(type, config)
     return config
   } catch (error) {
@@ -515,30 +487,21 @@ async function fetchWhatsappConnection(connectionId: string): Promise<WhatsappCo
   }
 
   try {
-    const { supabaseUrl, headers } = getSupabaseCredentials()
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,api_type,instance_name,instance_token,connection_name&limit=1&id=eq.${connectionId}`,
-      { headers, cache: "no-store" },
+    const row = await queryOne<any>(
+      `SELECT id, api_type, instance_name, instance_token, connection_name
+       FROM whatsapp_connections WHERE id = $1 LIMIT 1`,
+      [connectionId]
     )
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => "")
-      console.error("Erro ao buscar conexão WhatsApp:", response.status, text)
-      connectionCache.set(connectionId, null)
-      return null
-    }
-
-    const data = await response.json()
-    const record =
-      Array.isArray(data) && data.length > 0
-        ? {
-            id: String(data[0]?.id),
-            api_type: data[0]?.api_type ?? null,
-            instance_name: data[0]?.instance_name ?? null,
-            instance_token: data[0]?.instance_token ?? null,
-            connection_name: data[0]?.connection_name ?? null,
-          }
-        : null
+    const record: WhatsappConnectionRecord | null = row
+      ? {
+          id: String(row.id),
+          api_type: row.api_type ?? null,
+          instance_name: row.instance_name ?? null,
+          instance_token: row.instance_token ?? null,
+          connection_name: row.connection_name ?? null,
+        }
+      : null
 
     connectionCache.set(connectionId, record)
     return record
@@ -621,21 +584,15 @@ function normalizeBooking(raw: any): NormalizedBooking {
 }
 
 async function fetchTriggers(): Promise<ReminderTriggerRecord[]> {
-  const { supabaseUrl, headers } = getSupabaseCredentials()
+  const rows = await queryMany<any>(
+    `SELECT * FROM reminder_triggers WHERE is_active = true`
+  )
 
-  const response = await fetch(`${supabaseUrl}/rest/v1/reminder_triggers?select=*&is_active=eq.true`, { headers, cache: "no-store" })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`Erro ao buscar gatilhos: ${response.status} - ${text}`)
-  }
-
-  const triggers = await response.json()
-  if (!Array.isArray(triggers)) {
+  if (!rows || rows.length === 0) {
     return []
   }
 
-  return triggers
+  return rows
     .map((raw: any) => {
       // ✅ SEGURANÇA: Validar que agent_id existe e é válido
       const agent_id = String(raw?.agent_id ?? "").trim()
@@ -676,19 +633,13 @@ async function fetchAgent(agentId: string): Promise<AgentRecord | null> {
     return null
   }
 
-  const { supabaseUrl, headers } = getSupabaseCredentials()
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/ai_agents?select=id,name,user_id,calendar_provider,calendar_api_key,calendar_api_url,calendar_api_version,calendar_meeting_id,whatsapp_connection_id&limit=1&id=eq.${agentId}`,
-    { headers, cache: "no-store" },
+  const rawAgent = await queryOne<any>(
+    `SELECT id, name, user_id, calendar_provider, calendar_api_key, calendar_api_url,
+            calendar_api_version, calendar_meeting_id, whatsapp_connection_id
+     FROM ai_agents WHERE id = $1 LIMIT 1`,
+    [agentId]
   )
 
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`Erro ao buscar agente ${agentId}: ${response.status} - ${text}`)
-  }
-
-  const data = await response.json()
-  const rawAgent = Array.isArray(data) && data.length > 0 ? data[0] : null
   const agent: AgentRecord | null = rawAgent
     ? {
         id: String(rawAgent.id),
@@ -713,20 +664,11 @@ async function fetchAgent(agentId: string): Promise<AgentRecord | null> {
 }
 
 async function checkReminderAlreadySent(triggerId: string, bookingUid: string): Promise<boolean> {
-  const { supabaseUrl, headers } = getSupabaseCredentials()
-  const encodedUid = encodeURIComponent(bookingUid)
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/reminder_trigger_logs?select=id&trigger_id=eq.${triggerId}&booking_uid=eq.${encodedUid}&limit=1`,
-    { headers, cache: "no-store" },
+  const row = await queryOne<{ id: string }>(
+    `SELECT id FROM reminder_trigger_logs WHERE trigger_id = $1 AND booking_uid = $2 LIMIT 1`,
+    [triggerId, bookingUid]
   )
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`Erro ao consultar logs de lembrete: ${response.status} - ${text}`)
-  }
-
-  const data = await response.json()
-  return Array.isArray(data) && data.length > 0
+  return !!row
 }
 
 async function insertReminderLog(entry: {
@@ -738,28 +680,23 @@ async function insertReminderLog(entry: {
   webhookResponse: any
   errorMessage?: string | null
 }) {
-  const { supabaseUrl, headers } = getSupabaseCredentials()
-
-  const payload = {
-    trigger_id: entry.triggerId,
-    booking_uid: entry.bookingUid,
-    scheduled_for: entry.scheduledFor,
-    executed_at: new Date().toISOString(),
-    success: entry.success,
-    webhook_status: entry.webhookStatus,
-    webhook_response: entry.webhookResponse ?? null,
-    error_message: entry.errorMessage ?? null,
-  }
-
-  const response = await fetch(`${supabaseUrl}/rest/v1/reminder_trigger_logs`, {
-    method: "POST",
-    headers: { ...headers, Prefer: "return=minimal" },
-    body: JSON.stringify(payload),
-  })
-
-  if (!response.ok) {
-    const text = await response.text()
-    console.error("Erro ao registrar log de lembrete:", response.status, text)
+  try {
+    await dbQuery(
+      `INSERT INTO reminder_trigger_logs (trigger_id, booking_uid, scheduled_for, executed_at, success, webhook_status, webhook_response, error_message)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        entry.triggerId,
+        entry.bookingUid,
+        entry.scheduledFor,
+        new Date().toISOString(),
+        entry.success,
+        entry.webhookStatus,
+        entry.webhookResponse ? JSON.stringify(entry.webhookResponse) : null,
+        entry.errorMessage ?? null,
+      ]
+    )
+  } catch (error) {
+    console.error("Erro ao registrar log de lembrete:", error)
   }
 }
 
@@ -856,23 +793,12 @@ async function fetchCalcomBookings(
 
 async function insertCronRun(params: { startedAt: string; dryRun: boolean }) {
   try {
-    const { supabaseUrl, headers } = getSupabaseCredentials()
-    const response = await fetch(`${supabaseUrl}/rest/v1/reminder_cron_runs`, {
-      method: "POST",
-      headers: { ...headers, Prefer: "return=representation" },
-      body: JSON.stringify({
-        started_at: params.startedAt,
-        dry_run: params.dryRun,
-      }),
-    })
-
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`Falha ao registrar início do cron: ${response.status} - ${text}`)
-    }
-
-    const data = await response.json()
-    const row = Array.isArray(data) ? data[0] : data
+    const row = await queryOne<{ id: string }>(
+      `INSERT INTO reminder_cron_runs (started_at, dry_run)
+       VALUES ($1, $2)
+       RETURNING id`,
+      [params.startedAt, params.dryRun]
+    )
     return row?.id ? String(row.id) : null
   } catch (error) {
     console.error("Erro ao registrar início do cron:", error)
@@ -891,27 +817,25 @@ async function updateCronRun(
   },
 ) {
   try {
-    const { supabaseUrl, headers } = getSupabaseCredentials()
-    const response = await fetch(`${supabaseUrl}/rest/v1/reminder_cron_runs?id=eq.${runId}`, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify({
-        finished_at: params.finishedAt,
-        duration_ms: params.durationMs,
-        success: params.success,
-        reminders_due: params.summary.remindersDue,
-        reminders_sent: params.summary.sent,
-        reminders_failed: params.summary.failed,
-        triggers_processed: params.summary.processedTriggers,
-        message: params.errorMessage ?? null,
-        details: params.summary.details ?? null,
-      }),
-    })
-
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`Falha ao atualizar log do cron: ${response.status} - ${text}`)
-    }
+    await dbQuery(
+      `UPDATE reminder_cron_runs
+       SET finished_at = $1, duration_ms = $2, success = $3,
+           reminders_due = $4, reminders_sent = $5, reminders_failed = $6,
+           triggers_processed = $7, message = $8, details = $9
+       WHERE id = $10`,
+      [
+        params.finishedAt,
+        params.durationMs,
+        params.success,
+        params.summary.remindersDue,
+        params.summary.sent,
+        params.summary.failed,
+        params.summary.processedTriggers,
+        params.errorMessage ?? null,
+        params.summary.details ? JSON.stringify(params.summary.details) : null,
+        runId,
+      ]
+    )
   } catch (error) {
     console.error("Erro ao atualizar log do cron:", error)
   }

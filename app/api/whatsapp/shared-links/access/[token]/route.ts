@@ -1,20 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { query, queryOne, queryMany } from "@/lib/db";
 import crypto from "crypto";
-
-// Função para criar cliente Supabase com verificação segura
-function createSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing Supabase configuration");
-  }
-
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    db: { schema: "impaai" },
-  });
-}
 
 // Função para verificar senha
 function verifyPassword(password: string, hash: string, salt: string): boolean {
@@ -30,16 +16,6 @@ function verifyPassword(password: string, hash: string, salt: string): boolean {
 // Função para registrar acesso
 async function logAccess(linkId: string, ip: string, userAgent: string) {
   try {
-    // Tentar usar SUPABASE_SERVICE_ROLE_KEY, se não existir usar SUPABASE_ANON_KEY
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-    const supabaseUrl = process.env.SUPABASE_URL;
-    
-    if (!serviceKey || !supabaseUrl) return;
-
-    const serviceSupabase = createClient(supabaseUrl, serviceKey, {
-      db: { schema: "impaai" },
-    });
-
     const accessLog = {
       timestamp: new Date().toISOString(),
       ip,
@@ -47,11 +23,10 @@ async function logAccess(linkId: string, ip: string, userAgent: string) {
     };
 
     // Buscar dados atuais primeiro
-    const { data: currentLink } = await serviceSupabase
-      .from("shared_whatsapp_links")
-      .select("current_uses, access_logs")
-      .eq("id", linkId)
-      .single();
+    const currentLink = await queryOne(
+      'SELECT current_uses, access_logs FROM shared_whatsapp_links WHERE id = $1',
+      [linkId]
+    );
 
     if (currentLink) {
       const newUses = (currentLink.current_uses || 0) + 1;
@@ -59,15 +34,12 @@ async function logAccess(linkId: string, ip: string, userAgent: string) {
       const newLogs = [...currentLogs, accessLog];
 
       // Atualizar logs de acesso e contador
-      await serviceSupabase
-        .from("shared_whatsapp_links")
-        .update({
-          current_uses: newUses,
-          last_accessed_at: new Date().toISOString(),
-          last_accessed_ip: ip,
-          access_logs: newLogs
-        })
-        .eq("id", linkId);
+      await query(
+        `UPDATE shared_whatsapp_links 
+         SET current_uses = $1, last_accessed_at = $2, last_accessed_ip = $3, access_logs = $4::jsonb 
+         WHERE id = $5`,
+        [newUses, new Date().toISOString(), ip, JSON.stringify(newLogs), linkId]
+      );
     }
 
   } catch (error) {
@@ -82,14 +54,6 @@ async function getRealConnectionStatus(
   instanceToken?: string
 ) {
   try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.warn("⚠️ [STATUS-CHECK] Configuração do Supabase não disponível");
-      return null;
-    }
-
     // === UAZAPI ===
     if (apiType === "uazapi") {
       console.log(`🔵 [STATUS-CHECK-UAZAPI] Verificando status: ${instanceName}`);
@@ -100,25 +64,11 @@ async function getRealConnectionStatus(
       }
 
       // Buscar configuração da Uazapi
-      const uazapiIntegrationResponse = await fetch(
-        `${supabaseUrl}/rest/v1/integrations?type=eq.uazapi&is_active=eq.true&select=config`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-            apikey: supabaseAnonKey,
-            Authorization: `Bearer ${supabaseAnonKey}`,
-          },
-        }
+      const uazapiIntegrations = await queryMany(
+        'SELECT config FROM integrations WHERE type = $1 AND is_active = true',
+        ['uazapi']
       );
 
-      if (!uazapiIntegrationResponse.ok) {
-        console.warn("⚠️ [STATUS-CHECK-UAZAPI] Erro ao buscar config da Uazapi");
-        return null;
-      }
-
-      const uazapiIntegrations = await uazapiIntegrationResponse.json();
       if (!uazapiIntegrations || uazapiIntegrations.length === 0) {
         console.warn("⚠️ [STATUS-CHECK-UAZAPI] Uazapi não configurada");
         return null;
@@ -163,23 +113,9 @@ async function getRealConnectionStatus(
 
       // Atualizar status no banco
       try {
-        await fetch(
-          `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              "Accept-Profile": "impaai",
-              "Content-Profile": "impaai",
-              apikey: supabaseAnonKey,
-              Authorization: `Bearer ${supabaseAnonKey}`,
-              Prefer: "return=minimal",
-            },
-            body: JSON.stringify({
-              status: realStatus,
-              updated_at: new Date().toISOString(),
-            }),
-          }
+        await query(
+          'UPDATE whatsapp_connections SET status = $1, updated_at = $2 WHERE instance_name = $3',
+          [realStatus, new Date().toISOString(), instanceName]
         );
         console.log(`✅ [STATUS-CHECK-UAZAPI] Status atualizado: ${realStatus}`);
       } catch (updateError) {
@@ -198,25 +134,11 @@ async function getRealConnectionStatus(
     console.log(`🟢 [STATUS-CHECK-EVOLUTION] Verificando status: ${instanceName}`);
     
     // Buscar configuração da Evolution API
-    const integrationResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${supabaseAnonKey}`,
-        },
-      }
+    const integrations = await queryMany(
+      'SELECT config FROM integrations WHERE type = $1 AND is_active = true',
+      ['evolution_api']
     );
 
-    if (!integrationResponse.ok) {
-      console.warn("⚠️ [STATUS-CHECK-EVOLUTION] Erro ao buscar config");
-      return null;
-    }
-
-    const integrations = await integrationResponse.json();
     if (!integrations || integrations.length === 0) {
       console.warn("⚠️ [STATUS-CHECK-EVOLUTION] Evolution API não configurada");
       return null;
@@ -267,23 +189,9 @@ async function getRealConnectionStatus(
 
     // Atualizar status no banco se for diferente
     try {
-      await fetch(
-        `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept-Profile": "impaai",
-            "Content-Profile": "impaai",
-            apikey: supabaseAnonKey,
-            Authorization: `Bearer ${supabaseAnonKey}`,
-            Prefer: "return=minimal",
-          },
-          body: JSON.stringify({
-            status: realStatus,
-            updated_at: new Date().toISOString(),
-          }),
-        }
+      await query(
+        'UPDATE whatsapp_connections SET status = $1, updated_at = $2 WHERE instance_name = $3',
+        [realStatus, new Date().toISOString(), instanceName]
       );
       console.log(`🔄 [STATUS-CHECK] Status atualizado no banco: ${realStatus}`);
     } catch (updateError) {
@@ -312,35 +220,20 @@ export async function GET(
     const { token } = await params;
     console.log("🔍 [SHARED-ACCESS] Acessando link:", token.substring(0, 10) + "...");
 
-    const supabase = createSupabaseClient();
-
     // Buscar link compartilhado com informações da conexão
-    const { data: link, error } = await supabase
-      .from("shared_whatsapp_links")
-      .select(`
-        id,
-        connection_id,
-        password_hash,
-        permissions,
-        expires_at,
-        max_uses,
-        current_uses,
-        whatsapp_connections (
-          id,
-          connection_name,
-          instance_name,
-          status,
-          phone_number,
-          api_type,
-          instance_token
-        )
-      `)
-      .eq("token", token)
-      .eq("is_active", true)
-      .single();
+    const link = await queryOne(
+      `SELECT sl.id, sl.connection_id, sl.password_hash, sl.permissions, sl.expires_at, 
+              sl.max_uses, sl.current_uses,
+              wc.id as wc_id, wc.connection_name, wc.instance_name, wc.status as wc_status, 
+              wc.phone_number, wc.api_type, wc.instance_token
+       FROM shared_whatsapp_links sl
+       LEFT JOIN whatsapp_connections wc ON sl.connection_id = wc.id
+       WHERE sl.token = $1 AND sl.is_active = true`,
+      [token]
+    );
 
-    if (error || !link) {
-      console.error("❌ [SHARED-ACCESS] Link não encontrado:", error);
+    if (!link) {
+      console.error("❌ [SHARED-ACCESS] Link não encontrado");
       return NextResponse.json(
         { 
           success: false, 
@@ -378,7 +271,15 @@ export async function GET(
     }
 
     // Verificar se whatsapp_connections existe e tem dados
-    const connection = link.whatsapp_connections as any;
+    const connection = link.wc_id ? {
+      id: link.wc_id,
+      connection_name: link.connection_name,
+      instance_name: link.instance_name,
+      status: link.wc_status,
+      phone_number: link.phone_number,
+      api_type: link.api_type,
+      instance_token: link.instance_token,
+    } : null;
     if (!connection) {
       return NextResponse.json(
         { 
@@ -464,36 +365,20 @@ export async function POST(
                'unknown';
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
-    const supabase = createSupabaseClient();
-
     // Buscar link completo
-    const { data: link, error } = await supabase
-      .from("shared_whatsapp_links")
-      .select(`
-        id,
-        connection_id,
-        password_hash,
-        salt,
-        permissions,
-        expires_at,
-        max_uses,
-        current_uses,
-        whatsapp_connections (
-          id,
-          connection_name,
-          instance_name,
-          status,
-          phone_number,
-          qr_code,
-          settings
-        )
-      `)
-      .eq("token", token)
-      .eq("is_active", true)
-      .single();
+    const link = await queryOne(
+      `SELECT sl.id, sl.connection_id, sl.password_hash, sl.salt, sl.permissions, sl.expires_at, 
+              sl.max_uses, sl.current_uses,
+              wc.id as wc_id, wc.connection_name, wc.instance_name, wc.status as wc_status,
+              wc.phone_number, wc.qr_code, wc.settings
+       FROM shared_whatsapp_links sl
+       LEFT JOIN whatsapp_connections wc ON sl.connection_id = wc.id
+       WHERE sl.token = $1 AND sl.is_active = true`,
+      [token]
+    );
 
-    if (error || !link) {
-      console.error("❌ [SHARED-ACCESS] Link não encontrado:", error);
+    if (!link) {
+      console.error("❌ [SHARED-ACCESS] Link não encontrado");
       return NextResponse.json(
         { 
           success: false, 
@@ -558,7 +443,15 @@ export async function POST(
     await logAccess(link.id, ip, userAgent);
 
     // Verificar se whatsapp_connections existe
-    const connection = link.whatsapp_connections as any;
+    const connection = link.wc_id ? {
+      id: link.wc_id,
+      connection_name: link.connection_name,
+      instance_name: link.instance_name,
+      status: link.wc_status,
+      phone_number: link.phone_number,
+      qr_code: link.qr_code,
+      settings: link.settings,
+    } : null;
     if (!connection) {
       return NextResponse.json(
         { 
@@ -595,22 +488,12 @@ export async function POST(
         // Tentar buscar QR Code da Evolution API
         try {
           // Buscar configuração da Evolution API
-          const integrationResponse = await fetch(
-            `${process.env.SUPABASE_URL}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-            {
-              headers: {
-                "Content-Type": "application/json",
-                "Accept-Profile": "impaai",
-                "Content-Profile": "impaai",
-                apikey: process.env.SUPABASE_ANON_KEY!,
-                Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY!}`,
-              },
-            }
+          const integrations = await queryMany(
+            'SELECT config FROM integrations WHERE type = $1 AND is_active = true',
+            ['evolution_api']
           );
 
-          if (integrationResponse.ok) {
-            const integrations = await integrationResponse.json();
-            if (integrations && integrations.length > 0) {
+          if (integrations && integrations.length > 0) {
               const evolutionConfig = integrations[0].config;
               
               // Primeiro verificar status da instância
@@ -677,7 +560,6 @@ export async function POST(
               } else {
                 responseData.qr_message = "Erro ao verificar status da instância.";
               }
-            }
           }
         } catch (qrError) {
           console.error("⚠️ [SHARED-ACCESS] Erro ao buscar QR Code:", qrError);

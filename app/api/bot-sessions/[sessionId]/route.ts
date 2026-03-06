@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { queryMany, queryOne, buildUpdate } from "@/lib/db"
 
 /**
  * PUT /api/bot-sessions/[sessionId]
@@ -48,37 +49,14 @@ export async function PUT(
       )
     }
 
-    // Configurações do Supabase
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headersWithSchema = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Buscar sessão na tabela do n8n
     console.log("🔍 Buscando sessão na tabela impaai.bot_sessions...")
-    const sessionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/bot_sessions?select=*&sessionId=eq.${sessionId}`,
-      { headers: headersWithSchema }
+    const session = await queryOne(
+      'SELECT * FROM bot_sessions WHERE "sessionId" = $1',
+      [sessionId]
     )
 
-    if (!sessionResponse.ok) {
-      const errorText = await sessionResponse.text()
-      console.error("❌ Erro ao buscar sessão:", sessionResponse.status, errorText)
-      throw new Error(`Erro ao buscar sessão: ${sessionResponse.status}`)
-    }
-
-    const sessions = await sessionResponse.json()
-    if (!sessions || sessions.length === 0) {
+    if (!session) {
       return NextResponse.json(
         {
           success: false,
@@ -88,24 +66,19 @@ export async function PUT(
       )
     }
 
-    const session = sessions[0]
-
     // 🔒 SEGURANÇA CRÍTICA: Validar propriedade através do bot_id ou connection_id
     // Admin tem acesso total, usuários comuns apenas aos seus
     if (session.bot_id && !isAdmin) {
       // Verificar se o bot pertence ao usuário (admin bypassa essa verificação)
       // IMPORTANTE: bot_id é o UUID do bot externo, não o id do ai_agents
-      const botCheckResponse = await fetch(
-        `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id,bot_id&bot_id=eq.${session.bot_id}`,
-        { headers: headersWithSchema }
+      const bots = await queryMany<{ id: string; user_id: string; bot_id: string }>(
+        'SELECT id, user_id, bot_id FROM ai_agents WHERE bot_id = $1',
+        [session.bot_id]
       )
       
-      if (botCheckResponse.ok) {
-        const bots = await botCheckResponse.json()
-        if (bots && bots.length > 0 && bots[0].user_id !== currentUser.id) {
-          console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou modificar sessão do bot", session.bot_id, "que pertence a", bots[0].user_id)
-          return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
-        }
+      if (bots && bots.length > 0 && bots[0].user_id !== currentUser.id) {
+        console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou modificar sessão do bot", session.bot_id, "que pertence a", bots[0].user_id)
+        return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
       }
     } else if (session.bot_id && isAdmin) {
       console.log("✅ Admin modificando sessão do bot:", session.bot_id)
@@ -113,17 +86,14 @@ export async function PUT(
     
     if (session.connection_id && !isAdmin) {
       // Verificar se a conexão pertence ao usuário (admin bypassa essa verificação)
-      const connCheckResponse = await fetch(
-        `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,user_id&id=eq.${session.connection_id}`,
-        { headers: headersWithSchema }
+      const connections = await queryMany<{ id: string; user_id: string }>(
+        'SELECT id, user_id FROM whatsapp_connections WHERE id = $1',
+        [session.connection_id]
       )
       
-      if (connCheckResponse.ok) {
-        const connections = await connCheckResponse.json()
-        if (connections && connections.length > 0 && connections[0].user_id !== currentUser.id) {
-          console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou modificar sessão da conexão", session.connection_id, "que pertence a", connections[0].user_id)
-          return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
-        }
+      if (connections && connections.length > 0 && connections[0].user_id !== currentUser.id) {
+        console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou modificar sessão da conexão", session.connection_id, "que pertence a", connections[0].user_id)
+        return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
       }
     } else if (session.connection_id && isAdmin) {
       console.log("✅ Admin modificando sessão da conexão:", session.connection_id)
@@ -133,28 +103,21 @@ export async function PUT(
     console.log(`🔄 ${status ? "Reativando" : "Pausando"} bot para este chat...`)
 
     // Atualizar sessão
-    const updateResponse = await fetch(
-      `${supabaseUrl}/rest/v1/bot_sessions?sessionId=eq.${sessionId}`,
+    const update = buildUpdate(
+      "bot_sessions",
       {
-        method: "PATCH",
-        headers: {
-          ...headersWithSchema,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify({
-          status,
-          ultimo_status: new Date().toISOString(),
-        }),
-      }
+        status,
+        ultimo_status: new Date().toISOString(),
+      },
+      { sessionId }
     )
 
-    if (!updateResponse.ok) {
-      const errorText = await updateResponse.text()
-      console.error("❌ Erro ao atualizar sessão:", updateResponse.status, errorText)
-      throw new Error(`Erro ao atualizar sessão: ${updateResponse.status}`)
+    const updatedSession = await queryOne(update.text, update.values)
+
+    if (!updatedSession) {
+      throw new Error("Erro ao atualizar sessão: nenhum registro retornado")
     }
 
-    const [updatedSession] = await updateResponse.json()
     console.log(`✅ Bot ${status ? "reativado" : "pausado"} para este chat`)
 
     return NextResponse.json({
@@ -207,37 +170,14 @@ export async function DELETE(
 
     const isAdmin = currentUser.role === "admin"
 
-    // Configurações do Supabase
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headersWithSchema = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Buscar sessão na tabela do n8n
     console.log("🔍 Buscando sessão na tabela impaai.bot_sessions...")
-    const sessionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/bot_sessions?select=*&sessionId=eq.${sessionId}`,
-      { headers: headersWithSchema }
+    const session = await queryOne(
+      'SELECT * FROM bot_sessions WHERE "sessionId" = $1',
+      [sessionId]
     )
 
-    if (!sessionResponse.ok) {
-      const errorText = await sessionResponse.text()
-      console.error("❌ Erro ao buscar sessão:", sessionResponse.status, errorText)
-      throw new Error(`Erro ao buscar sessão: ${sessionResponse.status}`)
-    }
-
-    const sessions = await sessionResponse.json()
-    if (!sessions || sessions.length === 0) {
+    if (!session) {
       return NextResponse.json(
         {
           success: false,
@@ -247,24 +187,19 @@ export async function DELETE(
       )
     }
 
-    const session = sessions[0]
-
     // 🔒 SEGURANÇA CRÍTICA: Validar propriedade através do bot_id ou connection_id
     // Admin tem acesso total, usuários comuns apenas aos seus
     if (session.bot_id && !isAdmin) {
       // Verificar se o bot pertence ao usuário (admin bypassa essa verificação)
       // IMPORTANTE: bot_id é o UUID do bot externo, não o id do ai_agents
-      const botCheckResponse = await fetch(
-        `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id,bot_id&bot_id=eq.${session.bot_id}`,
-        { headers: headersWithSchema }
+      const bots = await queryMany<{ id: string; user_id: string; bot_id: string }>(
+        'SELECT id, user_id, bot_id FROM ai_agents WHERE bot_id = $1',
+        [session.bot_id]
       )
       
-      if (botCheckResponse.ok) {
-        const bots = await botCheckResponse.json()
-        if (bots && bots.length > 0 && bots[0].user_id !== currentUser.id) {
-          console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou deletar sessão do bot", session.bot_id, "que pertence a", bots[0].user_id)
-          return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
-        }
+      if (bots && bots.length > 0 && bots[0].user_id !== currentUser.id) {
+        console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou deletar sessão do bot", session.bot_id, "que pertence a", bots[0].user_id)
+        return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
       }
     } else if (session.bot_id && isAdmin) {
       console.log("✅ Admin deletando sessão do bot:", session.bot_id)
@@ -272,17 +207,14 @@ export async function DELETE(
     
     if (session.connection_id && !isAdmin) {
       // Verificar se a conexão pertence ao usuário (admin bypassa essa verificação)
-      const connCheckResponse = await fetch(
-        `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,user_id&id=eq.${session.connection_id}`,
-        { headers: headersWithSchema }
+      const connections = await queryMany<{ id: string; user_id: string }>(
+        'SELECT id, user_id FROM whatsapp_connections WHERE id = $1',
+        [session.connection_id]
       )
       
-      if (connCheckResponse.ok) {
-        const connections = await connCheckResponse.json()
-        if (connections && connections.length > 0 && connections[0].user_id !== currentUser.id) {
-          console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou deletar sessão da conexão", session.connection_id, "que pertence a", connections[0].user_id)
-          return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
-        }
+      if (connections && connections.length > 0 && connections[0].user_id !== currentUser.id) {
+        console.error("❌ SEGURANÇA VIOLADA: Usuário", currentUser.id, "tentou deletar sessão da conexão", session.connection_id, "que pertence a", connections[0].user_id)
+        return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
       }
     } else if (session.connection_id && isAdmin) {
       console.log("✅ Admin deletando sessão da conexão:", session.connection_id)
@@ -294,28 +226,21 @@ export async function DELETE(
     // SOFT DELETE: Marcar como inativa (deleted_at) ao invés de deletar fisicamente
     // Estado resultante: INATIVA (não aparece no painel, mantida no BD)
     // Após 30 dias, será apagada fisicamente por job de limpeza
-    const deleteResponse = await fetch(
-      `${supabaseUrl}/rest/v1/bot_sessions?sessionId=eq.${sessionId}`,
+    const update = buildUpdate(
+      "bot_sessions",
       {
-        method: "PATCH",
-        headers: {
-          ...headersWithSchema,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify({
-          deleted_at: new Date().toISOString(),
-          status: false, // Garante que está pausada também
-        }),
-      }
+        deleted_at: new Date().toISOString(),
+        status: false, // Garante que está pausada também
+      },
+      { sessionId }
     )
 
-    if (!deleteResponse.ok) {
-      const errorText = await deleteResponse.text()
-      console.error("❌ Erro ao inativar sessão:", deleteResponse.status, errorText)
-      throw new Error(`Erro ao inativar sessão: ${deleteResponse.status}`)
+    const inactivatedSession = await queryOne(update.text, update.values)
+
+    if (!inactivatedSession) {
+      throw new Error("Erro ao inativar sessão: nenhum registro retornado")
     }
 
-    const [inactivatedSession] = await deleteResponse.json()
     console.log("✅ Sessão marcada como INATIVA")
 
     return NextResponse.json({
@@ -335,4 +260,3 @@ export async function DELETE(
     )
   }
 }
-

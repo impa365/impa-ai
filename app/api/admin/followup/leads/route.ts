@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getCurrentServerUser } from "@/lib/auth-server"
+import { queryMany, queryOne, query } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,58 +12,42 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const connectionId = searchParams.get("connection_id")
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
+    // Build WHERE conditions
+    const conditions: string[] = []
+    const params: any[] = []
+    let paramIdx = 1
 
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
-    // Construir query para buscar leads com informações da conexão
-    let query = `${supabaseUrl}/rest/v1/lead_folow24hs?select=*,whatsapp_connections!whatsappConection(connection_name,user_id,phone_number)&order=updated_at.desc`
-
-    // Filtrar por conexão se especificado
     if (connectionId) {
-      query += `&whatsappConection=eq.${connectionId}`
+      conditions.push(`l."whatsappConection" = $${paramIdx++}`)
+      params.push(connectionId)
     }
 
-    // Se não for admin, filtrar por usuário através das conexões
+    // Se não for admin, filtrar por conexões do usuário
     if (user.role !== "admin") {
-      // Buscar conexões do usuário primeiro
-      const connectionsResponse = await fetch(
-        `${supabaseUrl}/rest/v1/whatsapp_connections?select=id&user_id=eq.${user.id}`,
-        { headers }
+      const userConnections = await queryMany(
+        `SELECT id FROM whatsapp_connections WHERE user_id = $1`,
+        [user.id]
       )
-      
-      if (!connectionsResponse.ok) {
-        throw new Error("Erro ao buscar conexões do usuário")
-      }
-      
-      const userConnections = await connectionsResponse.json()
       const connectionIds = userConnections.map((conn: any) => conn.id)
-      
+
       if (connectionIds.length === 0) {
         return NextResponse.json({ success: true, leads: [] })
       }
-      
-      query += `&whatsappConection=in.(${connectionIds.join(",")})`
+
+      conditions.push(`l."whatsappConection" = ANY($${paramIdx++})`)
+      params.push(connectionIds)
     }
 
-    const response = await fetch(query, { headers })
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
 
-    if (!response.ok) {
-      throw new Error("Erro ao buscar leads")
-    }
-
-    const leads = await response.json()
+    const leads = await queryMany(
+      `SELECT l.*, wc.connection_name, wc.user_id AS wc_user_id, wc.phone_number
+       FROM lead_folow24hs l
+       LEFT JOIN whatsapp_connections wc ON l."whatsappConection" = wc.id
+       ${whereClause}
+       ORDER BY l.updated_at DESC`,
+      params
+    )
 
     // Mapear dados para o formato esperado pelo frontend
     const mappedLeads = leads.map((lead: any) => ({
@@ -71,9 +56,9 @@ export async function GET(request: NextRequest) {
       remoteJid: lead.remoteJid,
       dia: lead.dia,
       updated_at: lead.updated_at,
-      connection_name: lead.whatsapp_connections?.connection_name || "Conexão",
-      user_id: lead.whatsapp_connections?.user_id,
-      phone_number: lead.whatsapp_connections?.phone_number,
+      connection_name: lead.connection_name || "Conexão",
+      user_id: lead.wc_user_id,
+      phone_number: lead.phone_number,
       // Extrair nome do contato do remoteJid (número do WhatsApp)
       nome_contato: lead.remoteJid ? lead.remoteJid.replace("@s.whatsapp.net", "").replace("@g.us", "") : "Contato",
       status: "ativo", // Por padrão todos são ativos, pode ser expandido futuramente
@@ -109,66 +94,34 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Verificar se o lead existe e se o usuário tem permissão
     if (user.role !== "admin") {
-      const leadResponse = await fetch(
-        `${supabaseUrl}/rest/v1/lead_folow24hs?select=*,whatsapp_connections!whatsappConection(user_id)&id=eq.${id}`,
-        { headers }
+      const lead = await queryOne(
+        `SELECT l.*, wc.user_id AS wc_user_id
+         FROM lead_folow24hs l
+         LEFT JOIN whatsapp_connections wc ON l."whatsappConection" = wc.id
+         WHERE l.id = $1`,
+        [id]
       )
 
-      if (!leadResponse.ok) {
-        throw new Error("Erro ao verificar lead")
-      }
-
-      const leads = await leadResponse.json()
-      if (!leads || leads.length === 0) {
+      if (!lead) {
         return NextResponse.json({ error: "Lead não encontrado" }, { status: 404 })
       }
 
-      const lead = leads[0]
-      if (lead.whatsapp_connections?.user_id !== user.id) {
+      if (lead.wc_user_id !== user.id) {
         return NextResponse.json({ error: "Sem permissão para modificar este lead" }, { status: 403 })
       }
     }
 
     // Atualizar o dia do lead
-    const updateResponse = await fetch(`${supabaseUrl}/rest/v1/lead_folow24hs?id=eq.${id}`, {
-      method: "PATCH",
-      headers: {
-        ...headers,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        dia: Number(dia),
-        updated_at: new Date().toISOString(),
-      }),
-    })
-
-    if (!updateResponse.ok) {
-      const errorText = await updateResponse.text()
-      throw new Error(`Erro ao atualizar lead: ${errorText}`)
-    }
-
-    const updatedLead = await updateResponse.json()
+    const updatedLead = await queryOne(
+      `UPDATE lead_folow24hs SET dia = $1, updated_at = $2 WHERE id = $3 RETURNING *`,
+      [Number(dia), new Date().toISOString(), id]
+    )
 
     return NextResponse.json({
       success: true,
-      lead: updatedLead[0],
+      lead: updatedLead,
     })
   } catch (error: any) {
     console.error("Erro na API followup/leads PUT:", error)

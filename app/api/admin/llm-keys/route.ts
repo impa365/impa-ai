@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getCurrentServerUser } from "@/lib/auth-server"
+import { queryMany, queryOne, query, buildInsert } from "@/lib/db"
 
 /**
  * GET /api/admin/llm-keys
@@ -21,44 +22,47 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("user_id")
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
+    const conditions: string[] = []
+    const params: any[] = []
+    let paramIdx = 1
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
-    // Montar query baseada no filtro
-    let query = `${supabaseUrl}/rest/v1/llm_api_keys?select=id,user_id,key_name,provider,is_active,is_default,usage_count,last_used_at,created_at,updated_at,user_profiles!llm_api_keys_user_id_fkey(id,email,full_name)&order=created_at.desc`
-    
     if (userId) {
-      query += `&user_id=eq.${userId}`
+      conditions.push(`k.user_id = $${paramIdx++}`)
+      params.push(userId)
     }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
 
     console.log("🔍 Buscando API keys LLM...")
-    const response = await fetch(query, { headers })
+    const keys = await queryMany(
+      `SELECT k.id, k.user_id, k.key_name, k.provider, k.api_key, k.is_active, k.is_default,
+              k.usage_count, k.last_used_at, k.created_at, k.updated_at,
+              up.id AS user_profile_id, up.email AS user_profile_email, up.full_name AS user_profile_full_name
+       FROM llm_api_keys k
+       LEFT JOIN user_profiles up ON k.user_id = up.id
+       ${whereClause}
+       ORDER BY k.created_at DESC`,
+      params
+    )
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ Erro ao buscar keys:", response.status, errorText)
-      throw new Error(`Erro ao buscar keys: ${response.status}`)
-    }
-
-    const keys = await response.json()
-    
-    // Mascarar API keys - mostrar apenas últimos 4 caracteres
+    // Mascarar API keys e formatar user_profiles como objeto aninhado
     const maskedKeys = keys.map((key: any) => ({
-      ...key,
+      id: key.id,
+      user_id: key.user_id,
+      key_name: key.key_name,
+      provider: key.provider,
+      is_active: key.is_active,
+      is_default: key.is_default,
+      usage_count: key.usage_count,
+      last_used_at: key.last_used_at,
+      created_at: key.created_at,
+      updated_at: key.updated_at,
       api_key_preview: `****${key.api_key?.slice(-4) || "****"}`,
-      api_key: undefined, // Remover chave completa
+      user_profiles: {
+        id: key.user_profile_id,
+        email: key.user_profile_email,
+        full_name: key.user_profile_full_name,
+      },
     }))
 
     console.log("✅ API keys encontradas:", maskedKeys.length)
@@ -138,42 +142,22 @@ export async function POST(request: Request) {
       )
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      Prefer: "return=representation",
-    }
-
     // Se está marcando como padrão, verificar se já existe outra chave padrão para este provedor
     if (keyData.is_default) {
-      const checkResponse = await fetch(
-        `${supabaseUrl}/rest/v1/llm_api_keys?select=id,key_name&provider=eq.${keyData.provider}&is_default=eq.true&is_active=eq.true`,
-        { headers }
+      const existingDefaults = await queryMany(
+        `SELECT id, key_name FROM llm_api_keys WHERE provider = $1 AND is_default = true AND is_active = true`,
+        [keyData.provider]
       )
-      
-      if (checkResponse.ok) {
-        const existingDefaults = await checkResponse.json()
-        if (existingDefaults && existingDefaults.length > 0) {
-          // Não permitir criar nova chave padrão se já existe uma
-          const existingKey = existingDefaults[0]
-          return NextResponse.json(
-            { 
-              error: `Já existe uma chave padrão para o provedor ${keyData.provider}`,
-              details: `A chave "${existingKey.key_name}" já está configurada como padrão. Desmarque-a ou atualize-a antes de criar uma nova.`
-            },
-            { status: 400 }
-          )
-        }
+
+      if (existingDefaults.length > 0) {
+        const existingKey = existingDefaults[0]
+        return NextResponse.json(
+          {
+            error: `Já existe uma chave padrão para o provedor ${keyData.provider}`,
+            details: `A chave "${existingKey.key_name}" já está configurada como padrão. Desmarque-a ou atualize-a antes de criar uma nova.`
+          },
+          { status: 400 }
+        )
       }
     }
 
@@ -189,39 +173,30 @@ export async function POST(request: Request) {
     }
 
     console.log("💾 Salvando no banco...")
-    const response = await fetch(`${supabaseUrl}/rest/v1/llm_api_keys`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(dbData),
-    })
+    try {
+      const ins = buildInsert("llm_api_keys", dbData)
+      const newKey = await queryOne(ins.text, ins.values)
+      console.log("✅ API key criada:", newKey?.id)
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ Erro ao criar key:", response.status, errorText)
-      
+      // Retornar sem a chave completa
+      return NextResponse.json({
+        success: true,
+        key: {
+          ...newKey,
+          api_key_preview: `****${newKey?.api_key?.slice(-4) || "****"}`,
+          api_key: undefined,
+        },
+      })
+    } catch (insertError: any) {
       // Tratar erro de chave duplicada
-      if (errorText.includes("unique_key_name_per_user")) {
+      if (insertError.message?.includes("unique_key_name_per_user") || insertError.code === "23505") {
         return NextResponse.json(
           { error: "Já existe uma chave com este nome para este usuário" },
           { status: 400 }
         )
       }
-      
-      throw new Error(`Erro ao criar key: ${response.status}`)
+      throw insertError
     }
-
-    const [newKey] = await response.json()
-    console.log("✅ API key criada:", newKey.id)
-
-    // Retornar sem a chave completa
-    return NextResponse.json({
-      success: true,
-      key: {
-        ...newKey,
-        api_key_preview: `****${newKey.api_key?.slice(-4) || "****"}`,
-        api_key: undefined,
-      },
-    })
   } catch (error: any) {
     console.error("❌ Erro ao criar API key:", error.message)
     return NextResponse.json(
@@ -263,85 +238,66 @@ export async function PUT(request: Request) {
 
     console.log("🔄 Atualizando API key:", keyId)
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Buscar a chave atual para obter o provedor
-    const getCurrentResponse = await fetch(
-      `${supabaseUrl}/rest/v1/llm_api_keys?id=eq.${keyId}&select=provider`,
-      { headers }
+    const currentKey = await queryOne(
+      `SELECT provider FROM llm_api_keys WHERE id = $1`,
+      [keyId]
     )
-    
-    let currentProvider = null
-    if (getCurrentResponse.ok) {
-      const [currentKey] = await getCurrentResponse.json()
-      currentProvider = currentKey?.provider
-    }
+    const currentProvider = currentKey?.provider
 
-    // Se está marcando como padrão, verificar se já existe outra chave padrão para este provedor
+    // Se está marcando como padrão, desmarcar outras chaves padrão do mesmo provedor
     if (keyData.is_default && currentProvider) {
-      const checkResponse = await fetch(
-        `${supabaseUrl}/rest/v1/llm_api_keys?select=id&provider=eq.${currentProvider}&is_default=eq.true&is_active=eq.true&id=neq.${keyId}`,
-        { headers }
+      const existingDefaults = await queryMany(
+        `SELECT id FROM llm_api_keys WHERE provider = $1 AND is_default = true AND is_active = true AND id != $2`,
+        [currentProvider, keyId]
       )
-      
-      if (checkResponse.ok) {
-        const existingDefaults = await checkResponse.json()
-        if (existingDefaults && existingDefaults.length > 0) {
-          // Desmarcar todas as outras chaves padrão do mesmo provedor
-          const defaultIds = existingDefaults.map((k: any) => k.id).join(",")
-          await fetch(
-            `${supabaseUrl}/rest/v1/llm_api_keys?id=in.(${defaultIds})`,
-            {
-              method: "PATCH",
-              headers,
-              body: JSON.stringify({ is_default: false }),
-            }
-          )
-        }
+
+      if (existingDefaults.length > 0) {
+        const defaultIds = existingDefaults.map((k: any) => k.id)
+        await query(
+          `UPDATE llm_api_keys SET is_default = false WHERE id = ANY($1)`,
+          [defaultIds]
+        )
       }
     }
 
     // Preparar dados para atualização (sem api_key se não fornecida)
-    const dbData: any = {}
-    
-    if (keyData.key_name?.trim()) dbData.key_name = keyData.key_name.trim()
-    if (keyData.description !== undefined) dbData.description = keyData.description?.trim() || null
-    if (keyData.is_active !== undefined) dbData.is_active = keyData.is_active
-    if (keyData.is_default !== undefined) dbData.is_default = keyData.is_default
-    
+    const setClauses: string[] = []
+    const params: any[] = []
+    let paramIdx = 1
+
+    if (keyData.key_name?.trim()) {
+      setClauses.push(`key_name = $${paramIdx++}`)
+      params.push(keyData.key_name.trim())
+    }
+    if (keyData.description !== undefined) {
+      setClauses.push(`description = $${paramIdx++}`)
+      params.push(keyData.description?.trim() || null)
+    }
+    if (keyData.is_active !== undefined) {
+      setClauses.push(`is_active = $${paramIdx++}`)
+      params.push(keyData.is_active)
+    }
+    if (keyData.is_default !== undefined) {
+      setClauses.push(`is_default = $${paramIdx++}`)
+      params.push(keyData.is_default)
+    }
     // Apenas atualizar api_key se uma nova foi fornecida
     if (keyData.api_key?.trim()) {
-      dbData.api_key = keyData.api_key.trim() // ⚠️ NOTA: Em produção, criptografar
+      setClauses.push(`api_key = $${paramIdx++}`)
+      params.push(keyData.api_key.trim()) // ⚠️ NOTA: Em produção, criptografar
     }
 
+    if (setClauses.length === 0) {
+      return NextResponse.json({ success: true })
+    }
+
+    params.push(keyId)
     console.log("💾 Atualizando no banco...")
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/llm_api_keys?id=eq.${keyId}`,
-      {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify(dbData),
-      }
+    await query(
+      `UPDATE llm_api_keys SET ${setClauses.join(", ")} WHERE id = $${paramIdx}`,
+      params
     )
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ Erro ao atualizar key:", response.status, errorText)
-      throw new Error(`Erro ao atualizar key: ${response.status}`)
-    }
 
     console.log("✅ API key atualizada")
     return NextResponse.json({ success: true })
@@ -386,34 +342,7 @@ export async function DELETE(request: Request) {
 
     console.log("🗑️ Deletando API key:", keyId)
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/llm_api_keys?id=eq.${keyId}`,
-      {
-        method: "DELETE",
-        headers,
-      }
-    )
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ Erro ao deletar key:", response.status, errorText)
-      throw new Error(`Erro ao deletar key: ${response.status}`)
-    }
+    await query(`DELETE FROM llm_api_keys WHERE id = $1`, [keyId])
 
     console.log("✅ API key deletada")
     return NextResponse.json({ success: true })

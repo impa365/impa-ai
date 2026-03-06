@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { queryOne } from "@/lib/db";
 
 export async function GET(
   request: NextRequest,
@@ -19,40 +20,11 @@ export async function GET(
       );
     }
 
-    // Buscar configuração do Supabase
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { success: false, error: "Configuração do servidor incompleta" },
-        { status: 500 }
-      );
-    }
-
-    // Buscar conexão da instância no Supabase
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
+    // Buscar conexão da instância no banco
+    const instanceConnection = await queryOne(
+      `SELECT * FROM whatsapp_connections WHERE instance_name = $1 LIMIT 1`,
+      [instanceName]
     );
-
-    if (!connectionResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao buscar conexão da instância" },
-        { status: 500 }
-      );
-    }
-
-    const connections = await connectionResponse.json();
-    const instanceConnection = connections[0];
 
     console.log(`🔍 [INFO] Conexão encontrada:`, {
       hasConnection: !!instanceConnection,
@@ -77,28 +49,10 @@ export async function GET(
     }
 
     // Buscar configuração da Evolution API
-    const integrationResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
+    const evolutionConfig = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["evolution_api"]
     );
-
-    if (!integrationResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao buscar configuração da Evolution API" },
-        { status: 500 }
-      );
-    }
-
-    const integrations = await integrationResponse.json();
-    const evolutionConfig = integrations[0];
 
     if (!evolutionConfig?.config?.apiUrl) {
       return NextResponse.json(

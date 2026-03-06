@@ -1,42 +1,24 @@
 import { NextResponse } from "next/server"
+import { queryMany } from '@/lib/db'
 
 export async function GET() {
   console.log("📡 API: /api/system/llm-config chamada")
 
   try {
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     console.log("🔍 Buscando configurações de provedores LLM...")
-    const settingsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?select=setting_key,setting_value&setting_key=in.(available_llm_providers,default_model)`,
-      { headers }
+    
+    const settings = await queryMany<any>(
+      "SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ($1, $2)",
+      ['available_llm_providers', 'default_model']
     )
 
-    if (!settingsResponse.ok) {
-      throw new Error("Erro ao buscar configurações do banco de dados")
-    }
+    console.log("🔍 [DEBUG] Resposta do banco:", JSON.stringify(settings, null, 2))
 
     let llmConfig = {
       available_providers: [] as string[],
       default_models: {} as Record<string, string>
     }
 
-    const settings = await settingsResponse.json()
-    console.log("🔍 [DEBUG] Resposta completa do Supabase:", JSON.stringify(settings, null, 2))
-    
     if (!Array.isArray(settings)) {
       throw new Error("Resposta inesperada do banco de dados")
     }

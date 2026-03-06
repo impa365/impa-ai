@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { checkRateLimit, getRequestIdentifier, RATE_LIMITS } from "@/lib/rate-limit"
 import { logAccessDenied, logRateLimitExceeded } from "@/lib/security-audit"
+import { query, queryOne, queryMany, buildInsert } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   console.log("📡 API: /api/user/agents chamada")
@@ -33,77 +34,65 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     console.log("🔍 Buscando agentes do usuário:", currentUser.id)
-    // FILTRAR NO BACKEND - apenas agentes do usuário atual
-    const agentsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/ai_agents?select=*,whatsapp_connections!ai_agents_whatsapp_connection_id_fkey(id,connection_name,phone_number,instance_name,status,api_type)&user_id=eq.${currentUser.id}&order=created_at.desc`,
-      { headers },
+    // FILTRAR NO BACKEND - apenas agentes do usuário atual com JOIN para conexões WhatsApp
+    const rawAgents = await queryMany(
+      `SELECT a.*,
+         wc.id as "wc_id", wc.connection_name as "wc_connection_name",
+         wc.phone_number as "wc_phone_number", wc.instance_name as "wc_instance_name",
+         wc.status as "wc_status", wc.api_type as "wc_api_type"
+       FROM ai_agents a
+       LEFT JOIN whatsapp_connections wc ON a.whatsapp_connection_id = wc.id
+       WHERE a.user_id = $1
+       ORDER BY a.created_at DESC`,
+      [currentUser.id]
     )
 
-    if (!agentsResponse.ok) {
-      const errorText = await agentsResponse.text()
-      console.error("❌ Erro ao buscar agentes:", agentsResponse.status, errorText)
-      throw new Error(`Erro ao buscar agentes: ${agentsResponse.status}`)
-    }
-
-    const agents = await agentsResponse.json()
+    // Reconstruct nested whatsapp_connections object to match PostgREST format
+    const agents = rawAgents.map((row: any) => {
+      const { wc_id, wc_connection_name, wc_phone_number, wc_instance_name, wc_status, wc_api_type, ...agent } = row
+      return {
+        ...agent,
+        whatsapp_connections: wc_id ? {
+          id: wc_id,
+          connection_name: wc_connection_name,
+          phone_number: wc_phone_number,
+          instance_name: wc_instance_name,
+          status: wc_status,
+          api_type: wc_api_type,
+        } : null,
+      }
+    })
     console.log("✅ Agentes do usuário encontrados:", agents.length)
 
     console.log("🔍 Buscando conexões WhatsApp do usuário...")
     // FILTRAR NO BACKEND - apenas conexões do usuário atual
-    const connectionsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=*&user_id=eq.${currentUser.id}&order=connection_name.asc`,
-      { headers },
+    const connections = await queryMany(
+      'SELECT * FROM whatsapp_connections WHERE user_id = $1 ORDER BY connection_name ASC',
+      [currentUser.id]
     )
-
-    if (!connectionsResponse.ok) {
-      const errorText = await connectionsResponse.text()
-      console.error("❌ Erro ao buscar conexões:", connectionsResponse.status, errorText)
-      throw new Error(`Erro ao buscar conexões: ${connectionsResponse.status}`)
-    }
-
-    const connections = await connectionsResponse.json()
     console.log("✅ Conexões do usuário encontradas:", connections.length)
 
     // Buscar limites do usuário
     console.log("🔍 Buscando limites do usuário...")
-    const userResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?select=agents_limit,connections_limit,role&id=eq.${currentUser.id}`,
-      { headers },
+    const userProfile = await queryOne<{ agents_limit: number; connections_limit: number; role: string }>(
+      'SELECT agents_limit, connections_limit, role FROM user_profiles WHERE id = $1',
+      [currentUser.id]
     )
 
     let userLimits = { max_agents: 5, max_whatsapp_connections: 3 }
-    if (userResponse.ok) {
-      const userData = await userResponse.json()
-      if (userData && userData.length > 0) {
-        const user = userData[0]
-        userLimits = {
-          max_agents: user.role === "admin" ? 999 : user.agents_limit || 5,
-          max_whatsapp_connections: user.role === "admin" ? 999 : user.connections_limit || 3,
-        }
+    if (userProfile) {
+      userLimits = {
+        max_agents: userProfile.role === "admin" ? 999 : userProfile.agents_limit || 5,
+        max_whatsapp_connections: userProfile.role === "admin" ? 999 : userProfile.connections_limit || 3,
       }
     }
 
     console.log("🔍 Buscando configurações de provedores LLM...")
     // Buscar configurações de sistema para provedores LLM
-    const settingsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/system_settings?select=setting_key,setting_value&setting_key=in.(available_llm_providers,default_model)`,
-      { headers }
+    const settings = await queryMany<{ setting_key: string; setting_value: string }>(
+      "SELECT setting_key, setting_value FROM system_settings WHERE setting_key = ANY($1)",
+      [['available_llm_providers', 'default_model']]
     )
 
     let llmConfig = {
@@ -111,21 +100,18 @@ export async function GET(request: NextRequest) {
       default_model: "gpt-4o-mini"
     }
 
-    if (settingsResponse.ok) {
-      const settings = await settingsResponse.json()
-      settings.forEach((setting: any) => {
-        if (setting.setting_key === 'available_llm_providers') {
-          try {
-            llmConfig.available_providers = JSON.parse(setting.setting_value)
-          } catch (e) {
-            console.warn("Erro ao parsear available_llm_providers, usando padrão")
-          }
+    settings.forEach((setting) => {
+      if (setting.setting_key === 'available_llm_providers') {
+        try {
+          llmConfig.available_providers = JSON.parse(setting.setting_value)
+        } catch (e) {
+          console.warn("Erro ao parsear available_llm_providers, usando padrão")
         }
-        if (setting.setting_key === 'default_model') {
-          llmConfig.default_model = setting.setting_value
-        }
-      })
-    }
+      }
+      if (setting.setting_key === 'default_model') {
+        llmConfig.default_model = setting.setting_value
+      }
+    })
     console.log("✅ Configurações LLM carregadas:", llmConfig.available_providers.length, "provedores")
 
     console.log("✅ Dados processados com sucesso - APENAS DO USUÁRIO")
@@ -171,34 +157,13 @@ export async function POST(request: NextRequest) {
     const agentData = await request.json()
     console.log("📝 Dados do agente recebidos:", { name: agentData.name, user_id: currentUser.id })
 
-    // Verificar configurações do Supabase
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Validar se a conexão WhatsApp pertence ao usuário
     console.log("🔍 Validando conexão WhatsApp...")
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=*&id=eq.${agentData.whatsapp_connection_id}&user_id=eq.${currentUser.id}`,
-      { headers }
+    const connections = await queryMany(
+      'SELECT * FROM whatsapp_connections WHERE id = $1 AND user_id = $2',
+      [agentData.whatsapp_connection_id, currentUser.id]
     )
 
-    if (!connectionResponse.ok) {
-      throw new Error("Erro ao validar conexão WhatsApp")
-    }
-
-    const connections = await connectionResponse.json()
     if (!connections || connections.length === 0) {
       throw new Error("Conexão WhatsApp não encontrada ou não pertence ao usuário")
     }
@@ -272,34 +237,17 @@ export async function POST(request: NextRequest) {
       orimon_bot_id: agentData.orimon_bot_id,
     }
 
-    // Ajustar o formato ignore_jids para PostgreSQL
-    const formattedAgentData = {
-      ...secureAgentData,
-      ignore_jids: `{${ignoreJidsArray.map((jid: string) => `"${jid}"`).join(",")}}`,
-    }
-
     // Criar agente no banco de dados
     console.log("💾 Criando agente no banco de dados...")
-    console.log("📦 Payload sendo enviado ao Supabase:", JSON.stringify(formattedAgentData, null, 2))
+    console.log("📦 Payload sendo enviado:", JSON.stringify(secureAgentData, null, 2))
     
-    const createResponse = await fetch(`${supabaseUrl}/rest/v1/ai_agents`, {
-      method: "POST",
-      headers: {
-        ...headers,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(formattedAgentData),
-    })
+    const { text: insertText, values: insertValues } = buildInsert('ai_agents', secureAgentData)
+    const newAgent = await queryOne(insertText, insertValues)
 
-    if (!createResponse.ok) {
-      const errorText = await createResponse.text()
-      console.error("❌ Erro ao criar agente no banco:", createResponse.status)
-      console.error("❌ Detalhes do erro:", errorText)
-      console.error("❌ Payload enviado:", JSON.stringify(formattedAgentData, null, 2))
-      throw new Error(`Erro ao criar agente no banco: ${createResponse.status} - ${errorText}`)
+    if (!newAgent) {
+      throw new Error("Erro ao criar agente no banco: nenhum registro retornado")
     }
 
-    const [newAgent] = await createResponse.json()
     const agentId = newAgent.id
     console.log("✅ Agente criado no banco com ID:", agentId)
 
@@ -308,21 +256,18 @@ export async function POST(request: NextRequest) {
     let n8nWebhookUrl = null
     let n8nIntegrations = null
     try {
-      const n8nResponse = await fetch(
-        `${supabaseUrl}/rest/v1/integrations?select=*&type=eq.n8n&is_active=eq.true`,
-        { headers }
+      n8nIntegrations = await queryMany(
+        'SELECT * FROM integrations WHERE type = $1 AND is_active = true',
+        ['n8n']
       )
 
-      if (n8nResponse.ok) {
-        n8nIntegrations = await n8nResponse.json()
-        if (n8nIntegrations && n8nIntegrations.length > 0) {
-          const n8nConfig =
-            typeof n8nIntegrations[0].config === "string"
-              ? JSON.parse(n8nIntegrations[0].config)
-              : n8nIntegrations[0].config
-          n8nWebhookUrl = n8nConfig.flowUrl
-          console.log("✅ N8N webhook encontrado")
-        }
+      if (n8nIntegrations && n8nIntegrations.length > 0) {
+        const n8nConfig =
+          typeof n8nIntegrations[0].config === "string"
+            ? JSON.parse(n8nIntegrations[0].config)
+            : n8nIntegrations[0].config
+        n8nWebhookUrl = n8nConfig.flowUrl
+        console.log("✅ N8N webhook encontrado")
       }
     } catch (n8nError) {
       console.log("⚠️ N8N não configurado, continuando sem webhook N8N")
@@ -341,21 +286,18 @@ export async function POST(request: NextRequest) {
       try {
         // Buscar configuração do N8N Session
         console.log("🔍 [UAZAPI] Buscando configuração N8N Session...")
-        const n8nSessionResponse = await fetch(
-          `${supabaseUrl}/rest/v1/integrations?select=*&type=eq.n8n_session&is_active=eq.true`,
-          { headers }
+        const n8nSessions = await queryMany(
+          'SELECT * FROM integrations WHERE type = $1 AND is_active = true',
+          ['n8n_session']
         )
 
         let n8nSessionUrl = null
-        if (n8nSessionResponse.ok) {
-          const n8nSessions = await n8nSessionResponse.json()
-          if (n8nSessions && n8nSessions.length > 0) {
-            const n8nSessionConfig =
-              typeof n8nSessions[0].config === "string"
-                ? JSON.parse(n8nSessions[0].config)
-                : n8nSessions[0].config
-            n8nSessionUrl = n8nSessionConfig.webhookUrl || n8nSessionConfig.webhook_url
-          }
+        if (n8nSessions && n8nSessions.length > 0) {
+          const n8nSessionConfig =
+            typeof n8nSessions[0].config === "string"
+              ? JSON.parse(n8nSessions[0].config)
+              : n8nSessions[0].config
+          n8nSessionUrl = n8nSessionConfig.webhookUrl || n8nSessionConfig.webhook_url
         }
 
         if (!n8nSessionUrl) {
@@ -369,34 +311,27 @@ export async function POST(request: NextRequest) {
         let userApiKey = null
         try {
           // Primeiro buscar o admin
-          const adminResponse = await fetch(
-            `${supabaseUrl}/rest/v1/user_profiles?select=id&role=eq.admin&limit=1`,
-            { headers }
+          const admin = await queryOne<{ id: string }>(
+            'SELECT id FROM user_profiles WHERE role = $1 LIMIT 1',
+            ['admin']
           )
-          if (!adminResponse.ok) {
-            throw new Error("Não foi possível buscar informações do admin")
-          }
-          const admins = await adminResponse.json()
-          if (!admins || admins.length === 0) {
+          if (!admin) {
             throw new Error("Nenhum administrador encontrado no sistema")
           }
-          const adminId = admins[0].id
+          const adminId = admin.id
           console.log("✅ [UAZAPI] Admin identificado:", adminId)
 
           // Agora buscar API key do admin
-          const apiKeyResponse = await fetch(
-            `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${adminId}&is_active=eq.true&order=created_at.desc&limit=1`,
-            { headers }
+          const apiKeyRow = await queryOne<{ api_key: string }>(
+            'SELECT api_key FROM user_api_keys WHERE user_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1',
+            [adminId]
           )
-          if (apiKeyResponse.ok) {
-            const apiKeys = await apiKeyResponse.json()
-            if (apiKeys && apiKeys.length > 0) {
-              userApiKey = apiKeys[0].api_key
-              console.log("✅ [UAZAPI] API key do admin encontrada")
-            } else {
-              console.warn("⚠️ [UAZAPI] Nenhuma API key ativa encontrada para o admin")
-              throw new Error("O administrador precisa criar uma API key antes que agentes possam ser criados. Entre em contato com o administrador do sistema.")
-            }
+          if (apiKeyRow) {
+            userApiKey = apiKeyRow.api_key
+            console.log("✅ [UAZAPI] API key do admin encontrada")
+          } else {
+            console.warn("⚠️ [UAZAPI] Nenhuma API key ativa encontrada para o admin")
+            throw new Error("O administrador precisa criar uma API key antes que agentes possam ser criados. Entre em contato com o administrador do sistema.")
           }
         } catch (apiKeyError: any) {
           console.error("❌ [UAZAPI] Erro com API key do admin:", apiKeyError.message)
@@ -489,18 +424,13 @@ export async function POST(request: NextRequest) {
           connection_id: agentData.whatsapp_connection_id,
         }
 
-        const createBotResponse = await fetch(`${supabaseUrl}/rest/v1/bots`, {
-          method: "POST",
-          headers: { ...headers, Prefer: "return=representation" },
-          body: JSON.stringify(botPayload),
-        })
+        const { text: botInsertText, values: botInsertValues } = buildInsert('bots', botPayload)
+        const createdBot = await queryOne(botInsertText, botInsertValues)
 
-        if (!createBotResponse.ok) {
-          const errorText = await createBotResponse.text()
-          throw new Error(`Falha ao criar bot no banco: ${errorText}`)
+        if (!createdBot) {
+          throw new Error("Falha ao criar bot no banco: nenhum registro retornado")
         }
 
-        const [createdBot] = await createBotResponse.json()
         createdBotId = createdBot.id
         console.log(`✅ [UAZAPI] Bot criado no banco: ${createdBotId}`)
 
@@ -533,40 +463,19 @@ export async function POST(request: NextRequest) {
 
         // ETAPA 3: Salvar webhook_id no bot
         console.log("💾 [UAZAPI] ETAPA 3/3: Salvando webhook_id no bot...")
-        const updateBotResponse = await fetch(
-          `${supabaseUrl}/rest/v1/bots?id=eq.${createdBotId}`,
-          {
-            method: "PATCH",
-            headers,
-            body: JSON.stringify({ webhook_id: webhookResult.webhookId }),
-          }
+        await query(
+          'UPDATE bots SET webhook_id = $1 WHERE id = $2',
+          [webhookResult.webhookId, createdBotId]
         )
-
-        if (!updateBotResponse.ok) {
-          throw new Error("Falha ao salvar webhook_id no bot")
-        }
-
         console.log("✅ [UAZAPI] webhook_id salvo no bot")
 
         // ETAPA 4: Vincular bot ao agente
         console.log("🔗 [UAZAPI] Vinculando bot ao agente...")
         console.log(`📝 [UAZAPI] Atualizando agente ${agentId} com bot_id: ${createdBotId}`)
-        const updateAgentResponse = await fetch(
-          `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
-          {
-            method: "PATCH",
-            headers,
-            body: JSON.stringify({ bot_id: createdBotId }),
-          }
+        await query(
+          'UPDATE ai_agents SET bot_id = $1 WHERE id = $2',
+          [createdBotId, agentId]
         )
-
-        if (!updateAgentResponse.ok) {
-          const errorText = await updateAgentResponse.text()
-          console.error(`❌ [UAZAPI] Erro ao vincular bot - Status: ${updateAgentResponse.status}`)
-          console.error(`❌ [UAZAPI] Erro detalhado:`, errorText)
-          throw new Error(`Falha ao vincular bot ao agente: ${updateAgentResponse.status} - ${errorText}`)
-        }
-
         console.log("✅ [UAZAPI] Bot vinculado ao agente com sucesso!")
 
       } catch (uazapiError: any) {
@@ -578,10 +487,7 @@ export async function POST(request: NextRequest) {
         // Deletar agente do banco
         try {
           console.log(`🗑️ [UAZAPI ROLLBACK] Deletando agente: ${agentId}`)
-          await fetch(`${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`, {
-            method: "DELETE",
-            headers,
-          })
+          await query('DELETE FROM ai_agents WHERE id = $1', [agentId])
           console.log("✅ [UAZAPI ROLLBACK] Agente deletado")
         } catch (e) {
           console.error("❌ [UAZAPI ROLLBACK] Falha ao deletar agente:", e)
@@ -593,36 +499,29 @@ export async function POST(request: NextRequest) {
             console.log(`🗑️ [UAZAPI ROLLBACK] Deletando bot: ${createdBotId}`)
             
             // Buscar webhook_id do bot para deletar da Uazapi
-            const getBotResponse = await fetch(
-              `${supabaseUrl}/rest/v1/bots?id=eq.${createdBotId}&select=webhook_id`,
-              { headers }
+            const bot = await queryOne<{ webhook_id: string }>(
+              'SELECT webhook_id FROM bots WHERE id = $1',
+              [createdBotId]
             )
             
-            if (getBotResponse.ok) {
-              const [bot] = await getBotResponse.json()
+            if (bot?.webhook_id) {
+              console.log(`🗑️ [UAZAPI ROLLBACK] Deletando webhook: ${bot.webhook_id}`)
+              const { deleteUazapiWebhook } = await import("@/lib/uazapi-webhook-helpers")
+              const { getUazapiConfigServer } = await import("@/lib/uazapi-server")
+              const uazapiConfig = await getUazapiConfigServer()
               
-              if (bot?.webhook_id) {
-                console.log(`🗑️ [UAZAPI ROLLBACK] Deletando webhook: ${bot.webhook_id}`)
-                const { deleteUazapiWebhook } = await import("@/lib/uazapi-webhook-helpers")
-                const { getUazapiConfigServer } = await import("@/lib/uazapi-server")
-                const uazapiConfig = await getUazapiConfigServer()
-                
-                if (uazapiConfig) {
-                  await deleteUazapiWebhook({
-                    uazapiServerUrl: uazapiConfig.serverUrl,
-                    instanceToken: connection.instance_token,
-                    webhookId: bot.webhook_id,
-                  })
-                  console.log("✅ [UAZAPI ROLLBACK] Webhook deletado")
-                }
+              if (uazapiConfig) {
+                await deleteUazapiWebhook({
+                  uazapiServerUrl: uazapiConfig.serverUrl,
+                  instanceToken: connection.instance_token,
+                  webhookId: bot.webhook_id,
+                })
+                console.log("✅ [UAZAPI ROLLBACK] Webhook deletado")
               }
             }
 
             // Deletar bot do banco
-            await fetch(`${supabaseUrl}/rest/v1/bots?id=eq.${createdBotId}`, {
-              method: "DELETE",
-              headers,
-            })
+            await query('DELETE FROM bots WHERE id = $1', [createdBotId])
             console.log("✅ [UAZAPI ROLLBACK] Bot deletado")
           } catch (e) {
             console.error("❌ [UAZAPI ROLLBACK] Falha ao deletar bot:", e)
@@ -648,34 +547,27 @@ export async function POST(request: NextRequest) {
           let userApiKey = null
           try {
             // Primeiro buscar o admin
-            const adminResponse = await fetch(
-              `${supabaseUrl}/rest/v1/user_profiles?select=id&role=eq.admin&limit=1`,
-              { headers }
+            const admin = await queryOne<{ id: string }>(
+              'SELECT id FROM user_profiles WHERE role = $1 LIMIT 1',
+              ['admin']
             )
-            if (!adminResponse.ok) {
-              throw new Error("Não foi possível buscar informações do admin")
-            }
-            const admins = await adminResponse.json()
-            if (!admins || admins.length === 0) {
+            if (!admin) {
               throw new Error("Nenhum administrador encontrado no sistema")
             }
-            const adminId = admins[0].id
+            const adminId = admin.id
             console.log("✅ Admin identificado:", adminId)
 
             // Agora buscar API key do admin
-            const apiKeyResponse = await fetch(
-              `${supabaseUrl}/rest/v1/user_api_keys?select=api_key&user_id=eq.${adminId}&is_active=eq.true&order=created_at.desc&limit=1`,
-              { headers }
+            const apiKeyRow = await queryOne<{ api_key: string }>(
+              'SELECT api_key FROM user_api_keys WHERE user_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1',
+              [adminId]
             )
-            if (apiKeyResponse.ok) {
-              const apiKeys = await apiKeyResponse.json()
-              if (apiKeys && apiKeys.length > 0) {
-                userApiKey = apiKeys[0].api_key
-                console.log("✅ API key do admin encontrada")
-              } else {
-                console.warn("⚠️ Nenhuma API key ativa encontrada para o admin")
-                throw new Error("É necessário criar uma API key antes de criar um agente. Vá para 'Configurações > API Keys' e crie uma chave de API ativa.")
-              }
+            if (apiKeyRow) {
+              userApiKey = apiKeyRow.api_key
+              console.log("✅ API key do admin encontrada")
+            } else {
+              console.warn("⚠️ Nenhuma API key ativa encontrada para o admin")
+              throw new Error("É necessário criar uma API key antes de criar um agente. Vá para 'Configurações > API Keys' e crie uma chave de API ativa.")
             }
           } catch (apiKeyError: any) {
             console.error("❌ Erro com API key do usuário:", apiKeyError.message)
@@ -747,19 +639,14 @@ export async function POST(request: NextRequest) {
 
             // Atualizar agente no banco com o evolution_bot_id
             console.log("🔄 Atualizando agente com evolution_bot_id...")
-            const updateResponse = await fetch(
-              `${supabaseUrl}/rest/v1/ai_agents?id=eq.${agentId}`,
-              {
-                method: "PATCH",
-                headers,
-                body: JSON.stringify({ evolution_bot_id: evolutionBotId }),
-              }
-            )
-
-            if (!updateResponse.ok) {
-              console.warn("⚠️ Erro ao atualizar evolution_bot_id, mas agente foi criado")
-            } else {
+            try {
+              await query(
+                'UPDATE ai_agents SET evolution_bot_id = $1 WHERE id = $2',
+                [evolutionBotId, agentId]
+              )
               console.log("✅ evolution_bot_id atualizado no banco")
+            } catch (updateError) {
+              console.warn("⚠️ Erro ao atualizar evolution_bot_id, mas agente foi criado")
             }
           } else {
             const errorText = await createBotResponse.text()

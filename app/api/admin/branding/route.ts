@@ -1,51 +1,19 @@
 import { NextResponse } from "next/server"
+import { queryOne, query, buildUpdate } from "@/lib/db"
 
 export async function GET() {
   try {
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Configuração do servidor incompleta",
-        },
-        { status: 500 },
-      )
-    }
-
     // Buscar tema ativo da tabela system_themes
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/system_themes?select=*&is_active=eq.true&order=updated_at.desc&limit=1`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-      },
+    const activeTheme = await queryOne(
+      `SELECT * FROM system_themes WHERE is_active = true ORDER BY updated_at DESC LIMIT 1`
     )
 
-    if (!response.ok) {
+    if (!activeTheme) {
       return NextResponse.json({
         success: true,
         theme: null,
       })
     }
-
-    const themes = await response.json()
-
-    if (!Array.isArray(themes) || themes.length === 0) {
-      return NextResponse.json({
-        success: true,
-        theme: null,
-      })
-    }
-
-    const activeTheme = themes[0]
 
     // Converter para formato esperado pelo frontend
     const theme = {
@@ -75,113 +43,66 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Configuração do servidor incompleta",
-        },
-        { status: 500 },
-      )
-    }
-
     // Preparar dados do tema usando APENAS colunas que existem
-    const themeData = {
-      name: body.systemName?.toLowerCase().replace(/\s+/g, "_") || "custom_theme",
-      display_name: body.systemName || "Custom Theme",
-      description: body.description || "",
-      colors: {
-        primary: body.primaryColor || "#3b82f6",
-        secondary: body.secondaryColor || "#10b981",
-        accent: body.accentColor || "#8b5cf6",
-        background: "#ffffff",
-        text: "#1e293b",
-      },
-      fonts: {},
-      borders: {},
-      logo_icon: body.logoIcon || "🤖",
-      is_default: true,
-      is_active: true,
-      updated_at: new Date().toISOString(),
-    }
+    const themeName = body.systemName?.toLowerCase().replace(/\s+/g, "_") || "custom_theme"
+    const colors = JSON.stringify({
+      primary: body.primaryColor || "#3b82f6",
+      secondary: body.secondaryColor || "#10b981",
+      accent: body.accentColor || "#8b5cf6",
+      background: "#ffffff",
+      text: "#1e293b",
+    })
+    const now = new Date().toISOString()
 
     // Primeiro, desativar todos os temas existentes
-    const deactivateResponse = await fetch(`${supabaseUrl}/rest/v1/system_themes`, {
-      method: "PATCH",
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-      body: JSON.stringify({
-        is_active: false,
-        is_default: false,
-        updated_at: new Date().toISOString(),
-      }),
-    })
-
-    if (!deactivateResponse.ok) {
-      console.warn("Aviso: Não foi possível desativar temas existentes")
-    }
+    await query(
+      `UPDATE system_themes SET is_active = false, is_default = false, updated_at = $1`,
+      [now]
+    )
 
     // Verificar se já existe um tema com o mesmo nome
-    const checkResponse = await fetch(`${supabaseUrl}/rest/v1/system_themes?name=eq.${themeData.name}&select=id`, {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-    })
+    const existing = await queryOne(
+      `SELECT id FROM system_themes WHERE name = $1`,
+      [themeName]
+    )
 
-    const existingThemes = await checkResponse.json()
-    const exists = Array.isArray(existingThemes) && existingThemes.length > 0
-
-    if (exists) {
+    if (existing) {
       // UPDATE se já existe
-      const updateResponse = await fetch(`${supabaseUrl}/rest/v1/system_themes?name=eq.${themeData.name}`, {
-        method: "PATCH",
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
+      const upd = buildUpdate(
+        "system_themes",
+        {
+          display_name: body.systemName || "Custom Theme",
+          description: body.description || "",
+          colors,
+          fonts: JSON.stringify({}),
+          borders: JSON.stringify({}),
+          logo_icon: body.logoIcon || "🤖",
+          is_default: true,
+          is_active: true,
+          updated_at: now,
         },
-        body: JSON.stringify(themeData),
-      })
-
-      if (!updateResponse.ok) {
-        const errorText = await updateResponse.text()
-        throw new Error(`Erro ao atualizar tema: ${updateResponse.status} - ${errorText}`)
-      }
+        { name: themeName }
+      )
+      await query(upd.text, upd.values)
     } else {
       // INSERT se não existe
-      const insertResponse = await fetch(`${supabaseUrl}/rest/v1/system_themes`, {
-        method: "POST",
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-        body: JSON.stringify({
-          ...themeData,
-          created_at: new Date().toISOString(),
-        }),
-      })
-
-      if (!insertResponse.ok) {
-        const errorText = await insertResponse.text()
-        throw new Error(`Erro ao inserir tema: ${insertResponse.status} - ${errorText}`)
-      }
+      await query(
+        `INSERT INTO system_themes (name, display_name, description, colors, fonts, borders, logo_icon, is_default, is_active, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          themeName,
+          body.systemName || "Custom Theme",
+          body.description || "",
+          colors,
+          JSON.stringify({}),
+          JSON.stringify({}),
+          body.logoIcon || "🤖",
+          true,
+          true,
+          now,
+          now,
+        ]
+      )
     }
 
     return NextResponse.json({

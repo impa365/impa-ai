@@ -6,6 +6,7 @@ import {
   logSecurityEvent,
   validateTokenFormat
 } from "../../security-utils";
+import { query, queryOne, queryMany } from "@/lib/db";
 
 // POST - Desconectar instância WhatsApp
 export async function POST(
@@ -68,38 +69,19 @@ export async function POST(
       );
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return NextResponse.json(
-        { success: false, error: "Configuração do servidor incompleta" },
-        { status: 500, headers: securityHeaders }
-      );
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseAnonKey,
-      Authorization: `Bearer ${supabaseAnonKey}`,
-    };
-
     // Buscar link compartilhado com informações da conexão
-    const linkResponse = await fetch(
-      `${supabaseUrl}/rest/v1/shared_whatsapp_links?token=eq.${token}&is_active=eq.true&select=*,whatsapp_connections(id,instance_name,status)`,
-      { headers }
+    const links = await queryMany(
+      `SELECT sl.*,
+        json_build_object(
+          'id', wc.id,
+          'instance_name', wc.instance_name,
+          'status', wc.status
+        ) as whatsapp_connections
+      FROM shared_whatsapp_links sl
+      LEFT JOIN whatsapp_connections wc ON wc.id = sl.connection_id
+      WHERE sl.token = $1 AND sl.is_active = true`,
+      [token]
     );
-
-    if (!linkResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Erro ao verificar link" },
-        { status: 500, headers: securityHeaders }
-      );
-    }
-
-    const links = await linkResponse.json();
     if (!links || links.length === 0) {
       logSecurityEvent({
         type: 'SUSPICIOUS_ACTIVITY',
@@ -178,27 +160,19 @@ export async function POST(
     }
 
     // Buscar configuração da Evolution API
-    const integrationResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-      { headers }
+    const integration = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["evolution_api"]
     );
 
-    if (!integrationResponse.ok) {
-      return NextResponse.json(
-        { success: false, error: "Configuração da Evolution API não encontrada" },
-        { status: 500, headers: securityHeaders }
-      );
-    }
-
-    const integrations = await integrationResponse.json();
-    if (!integrations || integrations.length === 0) {
+    if (!integration) {
       return NextResponse.json(
         { success: false, error: "Evolution API não configurada" },
         { status: 500, headers: securityHeaders }
       );
     }
 
-    const evolutionConfig = integrations[0].config;
+    const evolutionConfig = integration.config;
 
     try {
       // Verificar status atual antes de tentar desconectar
@@ -225,23 +199,9 @@ export async function POST(
           console.log("ℹ️ [DISCONNECT] Instância já está desconectada, atualizando banco...");
           
           // Atualizar status no banco
-          await fetch(
-            `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${connection.instance_name}`,
-            {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                "Accept-Profile": "impaai",
-                "Content-Profile": "impaai",
-                apikey: supabaseAnonKey,
-                Authorization: `Bearer ${supabaseAnonKey}`,
-                Prefer: "return=minimal",
-              },
-              body: JSON.stringify({
-                status: "disconnected",
-                updated_at: new Date().toISOString(),
-              }),
-            }
+          await query(
+            `UPDATE whatsapp_connections SET status = $1, updated_at = $2 WHERE instance_name = $3`,
+            ["disconnected", new Date().toISOString(), connection.instance_name]
           );
 
           return NextResponse.json({
@@ -304,23 +264,9 @@ export async function POST(
       
       // Atualizar status no banco após disconnect bem-sucedido
       try {
-        await fetch(
-          `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${connection.instance_name}`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              "Accept-Profile": "impaai",
-              "Content-Profile": "impaai",
-              apikey: supabaseAnonKey,
-              Authorization: `Bearer ${supabaseAnonKey}`,
-              Prefer: "return=minimal",
-            },
-            body: JSON.stringify({
-              status: "disconnected",
-              updated_at: new Date().toISOString(),
-            }),
-          }
+        await query(
+          `UPDATE whatsapp_connections SET status = $1, updated_at = $2 WHERE instance_name = $3`,
+          ["disconnected", new Date().toISOString(), connection.instance_name]
         );
         console.log("🔄 [DISCONNECT] Status atualizado no banco: disconnected");
       } catch (updateError) {

@@ -1,39 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { queryOne, queryMany, rpc, buildInsert } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
     console.log("📝 Iniciando processo de registro...");
 
     // Verificar se cadastro público está habilitado
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ Configuração do Supabase não encontrada");
-      return NextResponse.json(
-        { error: "Erro de configuração do servidor" },
-        { status: 500 }
-      );
-    }
-    // Usar função RPC com SECURITY DEFINER para contornar RLS
-    const regSettingResp = await fetch(
-      `${supabaseUrl}/rest/v1/rpc/is_public_registration_allowed`,
-      {
-        method: 'POST',
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-      }
-    );
     let regEnabled = false;
-    if (regSettingResp.ok) {
-      const result = await regSettingResp.json();
-      // A função retorna boolean direto
+    try {
+      const result = await rpc('is_public_registration_allowed');
       regEnabled = result === true;
+    } catch (e) {
+      console.error("❌ Erro ao verificar registro público:", e);
     }
     if (!regEnabled) {
       // Pegadinha/piada
@@ -60,39 +39,14 @@ export async function POST(request: NextRequest) {
 
     console.log("📧 Tentando registrar email:", email);
 
-    // Usar fetch direto para o Supabase REST API
-    // const supabaseUrl = process.env.SUPABASE_URL;
-    // const supabaseKey = process.env.SUPABASE_ANON_KEY; // Usar anon key para criar usuário
-
-    // if (!supabaseUrl || !supabaseKey) {
-    //   console.error("❌ Configuração do Supabase não encontrada");
-    //   return NextResponse.json(
-    //     { error: "Erro de configuração do servidor" },
-    //     { status: 500 }
-    //   );
-    // }
-
     // Verificar se usuário já existe
-    const checkResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles?email=eq.${email}`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (checkResponse.ok) {
-      const existingUsers = await checkResponse.json();
-      if (existingUsers && existingUsers.length > 0) {
-        console.log("❌ Email já cadastrado");
-        return NextResponse.json(
-          { error: "Este email já está cadastrado" },
-          { status: 400 }
-        );
-      }
+    const existingUsers = await queryMany('SELECT * FROM user_profiles WHERE email = $1', [email]);
+    if (existingUsers && existingUsers.length > 0) {
+      console.log("❌ Email já cadastrado");
+      return NextResponse.json(
+        { error: "Este email já está cadastrado" },
+        { status: 400 }
+      );
     }
 
     // Hash da senha
@@ -102,25 +56,13 @@ export async function POST(request: NextRequest) {
     let defaultAgentsLimit = 1;
     let defaultConnectionsLimit = 1;
     try {
-      const settingsResponse = await fetch(
-        `${supabaseUrl}/rest/v1/system_settings?select=setting_key,setting_value&setting_key=in.(default_agents_limit,max_connections_per_user)`,
-        {
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-            "Content-Type": "application/json",
-          },
+      const settings = await queryMany('SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ($1, $2)', ['default_agents_limit', 'max_connections_per_user']);
+      for (const setting of settings) {
+        if (setting.setting_key === "default_agents_limit") {
+          defaultAgentsLimit = parseInt(setting.setting_value) || 1;
         }
-      );
-      if (settingsResponse.ok) {
-        const settings = await settingsResponse.json();
-        for (const setting of settings) {
-          if (setting.setting_key === "default_agents_limit") {
-            defaultAgentsLimit = parseInt(setting.setting_value) || 1;
-          }
-          if (setting.setting_key === "max_connections_per_user") {
-            defaultConnectionsLimit = parseInt(setting.setting_value) || 1;
-          }
+        if (setting.setting_key === "max_connections_per_user") {
+          defaultConnectionsLimit = parseInt(setting.setting_value) || 1;
         }
       }
     } catch (e) {
@@ -129,44 +71,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Criar usuário via REST API
-    const createResponse = await fetch(
-      `${supabaseUrl}/rest/v1/user_profiles`,
-      {
-        method: "POST",
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          "Content-Type": "application/json",
-          Prefer: "return=representation",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-        },
-        body: JSON.stringify({
-          email,
-          full_name,
-          password: passwordHash, // Corrigido: usar 'password' ao invés de 'password_hash'
-          role: "user",
-          status: "active",
-          agents_limit: defaultAgentsLimit,
-          connections_limit: defaultConnectionsLimit,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }),
-      }
-    );
+    // Criar usuário via PostgreSQL
+    const insertQuery = buildInsert('user_profiles', {
+      email,
+      full_name,
+      password: passwordHash,
+      role: "user",
+      status: "active",
+      agents_limit: defaultAgentsLimit,
+      connections_limit: defaultConnectionsLimit,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
 
-    if (!createResponse.ok) {
-      const errorData = await createResponse.json();
-      console.error("❌ Erro ao criar usuário:", errorData);
+    const newUser = await queryOne(insertQuery.text, insertQuery.values);
+
+    if (!newUser) {
+      console.error("❌ Erro ao criar usuário");
       return NextResponse.json(
         { error: "Erro ao criar conta" },
         { status: 500 }
       );
     }
-
-    const newUsers = await createResponse.json();
-    const newUser = newUsers[0];
 
     console.log("✅ Usuário criado com sucesso:", newUser.email);
 

@@ -1,58 +1,6 @@
 import { NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth"
-
-function getSupabaseHeaders(supabaseKey: string) {
-  return {
-    "Content-Type": "application/json",
-    "Accept-Profile": "impaai",
-    "Content-Profile": "impaai",
-    apikey: supabaseKey,
-    Authorization: `Bearer ${supabaseKey}`,
-  }
-}
-
-async function ensureAgentOwnership(
-  supabaseUrl: string,
-  supabaseKey: string,
-  agentId: string,
-  userId: string,
-) {
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/ai_agents?select=id&limit=1&id=eq.${agentId}&user_id=eq.${userId}`,
-    { headers: getSupabaseHeaders(supabaseKey), cache: "no-store" },
-  )
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "")
-    throw new Error(`Erro ao validar agente: ${response.status} - ${text}`)
-  }
-
-  const data = await response.json()
-  return Array.isArray(data) && data.length > 0
-}
-
-async function fetchAgentRecord(
-  supabaseUrl: string,
-  supabaseKey: string,
-  agentId: string,
-) {
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/ai_agents?select=id,name,calendar_integration,calendar_provider,calendar_api_key,calendar_api_version,calendar_meeting_id&limit=1&id=eq.${agentId}`,
-    { headers: getSupabaseHeaders(supabaseKey), cache: "no-store" },
-  )
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "")
-    throw new Error(`Erro ao buscar agente: ${response.status} - ${text}`)
-  }
-
-  const data = await response.json()
-  if (!Array.isArray(data) || data.length === 0) {
-    return null
-  }
-
-  return data[0]
-}
+import { cookies } from "next/headers"
+import { queryOne } from "@/lib/db"
 
 async function fetchEventTypeFromCal(
   apiKey: string,
@@ -129,8 +77,17 @@ export async function GET(
   context: { params: Promise<{ id: string; eventTypeId: string }> },
 ) {
   try {
-    const currentUser = await getCurrentUser()
-    if (!currentUser) {
+    const cookieStore = await cookies()
+    const userCookie = cookieStore.get("impaai_user")
+
+    if (!userCookie) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
+    }
+
+    let currentUser
+    try {
+      currentUser = JSON.parse(userCookie.value)
+    } catch (error) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
     }
 
@@ -147,28 +104,12 @@ export async function GET(
       return NextResponse.json({ error: "eventTypeId obrigatório" }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { error: "Supabase não configurado" },
-        { status: 500 },
-      )
-    }
-
-    const ownsAgent = await ensureAgentOwnership(
-      supabaseUrl,
-      supabaseKey,
-      agentId,
-      currentUser.id,
+    const agent = await queryOne(
+      `SELECT id, name, calendar_integration, calendar_provider, calendar_api_key, calendar_api_version, calendar_meeting_id
+       FROM ai_agents WHERE id = $1 AND user_id = $2`,
+      [agentId, currentUser.id],
     )
 
-    if (!ownsAgent) {
-      return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
-    }
-
-    const agent = await fetchAgentRecord(supabaseUrl, supabaseKey, agentId)
     if (!agent) {
       return NextResponse.json({ error: "Agente não encontrado" }, { status: 404 })
     }

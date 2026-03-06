@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { queryOne, query } from "@/lib/db"
 
 // Cache simples para versão
 let versionCache: { version: string; timestamp: number } | null = null
@@ -12,30 +13,12 @@ export async function GET() {
       return NextResponse.json({ version: versionCache.version })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
+    const row = await queryOne<{ setting_value: string }>(
+      'SELECT setting_value FROM system_settings WHERE setting_key = $1',
+      ['app_version']
+    )
 
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ version: "1.0.0" })
-    }
-
-    // Buscar versão via REST API
-    const response = await fetch(`${supabaseUrl}/rest/v1/system_settings?setting_key=eq.app_version`, {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-    })
-
-    if (!response.ok) {
-      return NextResponse.json({ version: "1.0.0" })
-    }
-
-    const data = await response.json()
-    const version = data && data.length > 0 ? data[0].setting_value : "1.0.0"
+    const version = row?.setting_value || "1.0.0"
 
     // Atualizar cache
     versionCache = { version, timestamp: now }
@@ -54,33 +37,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Versão é obrigatória" }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
+    await query(
+      'UPDATE system_settings SET setting_value = $1, updated_at = $2 WHERE setting_key = $3',
+      [version, new Date().toISOString(), 'app_version']
+    )
 
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Erro de configuração do servidor" }, { status: 500 })
-    }
-
-    // Atualizar versão via REST API
-    const response = await fetch(`${supabaseUrl}/rest/v1/system_settings?setting_key=eq.app_version`, {
-      method: "PATCH",
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-      body: JSON.stringify({
-        setting_value: version,
-        updated_at: new Date().toISOString(),
-      }),
-    })
-
-    if (!response.ok) {
-      console.error("❌ Erro ao atualizar versão:", response.status)
-      return NextResponse.json({ error: "Erro ao atualizar versão" }, { status: 500 })
-    }
+    // Invalidar cache
+    versionCache = null
 
     console.log("✅ Versão atualizada:", version)
     return NextResponse.json({ success: true, version })

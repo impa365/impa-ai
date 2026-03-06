@@ -1,41 +1,20 @@
 import { NextResponse } from "next/server"
+import { queryOne } from "@/lib/db"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: userId } = await params
     console.log("🔍 Buscando usuário específico:", userId)
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
+    const user = await queryOne(
+      `SELECT * FROM user_profiles WHERE id = $1`,
+      [userId]
+    )
 
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 })
-    }
-
-    // Buscar usuário específico via REST API
-    const response = await fetch(`${supabaseUrl}/rest/v1/user_profiles?id=eq.${userId}&select=*`, {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Accept-Profile": "impaai",
-        "Content-Profile": "impaai",
-      },
-    })
-
-    if (!response.ok) {
-      const errorData = await response.json()
-      console.error("❌ Erro ao buscar usuário:", errorData)
-      return NextResponse.json({ error: "Erro ao buscar usuário" }, { status: response.status })
-    }
-
-    const users = await response.json()
-
-    if (!users || users.length === 0) {
+    if (!user) {
       return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 })
     }
 
-    const user = users[0]
     console.log("✅ Usuário encontrado:", user.email)
 
     // Retornar dados seguros (SEM campos sensíveis)

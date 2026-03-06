@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { queryOne, buildInsert } from "@/lib/db";
 
 // Endpoint para adicionar um novo lead ao follow up (apenas dia 1, sem atualizar existentes)
 export async function POST(request: NextRequest) {
@@ -13,35 +13,25 @@ export async function POST(request: NextRequest) {
     remoteJid = String(remoteJid).trim();
     instance_name = String(instance_name).trim();
 
-    // 2. Conexão com o Supabase usando o schema correto
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    });
-
-    // 3. Buscar o UUID da conexão pelo instance_name
-    const { data: connection, error: connectionError } = await supabase
-      .from("whatsapp_connections")
-      .select("id")
-      .eq("instance_name", instance_name)
-      .single();
-    if (connectionError || !connection) {
+    // 2. Buscar o UUID da conexão pelo instance_name
+    const connection = await queryOne(
+      `SELECT id FROM whatsapp_connections WHERE instance_name = $1`,
+      [instance_name]
+    );
+    if (!connection) {
       const isDev = process.env.NODE_ENV !== "production";
       return NextResponse.json({
         error: "Conexão WhatsApp não encontrada",
-        details: isDev ? connectionError : undefined,
+        details: isDev ? "No matching connection found" : undefined,
         supabase: isDev ? { instance_name } : undefined
       }, { status: 404 });
     }
 
-    // 4. Verificar se já existe lead para o mesmo remoteJid e conexão
-    const { data: existingLead, error: findError } = await supabase
-      .from("lead_folow24hs")
-      .select("id")
-      .eq("remoteJid", remoteJid)
-      .eq("whatsappConection", connection.id)
-      .single();
+    // 3. Verificar se já existe lead para o mesmo remoteJid e conexão
+    const existingLead = await queryOne(
+      `SELECT id FROM lead_folow24hs WHERE "remoteJid" = $1 AND "whatsappConection" = $2`,
+      [remoteJid, connection.id]
+    );
     if (existingLead) {
       return NextResponse.json({
         error: "Lead já existe para esta conexão",
@@ -49,27 +39,25 @@ export async function POST(request: NextRequest) {
       }, { status: 409 });
     }
 
-    // 5. Criar novo lead com dia=1
-    const { data: newLead, error: insertError } = await supabase
-      .from("lead_folow24hs")
-      .insert({
-        whatsappConection: connection.id,
-        remoteJid,
-        dia: 1,
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-    if (insertError) {
+    // 4. Criar novo lead com dia=1
+    const { text, values } = buildInsert("lead_folow24hs", {
+      whatsappConection: connection.id,
+      remoteJid,
+      dia: 1,
+      updated_at: new Date().toISOString(),
+    });
+    const newLead = await queryOne(text, values);
+
+    if (!newLead) {
       const isDev = process.env.NODE_ENV !== "production";
       return NextResponse.json({
         error: "Erro ao criar lead",
-        details: isDev ? insertError : undefined,
+        details: isDev ? "Insert returned no rows" : undefined,
         supabase: isDev ? { whatsappConection: connection.id, remoteJid } : undefined
       }, { status: 500 });
     }
 
-    // 6. Retornar lead criado
+    // 5. Retornar lead criado
     return NextResponse.json({
       success: true,
       lead: newLead

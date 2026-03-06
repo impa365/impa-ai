@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { connectUazapiInstanceServer, getUazapiInstanceStatusServer } from "@/lib/uazapi-server"
+import { queryOne } from "@/lib/db"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ instanceName: string }> }) {
   try {
@@ -10,38 +11,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: "Nome da instância é obrigatório" }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ success: false, error: "Configuração não encontrada" }, { status: 500 })
-    }
-
-    const headers = {
-          "Content-Type": "application/json",
-          "Accept-Profile": "impaai",
-          "Content-Profile": "impaai",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Buscar a conexão do banco para saber qual API usar
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}&select=api_type,instance_token&limit=1`,
-      { headers }
+    const connection = await queryOne<{ api_type: string; instance_token: string }>(
+      `SELECT api_type, instance_token FROM whatsapp_connections WHERE instance_name = $1 LIMIT 1`,
+      [instanceName]
     )
 
-    if (!connectionResponse.ok) {
-      return NextResponse.json({ success: false, error: "Erro ao buscar conexão" }, { status: 500 })
-    }
-
-    const connections = await connectionResponse.json()
-
-    if (!connections || connections.length === 0) {
+    if (!connection) {
       return NextResponse.json({ success: false, error: "Conexão não encontrada" }, { status: 404 })
     }
 
-    const connection = connections[0]
     const apiType = connection.api_type || "evolution"
 
     // ==================== ROTEAR PARA A API CORRETA ====================
@@ -82,28 +61,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       console.log("🔧 Gerando QR Code via Evolution:", instanceName)
 
       // Buscar configuração da Evolution API
-      const integrationResponse = await fetch(
-        `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-        { headers }
+      const integration = await queryOne<{ config: any }>(
+        `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+        ["evolution_api"]
       )
 
-    if (!integrationResponse.ok) {
-        return NextResponse.json({ success: false, error: "Erro ao buscar configuração da API" }, { status: 500 })
-    }
-
-      const integrations = await integrationResponse.json()
-
-    if (!integrations || integrations.length === 0) {
+      if (!integration) {
         return NextResponse.json({ success: false, error: "Evolution API não configurada" }, { status: 500 })
-    }
+      }
 
-      const config = integrations[0].config
+      const config = integration.config
 
-    if (!config?.apiUrl || !config?.apiKey) {
+      if (!config?.apiUrl || !config?.apiKey) {
         return NextResponse.json({ success: false, error: "Configuração da Evolution API incompleta" }, { status: 500 })
-    }
+      }
 
-    // Buscar QR Code da Evolution API
+      // Buscar QR Code da Evolution API
       const qrResponse = await fetch(`${config.apiUrl}/instance/connect/${instanceName}`, {
         method: "GET",
         headers: {
@@ -111,16 +84,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         },
       })
 
-    if (!qrResponse.ok) {
+      if (!qrResponse.ok) {
         return NextResponse.json({ success: false, error: "Erro ao gerar QR Code" }, { status: 500 })
-    }
+      }
 
       const qrData = await qrResponse.json()
 
-    return NextResponse.json({
-      success: true,
-      qrCode: qrData.base64 || qrData.qrcode || null,
-      status: qrData.instance?.state || "disconnected",
+      return NextResponse.json({
+        success: true,
+        qrCode: qrData.base64 || qrData.qrcode || null,
+        status: qrData.instance?.state || "disconnected",
         apiType: "evolution",
       })
     }
@@ -139,38 +112,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: "Nome da instância é obrigatório" }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ success: false, error: "Configuração não encontrada" }, { status: 500 })
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Buscar a conexão do banco para saber qual API usar
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}&select=api_type,instance_token&limit=1`,
-      { headers }
+    const connection = await queryOne<{ api_type: string; instance_token: string }>(
+      `SELECT api_type, instance_token FROM whatsapp_connections WHERE instance_name = $1 LIMIT 1`,
+      [instanceName]
     )
 
-    if (!connectionResponse.ok) {
-      return NextResponse.json({ success: false, error: "Erro ao buscar conexão" }, { status: 500 })
-    }
-
-    const connections = await connectionResponse.json()
-
-    if (!connections || connections.length === 0) {
+    if (!connection) {
       return NextResponse.json({ success: false, error: "Conexão não encontrada" }, { status: 404 })
     }
 
-    const connection = connections[0]
     const apiType = connection.api_type || "evolution"
 
     // ==================== ROTEAR PARA A API CORRETA ====================
@@ -196,22 +147,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       console.log("🔧 Conectando instância Evolution (POST):", instanceName)
 
       // Buscar configuração da Evolution API
-      const integrationResponse = await fetch(
-        `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-        { headers }
+      const integration = await queryOne<{ config: any }>(
+        `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+        ["evolution_api"]
       )
 
-      if (!integrationResponse.ok) {
-        return NextResponse.json({ success: false, error: "Erro ao buscar configuração da API" }, { status: 500 })
-      }
-
-      const integrations = await integrationResponse.json()
-
-      if (!integrations || integrations.length === 0) {
+      if (!integration) {
         return NextResponse.json({ success: false, error: "Evolution API não configurada" }, { status: 500 })
       }
 
-      const config = integrations[0].config
+      const config = integration.config
 
       if (!config?.apiUrl || !config?.apiKey) {
         return NextResponse.json({ success: false, error: "Configuração da Evolution API incompleta" }, { status: 500 })

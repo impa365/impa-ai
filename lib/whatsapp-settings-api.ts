@@ -1,4 +1,4 @@
-import { supabase } from "./supabase"
+import { queryOne, queryMany, query } from "@/lib/db"
 
 // Função para verificar status de uma instância específica usando connectionState
 export async function checkInstanceStatus(instanceName: string): Promise<{
@@ -12,13 +12,11 @@ export async function checkInstanceStatus(instanceName: string): Promise<{
       console.log(`[API SERVER LOG] Verificando status da instância: ${instanceName}`)
     }
 
-    // Corrigir chamada do Supabase - aguardar from() assíncrono
-    const integrationsTable = await supabase.from("integrations")
-    const { data: integrationData } = await integrationsTable
-      .select("config")
-      .eq("type", "evolution_api")
-      .eq("is_active", true)
-      .single()
+    // Buscar configuração da Evolution API via SQL
+    const integrationData = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["evolution_api"]
+    )
 
     if (!integrationData?.config?.apiUrl || !integrationData?.config?.apiKey) {
       return {
@@ -141,16 +139,11 @@ export async function syncInstanceStatus(connectionId: string) {
       console.log(`[SYNC SERVER LOG] Iniciando sincronização para conexão: ${connectionId}`)
     }
 
-    // Buscar informações da conexão - corrigir chamada do Supabase
-    const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
-    const { data: connections, error: connectionError } = await whatsappConnectionsTable
-      .select("instance_name, status")
-      .eq("id", connectionId)
-
-    if (connectionError) {
-      console.error("Erro ao buscar conexão:", connectionError)
-      return { success: false, error: "Erro ao buscar conexão" }
-    }
+    // Buscar informações da conexão via SQL
+    const connections = await queryMany<{ instance_name: string; status: string }>(
+      `SELECT instance_name, status FROM whatsapp_connections WHERE id = $1`,
+      [connectionId]
+    )
 
     if (!connections || connections.length === 0) {
       console.error("Conexão não encontrada para ID:", connectionId)
@@ -170,20 +163,15 @@ export async function syncInstanceStatus(connectionId: string) {
       // Atualizar apenas com colunas que sabemos que existem
       const currentTime = new Date().toISOString()
 
-      // Corrigir chamada do Supabase para update
-      const whatsappConnectionsUpdateTable = await supabase.from("whatsapp_connections")
-      const { data, error: updateError } = await whatsappConnectionsUpdateTable
-        .update({
-          status: statusResult.status,
-          updated_at: currentTime,
-          // Remover last_sync completamente para evitar erro de cache
-        })
-        .eq("id", connectionId)
-        .select()
+      const { rows: updatedRows } = await query(
+        `UPDATE whatsapp_connections SET status = $1, updated_at = $2 WHERE id = $3 RETURNING *`,
+        [statusResult.status, currentTime, connectionId]
+      )
+      const data = updatedRows
 
-      if (updateError) {
-        console.error("Erro ao atualizar status:", updateError) // Servidor
-        return { success: false, error: updateError.message }
+      if (!data || data.length === 0) {
+        console.error("Erro ao atualizar status: nenhuma linha atualizada")
+        return { success: false, error: "Erro ao atualizar status" }
       }
       if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
         console.log(`[SYNC SERVER LOG] Status atualizado para: ${statusResult.status}`)
@@ -198,18 +186,10 @@ export async function syncInstanceStatus(connectionId: string) {
       // Se não conseguir verificar o status, apenas atualizar o timestamp
       const currentTime = new Date().toISOString()
 
-      // Corrigir chamada do Supabase para update
-      const whatsappConnectionsUpdateTable = await supabase.from("whatsapp_connections")
-      const { error: updateError } = await whatsappConnectionsUpdateTable
-        .update({
-          updated_at: currentTime,
-        })
-        .eq("id", connectionId)
-
-      if (updateError) {
-        console.error("Erro ao atualizar timestamp:", updateError) // Servidor
-        return { success: false, error: updateError.message }
-      }
+      await query(
+        `UPDATE whatsapp_connections SET updated_at = $1 WHERE id = $2`,
+        [currentTime, connectionId]
+      )
       if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
         console.log("[SYNC SERVER LOG] Timestamp atualizado (status não verificado)")
       }
@@ -227,13 +207,11 @@ export async function disconnectInstance(instanceName: string) {
       console.log(`[DISCONNECT SERVER LOG] Desconectando instância: ${instanceName}`)
     }
 
-    // Buscar configuração da Evolution API - corrigir chamada do Supabase
-    const integrationsTable = await supabase.from("integrations")
-    const { data: integrationData } = await integrationsTable
-      .select("config")
-      .eq("type", "evolution_api")
-      .eq("is_active", true)
-      .single()
+    // Buscar configuração da Evolution API via SQL
+    const integrationData = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["evolution_api"]
+    )
 
     if (integrationData?.config?.apiUrl && integrationData?.config?.apiKey) {
       try {
@@ -262,17 +240,14 @@ export async function disconnectInstance(instanceName: string) {
       }
     }
 
-    // Atualizar status no banco - corrigir chamada do Supabase
-    const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
-    const { error } = await whatsappConnectionsTable
-      .update({
-        status: "disconnected",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("instance_name", instanceName)
-
-    if (error) {
-      console.error("Erro ao atualizar status de desconexão:", error) // Servidor
+    // Atualizar status no banco via SQL
+    try {
+      await query(
+        `UPDATE whatsapp_connections SET status = $1, updated_at = $2 WHERE instance_name = $3`,
+        ["disconnected", new Date().toISOString(), instanceName]
+      )
+    } catch (dbError: any) {
+      console.error("Erro ao atualizar status de desconexão:", dbError)
       return { success: false, error: "Erro ao desconectar" }
     }
     if (process.env.NODE_ENV === "development" && typeof window === "undefined") {
@@ -287,12 +262,15 @@ export async function disconnectInstance(instanceName: string) {
 
 export async function getInstanceSettings(instanceName: string) {
   try {
-    // Buscar configurações da instância no banco - corrigir chamada do Supabase
-    const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
-    const { data: connections, error } = await whatsappConnectionsTable.select("*").eq("instance_name", instanceName)
-
-    if (error) {
-      console.error("Erro ao buscar instância:", error)
+    // Buscar configurações da instância no banco via SQL
+    let connections: any[]
+    try {
+      connections = await queryMany(
+        `SELECT * FROM whatsapp_connections WHERE instance_name = $1`,
+        [instanceName]
+      )
+    } catch (dbError: any) {
+      console.error("Erro ao buscar instância:", dbError)
       return {
         success: false,
         error: "Erro ao buscar instância",
@@ -339,17 +317,14 @@ export async function getInstanceSettings(instanceName: string) {
 
 export async function saveInstanceSettings(instanceName: string, settings: any) {
   try {
-    // Salvar configurações no banco - corrigir chamada do Supabase
-    const whatsappConnectionsTable = await supabase.from("whatsapp_connections")
-    const { error } = await whatsappConnectionsTable
-      .update({
-        settings: settings, // Salva o objeto de configurações
-        updated_at: new Date().toISOString(),
-      })
-      .eq("instance_name", instanceName)
-
-    if (error) {
-      console.error("Erro ao salvar configurações:", error) // Servidor
+    // Salvar configurações no banco via SQL
+    try {
+      await query(
+        `UPDATE whatsapp_connections SET settings = $1, updated_at = $2 WHERE instance_name = $3`,
+        [JSON.stringify(settings), new Date().toISOString(), instanceName]
+      )
+    } catch (dbError: any) {
+      console.error("Erro ao salvar configurações:", dbError)
       return { success: false, error: "Erro ao salvar configurações" }
     }
 

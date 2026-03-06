@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { queryMany } from "@/lib/db";
 
 export async function POST(
   request: Request,
@@ -17,43 +18,15 @@ export async function POST(
       instanceName
     );
 
-    // Buscar configurações da Evolution API do banco de forma segura
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Configurações do Supabase não encontradas");
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    };
-
-    // Buscar configurações da Evolution API na tabela integrations
+    // Buscar configurações da Evolution API na tabela integrations via SQL
     console.log(
       "🔍 Buscando configurações da Evolution API na tabela integrations..."
     );
 
-    const integrationsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/integrations?select=*&type=eq.evolution_api&is_active=eq.true`,
-      { headers }
+    const integrations = await queryMany<any>(
+      `SELECT * FROM integrations WHERE type = 'evolution_api' AND is_active = true`
     );
 
-    if (!integrationsResponse.ok) {
-      const errorText = await integrationsResponse.text();
-      console.error(
-        "❌ Erro ao buscar integrações:",
-        integrationsResponse.status,
-        errorText
-      );
-      throw new Error("Erro ao buscar configurações da Evolution API");
-    }
-
-    const integrations = await integrationsResponse.json();
     console.log("📋 Integrações encontradas:", integrations.length);
 
     if (!integrations || integrations.length === 0) {

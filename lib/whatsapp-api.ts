@@ -1,4 +1,4 @@
-import { getSupabaseServer } from "./supabase";
+import { query, queryOne, queryMany } from "@/lib/db";
 
 // Função para gerar token único
 function generateInstanceToken(): string {
@@ -29,14 +29,13 @@ async function checkInstanceExists(
   instanceName: string,
   token: string
 ): Promise<boolean> {
-  const supabase = getSupabaseServer();
-  const { data } = await supabase
-    .from("whatsapp_connections")
-    .select("id")
-    .or(`instance_name.eq.${instanceName},instance_token.eq.${token}`)
-    .limit(1);
-
-  return (data?.length || 0) > 0;
+  const rows = await queryMany(
+    `SELECT id FROM whatsapp_connections
+     WHERE instance_name = $1 OR instance_token = $2
+     LIMIT 1`,
+    [instanceName, token]
+  );
+  return rows.length > 0;
 }
 
 // Função para validar se a resposta é JSON
@@ -55,20 +54,15 @@ export async function createEvolutionInstance(
   error?: string;
 }> {
   try {
-    const supabase = getSupabaseServer();
     // Buscar configurações da Evolution API
-    const integrationsTable = await supabase.from("integrations");
-    const { data: integrationData, error: integrationError } =
-      await integrationsTable
-        .select("config")
-        .eq("type", "evolution_api")
-        .eq("is_active", true)
-        .single();
+    const integrationData = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["evolution_api"]
+    );
 
-    if (integrationError) {
+    if (!integrationData) {
       console.error(
-        "Erro ao buscar configuração da Evolution API:",
-        integrationError
+        "Erro ao buscar configuração da Evolution API"
       );
       return {
         success: false,
@@ -97,17 +91,13 @@ export async function createEvolutionInstance(
     }
 
     // Buscar nome da plataforma
-    const globalThemeConfigTable = await supabase.from("global_theme_config");
-    const { data: themeData, error: themeError } = await globalThemeConfigTable
-      .select("system_name")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+    const themeData = await queryOne<{ system_name: string }>(
+      `SELECT system_name FROM global_theme_config ORDER BY created_at DESC LIMIT 1`
+    );
 
-    if (themeError && process.env.NODE_ENV === "development") {
+    if (!themeData && process.env.NODE_ENV === "development") {
       console.warn(
-        "Aviso: Não foi possível buscar nome da plataforma:",
-        themeError.message
+        "Aviso: Não foi possível buscar nome da plataforma"
       );
     }
     const platformName = themeData?.system_name || "impaai";
@@ -214,28 +204,24 @@ export async function createEvolutionInstance(
     }
 
     // Salvar no banco de dados
-    const whatsappConnectionsTableInsert = await supabase.from(
-      "whatsapp_connections"
+    const connectionData = await queryOne<any>(
+      `INSERT INTO whatsapp_connections (user_id, connection_name, instance_name, instance_id, instance_token, status)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [
+        userId,
+        connectionName,
+        instanceName,
+        Array.isArray(evolutionResponse)
+          ? evolutionResponse[0]?.instance?.instanceId || null
+          : evolutionResponse.instance?.instanceId || null,
+        token,
+        "disconnected",
+      ]
     );
-    const { data: connectionData, error: dbError } =
-      await whatsappConnectionsTableInsert
-        .insert([
-          {
-            user_id: userId,
-            connection_name: connectionName,
-            instance_name: instanceName,
-            instance_id: Array.isArray(evolutionResponse)
-              ? evolutionResponse[0]?.instance?.instanceId || null
-              : evolutionResponse.instance?.instanceId || null,
-            instance_token: token,
-            status: "disconnected",
-          },
-        ])
-        .select()
-        .single();
 
-    if (dbError) {
-      console.error("Erro ao salvar conexão no banco de dados:", dbError);
+    if (!connectionData) {
+      console.error("Erro ao salvar conexão no banco de dados");
       return {
         success: false,
         error: "Erro ao salvar conexão no banco de dados.",
@@ -267,20 +253,15 @@ export async function fetchInstanceDetails(instanceName: string): Promise<{
   error?: string;
 }> {
   try {
-    const supabase = getSupabaseServer();
     // Buscar configurações da Evolution API
-    const integrationsTable = await supabase.from("integrations");
-    const { data: integrationData, error: integrationError } =
-      await integrationsTable
-        .select("config")
-        .eq("type", "evolution_api")
-        .eq("is_active", true)
-        .single();
+    const integrationData = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["evolution_api"]
+    );
 
-    if (integrationError) {
+    if (!integrationData) {
       console.error(
-        "Erro ao buscar config da Evolution API:",
-        integrationError
+        "Erro ao buscar config da Evolution API"
       );
       return {
         success: false,
@@ -379,19 +360,14 @@ export async function getInstanceQRCode(instanceName: string): Promise<{
   error?: string;
 }> {
   try {
-    const supabase = getSupabaseServer();
-    const integrationsTable = await supabase.from("integrations");
-    const { data: integrationData, error: integrationError } =
-      await integrationsTable
-        .select("config")
-        .eq("type", "evolution_api")
-        .eq("is_active", true)
-        .single();
+    const integrationData = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["evolution_api"]
+    );
 
-    if (integrationError) {
+    if (!integrationData) {
       console.error(
-        "Erro ao buscar config da Evolution API:",
-        integrationError
+        "Erro ao buscar config da Evolution API"
       );
       return {
         success: false,
@@ -478,19 +454,14 @@ export async function deleteEvolutionInstance(instanceName: string): Promise<{
   evolutionApiDeleted?: boolean;
 }> {
   try {
-    const supabase = getSupabaseServer();
-    const integrationsTable = await supabase.from("integrations");
-    const { data: integrationData, error: integrationError } =
-      await integrationsTable
-        .select("config")
-        .eq("type", "evolution_api")
-        .eq("is_active", true)
-        .single();
+    const integrationData = await queryOne<{ config: any }>(
+      `SELECT config FROM integrations WHERE type = $1 AND is_active = true LIMIT 1`,
+      ["evolution_api"]
+    );
 
-    if (integrationError) {
+    if (!integrationData) {
       console.error(
-        "Erro ao buscar config da Evolution API:",
-        integrationError
+        "Erro ao buscar config da Evolution API"
       );
       return {
         success: false,
@@ -548,15 +519,13 @@ export async function deleteEvolutionInstance(instanceName: string): Promise<{
       console.log("Instância deletada da Evolution API com sucesso");
     }
 
-    // Deletar do banco de dados Supabase
-    const whatsappConnectionsTable = await supabase.from(
-      "whatsapp_connections"
-    );
-    const { error: dbError } = await whatsappConnectionsTable
-      .delete()
-      .eq("instance_name", instanceName);
-
-    if (dbError) {
+    // Deletar do banco de dados
+    try {
+      await query(
+        `DELETE FROM whatsapp_connections WHERE instance_name = $1`,
+        [instanceName]
+      );
+    } catch (dbError: any) {
       console.error("Erro ao deletar conexão do banco:", dbError);
       return {
         success: false,

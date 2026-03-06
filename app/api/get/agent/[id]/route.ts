@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { validateApiKey } from "@/lib/api-auth";
-import { createClient } from "@supabase/supabase-js";
+import { query, queryOne, queryMany } from "@/lib/db";
 
 export async function GET(
   request: NextRequest,
@@ -23,65 +23,41 @@ export async function GET(
     const user = authResult.user;
     const { id: agentId } = await params;
 
-    // Configurar Supabase
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error(
-        "Server configuration error: Supabase URL or Anon Key is missing."
-      );
-      return NextResponse.json(
-        { error: "Server configuration error" },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      db: { schema: "impaai" },
-    });
-
     // Buscar modelo padrão
-    const { data: defaultModelData, error: defaultModelError } = await supabase
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "default_model")
-      .single();
+    const defaultModelData = await queryOne(
+      'SELECT setting_value FROM system_settings WHERE setting_key = $1',
+      ['default_model']
+    );
 
     let systemDefaultModel = null;
-    if (defaultModelError) {
-      console.error("❌ Erro ao buscar default_model:", defaultModelError);
-    } else if (defaultModelData && defaultModelData.setting_value) {
+    if (!defaultModelData) {
+      console.error("❌ Erro ao buscar default_model");
+    } else if (defaultModelData.setting_value) {
       systemDefaultModel = defaultModelData.setting_value.toString().trim();
       console.log("✅ Default model encontrado:", systemDefaultModel);
     }
 
-    // Buscar agente específico
-    let query = supabase
-      .from("ai_agents")
-      .select(
-        `
-        *,
-        user_profiles (
-          id,
-          full_name,
-          email
-        )
-      `
-      )
-      .eq("id", agentId)
-      .eq("status", "active");
+    // Buscar agente específico com user_profiles via JOIN
+    let agentSql = `
+      SELECT a.*, 
+             up.id as up_id, up.full_name as up_full_name, up.email as up_email
+      FROM ai_agents a
+      LEFT JOIN user_profiles up ON a.user_id = up.id
+      WHERE a.id = $1 AND a.status = 'active'
+    `;
+    const agentParams: any[] = [agentId];
 
     // Se não for admin, verificar se o agente pertence ao usuário
     if (user.role !== "admin") {
-      query = query.eq("user_id", user.id);
+      agentSql += ' AND a.user_id = $2';
+      agentParams.push(user.id);
     }
 
-    const { data: agent, error: agentError } = await query.single();
+    const agent = await queryOne(agentSql, agentParams);
 
-    if (agentError || !agent) {
+    if (!agent) {
       console.error(
-        `Agente não encontrado com ID: ${agentId}. Erro: ${agentError?.message}`
+        `Agente não encontrado com ID: ${agentId}`
       );
       return NextResponse.json(
         { error: "Agente não encontrado" },
@@ -109,26 +85,24 @@ export async function GET(
     
     if (availabilityMode === 'schedule') {
       // Usar função PostgreSQL para verificar disponibilidade
-      const { data: availabilityCheck, error: availError } = await supabase
-        .rpc('is_agent_available', { 
-          p_agent_id: agentId,
-          p_check_time: new Date().toISOString()
-        });
+      const availabilityResult = await queryOne(
+        'SELECT impaai.is_agent_available($1, $2::timestamptz) as result',
+        [agentId, new Date().toISOString()]
+      );
       
-      if (availError) {
-        console.error('❌ Erro ao verificar disponibilidade:', availError);
+      if (!availabilityResult) {
+        console.error('❌ Erro ao verificar disponibilidade');
         // Em caso de erro, permitir acesso por segurança
-      } else if (availabilityCheck === false) {
+      } else if (availabilityResult.result === false) {
         // Buscar próximo horário disponível
-        const { data: nextSchedule } = await supabase
-          .from('agent_availability_schedules')
-          .select('day_of_week, start_time, timezone')
-          .eq('agent_id', agentId)
-          .eq('is_active', true)
-          .order('day_of_week', { ascending: true })
-          .order('start_time', { ascending: true })
-          .limit(1)
-          .single();
+        const nextSchedule = await queryOne(
+          `SELECT day_of_week, start_time, timezone 
+           FROM agent_availability_schedules 
+           WHERE agent_id = $1 AND is_active = true 
+           ORDER BY day_of_week ASC, start_time ASC 
+           LIMIT 1`,
+          [agentId]
+        );
         
         const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
         const nextAvailability = nextSchedule 
@@ -154,14 +128,13 @@ export async function GET(
     // Buscar conexão WhatsApp se existir
     let whatsappConnection = null;
     if (agent.whatsapp_connection_id) {
-      const { data: connectionData, error: connError } = await supabase
-        .from("whatsapp_connections")
-        .select("id, instance_name, status, phone_number, connection_name")
-        .eq("id", agent.whatsapp_connection_id)
-        .single();
+      const connectionData = await queryOne(
+        'SELECT id, instance_name, status, phone_number, connection_name FROM whatsapp_connections WHERE id = $1',
+        [agent.whatsapp_connection_id]
+      );
 
-      if (connError && connError.code !== "PGRST116") {
-        console.error("Erro ao buscar conexão WhatsApp:", connError?.message);
+      if (!connectionData) {
+        console.error("Erro ao buscar conexão WhatsApp para id:", agent.whatsapp_connection_id);
       }
       whatsappConnection = connectionData;
     }
@@ -172,14 +145,12 @@ export async function GET(
       const keyId = agent.llm_api_key.replace("__SAVED_KEY__", "");
       console.log("🔑 Resolvendo chave salva:", keyId);
       
-      const { data: savedKey, error: keyError } = await supabase
-        .from("llm_api_keys")
-        .select("api_key")
-        .eq("id", keyId)
-        .eq("is_active", true)
-        .single();
+      const savedKey = await queryOne(
+        'SELECT api_key FROM llm_api_keys WHERE id = $1 AND is_active = true',
+        [keyId]
+      );
       
-      if (savedKey && !keyError) {
+      if (savedKey) {
         resolvedLlmApiKey = savedKey.api_key;
         console.log("✅ Chave salva resolvida:", `${resolvedLlmApiKey?.slice(0, 7)}...`);
       } else {
@@ -198,17 +169,14 @@ export async function GET(
       const provider = agent.model_config.toLowerCase();
       
       // Buscar chave padrão do sistema no banco para o provedor
-      const { data: globalKey, error: globalKeyError } = await supabase
-        .from("llm_api_keys")
-        .select("api_key")
-        .eq("provider", provider)
-        .eq("is_default", true)
-        .eq("is_active", true)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .single();
+      const globalKey = await queryOne(
+        `SELECT api_key FROM llm_api_keys 
+         WHERE provider = $1 AND is_default = true AND is_active = true 
+         ORDER BY created_at ASC LIMIT 1`,
+        [provider]
+      );
 
-      if (globalKey && !globalKeyError && globalKey.api_key) {
+      if (globalKey?.api_key) {
         resolvedLlmApiKey = globalKey.api_key;
         console.log(`✅ Usando API key padrão do sistema para o provedor ${provider}`);
       } else {
@@ -298,11 +266,11 @@ export async function GET(
         created_at: agent.created_at,
         updated_at: agent.updated_at,
         whatsapp_connection: whatsappConnection,
-        owner: agent.user_profiles
+        owner: agent.up_id
           ? {
-              id: agent.user_profiles.id,
-              name: agent.user_profiles.full_name,
-              email: agent.user_profiles.email,
+              id: agent.up_id,
+              name: agent.up_full_name,
+              email: agent.up_email,
             }
           : null,
       },

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { queryMany, queryOne, buildInsert, buildUpdate } from "@/lib/db"
 
 /**
  * GET /api/bot-sessions
@@ -27,22 +28,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
-    // Configurações do Supabase
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Extrair query params
     const { searchParams } = new URL(request.url)
     const botId = searchParams.get("bot_id")
@@ -51,13 +36,6 @@ export async function GET(request: Request) {
     const status = searchParams.get("status")
     
     console.log("📋 Query params recebidos:", { botId, connectionId, remoteJid, status })
-
-    // Usar a tabela bot_sessions no schema impaai
-    const headersWithSchema = {
-      ...headers,
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-    }
 
     // 🔒 SEGURANÇA: EXIGIR bot_id ou connection_id para evitar vazamento de dados
     if (!botId && !connectionId) {
@@ -79,17 +57,11 @@ export async function GET(request: Request) {
     if (botId && !isAdmin) {
       // Verificar se o bot pertence ao usuário (admin bypassa essa verificação)
       // IMPORTANTE: bot_id é o UUID do bot externo, não o id do ai_agents
-      const botCheckResponse = await fetch(
-        `${supabaseUrl}/rest/v1/ai_agents?select=id,user_id,bot_id&bot_id=eq.${botId}`,
-        { headers: headersWithSchema }
+      const bots = await queryMany<{ id: string; user_id: string; bot_id: string }>(
+        'SELECT id, user_id, bot_id FROM ai_agents WHERE bot_id = $1',
+        [botId]
       )
       
-      if (!botCheckResponse.ok) {
-        console.error("❌ Erro ao verificar propriedade do bot")
-        return NextResponse.json({ error: "Erro ao verificar bot" }, { status: 500 })
-      }
-      
-      const bots = await botCheckResponse.json()
       if (!bots || bots.length === 0) {
         console.error("❌ SEGURANÇA: Bot não encontrado:", botId)
         return NextResponse.json({ error: "Bot não encontrado" }, { status: 404 })
@@ -107,17 +79,11 @@ export async function GET(request: Request) {
     
     if (connectionId && !isAdmin) {
       // Verificar se a conexão pertence ao usuário (admin bypassa essa verificação)
-      const connCheckResponse = await fetch(
-        `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,user_id&id=eq.${connectionId}`,
-        { headers: headersWithSchema }
+      const connections = await queryMany<{ id: string; user_id: string }>(
+        'SELECT id, user_id FROM whatsapp_connections WHERE id = $1',
+        [connectionId]
       )
       
-      if (!connCheckResponse.ok) {
-        console.error("❌ Erro ao verificar propriedade da conexão")
-        return NextResponse.json({ error: "Erro ao verificar conexão" }, { status: 500 })
-      }
-      
-      const connections = await connCheckResponse.json()
       if (!connections || connections.length === 0) {
         console.error("❌ SEGURANÇA: Conexão não encontrada:", connectionId)
         return NextResponse.json({ error: "Conexão não encontrada" }, { status: 404 })
@@ -135,35 +101,38 @@ export async function GET(request: Request) {
 
     // Construir query - buscar direto da bot_sessions
     // IMPORTANTE: Sempre filtrar deleted_at IS NULL para ocultar sessões inativas
-    let query = `${supabaseUrl}/rest/v1/bot_sessions?select=*&deleted_at=is.null`
+    const conditions: string[] = ["deleted_at IS NULL"]
+    const values: any[] = []
+    let paramIndex = 1
 
     // Filtros CRÍTICOS para separar Uazapi de Evolution
     if (botId) {
-      query += `&bot_id=eq.${botId}`
+      conditions.push(`bot_id = $${paramIndex++}`)
+      values.push(botId)
       console.log("🔍 Filtrando por bot_id:", botId)
     }
     if (connectionId) {
-      query += `&connection_id=eq.${connectionId}`
+      conditions.push(`connection_id = $${paramIndex++}`)
+      values.push(connectionId)
       console.log("🔍 Filtrando por connection_id:", connectionId)
     }
     
     // Filtros adicionais
-    if (remoteJid) query += `&remoteJid=eq.${remoteJid}`
-    if (status) query += `&status=eq.${status === "true"}`
-
-    query += `&order=ultimo_status.desc`
-
-    console.log("🔍 Buscando sessões ativas na tabela impaai.bot_sessions:", query)
-
-    const sessionsResponse = await fetch(query, { headers: headersWithSchema })
-
-    if (!sessionsResponse.ok) {
-      const errorText = await sessionsResponse.text()
-      console.error("❌ Erro ao buscar sessões:", sessionsResponse.status, errorText)
-      throw new Error(`Erro ao buscar sessões: ${sessionsResponse.status}`)
+    if (remoteJid) {
+      conditions.push(`"remoteJid" = $${paramIndex++}`)
+      values.push(remoteJid)
+    }
+    if (status) {
+      conditions.push(`status = $${paramIndex++}`)
+      values.push(status === "true")
     }
 
-    const sessions = await sessionsResponse.json()
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
+    const sql = `SELECT * FROM bot_sessions ${whereClause} ORDER BY ultimo_status DESC`
+
+    console.log("🔍 Buscando sessões ativas na tabela impaai.bot_sessions")
+
+    const sessions = await queryMany(sql, values)
     console.log(`✅ ${sessions.length} sessões encontradas`)
 
     return NextResponse.json({
@@ -227,88 +196,54 @@ export async function POST(request: Request) {
       )
     }
 
-    // Configurações do Supabase
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headersWithSchema = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Verificar se já existe sessão ATIVA para este remoteJid
     // IMPORTANTE: Apenas sessões não deletadas (deleted_at IS NULL)
     console.log("🔍 Verificando se sessão ativa já existe para:", remoteJid)
-    const existingSessionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/bot_sessions?select=*&remoteJid=eq.${remoteJid}&deleted_at=is.null`,
-      { headers: headersWithSchema }
+    const existingSessions = await queryMany(
+      'SELECT * FROM bot_sessions WHERE "remoteJid" = $1 AND deleted_at IS NULL',
+      [remoteJid]
     )
 
-    if (existingSessionResponse.ok) {
-      const existingSessions = await existingSessionResponse.json()
-      if (existingSessions && existingSessions.length > 0) {
-        console.log("ℹ️ Sessão já existe, atualizando...")
-        // Atualizar sessão existente
-        const updateResponse = await fetch(
-          `${supabaseUrl}/rest/v1/bot_sessions?sessionId=eq.${existingSessions[0].sessionId}`,
-          {
-            method: "PATCH",
-            headers: {
-              ...headersWithSchema,
-              Prefer: "return=representation",
-            },
-            body: JSON.stringify({
-              status,
-              ultimo_status: new Date().toISOString(),
-            }),
-          }
-        )
+    if (existingSessions && existingSessions.length > 0) {
+      console.log("ℹ️ Sessão já existe, atualizando...")
+      // Atualizar sessão existente
+      const update = buildUpdate(
+        "bot_sessions",
+        {
+          status,
+          ultimo_status: new Date().toISOString(),
+        },
+        { sessionId: existingSessions[0].sessionId }
+      )
 
-        if (!updateResponse.ok) {
-          const errorText = await updateResponse.text()
-          console.error("❌ Erro ao atualizar sessão:", updateResponse.status, errorText)
-          throw new Error(`Erro ao atualizar sessão: ${updateResponse.status}`)
-        }
+      const updatedSession = await queryOne(update.text, update.values)
 
-        const [updatedSession] = await updateResponse.json()
-        console.log("✅ Sessão atualizada")
-
-        return NextResponse.json({
-          success: true,
-          session: updatedSession,
-          message: "Sessão atualizada",
-        })
+      if (!updatedSession) {
+        throw new Error("Erro ao atualizar sessão: nenhum registro retornado")
       }
+
+      console.log("✅ Sessão atualizada")
+
+      return NextResponse.json({
+        success: true,
+        session: updatedSession,
+        message: "Sessão atualizada",
+      })
     }
 
     // Criar nova sessão
     console.log("➕ Criando nova sessão...")
-    const createResponse = await fetch(`${supabaseUrl}/rest/v1/bot_sessions`, {
-      method: "POST",
-      headers: {
-        ...headersWithSchema,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        remoteJid,
-        status,
-      }),
+    const insert = buildInsert("bot_sessions", {
+      remoteJid,
+      status,
     })
 
-    if (!createResponse.ok) {
-      const errorText = await createResponse.text()
-      console.error("❌ Erro ao criar sessão:", createResponse.status, errorText)
-      throw new Error(`Erro ao criar sessão: ${createResponse.status}`)
+    const newSession = await queryOne(insert.text, insert.values)
+
+    if (!newSession) {
+      throw new Error("Erro ao criar sessão: nenhum registro retornado")
     }
 
-    const [newSession] = await createResponse.json()
     console.log("✅ Sessão criada:", newSession.sessionId)
 
     return NextResponse.json({
@@ -328,4 +263,3 @@ export async function POST(request: Request) {
     )
   }
 }
-

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getUazapiInstanceStatusServer } from "@/lib/uazapi-server"
+import { query, queryOne, queryMany } from "@/lib/db"
 
 /**
  * Sincronização manual/forçada de uma conexão específica
@@ -14,32 +15,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Nome da instância é obrigatório" }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ success: false, error: "Configuração não encontrada" }, { status: 500 })
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Buscar a conexão do banco
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?instance_name=eq.${instanceName}&select=id,instance_name,instance_token,api_type,status&limit=1`,
-      { headers }
+    const connections = await queryMany(
+      'SELECT id, instance_name, instance_token, api_type, status FROM whatsapp_connections WHERE instance_name = $1 LIMIT 1',
+      [instanceName]
     )
-
-    if (!connectionResponse.ok) {
-      return NextResponse.json({ success: false, error: "Erro ao buscar conexão" }, { status: 500 })
-    }
-
-    const connections = await connectionResponse.json()
 
     if (!connections || connections.length === 0) {
       return NextResponse.json({ success: false, error: "Conexão não encontrada" }, { status: 404 })
@@ -84,16 +64,10 @@ export async function POST(request: NextRequest) {
       }))
     } else {
       // ========== EVOLUTION API ==========
-      const integrationResponse = await fetch(
-        `${supabaseUrl}/rest/v1/integrations?type=eq.evolution_api&is_active=eq.true&select=config`,
-        { headers }
+      const integrations = await queryMany(
+        'SELECT config FROM integrations WHERE type = $1 AND is_active = true',
+        ['evolution_api']
       )
-
-      if (!integrationResponse.ok) {
-        return NextResponse.json({ success: false, error: "Erro ao buscar configuração da API" }, { status: 500 })
-      }
-
-      const integrations = await integrationResponse.json()
 
       if (!integrations || integrations.length === 0) {
         return NextResponse.json({ success: false, error: "Evolution API não configurada" }, { status: 500 })
@@ -144,14 +118,13 @@ export async function POST(request: NextRequest) {
       updateData.phone_number = phoneNumber
     }
 
-    await fetch(`${supabaseUrl}/rest/v1/whatsapp_connections?id=eq.${connection.id}`, {
-      method: "PATCH",
-      headers: {
-        ...headers,
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify(updateData),
-    })
+    await query(
+      'UPDATE whatsapp_connections SET status = $1, updated_at = $2' +
+        (phoneNumber ? ', phone_number = $3 WHERE id = $4' : ' WHERE id = $3'),
+      phoneNumber
+        ? [updateData.status, updateData.updated_at, phoneNumber, connection.id]
+        : [updateData.status, updateData.updated_at, connection.id]
+    )
 
     console.log(`📝 Conexão atualizada: ${instanceName} → ${realStatus}`)
 

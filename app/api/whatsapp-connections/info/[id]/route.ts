@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { requireAuth, hasPermission } from "@/lib/auth-utils"
+import { queryOne } from "@/lib/db"
 
 /**
  * GET /api/whatsapp-connections/info/[id]
@@ -25,39 +26,14 @@ export async function GET(
 
     console.log("✅ Usuário autenticado:", currentUser.email, "| Role:", currentUser.role)
 
-    // Configurações do Supabase
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("❌ Variáveis de ambiente do Supabase não configuradas")
-      throw new Error("Variáveis de ambiente do Supabase não configuradas")
-    }
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept-Profile": "impaai",
-      "Content-Profile": "impaai",
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-    }
-
     // Buscar conexão do banco
     console.log("🔍 Buscando conexão WhatsApp...")
-    const connectionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/whatsapp_connections?select=id,connection_name,api_type,user_id&id=eq.${connectionId}`,
-      { headers }
+    const connection = await queryOne<{ id: string; connection_name: string; api_type: string; user_id: string }>(
+      'SELECT id, connection_name, api_type, user_id FROM whatsapp_connections WHERE id = $1',
+      [connectionId]
     )
 
-    if (!connectionResponse.ok) {
-      const errorText = await connectionResponse.text()
-      console.error("❌ Erro ao buscar conexão:", connectionResponse.status, errorText)
-      throw new Error(`Erro ao buscar conexão: ${connectionResponse.status}`)
-    }
-
-    const connections = await connectionResponse.json()
-    
-    if (!connections || connections.length === 0) {
+    if (!connection) {
       console.error("❌ Conexão não encontrada")
       return NextResponse.json(
         { 
@@ -67,8 +43,6 @@ export async function GET(
         { status: 404 }
       )
     }
-
-    const connection = connections[0]
     console.log("✅ Conexão encontrada:", connection.connection_name, "| API Type:", connection.api_type)
 
     // 🔒 SEGURANÇA: Validar propriedade da conexão

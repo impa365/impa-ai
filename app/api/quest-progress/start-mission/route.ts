@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     try {
       const updated = await supabasePatch('user_quest_progress', `user_id=eq.${userId}`, {
         active_mission_id: missionId,
-        mission_progress: {
+        mission_progress: JSON.stringify({
           missionId,
           currentStepIndex: 0,
           completedSteps: [],
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
           attempts: 0,
           hintsUsed: 0,
           errors: 0
-        }
+        })
       })
 
       console.log('✅ [QUEST] Missão iniciada com sucesso')

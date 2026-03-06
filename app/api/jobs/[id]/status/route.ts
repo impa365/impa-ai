@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServer } from "@/lib/supabase-config";
+import { queryOne, queryMany } from "@/lib/db";
 import { getCurrentServerUser } from "@/lib/auth-server";
 
 export async function GET(
@@ -18,22 +18,15 @@ export async function GET(
       );
     }
 
-    const supabase = getSupabaseServer();
-
     // Buscar job
-    let query = supabase
-      .from("background_jobs")
-      .select("*")
-      .eq("id", id);
+    const jobSql = `SELECT * FROM background_jobs WHERE id = $1`
+      + (user.role !== "admin" ? ` AND user_id = $2` : "")
+      + ` LIMIT 1`;
+    const jobParams = user.role !== "admin" ? [id, user.id] : [id];
 
-    // Se não for admin, filtrar apenas jobs do usuário
-    if (user.role !== "admin") {
-      query = query.eq("user_id", user.id);
-    }
+    const job = await queryOne<any>(jobSql, jobParams);
 
-    const { data: job, error: jobError } = await query.single();
-
-    if (jobError || !job) {
+    if (!job) {
       return NextResponse.json(
         { error: "Job não encontrado" },
         { status: 404 }
@@ -102,33 +95,36 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { limit = 10, offset = 0, status, type } = body;
 
-    const supabase = getSupabaseServer();
+    // Build dynamic query
+    const conditions: string[] = [];
+    const params: any[] = [];
+    let paramIdx = 1;
 
-    let query = supabase
-      .from("background_jobs")
-      .select("id, type, status, progress, total_items, processed_items, successful_items, failed_items, created_at, started_at, completed_at, error_message")
-      .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    // Se não for admin, filtrar apenas jobs do usuário
     if (user.role !== "admin") {
-      query = query.eq("user_id", user.id);
+      conditions.push(`user_id = $${paramIdx++}`);
+      params.push(user.id);
     }
-
-    // Filtros opcionais
     if (status) {
-      query = query.eq("status", status);
+      conditions.push(`status = $${paramIdx++}`);
+      params.push(status);
     }
-    
     if (type) {
-      query = query.eq("type", type);
+      conditions.push(`type = $${paramIdx++}`);
+      params.push(type);
     }
 
-    const { data: jobs, error: jobsError } = await query;
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    params.push(limit);
+    const limitParam = paramIdx++;
+    params.push(offset);
+    const offsetParam = paramIdx++;
 
-    if (jobsError) {
-      throw new Error("Erro ao buscar jobs");
-    }
+    const jobsSql = `SELECT id, type, status, progress, total_items, processed_items, successful_items, failed_items, created_at, started_at, completed_at, error_message
+      FROM background_jobs ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $${limitParam} OFFSET $${offsetParam}`;
+
+    const jobs = await queryMany<any>(jobsSql, params);
 
     return NextResponse.json({
       success: true,
