@@ -27,6 +27,7 @@ import AdminWhatsAppConnectionModal from "@/components/admin-whatsapp-connection
 import WhatsAppQRModal from "@/components/whatsapp-qr-modal";
 import WhatsAppSettingsModal from "@/components/whatsapp-settings-modal";
 import WhatsAppInfoModal from "@/components/whatsapp-info-modal";
+import WhatsAppUazapiInfoModal from "@/components/whatsapp-uazapi-info-modal";
 import TransferConnectionModal from "@/components/transfer-connection-modal";
 import { WhatsAppSharedLinksModal } from "@/components/whatsapp-shared-links-modal";
 import { WhatsAppImportModal } from "@/components/whatsapp-import-modal";
@@ -56,6 +57,7 @@ export default function AdminWhatsAppPage() {
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [uazapiInfoModalOpen, setUazapiInfoModalOpen] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState<any>(null);
   const [saveMessage, setSaveMessage] = useState("");
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -614,15 +616,18 @@ export default function AdminWhatsAppPage() {
                             size="sm"
                             onClick={() => {
                               setSelectedConnection(connection);
-                              setInfoModalOpen(true);
+                              if (connection.api_type === "uazapi") {
+                                setUazapiInfoModalOpen(true);
+                              } else {
+                                setInfoModalOpen(true);
+                              }
                             }}
-                            disabled={connection.api_type === "uazapi"}
                             title={
                               connection.api_type === "uazapi"
-                                ? "Em breve para Uazapi"
+                                ? "Ver Informações da Instância"
                                 : "Ver Informações"
                             }
-                            className="border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="border-blue-200 text-blue-600 hover:bg-blue-50"
                           >
                             <Info className="w-4 h-4" />
                           </Button>
@@ -742,6 +747,12 @@ export default function AdminWhatsAppPage() {
       <WhatsAppInfoModal
         open={infoModalOpen}
         onOpenChange={setInfoModalOpen}
+        connection={selectedConnection}
+      />
+
+      <WhatsAppUazapiInfoModal
+        open={uazapiInfoModalOpen}
+        onOpenChange={setUazapiInfoModalOpen}
         connection={selectedConnection}
       />
 
